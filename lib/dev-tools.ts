@@ -5,11 +5,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const devToolsEnabled = () =>
   process.env.NODE_ENV !== "production" || process.env.ENABLE_DEV_TOOLS === "true";
 
-// On deployments, dev tools are also limited to admin accounts, so customers
-// on a Preview never see them. Locally every signed-in user gets them.
+// Dev tools always require an admin account (profiles.role, which users can't
+// change), so customers never see them even if the env flag is on by mistake.
 export async function canUseDevTools(supabase: SupabaseClient, userId: string) {
   if (!devToolsEnabled()) return false;
-  if (process.env.NODE_ENV !== "production") return true;
   const { data } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
   return data?.role === "admin";
 }
