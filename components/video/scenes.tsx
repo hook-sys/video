@@ -7,6 +7,8 @@ import {
   useVideoConfig,
 } from "remotion";
 import { camera, enter, fadeInOut, motionFor } from "./animations";
+import { SceneSfx } from "./sfx";
+import { sceneEdgeStyle, transitionFor } from "./transitions";
 import type { RenderScene } from "./types";
 
 const BG = "#0b0d12";
@@ -41,7 +43,10 @@ function ImageBackground({ scene }: { scene: RenderScene }) {
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          transform: `scale(${1.08 + t * 0.12}) translateX(${dir * (t * 3 - 1.5)}%)`,
+          transform:
+            motionFor(scene.animation) === "fade"
+              ? `scale(${1.08 + t * 0.12}) translateX(${dir * (t * 3 - 1.5)}%)`
+              : camera(motionFor(scene.animation), frame, durationInFrames),
         }}
       />
       {/* Legibility scrim keeps text crisp over any image. */}
@@ -432,24 +437,38 @@ const VISUALS: Record<
   abstract: HeroScene,
 };
 
-export function SceneView({ scene, isFinal }: { scene: RenderScene; isFinal?: boolean }) {
+export function SceneView({
+  scene,
+  isFinal,
+  prevTransition,
+}: {
+  scene: RenderScene;
+  isFinal?: boolean;
+  // The previous scene's transition plays its "in" half here.
+  prevTransition?: string;
+}) {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const Visual = VISUALS[scene.visual];
-  // Entrance: blur + scale settle; exit: fade (with the scene's own motion).
-  const blur = interpolate(frame, [0, 12], [14, 0], clamp);
-  const scale = interpolate(frame, [0, 14], [1.04, 1], clamp);
+  const edge = sceneEdgeStyle(
+    frame,
+    durationInFrames,
+    prevTransition === undefined ? null : transitionFor(prevTransition),
+    isFinal ? null : transitionFor(scene.transition),
+  );
   return (
     <AbsoluteFill
       style={{
         background: BG,
-        opacity: fadeInOut(frame, durationInFrames, 8),
-        filter: `blur(${blur}px)`,
-        transform: `scale(${scale})`,
+        // First scene fades in from black; last scene fades out.
+        opacity: prevTransition === undefined || isFinal ? fadeInOut(frame, durationInFrames, 8) : 1,
       }}
     >
-      <Visual scene={scene} isFinal={isFinal} />
-      <Caption text={scene.narration} />
+      <AbsoluteFill style={edge}>
+        <Visual scene={scene} isFinal={isFinal} />
+        <Caption text={scene.narration} />
+      </AbsoluteFill>
+      <SceneSfx cues={scene.sound_effects ?? []} />
     </AbsoluteFill>
   );
 }
