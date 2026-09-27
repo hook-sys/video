@@ -116,6 +116,29 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         ← Dashboard
       </Link>
       <h1 className="text-2xl font-semibold">Project</h1>
+      <ol className="flex flex-wrap gap-2 text-xs">
+        {(
+          [
+            ["Brief", project.brief_status],
+            ["Voice", project.voice_status],
+            ["Assets", project.assets_status],
+            ["Render", project.render_status],
+          ] as const
+        ).map(([step, status]) => (
+          <li
+            key={step}
+            className={`rounded-full border px-3 py-1 ${
+              status === "completed"
+                ? "border-green-600/40 text-green-600"
+                : status === "failed"
+                  ? "border-red-600/40 text-red-600"
+                  : "border-foreground/20 text-foreground/70"
+            }`}
+          >
+            {step}: {status}
+          </li>
+        ))}
+      </ol>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 text-sm">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">

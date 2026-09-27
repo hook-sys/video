@@ -14,7 +14,7 @@ import {
 const field = "rounded-md border border-foreground/20 bg-transparent px-3 py-2";
 const label = "flex flex-col gap-1.5 text-sm font-medium";
 
-export function CreateProjectForm() {
+export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [direction, setDirection] = useState("");
   const [files, setFiles] = useState<string[]>([]);
@@ -35,7 +35,10 @@ export function CreateProjectForm() {
         Screenshots
         <span className="flex flex-col items-center gap-1 rounded-md border border-dashed border-foreground/30 px-3 py-6 text-center font-normal text-foreground/70">
           Click to choose product screenshots (PNG, JPG, WebP)
-          <span className="text-xs">Up to 5 images, 5 MB each.</span>
+          <span className="text-xs">
+            Up to 5 images, 5 MB each
+            {maxTotalBytes ? `, ${Math.floor(maxTotalBytes / 1024 / 1024)} MB total` : ""}.
+          </span>
           {files.length > 0 && <span className="text-xs">{files.join(", ")}</span>}
         </span>
         <input
@@ -47,7 +50,7 @@ export function CreateProjectForm() {
           onChange={(e) => {
             const chosen = Array.from(e.target.files ?? []);
             setFiles(chosen.map((f) => f.name));
-            setFileError(validateScreenshots(chosen));
+            setFileError(validateScreenshots(chosen, maxTotalBytes));
           }}
         />
       </label>

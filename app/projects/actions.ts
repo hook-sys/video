@@ -16,6 +16,7 @@ import {
   VOICE_STYLES,
   parseHttpUrl,
   validateScreenshots,
+  VERCEL_SCREENSHOT_TOTAL_BYTES,
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
 import { type BriefUsage, ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
@@ -65,7 +66,10 @@ export async function createProject(
   const screenshots = formData
     .getAll("screenshots")
     .filter((f): f is File => f instanceof File && (f.size > 0 || f.name !== ""));
-  const screenshotError = validateScreenshots(screenshots);
+  const screenshotError = validateScreenshots(
+    screenshots,
+    process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES : undefined,
+  );
   if (screenshotError) return { error: screenshotError };
 
   const supabase = await createClient();
@@ -454,6 +458,17 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
     return;
   }
   const resolution = requested as Resolution;
+
+  // Vercel Functions have no Chrome for Remotion; stop cleanly instead of
+  // attempting (or faking) a render. Rendering runs on a dedicated worker later.
+  if (process.env.VERCEL) {
+    await renderUpdate({
+      render_status: "failed",
+      render_error: "Video rendering requires the production render worker.",
+    }).neq("render_status", "processing");
+    revalidatePath(`/projects/${projectId}`);
+    return;
+  }
 
   const staleBefore = new Date(Date.now() - STALE_RENDER_MS).toISOString();
   const { data: claimed } = await renderUpdate({

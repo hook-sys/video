@@ -47,9 +47,14 @@ export type WebsiteCapture = {
 };
 
 export async function captureWebsite(url: string): Promise<WebsiteCapture> {
-  const browser = await chromium.launch({
-    executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || undefined,
-  });
+  const browser = await chromium
+    .launch({ executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || undefined })
+    .catch(() => {
+      // e.g. Vercel Functions ship no Chromium.
+      throw new Error(
+        "Website capture is unavailable on this server (no Chromium). Upload screenshots to continue.",
+      );
+    });
   const killTimer = setTimeout(() => browser.close(), TOTAL_TIMEOUT_MS);
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });

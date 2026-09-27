@@ -34,9 +34,18 @@ export const SCREENSHOT_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 
-export function validateScreenshots(files: File[]): string | undefined {
+// Vercel Functions reject request bodies over 4.5 MB; keep uploads (plus form
+// overhead) under that on Vercel deployments.
+export const VERCEL_SCREENSHOT_TOTAL_BYTES = 4 * 1024 * 1024;
+
+export function validateScreenshots(
+  files: File[],
+  maxTotalBytes = Infinity,
+): string | undefined {
   if (files.length > SCREENSHOT_MAX_FILES)
     return `Upload at most ${SCREENSHOT_MAX_FILES} screenshots.`;
+  if (files.reduce((sum, f) => sum + f.size, 0) > maxTotalBytes)
+    return `Screenshots must total ${Math.floor(maxTotalBytes / 1024 / 1024)} MB or less on this server.`;
   for (const file of files) {
     if (!SCREENSHOT_TYPES[file.type])
       return `${file.name}: only PNG, JPG or WebP images are allowed.`;
