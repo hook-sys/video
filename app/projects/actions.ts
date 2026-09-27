@@ -18,7 +18,8 @@ import {
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
 import { ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
-import { buildAssetManifest } from "@/lib/asset-manifest";
+import { type AssetManifest, buildAssetManifest } from "@/lib/asset-manifest";
+import { generateAsset } from "@/lib/generated-assets";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 
@@ -285,7 +286,7 @@ export async function prepareAssets(projectId: string) {
 
   const staleBefore = new Date(Date.now() - STALE_GENERATION_MS).toISOString();
   const { data: claimed } = await assetsUpdate({ assets_status: "preparing", assets_error: null })
-    .or(`assets_status.neq.preparing,updated_at.lt.${staleBefore}`)
+    .or(`assets_status.not.in.(preparing,generating),updated_at.lt.${staleBefore}`)
     .select("id");
   if (!claimed?.length) return;
 
@@ -303,5 +304,49 @@ export async function prepareAssets(projectId: string) {
       assets_manifest: buildAssetManifest(brief.data, paths, project.format),
     });
   }
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function generateVisualAssets(projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // RLS: only returns the project if this user owns it.
+  const { data: project } = await supabase
+    .from("projects")
+    .select("format, assets_status, assets_manifest")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (!project?.assets_manifest) return;
+
+  const admin = createAdminClient();
+  const assetsUpdate = (fields: Record<string, unknown>) =>
+    admin.from("projects").update(fields).eq("id", projectId).eq("user_id", user.id);
+
+  // Only from a prepared manifest, and never while another run is in progress.
+  const staleBefore = new Date(Date.now() - STALE_GENERATION_MS).toISOString();
+  const { data: claimed } = await assetsUpdate({ assets_status: "generating", assets_error: null })
+    .or(`assets_status.in.(completed,failed),and(assets_status.eq.generating,updated_at.lt.${staleBefore})`)
+    .select("assets_manifest")
+    .maybeSingle();
+  if (!claimed) return;
+
+  const manifest = claimed.assets_manifest as AssetManifest;
+  const ctx = { userId: user.id, projectId, format: project.format };
+  // Skip assets already generated; screenshots/typography are never sent to Fal.
+  const assets = await Promise.all(
+    manifest.assets.map((asset) =>
+      asset.status === "completed" ? asset : generateAsset(admin, asset, ctx),
+    ),
+  );
+  const failed = assets.filter((a) => a.status === "failed").length;
+  await assetsUpdate({
+    assets_manifest: { ...manifest, assets },
+    assets_status: failed ? "failed" : "completed",
+    assets_error: failed ? `${failed} asset(s) failed to generate.` : null,
+  });
   revalidatePath(`/projects/${projectId}`);
 }

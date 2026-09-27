@@ -7,8 +7,11 @@ export type AssetManifest = {
     source: "project" | "generated";
     scene_ids: string[];
     prompt?: string;
-    // Private storage path for `source: "project"` assets.
+    // Private storage path: project screenshot, or generated file once created.
     storage_path?: string;
+    // Generation state for `source: "generated"` assets.
+    status?: "pending" | "completed" | "failed";
+    error?: string;
   }[];
 };
 

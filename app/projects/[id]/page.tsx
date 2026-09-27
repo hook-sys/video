@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
-import { generateBrief, generateVoice, prepareAssets } from "@/app/projects/actions";
+import {
+  generateBrief,
+  generateVisualAssets,
+  generateVoice,
+  prepareAssets,
+} from "@/app/projects/actions";
+import type { AssetManifest } from "@/lib/asset-manifest";
 import { SubmitButton } from "@/components/submit-button";
 
 // Allows the AI brief call to finish.
@@ -49,6 +55,16 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           .from(AUDIO_BUCKET)
           .createSignedUrl(project.voice_result.storagePath, 3600)
       : { data: null };
+
+  const manifestAssets = (project.assets_manifest as AssetManifest | null)?.assets ?? [];
+  const generatedPaths = manifestAssets
+    .filter((a) => a.source === "generated" && a.storage_path)
+    .map((a) => a.storage_path!);
+  const { data: assetUrls } = generatedPaths.length
+    ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(generatedPaths, 3600)
+    : { data: [] };
+  const assetUrl = (path?: string) => assetUrls?.find((u) => u.path === path)?.signedUrl;
+  const assetsBusy = project.assets_status === "preparing" || project.assets_status === "generating";
 
   const rows: [string, string][] = [
     ["Website URL", project.website_url ?? "—"],
@@ -166,16 +182,52 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         <form action={prepareAssets.bind(null, id)}>
           <SubmitButton
             pendingLabel="Preparing…"
-            disabled={project.brief_status !== "completed" || project.assets_status === "preparing"}
+            disabled={project.brief_status !== "completed" || assetsBusy}
             className="rounded-md border border-foreground/20 px-3 py-1.5 disabled:opacity-50"
           >
             Prepare Visual Assets
           </SubmitButton>
         </form>
+        {manifestAssets.some((a) => a.source === "generated") && (
+          <form action={generateVisualAssets.bind(null, id)}>
+            <SubmitButton
+              pendingLabel="Generating assets…"
+              disabled={assetsBusy}
+              className="rounded-md border border-foreground/20 px-3 py-1.5 disabled:opacity-50"
+            >
+              Generate Visual Assets
+            </SubmitButton>
+          </form>
+        )}
+        {manifestAssets.length > 0 && (
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {manifestAssets.map((a) => {
+              const url = a.source === "generated" ? assetUrl(a.storage_path) : undefined;
+              return (
+                <li key={a.id} className="flex flex-col gap-1 rounded-md border border-foreground/10 p-2 text-xs">
+                  <span className="font-medium">
+                    {a.id} · {a.type}
+                  </span>
+                  <span className="text-foreground/60">
+                    {a.source === "project" ? "project screenshot" : (a.status ?? "pending")}
+                  </span>
+                  {url && (
+                    // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL
+                    <img src={url} alt={a.id} className="aspect-square w-full rounded object-contain" />
+                  )}
+                  {a.error && <span className="text-red-600">{a.error}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
         {project.assets_manifest && (
-          <pre className="max-h-96 overflow-auto rounded-md bg-foreground/5 p-3 text-xs whitespace-pre-wrap">
-            {JSON.stringify(project.assets_manifest, null, 2)}
-          </pre>
+          <details>
+            <summary className="cursor-pointer text-foreground/60">Manifest JSON</summary>
+            <pre className="max-h-96 overflow-auto rounded-md bg-foreground/5 p-3 text-xs whitespace-pre-wrap">
+              {JSON.stringify(project.assets_manifest, null, 2)}
+            </pre>
+          </details>
         )}
       </section>
       <button
