@@ -9,6 +9,8 @@ export type AssetManifest = {
     prompt?: string;
     // Private storage path: project screenshot, or generated file once created.
     storage_path?: string;
+    // "background": full-frame scene image; otherwise the scene's main visual.
+    role?: "background" | "foreground";
     // Generation state for `source: "generated"` assets.
     status?: "pending" | "completed" | "failed";
     error?: string;
@@ -49,25 +51,32 @@ export function buildAssetManifest(
     asset.scene_ids.push(scene);
   };
 
-  const abstract = (scene: string) =>
-    addToAsset("abstract", () => ({
+  // Every scene gets its own generated background image so no frame is text-only.
+  const background = (scene: string, purpose: string) =>
+    addToAsset(`bg:${scene}`, () => ({
       type: "abstract",
       source: "generated",
-      prompt: `Abstract geometric motion background, soft gradients and simple shapes, ${format} composition, ${SAFE}`,
+      role: "background",
+      prompt: `Premium cinematic 3D illustration for a software promo video scene about: ${
+        neutral(purpose) || "modern software"
+      }. Glossy abstract shapes, soft volumetric light, depth of field, rich indigo and violet gradient palette, ${format} composition, ${SAFE}`,
     }), scene);
 
   let nextShot = 0;
   brief.scenes.forEach((scene, i) => {
     const id = sceneId(i);
+    background(id, scene.purpose);
     switch (scene.visual) {
       case "ui":
       case "screenshot": {
-        if (!screenshotPaths.length) return abstract(id);
+        // Without screenshots the composition draws an app mockup instead.
+        if (!screenshotPaths.length) return;
         // Rotate through available screenshots so scenes vary without new assets.
         const path = screenshotPaths[nextShot++ % screenshotPaths.length];
         return addToAsset(path, () => ({
           type: "screenshot",
           source: "project",
+          role: "foreground",
           storage_path: path,
         }), id);
       }
@@ -76,13 +85,13 @@ export function buildAssetManifest(
         return addToAsset(`icon:${subject.toLowerCase()}`, () => ({
           type: "icon",
           source: "generated",
+          role: "foreground",
           prompt: `Minimal flat line icon symbolizing: ${subject}. Single color on transparent background, ${SAFE}`,
         }), id);
       }
       case "abstract":
-        return abstract(id);
       case "typography":
-        return; // Rendered as text; no asset needed.
+        return; // Background image plus animated typography.
     }
   });
 

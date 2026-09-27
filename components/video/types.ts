@@ -2,8 +2,11 @@ import type { ProductBrief } from "@/lib/ai/product-brief";
 
 export type RenderScene = ProductBrief["scenes"][number] & {
   id: string;
-  // Signed URL of the screenshot or generated asset used by this scene, if any.
+  // Signed URL of the scene's main visual (screenshot or icon), if any.
   assetUrl?: string;
+  assetKind?: "screenshot" | "icon" | "image";
+  // Signed URL of the full-frame generated background image, if any.
+  backgroundUrl?: string;
 };
 
 export type StoryboardProps = {

@@ -13,7 +13,7 @@ export function Storyboard({ scenes, durationSeconds, audioUrl }: StoryboardProp
       <Series>
         {scenes.map((scene, i) => (
           <Series.Sequence key={scene.id} durationInFrames={frames[i]}>
-            <SceneView scene={scene} />
+            <SceneView scene={scene} isFinal={i === scenes.length - 1} />
           </Series.Sequence>
         ))}
       </Series>

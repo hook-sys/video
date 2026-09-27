@@ -34,15 +34,26 @@ export async function buildRenderInput(
   // Map each scene to its manifest asset (project screenshot or completed generated asset).
   const assets = (project.assets_manifest as AssetManifest | null)?.assets ?? [];
   if (!project.assets_manifest) problems.push("Prepare visual assets first.");
-  const pathByScene = new Map<string, string>();
+  // Per scene: a full-frame background and/or a main visual.
+  const bgByScene = new Map<string, string>();
+  const fgByScene = new Map<string, { path: string; kind: "screenshot" | "icon" | "image" }>();
   for (const a of assets) {
     if (a.source === "generated" && a.status !== "completed") {
       problems.push(`Asset ${a.id} is not generated.`);
       continue;
     }
     if (!a.storage_path) continue;
-    for (const s of a.scene_ids) pathByScene.set(s, a.storage_path);
+    // Older manifests have no role: abstract images were used as backgrounds.
+    const isBackground = a.role ? a.role === "background" : a.type === "abstract";
+    for (const s of a.scene_ids) {
+      if (isBackground) bgByScene.set(s, a.storage_path);
+      else fgByScene.set(s, { path: a.storage_path, kind: a.type === "abstract" ? "image" : a.type });
+    }
   }
+  const pathByScene = new Map<string, string>([
+    ...bgByScene,
+    ...[...fgByScene].map(([k, v]) => [`fg:${k}`, v.path] as [string, string]),
+  ]);
   const paths = [...new Set(pathByScene.values())];
   const { data: signed } = paths.length
     ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(paths, expiresIn)
@@ -58,9 +69,16 @@ export async function buildRenderInput(
     : { data: null };
   if (!voice?.signedUrl) problems.push("Generate the voice first.");
 
+  const url = (path?: string) => (path && urlByPath.get(path)) || undefined;
   const scenes: RenderScene[] = brief.data.scenes.map((scene, i) => {
-    const path = pathByScene.get(sceneId(i));
-    return { ...scene, id: sceneId(i), assetUrl: (path && urlByPath.get(path)) || undefined };
+    const fg = fgByScene.get(sceneId(i));
+    return {
+      ...scene,
+      id: sceneId(i),
+      assetUrl: url(fg?.path),
+      assetKind: fg?.kind,
+      backgroundUrl: url(bgByScene.get(sceneId(i))),
+    };
   });
 
   return {
