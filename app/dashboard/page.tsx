@@ -1,0 +1,25 @@
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { logout } from "@/app/auth/actions";
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  return (
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-12">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <form action={logout}>
+          <button className="rounded-md border border-foreground/20 px-3 py-1.5 text-sm">
+            Log out
+          </button>
+        </form>
+      </div>
+      <p className="text-foreground/70">Signed in as {user.email}</p>
+    </main>
+  );
+}
