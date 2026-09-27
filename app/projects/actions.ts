@@ -182,8 +182,9 @@ export async function generateBrief(projectId: string) {
   const fail = (message: string) =>
     briefUpdate({ brief_status: "failed", brief_error: message });
 
-  if (!capture && !screenshots?.length) {
-    await fail("Add a captured website or screenshots before generating a brief.");
+  // The customer's script is also a source (same rule as the pipeline).
+  if (!capture && !screenshots?.length && !project.direction?.trim()) {
+    await fail("Add a script, captured website or screenshots before generating a brief.");
     revalidatePath(`/projects/${projectId}`);
     return;
   }
