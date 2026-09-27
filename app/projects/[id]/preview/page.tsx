@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ProductBrief } from "@/lib/ai/product-brief";
 import { type AssetManifest, sceneId } from "@/lib/asset-manifest";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
+import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import type { RenderScene } from "@/components/video/types";
 import { PreviewPlayer } from "./preview-player";
 
@@ -15,7 +16,7 @@ export default async function PreviewPage({ params }: PageProps<"/projects/[id]/
   const supabase = await createClient();
   const { data: project } = await supabase
     .from("projects")
-    .select("format, brief, assets_manifest")
+    .select("format, duration_seconds, brief, assets_manifest, voice_status, voice_result")
     .eq("id", id)
     .maybeSingle();
   const brief = ProductBrief.safeParse(project?.brief);
@@ -34,6 +35,13 @@ export default async function PreviewPage({ params }: PageProps<"/projects/[id]/
     : { data: [] };
   const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
 
+  // Stored narration (not regenerated); preview stays silent without it.
+  const voicePath =
+    project.voice_status === "completed" ? project.voice_result?.storagePath : undefined;
+  const { data: voice } = voicePath
+    ? await supabase.storage.from(AUDIO_BUCKET).createSignedUrl(voicePath, 3600)
+    : { data: null };
+
   const scenes: RenderScene[] = brief.data.scenes.map((scene, i) => {
     const path = pathByScene.get(sceneId(i));
     return { ...scene, id: sceneId(i), assetUrl: (path && urlByPath.get(path)) || undefined };
@@ -45,7 +53,13 @@ export default async function PreviewPage({ params }: PageProps<"/projects/[id]/
         ← Project
       </Link>
       <h1 className="text-xl font-semibold">Storyboard preview (dev)</h1>
-      <PreviewPlayer scenes={scenes} format={project.format} />
+      <PreviewPlayer
+        scenes={scenes}
+        format={project.format}
+        durationSeconds={project.duration_seconds}
+        audioUrl={voice?.signedUrl}
+      />
+      {!voice?.signedUrl && <p className="text-sm text-foreground/60">No voice yet — silent preview.</p>}
     </main>
   );
 }

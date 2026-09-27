@@ -1,14 +1,18 @@
-import { AbsoluteFill, Series } from "remotion";
+import { AbsoluteFill, Html5Audio, Series } from "remotion";
 import { SceneView } from "./scenes";
-import { sceneFrames, type StoryboardProps } from "./types";
+import { sceneTimings, type StoryboardProps } from "./types";
 
-// Remotion composition: plays storyboard scenes back to back.
-export function Storyboard({ scenes }: StoryboardProps) {
+// Remotion composition: plays storyboard scenes back to back with the narration.
+// Audio plays at normal speed from frame 0; a shorter track simply ends, a longer
+// one is cut off at the end of the composition.
+export function Storyboard({ scenes, durationSeconds, audioUrl }: StoryboardProps) {
+  const { frames } = sceneTimings(scenes, durationSeconds);
   return (
     <AbsoluteFill style={{ background: "#0b0d12" }}>
+      {audioUrl && <Html5Audio src={audioUrl} />}
       <Series>
-        {scenes.map((scene) => (
-          <Series.Sequence key={scene.id} durationInFrames={sceneFrames(scene)}>
+        {scenes.map((scene, i) => (
+          <Series.Sequence key={scene.id} durationInFrames={frames[i]}>
             <SceneView scene={scene} />
           </Series.Sequence>
         ))}

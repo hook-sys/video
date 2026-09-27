@@ -43,17 +43,25 @@ function OnScreenText({ scene, compact = false }: { scene: RenderScene; compact?
 
 // Narration shown as a caption until voice sync exists.
 function Caption({ text }: { text: string }) {
-  const { width } = useVideoConfig();
+  const { width, height } = useVideoConfig();
   if (!text) return null;
+  // Keep within the ~5% title-safe margins.
   return (
-    <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", padding: width * 0.03 }}>
+    <AbsoluteFill
+      style={{
+        justifyContent: "flex-end",
+        alignItems: "center",
+        padding: `0 ${width * 0.05}px ${height * 0.05}px`,
+      }}
+    >
       <div
         style={{
-          maxWidth: "85%",
+          maxWidth: "100%",
           background: "rgba(0,0,0,.55)",
           color: FG,
           fontFamily: "Inter, system-ui, sans-serif",
-          fontSize: width * 0.018,
+          fontSize: Math.min(width, height) * 0.032,
+          lineHeight: 1.3,
           padding: "0.4em 0.8em",
           borderRadius: 8,
           textAlign: "center",
