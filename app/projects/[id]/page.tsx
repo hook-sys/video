@@ -24,6 +24,19 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         .createSignedUrls(screenshots.map((s) => s.storage_path), 3600)
     : { data: [] };
 
+  const { data: capture } = await supabase
+    .from("website_captures")
+    .select("status, error_message, title, meta_description, visible_text, screenshot_path")
+    .eq("project_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { data: captureShot } = capture?.screenshot_path
+    ? await supabase.storage
+        .from(SCREENSHOTS_BUCKET)
+        .createSignedUrl(capture.screenshot_path, 3600)
+    : { data: null };
+
   const rows: [string, string][] = [
     ["Website URL", project.website_url ?? "—"],
     ["Direction", project.direction],
@@ -62,6 +75,36 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             ) : null,
           )}
         </div>
+      )}
+      {capture && (
+        <section className="flex flex-col gap-2 text-sm">
+          <h2 className="font-medium">
+            Website capture:{" "}
+            <span className="text-foreground/70">
+              {capture.status === "pending" ? "In progress (refresh to update)" : capture.status}
+            </span>
+          </h2>
+          {capture.error_message && <p className="text-red-600">{capture.error_message}</p>}
+          {capture.status === "completed" && (
+            <>
+              <p>{capture.title || "Untitled page"}</p>
+              {capture.meta_description && (
+                <p className="text-foreground/70">{capture.meta_description}</p>
+              )}
+              <p className="text-foreground/60">
+                {capture.visible_text?.length ?? 0} characters of text captured
+              </p>
+            </>
+          )}
+          {captureShot?.signedUrl && (
+            // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URL
+            <img
+              src={captureShot.signedUrl}
+              alt="Website screenshot"
+              className="w-full rounded-md border border-foreground/10"
+            />
+          )}
+        </section>
       )}
       <button
         disabled

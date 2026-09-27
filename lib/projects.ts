@@ -17,6 +17,12 @@ export const VOICE_STYLES = [
   "Premium",
 ] as const;
 
+export function parseHttpUrl(value: string): URL | null {
+  if (!URL.canParse(value)) return null;
+  const url = new URL(value);
+  return url.protocol === "http:" || url.protocol === "https:" ? url : null;
+}
+
 // Storage path: `${userId}/${projectId}/${uuid}.${ext}`
 export const SCREENSHOTS_BUCKET = "project-screenshots";
 export const SCREENSHOT_MAX_FILES = 5;

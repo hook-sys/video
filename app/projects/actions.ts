@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   DIRECTION_MAX,
@@ -10,8 +11,10 @@ import {
   SCREENSHOTS_BUCKET,
   VOICE_LANGUAGES,
   VOICE_STYLES,
+  parseHttpUrl,
   validateScreenshots,
 } from "@/lib/projects";
+import { runWebsiteCapture } from "@/lib/website-capture";
 
 export type CreateProjectState = { error?: string };
 
@@ -35,8 +38,8 @@ export async function createProject(
     return { error: `Direction must be ${DIRECTION_MAX} characters or less.` };
   if (!duration || !format || !voiceLanguage || !voiceStyle)
     return { error: "Please choose a valid option for every field." };
-  if (websiteUrl && !URL.canParse(websiteUrl))
-    return { error: "Website URL is not valid." };
+  if (websiteUrl && !parseHttpUrl(websiteUrl))
+    return { error: "Website URL must be a valid http:// or https:// address." };
 
   // Browsers send an empty, unnamed File when no file is chosen.
   const screenshots = formData
@@ -95,6 +98,24 @@ export async function createProject(
     if (uploaded.length) await supabase.storage.from(SCREENSHOTS_BUCKET).remove(uploaded);
     await supabase.from("projects").delete().eq("id", data.id);
     return { error: "Screenshot upload failed. Please try again." };
+  }
+
+  if (websiteUrl) {
+    const { data: capture } = await supabase
+      .from("website_captures")
+      .insert({ project_id: data.id, user_id: user.id, url: websiteUrl })
+      .select("id")
+      .single();
+    if (capture) {
+      after(() =>
+        runWebsiteCapture(supabase, {
+          id: capture.id,
+          userId: user.id,
+          projectId: data.id,
+          url: websiteUrl,
+        }),
+      );
+    }
   }
 
   redirect(`/projects/${data.id}`);
