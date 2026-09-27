@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/auth/actions";
@@ -20,6 +21,12 @@ export default async function DashboardPage() {
         </form>
       </div>
       <p className="text-foreground/70">Signed in as {user.email}</p>
+      <Link
+        href="/projects/new"
+        className="self-start rounded-md bg-foreground px-4 py-2 font-medium text-background"
+      >
+        Create Video
+      </Link>
     </main>
   );
 }

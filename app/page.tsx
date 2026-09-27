@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 px-4 text-center">
@@ -8,12 +10,12 @@ export default function Home() {
         Turn your website or product screenshots into a professional
         motion-graphics promo video for your SaaS, software or digital product.
       </p>
-      <a
-        href="/create"
+      <Link
+        href="/projects/new"
         className="rounded-full bg-foreground px-6 py-3 font-medium text-background transition-opacity hover:opacity-90"
       >
         Create Video
-      </a>
+      </Link>
     </main>
   );
 }
