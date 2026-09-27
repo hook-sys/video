@@ -230,6 +230,11 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           </details>
         )}
       </section>
+      {process.env.NODE_ENV !== "production" && project.brief_status === "completed" && (
+        <Link href={`/projects/${id}/preview`} className="self-start text-sm underline">
+          Preview storyboard (dev)
+        </Link>
+      )}
       <button
         disabled
         title="Coming soon"
