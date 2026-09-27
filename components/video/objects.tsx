@@ -335,3 +335,104 @@ export function TextCard({ w, text, size, icon, caret = false, glow = 0 }: { w?:
     </div>
   );
 }
+
+// Task card: checkbox, title line, meta line and a coloured tag. `done` ticks it.
+export function TaskCard({ w, tint, done = 0 }: { w: number; tint: string; done?: number }) {
+  return (
+    <div style={{ ...glass, width: w, padding: w * 0.07, borderRadius: w * 0.07, display: "flex", gap: w * 0.06, alignItems: "center", background: "rgba(18,21,34,0.9)" }}>
+      <div
+        style={{
+          width: w * 0.13,
+          height: w * 0.13,
+          borderRadius: w * 0.04,
+          border: `2px solid ${done > 0.5 ? "#34d399" : "rgba(255,255,255,0.35)"}`,
+          background: done > 0.5 ? "#34d39933" : "transparent",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <svg width="80%" height="80%" viewBox="0 0 24 24" style={{ transform: `scale(${done})` }}>
+          {ICONS.check}
+        </svg>
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: w * 0.035 }}>
+        <div style={{ height: w * 0.045, width: "85%", borderRadius: 99, background: "rgba(255,255,255,0.3)" }} />
+        <div style={{ display: "flex", gap: w * 0.03, alignItems: "center" }}>
+          <div style={{ height: w * 0.05, width: w * 0.18, borderRadius: 99, background: `${tint}88` }} />
+          <div style={{ height: w * 0.035, width: "40%", borderRadius: 99, background: "rgba(255,255,255,0.14)" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Small browser window: tab strip with one active tab, address bar, content lines.
+export function BrowserTab({ w, tint }: { w: number; tint: string }) {
+  return (
+    <div style={{ ...glass, width: w, borderRadius: w * 0.05, overflow: "hidden", background: "rgba(18,21,34,0.92)" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: w * 0.02, padding: `${w * 0.03}px ${w * 0.04}px 0`, background: "rgba(255,255,255,0.05)" }}>
+        {[ACCENT, "#febc2e", "#28c840"].map((c) => (
+          <div key={c} style={{ width: w * 0.03, height: w * 0.03, borderRadius: 99, background: c, marginBottom: w * 0.03 }} />
+        ))}
+        <div style={{ marginLeft: w * 0.03, width: w * 0.34, height: w * 0.07, borderRadius: `${w * 0.025}px ${w * 0.025}px 0 0`, background: `${tint}55` }} />
+      </div>
+      <div style={{ padding: w * 0.05, display: "flex", flexDirection: "column", gap: w * 0.035 }}>
+        <div style={{ height: w * 0.05, borderRadius: 99, background: "rgba(255,255,255,0.1)" }} />
+        <div style={{ height: w * 0.035, width: "70%", borderRadius: 99, background: "rgba(255,255,255,0.2)" }} />
+        <div style={{ height: w * 0.035, width: "50%", borderRadius: 99, background: "rgba(255,255,255,0.14)" }} />
+      </div>
+    </div>
+  );
+}
+
+// Workspace window frame the other objects move into.
+export function WorkspaceFrame({ w, h }: { w: number; h: number }) {
+  const u = Math.min(w, h);
+  return (
+    <div style={{ ...glass, width: w, height: h, borderRadius: u * 0.04, background: "rgba(12,15,26,0.8)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", gap: u * 0.015, padding: u * 0.03, borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        {["#ff5f57", "#febc2e", "#28c840"].map((c) => (
+          <div key={c} style={{ width: u * 0.022, height: u * 0.022, borderRadius: 99, background: c }} />
+        ))}
+      </div>
+      <div style={{ flex: 1, display: "flex" }}>
+        <div style={{ width: "14%", borderRight: "1px solid rgba(255,255,255,0.06)", padding: u * 0.03, display: "flex", flexDirection: "column", gap: u * 0.025 }}>
+          {[0.8, 0.6, 0.7].map((x, i) => (
+            <div key={i} style={{ height: u * 0.016, width: `${x * 100}%`, borderRadius: 99, background: "rgba(255,255,255,0.14)" }} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Progress chart: bars grow in sequence, then a trend line draws over them.
+export function ProgressChart({ w, h, grow }: { w: number; h: number; grow: number }) {
+  const bars = [0.35, 0.5, 0.45, 0.65, 0.8, 0.95];
+  const line = bars.map((b, i) => `${(i + 0.5) * (100 / bars.length)},${100 - b * 100}`).join(" ");
+  return (
+    <div style={{ position: "relative", width: w, height: h, display: "flex", alignItems: "flex-end", gap: w * 0.03 }}>
+      {bars.map((b, i) => (
+        <div
+          key={i}
+          style={{
+            flex: 1,
+            height: `${b * 100 * interpolate(grow, [i * 0.08, i * 0.08 + 0.5], [0, 1], clamp)}%`,
+            borderRadius: w * 0.012,
+            background: `linear-gradient(180deg, ${ACCENT_2}, ${ACCENT}88)`,
+          }}
+        />
+      ))}
+      {/* Trend line draws left to right once the bars are mostly up. */}
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", clipPath: `inset(0 ${100 * (1 - interpolate(grow, [0.5, 1], [0, 1], clamp))}% 0 0)` }}
+      >
+        <polyline points={line} fill="none" stroke="#34d399" strokeWidth="3" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
+  );
+}

@@ -1,5 +1,6 @@
 import { AbsoluteFill, Html5Audio, Sequence } from "remotion";
 import { exitTransition, sceneKind, SceneView, typedPhrase } from "./scenes";
+import { buildField } from "./field";
 import { syncToNarration } from "./sync";
 import { TRANSITION_FRAMES } from "./transitions";
 import { sceneTimings, type StoryboardProps } from "./types";
@@ -15,6 +16,8 @@ export function Storyboard({ scenes: planned, durationSeconds, audioUrl, words }
   const { frames } = sceneTimings(scenes, durationSeconds);
   const starts = frames.map((_, i) => frames.slice(0, i).reduce((n, f) => n + f, 0));
   const kinds = scenes.map((s, i) => sceneKind(s, i === scenes.length - 1));
+  // Persistent objects laid out from each scene's semantic plan.
+  const fields = buildField(scenes.map((s, i) => (kinds[i] === "field" ? s.plan : null)));
   return (
     <AbsoluteFill style={{ background: "#0b0d12" }}>
       {audioUrl && <Html5Audio src={audioUrl} />}
@@ -31,6 +34,7 @@ export function Storyboard({ scenes: planned, durationSeconds, audioUrl, words }
               prevKind={kinds[i - 1]}
               nextKind={kinds[i + 1]}
               prevTyped={i > 0 ? typedPhrase(scenes[i - 1]) : undefined}
+              field={fields[i]}
             />
           </Sequence>
         );

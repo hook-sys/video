@@ -1,14 +1,16 @@
 import type { CSSProperties } from "react";
 import { Easing, interpolate } from "remotion";
 
-export type TransitionKind = "fade" | "slide" | "zoom" | "blur" | "wipe" | "morph";
+export type TransitionKind = "fade" | "slide" | "zoom" | "blur" | "wipe" | "morph" | "dissolve";
 type Direction = "left" | "right" | "up" | "down";
 
 // Maps the storyboard's free-text `transition` onto a rendered transition.
 export function transitionFor(text: string | undefined): { kind: TransitionKind; dir: Direction } {
   const t = (text ?? "").toLowerCase();
   const dir: Direction = /right/.test(t) ? "right" : /\bup\b/.test(t) ? "up" : /down/.test(t) ? "down" : "left";
-  const kind: TransitionKind = /morph|match|shape/.test(t)
+  const kind: TransitionKind = /dissolve|continu/.test(t)
+    ? "dissolve"
+    : /morph|match|shape/.test(t)
     ? "morph"
     : /wipe/.test(t)
       ? "wipe"
@@ -57,6 +59,8 @@ export function transitionStyle(
         const i = (1 - e) * 28;
         return { clipPath: `inset(${i}% ${i}% ${i}% ${i}% round ${(1 - e) * 64}px)`, transform: `scale(${1.1 - 0.1 * e})` };
       }
+      case "dissolve": // same objects continue; only the scene around them changes
+        return { opacity: e };
       default: // push-through dissolve: the new scene settles as the old one is passed
         return { opacity: e, transform: `scale(${1.1 - 0.1 * e})`, filter: `blur(${(1 - e) * 6}px)` };
     }
@@ -72,6 +76,8 @@ export function transitionStyle(
       return { transform: `translate${axis}(${-sign * e * 12}%)` };
     case "morph":
       return { transform: `scale(${1 + 0.15 * e})`, filter: `blur(${e * 6}px)` };
+    case "dissolve":
+      return {};
     default:
       return { transform: `scale(${1 + 0.25 * e})`, filter: `blur(${e * 6}px)` };
   }

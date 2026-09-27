@@ -13,7 +13,8 @@ import { tokenize } from "@/lib/voice-timing";
 import { enter, motionFor } from "./animations";
 import { ActionLayer, graphemes } from "./actions";
 import { CameraLayer, CameraProvider, focusOn, orderKeys, pose, useSceneSpan, type CameraKey } from "./camera";
-import { Burst, Chip, Core, Obj, Particles, SkeletonCard, TextCard, type IconName } from "./objects";
+import { BrowserTab, Burst, Chip, Core, Obj, Particles, ProgressChart, SkeletonCard, TaskCard, TextCard, WorkspaceFrame, type IconName } from "./objects";
+import { FIELD_OBJECTS, type FieldScene as FieldPlan, type Pose } from "./field";
 import { SceneSfx } from "./sfx";
 import { same, type SyncedScene, type TimedAction } from "./sync";
 import { sceneEdgeStyle, TRANSITION_FRAMES, transitionFor } from "./transitions";
@@ -217,7 +218,7 @@ function Headline({
 
 // `lines`: on-screen text not already shown elsewhere; `typed`: the line the UI types.
 // `prevKind`/`prevTyped` let a scene continue the previous one's focal object.
-type VisualProps = { scene: SyncedView; isFinal?: boolean; lines: string[]; typed: string; prevKind?: Kind; prevTyped?: string };
+type VisualProps = { scene: SyncedView; isFinal?: boolean; lines: string[]; typed: string; prevKind?: Kind; prevTyped?: string; field?: FieldPlan | null };
 
 // Foreground depth-of-field layer (nearest, softly blurred): one object that
 // reacts to a story beat. No ambient particles.
@@ -357,6 +358,105 @@ function FeatureScene({ scene, lines }: VisualProps) {
   );
 }
 
+// When the field's objects start moving: the scene's first timed action, else
+// just after the scene has transitioned in.
+function fieldBeat(scene: SyncedView, fps: number) {
+  const first = scene.timedActions?.[0];
+  return first ? Math.max(4, Math.round(first.at * fps) - 4) : 8;
+}
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const FIELD_TINTS = [ACCENT, ACCENT_2, "#34d399", "#febc2e", "#ff8ad8"];
+
+// Semantic object field: the storyboard's plan decides which objects exist and
+// what they do (stack, scatter, merge, arrange, generate, complete). Objects
+// keep their identity across consecutive planned scenes: each scene starts
+// from where the previous one left them.
+function FieldScene({ scene, lines, isFinal, field }: VisualProps) {
+  const frame = useCurrentFrame();
+  const { fps, width, height } = useVideoConfig();
+  const span = useSceneSpan();
+  const base = Math.min(width, height);
+  if (!field) return null;
+  const beat = fieldBeat(scene, fps);
+  const wsP = spring({ frame: frame - (beat - 6), fps, config: { damping: 18 } });
+  const ws = field.workspace;
+  const rect = { x: lerp(ws.from.x, ws.to.x, wsP), y: lerp(ws.from.y, ws.to.y, wsP), w: lerp(ws.from.w, ws.to.w, wsP), h: lerp(ws.from.h, ws.to.h, wsP), o: lerp(ws.from.o, ws.to.o, wsP) };
+  const chartAt = actionFrames(scene, "reveal", fps)?.[0] ?? Math.round(span * 0.5);
+  const grow = field.chart.to > field.chart.from ? interpolate(frame, [chartAt, chartAt + fps * 1.2], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) }) : field.chart.to;
+  const doneAt = actionFrames(scene, "success", fps)?.[0] ?? beat + 10;
+  const cta = spring({ frame: frame - Math.round(span * 0.45), fps, config: { damping: 12 } });
+  let spawnOrder = 0;
+  return (
+    <AbsoluteFill>
+      <ImageBackground scene={scene} />
+      <CameraLayer depth={DEPTH.subject} zoom={0.8}>
+        {rect.o > 0.01 && (
+          <div style={{ position: "absolute", left: `${rect.x - rect.w / 2}%`, top: `${rect.y - rect.h / 2}%`, opacity: rect.o }}>
+            <WorkspaceFrame w={(rect.w / 100) * width} h={(rect.h / 100) * height} />
+            {grow > 0 && (
+              <div style={{ position: "absolute", left: "20%", right: "6%", bottom: "8%", height: "34%" }}>
+                <ProgressChart w={(rect.w / 100) * width * 0.74} h={(rect.h / 100) * height * 0.34} grow={grow} />
+              </div>
+            )}
+          </div>
+        )}
+        {field.items.map((it, i) => {
+          const order = it.spawned ? spawnOrder++ : i;
+          const delay = beat + (it.spawned ? order * 5 : order * 2);
+          const p = spring({ frame: frame - delay, fps, config: { damping: 14, mass: 0.8 } });
+          const at: Pose = {
+            x: lerp(it.from.x, it.to.x, p),
+            y: lerp(it.from.y, it.to.y, p),
+            s: lerp(it.from.s, it.to.s, p),
+            rot: lerp(it.from.rot, it.to.rot, p),
+            o: lerp(it.from.o, it.to.o, Math.min(1, p * 1.5)),
+          };
+          const w = base * (it.skin === "tab" ? 0.3 : it.skin === "card" ? 0.26 : 0.28);
+          const done = field.complete && it.skin === "task" ? spring({ frame: frame - doneAt - order * 3, fps, config: { damping: 12 } }) : 0;
+          return (
+            <div
+              key={it.id}
+              style={{
+                position: "absolute",
+                left: `${at.x}%`,
+                top: `${at.y}%`,
+                opacity: at.o,
+                transform: `translate(-50%, -50%) rotate(${at.rot}deg) scale(${at.s})`,
+                filter: at.o < 0.6 ? "blur(1.5px)" : undefined,
+              }}
+            >
+              {it.skin === "task" ? (
+                <TaskCard w={w} tint={FIELD_TINTS[it.id % 5]} done={done} />
+              ) : it.skin === "tab" ? (
+                <BrowserTab w={w} tint={FIELD_TINTS[(it.id + 2) % 5]} />
+              ) : (
+                <SkeletonCard w={w} variant="result" fill={1} />
+              )}
+            </div>
+          );
+        })}
+        {field.complete && (
+          <Obj x={rect.x + rect.w / 2 - 3} y={rect.y - rect.h / 2 + 3} at={doneAt + 6} from="depth" float={0.5}>
+            <Chip icon="check" size={base * 0.09} tint="#34d399" />
+          </Obj>
+        )}
+      </CameraLayer>
+      <CameraLayer depth={DEPTH.text} zoom={0.4}>
+        <AbsoluteFill style={{ ...inset, top: height * 0.03, height: height * 0.2, justifyContent: "center", padding: "0 10%" }}>
+          <Headline scene={scene} lines={lines} scale={0.62} />
+        </AbsoluteFill>
+        {isFinal && (
+          <AbsoluteFill style={{ ...inset, top: height * 0.86, height: height * 0.1, alignItems: "center", justifyContent: "center" }}>
+            <div style={{ width: base * 0.26, height: base * 0.07, borderRadius: 999, background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT, fontWeight: 700, fontSize: base * 0.035, opacity: Math.min(1, cta * 1.5), transform: `translateY(${(1 - cta) * 30}px) scale(${0.8 + 0.2 * cta})` }}>
+              →
+            </div>
+          </AbsoluteFill>
+        )}
+      </CameraLayer>
+    </AbsoluteFill>
+  );
+}
+
 // Beats of a scene that turns input into a result: input card flies into the
 // processing core, particles stream in while progress advances, then the core
 // bursts into a result card (which the camera flies through into the next scene).
@@ -435,7 +535,7 @@ function ProcessingScene({ scene, lines, prevKind, prevTyped }: VisualProps) {
 
 // Closing scene: the result settles among other cards at different depths,
 // the camera pulls back to reveal them, and the call-to-action enters.
-function ResultScene({ scene, lines }: VisualProps) {
+function ResultScene({ scene, lines, isFinal }: VisualProps) {
   const frame = useCurrentFrame();
   const { fps, height, width } = useVideoConfig();
   const span = useSceneSpan();
@@ -443,7 +543,7 @@ function ResultScene({ scene, lines }: VisualProps) {
   const success = actionFrames(scene, "success", fps);
   const check = success ? spring({ frame: frame - success[0], fps, config: { damping: 10 } }) : 0;
   const ctaAt = Math.round(span * 0.42);
-  const cta = spring({ frame: frame - ctaAt, fps, config: { damping: 12 } });
+  const cta = isFinal ? spring({ frame: frame - ctaAt, fps, config: { damping: 12 } }) : 0;
   const pulse = 0.5 + 0.5 * Math.sin(frame / 8);
   const fill = interpolate(frame, [6, 30], [0, 1], clamp);
   return (
@@ -849,12 +949,27 @@ function IconScene({ scene, lines }: VisualProps) {
 
 // Compositions: kinetic intro, script input (app), AI processing, feature
 // showcase, icon, and the closing result + CTA.
-export type Kind = "product" | "processing" | "result" | "feature" | "icon" | "kinetic";
+export type Kind = "product" | "processing" | "result" | "feature" | "icon" | "kinetic" | "field";
 
 // Composition chosen from what the storyboard (AI) decided for the scene: its
 // visual type, its timed actions and its on-screen phrases.
 export function sceneKind(scene: SyncedView, isFinal?: boolean): Kind {
   const has = (k: TimedAction["action"]) => scene.timedActions?.some((a) => a.action === k);
+  // A real screenshot is always shown as the product.
+  if (scene.visual === "screenshot" && scene.assetUrl) return "product";
+  // The storyboard's semantic plan picks the composition from the scene's meaning.
+  const plan = scene.plan;
+  if (plan) {
+    const o = plan.primary_object;
+    if (FIELD_OBJECTS.includes(o)) return "field";
+    if (o === "input_field" || o === "button") return "product";
+    if (o === "processing_core") return "processing";
+    if (o === "feature_card") return scene.on_screen_text.length >= 2 ? "feature" : "kinetic";
+    if (o === "result_card" || o === "video_card") {
+      return ["stack", "scatter", "arrange", "merge", "move_to"].includes(plan.object_action) ? "field" : isFinal ? "result" : "processing";
+    }
+    return "kinetic";
+  }
   if (scene.visual === "ui" || scene.visual === "screenshot") return "product";
   if (isFinal) return "result";
   if (has("processing") || has("reveal")) return "processing";
@@ -870,6 +985,8 @@ export function exitTransition(scene: SyncedView, isFinal?: boolean, next?: Kind
   const kind = sceneKind(scene, isFinal);
   if (kind === "processing") return "zoom through";
   if (kind === "product" && next === "processing") return "zoom through";
+  // The same objects continue on screen: a plain dissolve keeps them in place.
+  if (kind === "field" && next === "field") return "dissolve";
   return scene.transition ?? "fade";
 }
 
@@ -884,6 +1001,7 @@ const COMPOSITIONS: Record<Kind, React.ComponentType<VisualProps>> = {
   processing: ProcessingScene,
   result: ResultScene,
   feature: FeatureScene,
+  field: FieldScene,
   icon: IconScene,
   kinetic: KineticScene,
 };
@@ -891,7 +1009,7 @@ const COMPOSITIONS: Record<Kind, React.ComponentType<VisualProps>> = {
 // Camera choreography per composition: starts slightly close (the scene
 // emerges from the transition), opens wide as objects enter, follows the
 // action to its focal point, and keeps pushing into the transition tail.
-function choreography(kind: Kind, scene: SyncedView, fps: number, span: number, typedLength: number, index: number, prevKind?: Kind): CameraKey[] {
+function choreography(kind: Kind, scene: SyncedView, fps: number, span: number, typedLength: number, index: number, prevKind?: Kind, field?: FieldPlan | null): CameraKey[] {
   const end = span + TRANSITION_FRAMES;
   const side = index % 2 ? -1 : 1;
   const k = (f: number, p: CameraKey["pose"]) => ({ f: Math.round(f), pose: p });
@@ -923,6 +1041,23 @@ function choreography(kind: Kind, scene: SyncedView, fps: number, span: number, 
   }
   if (kind === "result") {
     return orderKeys([k(0, pose(1.32, 0, -2)), k(14, pose(1.3, 0, -2)), k(span * 0.5, pose(1.02, 0, 0)), k(span, pose(1, 0, 0))]);
+  }
+  if (kind === "field" && field) {
+    // Follows the objects: starts framed on where they were, moves with them to
+    // where they go, and settles back to the shared framing, so consecutive
+    // field scenes meet at the same camera position.
+    const centre = (poses: Pose[]) => (poses.length ? [poses.reduce((n, p) => n + p.x, 0) / poses.length, poses.reduce((n, p) => n + p.y, 0) / poses.length] : [50, 56]);
+    const [fx, fy] = centre(field.items.filter((it) => !it.spawned).map((it) => it.from));
+    const [tx, ty] = centre(field.items.map((it) => it.to));
+    const focus = scene.plan?.camera_focus ?? "primary";
+    const zoom = focus === "close" ? 1.24 : focus === "wide" ? 1.02 : 1.14;
+    const beat = fieldBeat(scene, fps);
+    const home = (x: number, y: number) => focusOn(x - 50, y - 50, 1.06, DEPTH.subject, 0.3);
+    return orderKeys([
+      k(0, home(fx, fy)),
+      k(beat + (focus === "follow" ? 30 : 20), focusOn(tx - 50, ty - 50, zoom, DEPTH.subject, focus === "wide" ? 0.1 : 0.4)),
+      k(span, home(tx, ty)),
+    ]);
   }
   if (kind === "feature") {
     // Visit each phrase card as it is spoken, then pull back to show them together.
@@ -963,9 +1098,11 @@ export function SceneView({
   prevKind,
   nextKind,
   prevTyped,
+  field,
 }: {
   scene: SyncedView;
   index: number;
+  field?: FieldPlan | null;
   // Neighbouring compositions, so focal objects and transitions can continue.
   prevKind?: Kind;
   nextKind?: Kind;
@@ -996,6 +1133,7 @@ export function SceneView({
   const handled: Partial<Record<Kind, TimedAction["action"][]>> = {
     processing: ["processing", "reveal"],
     result: ["success", "reveal"],
+    field: ["reveal", "success", "processing"], // chart growth / completion happen on the objects
   };
   const overlay = actions.filter(
     (a) =>
@@ -1021,8 +1159,8 @@ export function SceneView({
   return (
     <AbsoluteFill style={{ opacity }}>
       <AbsoluteFill style={{ ...edge, overflow: "hidden" }}>
-        <CameraProvider value={{ keys: choreography(kind, scene, fps, span, graphemes(typedLine).length, index, prevKind), frame, span }}>
-          <Visual scene={scene} isFinal={isFinal} lines={lines} typed={typedLine} prevKind={prevKind} prevTyped={prevTyped} />
+        <CameraProvider value={{ keys: choreography(kind, scene, fps, span, graphemes(typedLine).length, index, prevKind, field), frame, span }}>
+          <Visual scene={scene} isFinal={isFinal} lines={lines} typed={typedLine} prevKind={prevKind} prevTyped={prevTyped} field={field} />
           <Hud span={span}>
             <ActionLayer actions={overlay} text={typedLine} placement={product ? "center" : "lower"} />
           </Hud>
