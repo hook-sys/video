@@ -2,8 +2,6 @@ import "server-only";
 import { readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { bundle } from "@remotion/bundler";
-import { renderMedia, selectComposition } from "@remotion/renderer";
 import {
   COMPOSITION_ID,
   RESOLUTIONS,
@@ -13,8 +11,13 @@ import {
 
 let bundled: Promise<string> | undefined;
 
+// Remotion is loaded lazily: its native dependencies aren't shipped to Vercel
+// Functions, and a top-level import would break every server action that
+// shares this module graph (e.g. project creation), not just rendering.
+
 // Bundles the Remotion entry once per server process.
-function getServeUrl() {
+async function getServeUrl() {
+  const { bundle } = await import("@remotion/bundler");
   bundled ??= bundle({
     entryPoint: path.join(process.cwd(), "remotion/index.ts"),
     webpackOverride: (config) => ({
@@ -36,6 +39,7 @@ export async function renderStoryboardMp4(
   props: RenderProps,
   resolution: Resolution,
 ): Promise<Buffer> {
+  const { renderMedia, selectComposition } = await import("@remotion/renderer");
   const serveUrl = await getServeUrl();
   const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE || null;
   const inputProps = props as unknown as Record<string, unknown>;
