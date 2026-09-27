@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
+    "@remotion/bundler": "4.0.529",
     "@remotion/player": "4.0.529",
+    "@remotion/renderer": "4.0.529",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "next": "16.3.6",

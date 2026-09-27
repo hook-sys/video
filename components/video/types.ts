@@ -14,7 +14,17 @@ export type StoryboardProps = {
   audioUrl?: string;
 };
 
+// Props for server rendering; `format` only drives composition size.
+export type RenderProps = StoryboardProps & { format: string };
+
+export const COMPOSITION_ID = "Storyboard";
+
 export const FPS = 30;
+
+// Output resolutions. The composition is laid out at 1080p and scaled for 4K,
+// so scenes render identically at either size.
+export const RESOLUTIONS = { "1080p": 1, "4k": 2 } as const;
+export type Resolution = keyof typeof RESOLUTIONS;
 
 export const DIMENSIONS: Record<string, { width: number; height: number }> = {
   "16:9": { width: 1920, height: 1080 },

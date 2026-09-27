@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { SCREENSHOTS_BUCKET } from "@/lib/projects";
+import { SCREENSHOTS_BUCKET, VIDEOS_BUCKET } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import {
   generateBrief,
   generateVisualAssets,
   generateVoice,
   prepareAssets,
+  renderVideo,
 } from "@/app/projects/actions";
 import type { AssetManifest } from "@/lib/asset-manifest";
 import { SubmitButton } from "@/components/submit-button";
@@ -65,6 +66,17 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
     : { data: [] };
   const assetUrl = (path?: string) => assetUrls?.find((u) => u.path === path)?.signedUrl;
   const assetsBusy = project.assets_status === "preparing" || project.assets_status === "generating";
+
+  const { data: video } =
+    project.render_status === "completed" && project.video_path
+      ? await supabase.storage.from(VIDEOS_BUCKET).createSignedUrl(project.video_path, 3600)
+      : { data: null };
+  const { data: download } =
+    project.render_status === "completed" && project.video_path
+      ? await supabase.storage
+          .from(VIDEOS_BUCKET)
+          .createSignedUrl(project.video_path, 3600, { download: "video.mp4" })
+      : { data: null };
 
   const rows: [string, string][] = [
     ["Website URL", project.website_url ?? "—"],
@@ -235,13 +247,42 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           Preview storyboard (dev)
         </Link>
       )}
-      <button
-        disabled
-        title="Coming soon"
-        className="self-start rounded-md bg-foreground px-4 py-2 font-medium text-background opacity-50"
-      >
-        Generate Video
-      </button>
+      <section className="flex flex-col gap-2 text-sm">
+        <h2 className="font-medium">
+          Video:{" "}
+          <span className="text-foreground/70">
+            {project.render_status === "processing"
+              ? "Rendering… (refresh to update)"
+              : project.render_status}
+          </span>
+        </h2>
+        {project.render_error && <p className="text-red-600">{project.render_error}</p>}
+        <form action={renderVideo.bind(null, id)} className="flex items-center gap-2">
+          <select
+            name="resolution"
+            defaultValue={project.resolution}
+            className="rounded-md border border-foreground/20 bg-transparent px-3 py-2"
+          >
+            <option value="1080p">1080p</option>
+            <option value="4k">4K</option>
+          </select>
+          <SubmitButton
+            pendingLabel="Starting render…"
+            disabled={project.render_status === "processing"}
+            className="rounded-md bg-foreground px-4 py-2 font-medium text-background disabled:opacity-50"
+          >
+            Render Video
+          </SubmitButton>
+        </form>
+        {video?.signedUrl && (
+          <video controls src={video.signedUrl} className="w-full rounded-md" />
+        )}
+        {download?.signedUrl && (
+          <a href={download.signedUrl} className="self-start underline">
+            Download MP4
+          </a>
+        )}
+      </section>
     </main>
   );
 }

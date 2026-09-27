@@ -25,6 +25,7 @@ export function parseHttpUrl(value: string): URL | null {
 
 // Storage path: `${userId}/${projectId}/${uuid}.${ext}`
 export const SCREENSHOTS_BUCKET = "project-screenshots";
+export const VIDEOS_BUCKET = "project-videos";
 export const SCREENSHOT_MAX_FILES = 5;
 export const SCREENSHOT_MAX_BYTES = 5 * 1024 * 1024;
 export const SCREENSHOT_TYPES: Record<string, string> = {

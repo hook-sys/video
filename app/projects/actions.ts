@@ -11,6 +11,7 @@ import {
   FORMATS,
   SCREENSHOT_TYPES,
   SCREENSHOTS_BUCKET,
+  VIDEOS_BUCKET,
   VOICE_LANGUAGES,
   VOICE_STYLES,
   parseHttpUrl,
@@ -20,6 +21,9 @@ import { runWebsiteCapture } from "@/lib/website-capture";
 import { ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
 import { type AssetManifest, buildAssetManifest } from "@/lib/asset-manifest";
 import { generateAsset } from "@/lib/generated-assets";
+import { RENDER_PROJECT_COLUMNS, buildRenderInput } from "@/lib/render-input";
+import { renderStoryboardMp4 } from "@/lib/render-video";
+import { RESOLUTIONS, type Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 
@@ -347,6 +351,82 @@ export async function generateVisualAssets(projectId: string) {
     assets_manifest: { ...manifest, assets },
     assets_status: failed ? "failed" : "completed",
     assets_error: failed ? `${failed} asset(s) failed to generate.` : null,
+  });
+  revalidatePath(`/projects/${projectId}`);
+}
+
+const STALE_RENDER_MS = 30 * 60 * 1000;
+
+export async function renderVideo(projectId: string, formData: FormData) {
+  const resolution = Object.keys(RESOLUTIONS).find((r) => r === formData.get("resolution")) as
+    | Resolution
+    | undefined;
+  if (!resolution) return;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // RLS: only returns the project if this user owns it.
+  const { data: project } = await supabase
+    .from("projects")
+    .select(RENDER_PROJECT_COLUMNS)
+    .eq("id", projectId)
+    .maybeSingle();
+  if (!project) return;
+
+  const admin = createAdminClient();
+  const renderUpdate = (fields: Record<string, unknown>) =>
+    admin.from("projects").update(fields).eq("id", projectId).eq("user_id", user.id);
+
+  // Signed URLs must outlive the render.
+  const input = await buildRenderInput(supabase, project, 2 * 60 * 60);
+  if (!input.props || input.problems.length) {
+    await renderUpdate({
+      render_status: "failed",
+      render_error: input.problems.join(" "),
+    }).neq("render_status", "processing");
+    revalidatePath(`/projects/${projectId}`);
+    return;
+  }
+
+  const staleBefore = new Date(Date.now() - STALE_RENDER_MS).toISOString();
+  const { data: claimed } = await renderUpdate({
+    render_status: "processing",
+    render_error: null,
+    status: "processing",
+    resolution,
+  })
+    .or(`render_status.neq.processing,updated_at.lt.${staleBefore}`)
+    .select("id");
+  if (!claimed?.length) return;
+
+  // Rendering takes minutes; finish after responding. Page shows progress on refresh.
+  const props = input.props;
+  after(async () => {
+    try {
+      const mp4 = await renderStoryboardMp4(props, resolution);
+      const videoPath = `${user.id}/${projectId}/final.mp4`;
+      const { error } = await admin.storage
+        .from(VIDEOS_BUCKET)
+        .upload(videoPath, mp4, { contentType: "video/mp4", upsert: true });
+      if (error) throw new Error(`Video storage failed: ${error.message}`);
+      await renderUpdate({
+        render_status: "completed",
+        render_error: null,
+        video_path: videoPath,
+        status: "completed",
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message.split("\n")[0] : "Render failed.";
+      await renderUpdate({
+        render_status: "failed",
+        render_error: message.slice(0, 500),
+        status: "failed",
+      });
+    }
   });
   revalidatePath(`/projects/${projectId}`);
 }
