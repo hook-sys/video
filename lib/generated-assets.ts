@@ -47,13 +47,8 @@ export async function generateAsset(
       prompt: asset.prompt,
       format: asset.type === "icon" ? "1:1" : ctx.format,
     });
-    const { body, type, ext } = await downloadImage(imageUrl);
-    const path = `${ctx.userId}/${ctx.projectId}/assets/${asset.id}.${ext}`;
-    const { error } = await admin.storage
-      .from(SCREENSHOTS_BUCKET)
-      .upload(path, body, { contentType: type, upsert: true });
-    if (error) throw new Error(`Asset storage failed: ${error.message}`);
     const owner = { project_id: ctx.projectId, user_id: ctx.userId };
+    // Recorded as soon as Fal returns: the provider charges even if storing fails.
     await recordCost(admin, {
       ...owner,
       operation: "fal_image",
@@ -62,6 +57,12 @@ export async function generateAsset(
       estimated_cost_usd: falCost(model, 1),
       metadata: { asset_id: asset.id, asset_type: asset.type, request_id: requestId },
     });
+    const { body, type, ext } = await downloadImage(imageUrl);
+    const path = `${ctx.userId}/${ctx.projectId}/assets/${asset.id}.${ext}`;
+    const { error } = await admin.storage
+      .from(SCREENSHOTS_BUCKET)
+      .upload(path, body, { contentType: type, upsert: true });
+    if (error) throw new Error(`Asset storage failed: ${error.message}`);
     await recordCost(admin, {
       ...owner,
       operation: "storage",

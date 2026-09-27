@@ -264,9 +264,8 @@ export async function generateVoice(projectId: string) {
       language: project.voice_language,
       style: project.voice_style,
     });
-    const stored = await storeVoiceAudio(admin, audioUrl, user.id, projectId);
-    const storagePath = stored.path;
     const owner = { project_id: projectId, user_id: user.id };
+    // Recorded as soon as Fal returns: the provider charges even if storing fails.
     // Voice is priced per script character; the stored file costs storage.
     await recordCost(admin, {
       ...owner,
@@ -276,6 +275,8 @@ export async function generateVoice(projectId: string) {
       estimated_cost_usd: falCost(model, script.length),
       metadata: { unit: "characters", request_id: requestId },
     });
+    const stored = await storeVoiceAudio(admin, audioUrl, user.id, projectId);
+    const storagePath = stored.path;
     await recordCost(admin, {
       ...owner,
       operation: "storage",
@@ -587,11 +588,16 @@ export async function runBenchmark(sourceProjectId: string, formData: FormData) 
 
       await finish({ status: "completed", ...(await collectBenchmarkMetrics(admin, pid, duration)) });
     } catch (e) {
-      const metrics = projectId ? await collectBenchmarkMetrics(admin, projectId, duration) : {};
+      // Keep usage and partial spend for diagnosis, but no per-video totals:
+      // an incomplete video's cost would understate the real cost per video/minute.
+      const metrics = projectId ? await collectBenchmarkMetrics(admin, projectId, duration) : undefined;
       await finish({
         status: "failed",
         error: (e instanceof Error ? e.message : "Benchmark failed.").slice(0, 500),
         ...metrics,
+        estimated_cost_usd: null,
+        cost_per_minute_usd: null,
+        cost_breakdown: metrics ? { ...metrics.cost_breakdown, partial: true } : null,
       });
     }
   }

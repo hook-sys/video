@@ -292,8 +292,10 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         <section className="flex flex-col gap-2 rounded-md border border-dashed border-foreground/20 p-3 text-sm">
           <h2 className="font-medium">Generation Benchmark (dev)</h2>
           <p className="text-xs font-medium text-amber-600">
-            Runs the full paid pipeline on copies of this project. Costs are development
-            estimates (usage × configured rates) — not billing.
+            Development estimate — not billing. Runs the full paid pipeline on copies of this
+            project; the original is not modified. Costs are measured usage × the rates configured
+            in lib/costs/pricing.ts / COST_PRICING_JSON, not provider invoices. Unconfigured rates
+            count as $0. Failed runs show no totals — use completed runs only.
           </p>
           <form action={runBenchmark.bind(null, id)} className="flex items-center gap-2">
             <select name="case" className="rounded-md border border-foreground/20 bg-transparent px-3 py-2">
