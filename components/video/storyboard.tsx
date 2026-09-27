@@ -1,5 +1,5 @@
 import { AbsoluteFill, Html5Audio, Sequence } from "remotion";
-import { exitTransition, SceneView } from "./scenes";
+import { exitTransition, sceneKind, SceneView, typedPhrase } from "./scenes";
 import { syncToNarration } from "./sync";
 import { TRANSITION_FRAMES } from "./transitions";
 import { sceneTimings, type StoryboardProps } from "./types";
@@ -14,6 +14,7 @@ export function Storyboard({ scenes: planned, durationSeconds, audioUrl, words }
   const { scenes } = syncToNarration(planned, durationSeconds, words);
   const { frames } = sceneTimings(scenes, durationSeconds);
   const starts = frames.map((_, i) => frames.slice(0, i).reduce((n, f) => n + f, 0));
+  const kinds = scenes.map((s, i) => sceneKind(s, i === scenes.length - 1));
   return (
     <AbsoluteFill style={{ background: "#0b0d12" }}>
       {audioUrl && <Html5Audio src={audioUrl} />}
@@ -26,7 +27,10 @@ export function Storyboard({ scenes: planned, durationSeconds, audioUrl, words }
               index={i}
               span={frames[i]}
               isFinal={last}
-              prevTransition={i > 0 ? exitTransition(scenes[i - 1], false) : undefined}
+              prevTransition={i > 0 ? exitTransition(scenes[i - 1], false, kinds[i]) : undefined}
+              prevKind={kinds[i - 1]}
+              nextKind={kinds[i + 1]}
+              prevTyped={i > 0 ? typedPhrase(scenes[i - 1]) : undefined}
             />
           </Sequence>
         );

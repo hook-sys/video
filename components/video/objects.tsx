@@ -302,3 +302,36 @@ export function Burst({ x, y, at, size }: { x: number; y: number; at: number; si
     />
   );
 }
+
+// Glass card showing a line of text, e.g. the typed input carried from the app
+// scene into processing (shared element), or a feature phrase.
+export function TextCard({ w, text, size, icon, caret = false, glow = 0 }: { w?: number; text: string; size: number; icon?: IconName; caret?: boolean; glow?: number }) {
+  const frame = useCurrentFrame();
+  return (
+    <div
+      style={{
+        ...glass,
+        width: w,
+        display: "flex",
+        alignItems: "center",
+        gap: size * 0.5,
+        padding: `${size * 0.55}px ${size * 0.8}px`,
+        borderRadius: size * 0.6,
+        background: "rgba(16,19,32,0.82)",
+        border: `1px solid ${ACCENT}${glow > 0.3 ? "cc" : "55"}`,
+        boxShadow: `0 30px 80px rgba(0,0,0,.45), 0 0 ${size * 1.2 * glow}px ${ACCENT}88`,
+        color: FG,
+        fontFamily: "Inter, system-ui, sans-serif",
+        fontSize: size,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {icon && <Chip icon={icon} size={size * 1.7} />}
+      <span>
+        {text}
+        {caret && <span style={{ color: ACCENT, opacity: Math.floor(frame / 12) % 2 ? 0 : 1 }}>▍</span>}
+      </span>
+    </div>
+  );
+}
