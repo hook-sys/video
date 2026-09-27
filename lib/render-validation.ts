@@ -10,7 +10,7 @@ export type ValidationInput = {
   format: string;
   durationSeconds: number;
   resolution: string;
-  // Captured website text plus screenshot evidence: the only accepted sources for claims.
+  // Website text, screenshot evidence and the customer's script: the only accepted sources for claims.
   sourceText: string;
   // Missing voice/assets reported by the render input builder.
   missing: string[];

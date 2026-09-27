@@ -1,4 +1,3 @@
-import { VERCEL_SCREENSHOT_TOTAL_BYTES } from "@/lib/projects";
 import { CreateProjectForm } from "./create-project-form";
 
 // The generation pipeline runs after the response (after()) within this limit.
@@ -11,9 +10,7 @@ export default function NewProjectPage() {
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Create your video</h1>
         <p className="text-foreground/60">Write your script, pick a few options, and we&apos;ll do the rest.</p>
       </div>
-      <CreateProjectForm
-        maxTotalBytes={process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES : undefined}
-      />
+      <CreateProjectForm />
     </main>
   );
 }

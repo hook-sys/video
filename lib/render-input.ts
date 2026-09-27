@@ -14,10 +14,11 @@ export type RenderProject = {
   voice_status: string;
   voice_result: { storagePath?: string } | null;
   screenshot_evidence?: unknown;
+  direction?: string;
 };
 
 export const RENDER_PROJECT_COLUMNS =
-  "format, duration_seconds, brief, assets_manifest, voice_status, voice_result, screenshot_evidence";
+  "format, duration_seconds, brief, assets_manifest, voice_status, voice_result, screenshot_evidence, direction";
 
 // Resolves storyboard scenes, assets and narration into composition props with signed URLs.
 // `problems` lists anything missing that a final render must not proceed without.

@@ -8,9 +8,9 @@ import {
   DURATIONS,
   FORMATS,
   VISUAL_STYLES,
+  VOICE_GENDERS,
   VOICE_LANGUAGES,
   VOICE_STYLES,
-  validateScreenshots,
 } from "@/lib/projects";
 
 const sectionLabel = "text-sm font-medium";
@@ -21,14 +21,11 @@ const select =
 const styleSuffix = (style: string) => `\n\nVisual style: ${style}`;
 const SCRIPT_MAX = DIRECTION_MAX - Math.max(...VISUAL_STYLES.map((s) => styleSuffix(s).length));
 
-export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number }) {
+export function CreateProjectForm() {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState("");
   const [style, setStyle] = useState<string>(VISUAL_STYLES[0]);
-  const [files, setFiles] = useState<string[]>([]);
-  const [fileError, setFileError] = useState<string>();
-
-  const error = fileError ?? state.error;
+  const error = state.error;
 
   return (
     <>
@@ -59,7 +56,7 @@ export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number })
           <Choice name="format" title="Format" options={FORMATS} defaultValue={FORMATS[0]} columns={3} />
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="grid gap-8 sm:grid-cols-2">
           <label className="flex flex-col gap-2">
             <span className={sectionLabel}>Voice</span>
             <select name="voice_language" required className={select}>
@@ -68,50 +65,22 @@ export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number })
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-2">
-            <span className={sectionLabel}>Voice style</span>
-            <select name="voice_style" required className={select}>
-              {VOICE_STYLES.map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
-          </label>
+          <Choice
+            name="voice_gender"
+            title="Voice gender"
+            options={VOICE_GENDERS}
+            defaultValue={VOICE_GENDERS[0]}
+            format={(g) => (g === "male" ? "Male" : "Female")}
+            columns={2}
+          />
         </div>
-
-        <details className="group rounded-2xl border border-foreground/10 p-4 open:bg-foreground/[0.02]">
-          <summary className="cursor-pointer list-none text-sm font-medium">
-            <span className="mr-1 inline-block transition group-open:rotate-90">›</span>
-            Add product screenshots <span className="font-normal text-foreground/50">(recommended)</span>
-          </summary>
-          <p className="mt-2 text-xs text-foreground/60">
-            Screenshots show us your real product, so the video only features what it actually does.
-          </p>
-          <label className="mt-3 flex cursor-pointer flex-col items-center gap-1 rounded-xl border border-dashed border-foreground/20 px-3 py-6 text-center text-sm text-foreground/70 transition hover:border-indigo-500/60 hover:bg-indigo-500/5">
-            Click to choose images (PNG, JPG, WebP)
-            <span className="text-xs text-foreground/50">
-              Up to 5 images, 5 MB each
-              {maxTotalBytes ? `, ${Math.floor(maxTotalBytes / 1024 / 1024)} MB total` : ""}.
-            </span>
-            {files.length > 0 && <span className="text-xs text-foreground">{files.join(", ")}</span>}
-            <input
-              name="screenshots"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              multiple
-              className="sr-only"
-              onChange={(e) => {
-                const chosen = Array.from(e.target.files ?? []);
-                setFiles(chosen.map((f) => f.name));
-                setFileError(validateScreenshots(chosen, maxTotalBytes));
-              }}
-            />
-          </label>
-        </details>
+        {/* Voice style isn't offered to customers; keep the existing default. */}
+        <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
 
         {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600">{error}</p>}
 
         <button
-          disabled={pending || !!fileError}
+          disabled={pending}
           className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:shadow-xl hover:shadow-indigo-600/30 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/30 disabled:opacity-60"
         >
           ✦ Generate Video
@@ -145,7 +114,7 @@ function Choice<T extends string | number>({
     <fieldset className="flex flex-col gap-2">
       <legend className={`${sectionLabel} mb-2`}>{title}</legend>
       <div
-        className={`grid gap-2 ${columns === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3"}`}
+        className={`grid gap-2 ${columns === 3 ? "grid-cols-3" : columns === 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"}`}
       >
         {options.map((o) => (
           <label key={o} className="cursor-pointer">

@@ -1,7 +1,7 @@
 import "server-only";
 import { createFalClient } from "@fal-ai/client";
 
-export type VoiceInput = { script: string; language: string; style: string };
+export type VoiceInput = { script: string; language: string; style: string; gender: string };
 export type VoiceResult = { model: string; requestId: string; audioUrl: string };
 export type ImageInput = { prompt: string; format: string };
 export type ImageResult = { model: string; requestId: string; imageUrl: string };
@@ -10,7 +10,7 @@ const SCRIPT_MAX = 5_000;
 const TIMEOUT_MS = 55_000;
 
 // Input shape differs per Fal model, so it is configured, not guessed.
-// FAL_VOICE_INPUT_TEMPLATE is JSON with {{text}}, {{language}}, {{style}} placeholders,
+// FAL_VOICE_INPUT_TEMPLATE is JSON with {{text}}, {{language}}, {{style}}, {{gender}} placeholders,
 // e.g. {"text":"{{text}}","language":"{{language}}"}. Defaults to {"text":"{{text}}"}.
 // FAL_IMAGE_INPUT_TEMPLATE uses {{prompt}}, {{format}}. Defaults to {"prompt":"{{prompt}}"}.
 function buildInput(templateJson: string, values: Record<string, string>): Record<string, unknown> {
@@ -78,7 +78,12 @@ export async function generateImage({ prompt, format }: ImageInput): Promise<Ima
   return { model, requestId: result.requestId, imageUrl };
 }
 
-export async function generateVoice({ script, language, style }: VoiceInput): Promise<VoiceResult> {
+export async function generateVoice({
+  script,
+  language,
+  style,
+  gender,
+}: VoiceInput): Promise<VoiceResult> {
   const model = process.env.FAL_VOICE_MODEL;
   if (!model) throw new Error("FAL_VOICE_MODEL is not configured.");
 
@@ -91,6 +96,7 @@ export async function generateVoice({ script, language, style }: VoiceInput): Pr
       text,
       language,
       style,
+      gender,
     }),
     abortSignal: AbortSignal.timeout(TIMEOUT_MS),
   });

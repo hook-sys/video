@@ -12,6 +12,7 @@ export const VOICE_LANGUAGES = [
   "Spanish",
   "Arabic",
 ] as const;
+export const VOICE_GENDERS = ["male", "female"] as const;
 export const VOICE_STYLES = [
   "Professional",
   "Friendly",

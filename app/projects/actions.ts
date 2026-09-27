@@ -13,6 +13,7 @@ import {
   SCREENSHOTS_BUCKET,
   VIDEOS_BUCKET,
   VOICE_LANGUAGES,
+  VOICE_GENDERS,
   VOICE_STYLES,
   parseHttpUrl,
   validateScreenshots,
@@ -29,7 +30,7 @@ import { renderStoryboardMp4 } from "@/lib/render-video";
 import { validateForRender } from "@/lib/render-validation";
 import { falCost, openaiCost, renderCost, storageCost } from "@/lib/costs/pricing";
 import { recordCost } from "@/lib/costs/record";
-import { devToolsEnabled } from "@/lib/dev-tools";
+import { canUseDevTools } from "@/lib/dev-tools";
 import {
   NEEDS_SCREENSHOTS_MESSAGE,
   RENDER_WORKER_MESSAGE,
@@ -60,6 +61,7 @@ export async function createProject(
   const format = oneOf(FORMATS, formData.get("format"));
   const voiceLanguage = oneOf(VOICE_LANGUAGES, formData.get("voice_language"));
   const voiceStyle = oneOf(VOICE_STYLES, formData.get("voice_style"));
+  const voiceGender = oneOf(VOICE_GENDERS, formData.get("voice_gender")) ?? "male";
 
   if (!direction) return { error: "Video direction is required." };
   if (direction.length > DIRECTION_MAX)
@@ -95,6 +97,7 @@ export async function createProject(
       format,
       voice_language: voiceLanguage,
       voice_style: voiceStyle,
+      voice_gender: voiceGender,
     })
     .select("id")
     .single();
@@ -262,7 +265,7 @@ export async function generateVoice(projectId: string) {
   // RLS: only returns the project if this user owns it.
   const { data: project } = await supabase
     .from("projects")
-    .select("brief, brief_status, voice_language, voice_style, voice_result")
+    .select("brief, brief_status, voice_language, voice_style, voice_gender, voice_result")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return;
@@ -289,6 +292,7 @@ export async function generateVoice(projectId: string) {
       script,
       language: project.voice_language,
       style: project.voice_style,
+      gender: project.voice_gender,
     });
     const owner = { project_id: projectId, user_id: user.id };
     // Recorded as soon as Fal returns: the provider charges even if storing fails.
@@ -467,12 +471,14 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
     format: project.format,
     durationSeconds: project.duration_seconds,
     resolution: requested,
-    // Claims must be supported by website text or screenshot evidence.
+    // Claims must be supported by website text, screenshot evidence or the script.
     sourceText: [
       capture?.title,
       capture?.meta_description,
       capture?.visible_text,
       evidenceText(project.screenshot_evidence as ScreenshotEvidence | null),
+      // The customer's own script is a source for its own claims.
+      project.direction,
     ].join("\n"),
     missing: input.problems,
   });
@@ -563,12 +569,12 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
 // for each benchmark case on a copy of this project and records the metrics.
 // Runs synchronously so each step and render can be timed end to end.
 export async function runBenchmark(sourceProjectId: string, formData: FormData) {
-  if (!devToolsEnabled()) return;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  if (!(await canUseDevTools(supabase, user.id))) return;
 
   // RLS: verifies ownership of the source project.
   const { data: source } = await supabase
@@ -723,8 +729,12 @@ async function runPipeline(projectId: string, userId: string) {
         .select("id", { count: "exact", head: true })
         .eq("project_id", projectId),
     ]);
+    // Sources: captured website, screenshots, or the customer's own script.
     // Never generate from the URL alone: that would mean inventing the product.
-    if (!captured && !shots) return void (await fail(NEEDS_SCREENSHOTS_MESSAGE, "needs_input"));
+    const { data: own } = await supabase.from("projects").select("direction").eq("id", projectId).single();
+    if (!captured && !shots && !own?.direction?.trim()) {
+      return void (await fail(NEEDS_SCREENSHOTS_MESSAGE, "needs_input"));
+    }
 
     // 2. Product brief + script.
     await enter("writing");
