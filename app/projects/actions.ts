@@ -26,6 +26,7 @@ import { renderStoryboardMp4 } from "@/lib/render-video";
 import { validateForRender } from "@/lib/render-validation";
 import { falCost, openaiCost, renderCost, storageCost } from "@/lib/costs/pricing";
 import { recordCost } from "@/lib/costs/record";
+import { devToolsEnabled } from "@/lib/dev-tools";
 import {
   BENCHMARK_CASES,
   cloneProjectForBenchmark,
@@ -520,7 +521,7 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
 // for each benchmark case on a copy of this project and records the metrics.
 // Runs synchronously so each step and render can be timed end to end.
 export async function runBenchmark(sourceProjectId: string, formData: FormData) {
-  if (process.env.NODE_ENV === "production") return;
+  if (!devToolsEnabled()) return;
   const supabase = await createClient();
   const {
     data: { user },

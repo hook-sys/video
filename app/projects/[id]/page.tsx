@@ -14,10 +14,13 @@ import {
 import { BENCHMARK_CASES } from "@/lib/benchmark";
 import type { AssetManifest } from "@/lib/asset-manifest";
 import { getProjectCostSummary } from "@/lib/costs/benchmark";
+import { devToolsEnabled } from "@/lib/dev-tools";
 import { SubmitButton } from "@/components/submit-button";
 
-// Allows the AI brief call to finish.
-export const maxDuration = 60;
+// Server actions on this page (brief, voice, assets, render via after(), dev
+// benchmark) run inside this function. 300s is the Vercel Hobby maximum with
+// Fluid compute; Pro allows up to 800s.
+export const maxDuration = 300;
 
 export default async function ProjectPage({ params }: PageProps<"/projects/[id]">) {
   const { id } = await params;
@@ -82,12 +85,12 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       : { data: null };
 
   const costs =
-    process.env.NODE_ENV !== "production"
+    devToolsEnabled()
       ? await getProjectCostSummary(supabase, id, project.duration_seconds)
       : null;
   const usd = (n: number) => `$${n.toFixed(4)}`;
   const { data: benchmarkRuns } =
-    process.env.NODE_ENV !== "production"
+    devToolsEnabled()
       ? await supabase
           .from("benchmark_runs")
           .select("*")
@@ -344,7 +347,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           )}
         </section>
       )}
-      {process.env.NODE_ENV !== "production" && project.brief_status === "completed" && (
+      {devToolsEnabled() && project.brief_status === "completed" && (
         <Link href={`/projects/${id}/preview`} className="self-start text-sm underline">
           Preview storyboard (dev)
         </Link>

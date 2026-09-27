@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { devToolsEnabled } from "@/lib/dev-tools";
 import { RENDER_PROJECT_COLUMNS, buildRenderInput } from "@/lib/render-input";
 import { PreviewPlayer } from "./preview-player";
 
 // Development-only storyboard preview.
 export default async function PreviewPage({ params }: PageProps<"/projects/[id]/preview">) {
-  if (process.env.NODE_ENV === "production") notFound();
+  if (!devToolsEnabled()) notFound();
   const { id } = await params;
 
   const supabase = await createClient();
