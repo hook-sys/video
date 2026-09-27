@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -15,6 +16,7 @@ import {
   validateScreenshots,
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
+import { generateProductBrief } from "@/lib/ai/product-brief";
 
 export type CreateProjectState = { error?: string };
 
@@ -119,4 +121,77 @@ export async function createProject(
   }
 
   redirect(`/projects/${data.id}`);
+}
+
+const STALE_GENERATION_MS = 2 * 60 * 1000;
+
+export async function generateBrief(projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const [{ data: project }, { data: capture }, { data: screenshots }] = await Promise.all([
+    supabase.from("projects").select("*").eq("id", projectId).maybeSingle(),
+    supabase
+      .from("website_captures")
+      .select("url, title, meta_description, visible_text, screenshot_path")
+      .eq("project_id", projectId)
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("project_screenshots").select("original_filename").eq("project_id", projectId),
+  ]);
+  if (!project) return;
+
+  const fail = (message: string) =>
+    supabase
+      .from("projects")
+      .update({ brief_status: "failed", brief_error: message })
+      .eq("id", projectId);
+
+  if (!capture && !screenshots?.length) {
+    await fail("Add a captured website or screenshots before generating a brief.");
+    revalidatePath(`/projects/${projectId}`);
+    return;
+  }
+
+  // Claim the job so double submits don't trigger two paid AI calls.
+  const staleBefore = new Date(Date.now() - STALE_GENERATION_MS).toISOString();
+  const { data: claimed } = await supabase
+    .from("projects")
+    .update({ brief_status: "generating", brief_error: null })
+    .eq("id", projectId)
+    .or(`brief_status.neq.generating,updated_at.lt.${staleBefore}`)
+    .select("id");
+  if (!claimed?.length) return;
+
+  try {
+    const brief = await generateProductBrief({
+      website: capture
+        ? {
+            url: capture.url,
+            title: capture.title,
+            meta_description: capture.meta_description,
+            visible_text: capture.visible_text,
+          }
+        : undefined,
+      direction: project.direction,
+      duration_seconds: project.duration_seconds,
+      format: project.format,
+      voice_language: project.voice_language,
+      voice_style: project.voice_style,
+      screenshots: (screenshots ?? []).map((s) => s.original_filename),
+      has_website_screenshot: !!capture?.screenshot_path,
+    });
+    await supabase
+      .from("projects")
+      .update({ brief, brief_status: "completed", brief_error: null })
+      .eq("id", projectId);
+  } catch (e) {
+    await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));
+  }
+  revalidatePath(`/projects/${projectId}`);
 }

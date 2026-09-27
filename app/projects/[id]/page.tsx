@@ -2,6 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
+import { generateBrief } from "@/app/projects/actions";
+import { SubmitButton } from "@/components/submit-button";
+
+// Allows the AI brief call to finish.
+export const maxDuration = 60;
 
 export default async function ProjectPage({ params }: PageProps<"/projects/[id]">) {
   const { id } = await params;
@@ -46,6 +51,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
     ["Voice style", project.voice_style],
     ["Status", project.status],
   ];
+  const canGenerateBrief = capture?.status === "completed" || !!screenshots?.length;
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-12">
@@ -106,6 +112,26 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           )}
         </section>
       )}
+      <section className="flex flex-col gap-2 text-sm">
+        <h2 className="font-medium">
+          AI brief: <span className="text-foreground/70">{project.brief_status}</span>
+        </h2>
+        {project.brief_error && <p className="text-red-600">{project.brief_error}</p>}
+        <form action={generateBrief.bind(null, id)}>
+          <SubmitButton
+            pendingLabel="Generating…"
+            disabled={!canGenerateBrief || project.brief_status === "generating"}
+            className="rounded-md border border-foreground/20 px-3 py-1.5 disabled:opacity-50"
+          >
+            {project.brief ? "Regenerate brief" : "Generate brief"}
+          </SubmitButton>
+        </form>
+        {project.brief && (
+          <pre className="max-h-96 overflow-auto rounded-md bg-foreground/5 p-3 text-xs whitespace-pre-wrap">
+            {JSON.stringify(project.brief, null, 2)}
+          </pre>
+        )}
+      </section>
       <button
         disabled
         title="Coming soon"
