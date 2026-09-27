@@ -21,12 +21,17 @@ export default async function DashboardPage() {
         </form>
       </div>
       <p className="text-foreground/70">Signed in as {user.email}</p>
-      <Link
-        href="/projects/new"
-        className="self-start rounded-md bg-foreground px-4 py-2 font-medium text-background"
-      >
-        Create Video
-      </Link>
+      <div className="flex gap-3">
+        <Link
+          href="/projects/new"
+          className="rounded-md bg-foreground px-4 py-2 font-medium text-background"
+        >
+          Create Video
+        </Link>
+        <Link href="/crm" className="rounded-md border border-foreground/20 px-4 py-2 font-medium">
+          CRM
+        </Link>
+      </div>
     </main>
   );
 }
