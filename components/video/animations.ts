@@ -16,7 +16,6 @@ export function motionFor(animation: string): Motion {
   return "fade";
 }
 
-const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 
 // Entrance for text/UI elements, staggered by `delay` frames.
 export function enter(motion: Motion, frame: number, fps: number, delay = 0) {
