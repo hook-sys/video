@@ -64,22 +64,24 @@ export function buildAssetManifest(
       }. Glossy abstract shapes, soft volumetric light, depth of field, rich indigo and violet gradient palette, ${format} composition, ${SAFE}`,
     }), scene);
 
-  // Planned scenes only get an image when the plan asks for one (a complex hero
-  // visual the shape objects cannot build); the prompt describes the visual
-  // concept, never the narration. Scenes without a plan keep the V3 behaviour.
-  const plannedImage = (scene: string, plan: NonNullable<ProductBrief["scenes"][number]["visual_plan"]>, purpose: string) =>
+  // Blueprint scenes only get an image when the blueprint needs a hero visual
+  // (environment "hero_image" or a hero_visual object); native objects do the
+  // rest. The prompt describes the visual concept, never the narration.
+  // Scenes without a blueprint keep the V3 behaviour.
+  const heroImage = (scene: string, blueprint: NonNullable<ProductBrief["scenes"][number]["visual_plan"]>, purpose: string) =>
     addToAsset(`bg:${scene}`, () => ({
       type: "abstract",
       source: "generated",
       role: "background",
-      prompt: buildImagePrompt({ plan, concept: neutral(purpose), style, format }),
+      prompt: buildImagePrompt({ blueprint, concept: neutral(purpose), style, format }),
     }), scene);
 
   let nextShot = 0;
   brief.scenes.forEach((scene, i) => {
     const id = sceneId(i);
-    if (!scene.visual_plan) background(id, scene.purpose);
-    else if (scene.visual_plan.generate_image) plannedImage(id, scene.visual_plan, scene.purpose);
+    const bp = scene.visual_plan;
+    if (!bp) background(id, scene.purpose);
+    else if (bp.environment === "hero_image" || bp.objects.some((o) => o.type === "hero_visual")) heroImage(id, bp, scene.purpose);
     switch (scene.visual) {
       case "ui":
       case "screenshot": {

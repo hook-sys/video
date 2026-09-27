@@ -1,4 +1,4 @@
-import type { VisualPlan } from "@/lib/ai/product-brief";
+import type { Blueprint, BlueprintObject } from "@/lib/ai/product-brief";
 
 // Semantic image prompts for generated background/hero assets. They describe
 // a visual concept (never the raw narration), leave room for the animated
@@ -11,11 +11,11 @@ const COMPOSITION: Record<string, string> = {
   "1:1": "square composition, centred subject with even margins",
 };
 
-const OBJECT_PHRASE: Partial<Record<VisualPlan["primary_object"], string>> = {
+const OBJECT_PHRASE: Partial<Record<BlueprintObject["type"], string>> = {
   hero_visual: "a single striking hero visual of a modern software product",
   workspace: "one calm, organised digital workspace",
-  task_cards: "many floating task cards",
-  browser_tabs: "a clutter of overlapping browser windows",
+  task_card: "many floating task cards",
+  browser_tab: "a clutter of overlapping browser windows",
   progress_chart: "an upward-trending abstract data visual",
   processing_core: "a glowing abstract processing core",
   result_card: "a polished finished result presented like a product shot",
@@ -24,7 +24,7 @@ const OBJECT_PHRASE: Partial<Record<VisualPlan["primary_object"], string>> = {
   icon: "one simple symbolic object",
 };
 
-const ACTION_MOOD: Partial<Record<VisualPlan["action"], string>> = {
+const ACTION_MOOD: Partial<Record<BlueprintObject["action"], string>> = {
   scatter: "a feeling of overload and scattered focus",
   stack: "a feeling of things piling up",
   merge: "elements converging toward one centre",
@@ -40,18 +40,20 @@ const NEGATIVE =
   "no watermark, no readable text, no letters, no numbers, no logos, no people, no animals, no creatures, no UI screenshots";
 
 export function buildImagePrompt({
-  plan,
+  blueprint,
   concept,
   style = "Premium SaaS",
   format,
 }: {
-  plan: Pick<VisualPlan, "primary_object" | "action">;
+  blueprint: Blueprint;
   concept: string; // the scene's meaning in a few neutral words (not the narration)
   style?: string;
   format: string;
 }) {
-  const subject = OBJECT_PHRASE[plan.primary_object] ?? "an abstract visual metaphor";
-  const mood = ACTION_MOOD[plan.action] ?? "a confident, premium mood";
+  // The hero object if there is one, else the focal (emphasised) object.
+  const focal = blueprint.objects.find((o) => o.type === "hero_visual") ?? blueprint.objects.find((o) => o.emphasis) ?? blueprint.objects[0];
+  const subject = (focal && OBJECT_PHRASE[focal.type]) ?? "an abstract visual metaphor";
+  const mood = (focal && ACTION_MOOD[focal.action]) ?? "a confident, premium mood";
   return [
     `${style} motion-ad visual: ${subject}, expressing ${mood}${concept ? `, about ${concept}` : ""}`,
     "premium SaaS advertising aesthetic, dark elegant background with indigo and violet accents",

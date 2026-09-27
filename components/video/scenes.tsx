@@ -13,8 +13,9 @@ import { tokenize } from "@/lib/voice-timing";
 import { enter, motionFor } from "./animations";
 import { ActionLayer, graphemes } from "./actions";
 import { CameraLayer, CameraProvider, focusOn, orderKeys, pose, useSceneSpan, type CameraKey } from "./camera";
-import { BrowserTab, Burst, Chip, Core, Obj, Particles, ProgressChart, SkeletonCard, TaskCard, TextCard, WorkspaceFrame, type IconName } from "./objects";
-import { FIELD_OBJECTS, type FieldScene as FieldPlan, type Pose } from "./field";
+import { Burst, Chip, Core, Obj, Particles, SkeletonCard, TextCard, type IconName } from "./objects";
+import type { ResolvedScene } from "./blueprint";
+import { BlueprintScene } from "./motion";
 import { SceneSfx } from "./sfx";
 import { same, type SyncedScene, type TimedAction } from "./sync";
 import { sceneEdgeStyle, TRANSITION_FRAMES, transitionFor } from "./transitions";
@@ -218,7 +219,7 @@ function Headline({
 
 // `lines`: on-screen text not already shown elsewhere; `typed`: the line the UI types.
 // `prevKind`/`prevTyped` let a scene continue the previous one's focal object.
-type VisualProps = { scene: SyncedView; isFinal?: boolean; lines: string[]; typed: string; prevKind?: Kind; prevTyped?: string; field?: FieldPlan | null };
+type VisualProps = { scene: SyncedView; isFinal?: boolean; lines: string[]; typed: string; prevKind?: Kind; prevTyped?: string };
 
 // Foreground depth-of-field layer (nearest, softly blurred): one object that
 // reacts to a story beat. No ambient particles.
@@ -354,149 +355,6 @@ function FeatureScene({ scene, lines }: VisualProps) {
           </Obj>
         </CameraLayer>
       ))}
-    </AbsoluteFill>
-  );
-}
-
-// When the field's objects start moving: the scene's first timed action, else
-// just after the scene has transitioned in.
-function fieldBeat(scene: SyncedView, fps: number) {
-  const first = scene.timedActions?.[0];
-  return first ? Math.max(4, Math.round(first.at * fps) - 4) : 8;
-}
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const FIELD_TINTS = [ACCENT, ACCENT_2, "#34d399", "#febc2e", "#ff8ad8"];
-
-// Semantic object field: the storyboard's plan decides which objects exist and
-// what they do (stack, scatter, merge, arrange, generate, complete). Objects
-// keep their identity across consecutive planned scenes: each scene starts
-// from where the previous one left them.
-function FieldScene({ scene, lines, isFinal, field }: VisualProps) {
-  const frame = useCurrentFrame();
-  const { fps, width, height } = useVideoConfig();
-  const span = useSceneSpan();
-  const base = Math.min(width, height);
-  if (!field) return null;
-  const beat = fieldBeat(scene, fps);
-  const wsP = spring({ frame: frame - (beat - 6), fps, config: { damping: 18 } });
-  const ws = field.workspace;
-  const rect = { x: lerp(ws.from.x, ws.to.x, wsP), y: lerp(ws.from.y, ws.to.y, wsP), w: lerp(ws.from.w, ws.to.w, wsP), h: lerp(ws.from.h, ws.to.h, wsP), o: lerp(ws.from.o, ws.to.o, wsP) };
-  const chartAt = actionFrames(scene, "reveal", fps)?.[0] ?? Math.round(span * 0.5);
-  const grow = field.chart.to > field.chart.from ? interpolate(frame, [chartAt, chartAt + fps * 1.2], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) }) : field.chart.to;
-  const success = actionFrames(scene, "success", fps);
-  const doneAt = success?.[0] ?? beat + 10;
-  // Completed items tick on "complete" scenes and on a success moment in the narration.
-  const completing = field.complete || !!success;
-  const cta = spring({ frame: frame - Math.round(span * 0.45), fps, config: { damping: 12 } });
-  let spawnOrder = 0;
-  return (
-    <AbsoluteFill>
-      <ImageBackground scene={scene} />
-      <CameraLayer depth={DEPTH.subject} zoom={0.8}>
-        {rect.o > 0.01 && (
-          <div style={{ position: "absolute", left: `${rect.x - rect.w / 2}%`, top: `${rect.y - rect.h / 2}%`, opacity: rect.o }}>
-            <WorkspaceFrame w={(rect.w / 100) * width} h={(rect.h / 100) * height} />
-            {grow > 0 && (
-              <div style={{ position: "absolute", left: "20%", right: "6%", bottom: "8%", height: "34%" }}>
-                <ProgressChart w={(rect.w / 100) * width * 0.74} h={(rect.h / 100) * height * 0.34} grow={grow} />
-              </div>
-            )}
-          </div>
-        )}
-        {field.hub && (
-          // "connect": lines draw from a central hub out to every object.
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-            {field.items.map((it, i) => {
-              const t = interpolate(frame, [beat + 10 + i * 3, beat + 26 + i * 3], [0, 1], clamp);
-              return (
-                <line key={it.id} x1={field.hub!.x} y1={field.hub!.y} x2={field.hub!.x + (it.to.x - field.hub!.x) * t} y2={field.hub!.y + (it.to.y - field.hub!.y) * t} stroke={ACCENT} strokeOpacity={0.6} strokeWidth={2} vectorEffect="non-scaling-stroke" />
-              );
-            })}
-          </svg>
-        )}
-        {field.hub && (
-          <Obj x={field.hub.x} y={field.hub.y} at={beat} from="depth" float={0.4}>
-            <Chip icon="layers" size={base * 0.12} />
-          </Obj>
-        )}
-        {field.items.map((it, i) => {
-          const order = it.spawned ? spawnOrder++ : i;
-          const delay = beat + (it.spawned ? order * 5 : order * 2);
-          const p = spring({ frame: frame - delay, fps, config: { damping: 14, mass: 0.8 } });
-          const at: Pose = {
-            x: lerp(it.from.x, it.to.x, p),
-            y: lerp(it.from.y, it.to.y, p),
-            s: lerp(it.from.s, it.to.s, p),
-            rot: lerp(it.from.rot, it.to.rot, p),
-            o: lerp(it.from.o, it.to.o, Math.min(1, p * 1.5)),
-          };
-          const w = base * (it.skin === "tab" ? 0.3 : it.skin === "card" ? 0.26 : 0.28);
-          const done = completing && it.skin === "task" ? spring({ frame: frame - doneAt - order * 3, fps, config: { damping: 12 } }) : 0;
-          const skinOf = (skin: typeof it.skin) =>
-            skin === "task" ? <TaskCard w={w} tint={FIELD_TINTS[it.id % 5]} done={done} /> : skin === "tab" ? <BrowserTab w={w} tint={FIELD_TINTS[(it.id + 2) % 5]} /> : <SkeletonCard w={w} variant="result" fill={1} />;
-          return (
-            <div
-              key={it.id}
-              style={{
-                position: "absolute",
-                left: `${at.x}%`,
-                top: `${at.y}%`,
-                opacity: at.o,
-                transform: `translate(-50%, -50%) rotate(${at.rot}deg) scale(${at.s})`,
-                filter: at.o < 0.6 ? "blur(1.5px)" : undefined,
-              }}
-            >
-              {it.fromSkin === it.skin ? (
-                skinOf(it.skin)
-              ) : (
-                // "transform": the old object turns into the new one as it moves.
-                <div style={{ position: "relative" }}>
-                  <div style={{ opacity: 1 - p, transform: `rotateY(${p * 90}deg)` }}>{skinOf(it.fromSkin)}</div>
-                  <div style={{ position: "absolute", left: "50%", top: "50%", opacity: p, transform: `translate(-50%, -50%) rotateY(${(1 - p) * -90}deg)` }}>{skinOf(it.skin)}</div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {field.complete && (
-          <Obj x={rect.x + rect.w / 2 - 3} y={rect.y - rect.h / 2 + 3} at={doneAt + 6} from="depth" float={0.5}>
-            <Chip icon="check" size={base * 0.09} tint="#34d399" />
-          </Obj>
-        )}
-      </CameraLayer>
-      <CameraLayer depth={DEPTH.text} zoom={0.4}>
-        <AbsoluteFill style={{ ...inset, top: height * 0.03, height: height * 0.2, justifyContent: "center", padding: "0 10%" }}>
-          <Headline scene={scene} lines={lines} scale={0.62} />
-        </AbsoluteFill>
-        {isFinal && (
-          <AbsoluteFill style={{ ...inset, top: height * 0.86, height: height * 0.1, alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: base * 0.26, height: base * 0.07, borderRadius: 999, background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT, fontWeight: 700, fontSize: base * 0.035, opacity: Math.min(1, cta * 1.5), transform: `translateY(${(1 - cta) * 30}px) scale(${0.8 + 0.2 * cta})` }}>
-              →
-            </div>
-          </AbsoluteFill>
-        )}
-      </CameraLayer>
-    </AbsoluteFill>
-  );
-}
-
-// hero_visual: the generated image is the hero (sharp, prominent) while the
-// headline and a reacting object still animate in front of it.
-function HeroVisualScene({ scene, lines }: VisualProps) {
-  const { fps, height } = useVideoConfig();
-  const span = useSceneSpan();
-  const { emphasisAt } = headlineBeats(scene, lines, fps, span);
-  const idx = Number(scene.id.split("-")[1] ?? 0);
-  return (
-    <AbsoluteFill>
-      <ImageBackground scene={scene} hero />
-      <AbsoluteFill style={{ background: "linear-gradient(180deg, rgba(8,10,18,0) 45%, rgba(8,10,18,0.75) 100%)" }} />
-      <CameraLayer depth={DEPTH.text} zoom={0.4}>
-        <AbsoluteFill style={{ ...inset, top: height * 0.68, height: height * 0.24, justifyContent: "center", padding: "0 10%" }}>
-          <Headline scene={scene} lines={lines} scale={0.8} />
-        </AbsoluteFill>
-      </CameraLayer>
-      {emphasisAt !== undefined && <Foreground seed={idx} chip={CHIP_ICONS[idx % 4]} at={emphasisAt + 4} />}
     </AbsoluteFill>
   );
 }
@@ -993,29 +851,14 @@ function IconScene({ scene, lines }: VisualProps) {
 
 // Compositions: kinetic intro, script input (app), AI processing, feature
 // showcase, icon, and the closing result + CTA.
-export type Kind = "product" | "processing" | "result" | "feature" | "icon" | "kinetic" | "field" | "hero";
+export type Kind = "product" | "processing" | "result" | "feature" | "icon" | "kinetic" | "blueprint";
 
 // Composition chosen from what the storyboard (AI) decided for the scene: its
 // visual type, its timed actions and its on-screen phrases.
 export function sceneKind(scene: SyncedView, isFinal?: boolean): Kind {
   const has = (k: TimedAction["action"]) => scene.timedActions?.some((a) => a.action === k);
-  // A real screenshot is always shown as the product.
-  if (scene.visual === "screenshot" && scene.assetUrl) return "product";
-  // The storyboard's semantic plan picks the composition from the scene's meaning.
-  const plan = scene.visual_plan;
-  if (plan) {
-    const o = plan.primary_object;
-    if (FIELD_OBJECTS.includes(o)) return "field";
-    if (o === "input_field" || o === "button" || o === "cursor") return "product";
-    if (o === "hero_visual") return scene.backgroundUrl ? "hero" : "kinetic";
-    if (o === "icon") return "icon";
-    if (o === "processing_core") return "processing";
-    if (o === "feature_card") return scene.on_screen_text.length >= 2 ? "feature" : "kinetic";
-    if (o === "result_card" || o === "video_card") {
-      return ["stack", "scatter", "arrange", "merge", "move_to", "connect", "transform"].includes(plan.action) ? "field" : isFinal ? "result" : "processing";
-    }
-    return "kinetic";
-  }
+  // A scene with a visual blueprint is composed only from that blueprint.
+  if (scene.visual_plan) return "blueprint";
   if (scene.visual === "ui" || scene.visual === "screenshot") return "product";
   if (isFinal) return "result";
   if (has("processing") || has("reveal")) return "processing";
@@ -1031,8 +874,12 @@ export function exitTransition(scene: SyncedView, isFinal?: boolean, next?: Kind
   const kind = sceneKind(scene, isFinal);
   if (kind === "processing") return "zoom through";
   if (kind === "product" && next === "processing") return "zoom through";
-  // The same objects continue on screen: a plain dissolve keeps them in place.
-  if (kind === "field" && next === "field") return "dissolve";
+  // Blueprint scenes use the blueprint's own transition ("continue"/"cut" keep
+  // the shared objects in place with a plain dissolve; never through black).
+  if (kind === "blueprint") {
+    const t = scene.visual_plan?.transition;
+    return t === "zoom_through" ? "zoom through" : t === "slide" ? "slide left" : "dissolve";
+  }
   return scene.transition ?? "fade";
 }
 
@@ -1047,8 +894,7 @@ const COMPOSITIONS: Record<Kind, React.ComponentType<VisualProps>> = {
   processing: ProcessingScene,
   result: ResultScene,
   feature: FeatureScene,
-  field: FieldScene,
-  hero: HeroVisualScene,
+  blueprint: () => null, // rendered by BlueprintScene with its resolved blueprint
   icon: IconScene,
   kinetic: KineticScene,
 };
@@ -1056,7 +902,7 @@ const COMPOSITIONS: Record<Kind, React.ComponentType<VisualProps>> = {
 // Camera choreography per composition: starts slightly close (the scene
 // emerges from the transition), opens wide as objects enter, follows the
 // action to its focal point, and keeps pushing into the transition tail.
-function choreography(kind: Kind, scene: SyncedView, fps: number, span: number, typedLength: number, index: number, prevKind?: Kind, field?: FieldPlan | null): CameraKey[] {
+function choreography(kind: Kind, scene: SyncedView, fps: number, span: number, typedLength: number, index: number, prevKind?: Kind, resolved?: ResolvedScene | null): CameraKey[] {
   const end = span + TRANSITION_FRAMES;
   const side = index % 2 ? -1 : 1;
   const k = (f: number, p: CameraKey["pose"]) => ({ f: Math.round(f), pose: p });
@@ -1089,29 +935,10 @@ function choreography(kind: Kind, scene: SyncedView, fps: number, span: number, 
   if (kind === "result") {
     return orderKeys([k(0, pose(1.32, 0, -2)), k(14, pose(1.3, 0, -2)), k(span * 0.5, pose(1.02, 0, 0)), k(span, pose(1, 0, 0))]);
   }
-  if (kind === "field" && field) {
-    // Follows the object named in the plan's camera_focus: frames where that
-    // object is at the start, moves with it to where it goes, and settles back
-    // to the shared framing so consecutive field scenes meet seamlessly.
-    const target = scene.visual_plan?.camera_focus ?? "wide";
-    const skinOf: Partial<Record<string, string>> = { task_cards: "task", browser_tabs: "tab", result_card: "card", video_card: "card", feature_card: "card" };
-    const centre = (poses: Pose[]): [number, number] =>
-      poses.length ? [poses.reduce((n, p) => n + p.x, 0) / poses.length, poses.reduce((n, p) => n + p.y, 0) / poses.length] : [50, 56];
-    const tracked = field.items.filter((it) => !skinOf[target] || it.skin === skinOf[target]);
-    const ws = field.workspace.to;
-    // The shared framing: centre of all objects (end of one scene = start of the next).
-    const [fx, fy] = centre(field.items.filter((it) => !it.spawned).map((it) => it.from));
-    const [ax, ay] = centre(field.items.map((it) => it.to));
-    const [tx, ty] =
-      target === "workspace" ? [ws.x, ws.y] : target === "progress_chart" ? [ws.x + ws.w * 0.1, ws.y + ws.h * 0.25] : centre(tracked.map((it) => it.to));
-    const wide = target === "wide";
-    const beat = fieldBeat(scene, fps);
-    const home = (x: number, y: number) => focusOn(x - 50, y - 50, 1.06, DEPTH.subject, 0.3);
-    return orderKeys([
-      k(0, home(fx, fy)),
-      k(beat + 24, wide ? pose(1.0, 0, 0) : focusOn(tx - 50, ty - 50, target === "progress_chart" ? 1.22 : 1.15, DEPTH.subject, 0.45)),
-      k(span, home(ax, ay)),
-    ]);
+  if (kind === "blueprint" && resolved) {
+    // The blueprint's camera: from its start framing to its end framing.
+    const cam = (c: ResolvedScene["camera"]["from"]) => pose(c.scale, c.x / DEPTH.subject, c.y / DEPTH.subject, c.rot);
+    return orderKeys([k(0, cam(resolved.camera.from)), k(span, cam(resolved.camera.to)), k(end, cam({ ...resolved.camera.to, scale: resolved.camera.to.scale + 0.03 }))]);
   }
   if (kind === "feature") {
     // Visit each phrase card as it is spoken, then pull back to show them together.
@@ -1152,11 +979,11 @@ export function SceneView({
   prevKind,
   nextKind,
   prevTyped,
-  field,
+  resolved,
 }: {
   scene: SyncedView;
   index: number;
-  field?: FieldPlan | null;
+  resolved?: ResolvedScene | null;
   // Neighbouring compositions, so focal objects and transitions can continue.
   prevKind?: Kind;
   nextKind?: Kind;
@@ -1187,9 +1014,9 @@ export function SceneView({
   const handled: Partial<Record<Kind, TimedAction["action"][]>> = {
     processing: ["processing", "reveal"],
     result: ["success", "reveal"],
-    field: ["reveal", "success", "processing"], // chart growth / completion happen on the objects
   };
-  const overlay = actions.filter(
+  // Blueprint scenes: every visible thing comes from the blueprint's objects.
+  const overlay = kind === "blueprint" ? [] : actions.filter(
     (a) =>
       !(mockup && (a.action === "typing" || a.action === "processing" || a.action === "click")) &&
       !handled[kind]?.includes(a.action) &&
@@ -1213,8 +1040,12 @@ export function SceneView({
   return (
     <AbsoluteFill style={{ opacity }}>
       <AbsoluteFill style={{ ...edge, overflow: "hidden" }}>
-        <CameraProvider value={{ keys: choreography(kind, scene, fps, span, graphemes(typedLine).length, index, prevKind, field), frame, span }}>
-          <Visual scene={scene} isFinal={isFinal} lines={lines} typed={typedLine} prevKind={prevKind} prevTyped={prevTyped} field={field} />
+        <CameraProvider value={{ keys: choreography(kind, scene, fps, span, graphemes(typedLine).length, index, prevKind, resolved), frame, span }}>
+          {kind === "blueprint" && resolved ? (
+            <BlueprintScene scene={scene as never} resolved={resolved} />
+          ) : (
+            <Visual scene={scene} isFinal={isFinal} lines={lines} typed={typedLine} prevKind={prevKind} prevTyped={prevTyped} />
+          )}
           <Hud span={span}>
             <ActionLayer actions={overlay} text={typedLine} placement={product ? "center" : "lower"} />
           </Hud>
