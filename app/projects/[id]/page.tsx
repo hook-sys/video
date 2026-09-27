@@ -9,7 +9,9 @@ import {
   generateVoice,
   prepareAssets,
   renderVideo,
+  runBenchmark,
 } from "@/app/projects/actions";
+import { BENCHMARK_CASES } from "@/lib/benchmark";
 import type { AssetManifest } from "@/lib/asset-manifest";
 import { getProjectCostSummary } from "@/lib/costs/benchmark";
 import { SubmitButton } from "@/components/submit-button";
@@ -84,6 +86,15 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       ? await getProjectCostSummary(supabase, id, project.duration_seconds)
       : null;
   const usd = (n: number) => `$${n.toFixed(4)}`;
+  const { data: benchmarkRuns } =
+    process.env.NODE_ENV !== "production"
+      ? await supabase
+          .from("benchmark_runs")
+          .select("*")
+          .eq("source_project_id", id)
+          .order("started_at", { ascending: false })
+          .limit(20)
+      : { data: null };
 
   const rows: [string, string][] = [
     ["Website URL", project.website_url ?? "—"],
@@ -275,6 +286,60 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
               </div>
             ))}
           </dl>
+        </section>
+      )}
+      {benchmarkRuns && (
+        <section className="flex flex-col gap-2 rounded-md border border-dashed border-foreground/20 p-3 text-sm">
+          <h2 className="font-medium">Generation Benchmark (dev)</h2>
+          <p className="text-xs font-medium text-amber-600">
+            Runs the full paid pipeline on copies of this project. Costs are development
+            estimates (usage × configured rates) — not billing.
+          </p>
+          <form action={runBenchmark.bind(null, id)} className="flex items-center gap-2">
+            <select name="case" className="rounded-md border border-foreground/20 bg-transparent px-3 py-2">
+              <option value="all">All 4 cases</option>
+              {BENCHMARK_CASES.map((c, i) => (
+                <option key={i} value={i}>
+                  {c.duration}s / {c.resolution === "4k" ? "4K" : c.resolution}
+                </option>
+              ))}
+            </select>
+            <SubmitButton
+              pendingLabel="Benchmarking… (can take many minutes)"
+              className="rounded-md border border-foreground/20 px-3 py-1.5 disabled:opacity-50"
+            >
+              Run benchmark
+            </SubmitButton>
+          </form>
+          {benchmarkRuns.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="text-foreground/60">
+                  <tr>
+                    {["Case", "Status", "Tokens in/out", "Voice chars", "Images", "Render", "MP4", "Total", "Est. cost", "Est. /min"].map((h) => (
+                      <th key={h} className="py-1 pr-3 font-normal">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {benchmarkRuns.map((r) => (
+                    <tr key={r.id} className="border-t border-foreground/10" title={r.error ?? undefined}>
+                      <td className="py-1 pr-3">{r.duration_seconds}s/{r.resolution}</td>
+                      <td className="pr-3">{r.status}</td>
+                      <td className="pr-3">{r.openai_input_tokens ?? "–"}/{r.openai_output_tokens ?? "–"}</td>
+                      <td className="pr-3">{r.voice_characters ?? "–"}</td>
+                      <td className="pr-3">{r.image_count ?? "–"}</td>
+                      <td className="pr-3">{r.render_ms ? `${(r.render_ms / 1000).toFixed(1)}s` : "–"}</td>
+                      <td className="pr-3">{r.mp4_bytes ? `${(r.mp4_bytes / 1e6).toFixed(1)} MB` : "–"}</td>
+                      <td className="pr-3">{r.total_ms ? `${(r.total_ms / 1000).toFixed(0)}s` : "–"}</td>
+                      <td className="pr-3">{r.estimated_cost_usd != null ? usd(Number(r.estimated_cost_usd)) : "–"}</td>
+                      <td className="pr-3">{r.cost_per_minute_usd != null ? usd(Number(r.cost_per_minute_usd)) : "–"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
       {process.env.NODE_ENV !== "production" && project.brief_status === "completed" && (

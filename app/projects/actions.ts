@@ -26,6 +26,11 @@ import { renderStoryboardMp4 } from "@/lib/render-video";
 import { validateForRender } from "@/lib/render-validation";
 import { falCost, openaiCost, renderCost, storageCost } from "@/lib/costs/pricing";
 import { recordCost } from "@/lib/costs/record";
+import {
+  BENCHMARK_CASES,
+  cloneProjectForBenchmark,
+  collectBenchmarkMetrics,
+} from "@/lib/benchmark";
 import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
@@ -396,6 +401,12 @@ export async function generateVisualAssets(projectId: string) {
 const STALE_RENDER_MS = 30 * 60 * 1000;
 
 export async function renderVideo(projectId: string, formData: FormData) {
+  await startRender(projectId, String(formData.get("resolution") ?? ""), false);
+}
+
+// Shared by the Render button (background) and the dev benchmark (awaited).
+// Not exported, so clients can't trigger a blocking render.
+async function startRender(projectId: string, requested: string, wait: boolean) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -423,7 +434,6 @@ export async function renderVideo(projectId: string, formData: FormData) {
   // Validate immediately before rendering; Remotion never starts on failure.
   // Signed URLs must outlive the render.
   const input = await buildRenderInput(supabase, project, 2 * 60 * 60);
-  const requested = String(formData.get("resolution") ?? "");
   const problems = validateForRender({
     brief: project.brief,
     assetsManifest: project.assets_manifest,
@@ -456,7 +466,7 @@ export async function renderVideo(projectId: string, formData: FormData) {
 
   // Rendering takes minutes; finish after responding. Page shows progress on refresh.
   const props = input.props;
-  after(async () => {
+  const job = async () => {
     try {
       const started = Date.now();
       const mp4 = await renderStoryboardMp4(props, resolution);
@@ -499,6 +509,91 @@ export async function renderVideo(projectId: string, formData: FormData) {
         status: "failed",
       });
     }
-  });
+  };
+  if (wait) await job();
+  else after(job);
   revalidatePath(`/projects/${projectId}`);
+}
+
+// Development-only: runs the real pipeline (brief → voice → assets → render)
+// for each benchmark case on a copy of this project and records the metrics.
+// Runs synchronously so each step and render can be timed end to end.
+export async function runBenchmark(sourceProjectId: string, formData: FormData) {
+  if (process.env.NODE_ENV === "production") return;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // RLS: verifies ownership of the source project.
+  const { data: source } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", sourceProjectId)
+    .maybeSingle();
+  if (!source) return;
+
+  const choice = String(formData.get("case") ?? "all");
+  const cases = choice === "all" ? BENCHMARK_CASES : [BENCHMARK_CASES[Number(choice)]].filter(Boolean);
+  const admin = createAdminClient();
+
+  for (const { duration, resolution } of cases) {
+    const started = Date.now();
+    const { data: run } = await admin
+      .from("benchmark_runs")
+      .insert({
+        user_id: user.id,
+        source_project_id: sourceProjectId,
+        duration_seconds: duration,
+        resolution,
+      })
+      .select("id")
+      .single();
+    if (!run) continue;
+    const finish = (fields: Record<string, unknown>) =>
+      admin
+        .from("benchmark_runs")
+        .update({ ...fields, total_ms: Date.now() - started, finished_at: new Date().toISOString() })
+        .eq("id", run.id);
+
+    let projectId: string | undefined;
+    try {
+      projectId = await cloneProjectForBenchmark(admin, user.id, sourceProjectId, duration);
+      await admin.from("benchmark_runs").update({ project_id: projectId }).eq("id", run.id);
+      const pid = projectId;
+      const state = async () =>
+        (
+          await admin
+            .from("projects")
+            .select("brief_status, brief_error, voice_status, voice_error, assets_status, assets_error, render_status, render_error")
+            .eq("id", pid)
+            .single()
+        ).data!;
+
+      await generateBrief(pid);
+      let p = await state();
+      if (p.brief_status !== "completed") throw new Error(`Brief: ${p.brief_error}`);
+      await generateVoice(pid);
+      p = await state();
+      if (p.voice_status !== "completed") throw new Error(`Voice: ${p.voice_error}`);
+      await prepareAssets(pid);
+      await generateVisualAssets(pid);
+      p = await state();
+      if (p.assets_status !== "completed") throw new Error(`Assets: ${p.assets_error}`);
+      await startRender(pid, resolution, true);
+      p = await state();
+      if (p.render_status !== "completed") throw new Error(`Render: ${p.render_error}`);
+
+      await finish({ status: "completed", ...(await collectBenchmarkMetrics(admin, pid, duration)) });
+    } catch (e) {
+      const metrics = projectId ? await collectBenchmarkMetrics(admin, projectId, duration) : {};
+      await finish({
+        status: "failed",
+        error: (e instanceof Error ? e.message : "Benchmark failed.").slice(0, 500),
+        ...metrics,
+      });
+    }
+  }
+  revalidatePath(`/projects/${sourceProjectId}`);
 }
