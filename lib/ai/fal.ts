@@ -10,7 +10,7 @@ const SCRIPT_MAX = 5_000;
 const TIMEOUT_MS = 55_000;
 
 // Input shape differs per Fal model, so it is configured, not guessed.
-// FAL_VOICE_INPUT_TEMPLATE is JSON with {{text}}, {{language}}, {{style}}, {{gender}} placeholders,
+// FAL_VOICE_INPUT_TEMPLATE is JSON with {{text}}, {{language}}, {{style}}, {{gender}}, {{voice}} placeholders,
 // e.g. {"text":"{{text}}","language":"{{language}}"}. Defaults to {"text":"{{text}}"}.
 // FAL_IMAGE_INPUT_TEMPLATE uses {{prompt}}, {{format}}. Defaults to {"prompt":"{{prompt}}"}.
 function buildInput(templateJson: string, values: Record<string, string>): Record<string, unknown> {
@@ -78,6 +78,14 @@ export async function generateImage({ prompt, format }: ImageInput): Promise<Ima
   return { model, requestId: result.requestId, imageUrl };
 }
 
+// Model voice for the customer's gender choice. Defaults are ElevenLabs preset
+// voices (the configured fal-ai/elevenlabs model); override per model via env.
+export function voiceForGender(gender: string) {
+  return gender === "female"
+    ? process.env.FAL_VOICE_FEMALE || "Sarah"
+    : process.env.FAL_VOICE_MALE || "Brian";
+}
+
 export async function generateVoice({
   script,
   language,
@@ -97,6 +105,7 @@ export async function generateVoice({
       language,
       style,
       gender,
+      voice: voiceForGender(gender),
     }),
     abortSignal: AbortSignal.timeout(TIMEOUT_MS),
   });
