@@ -6,7 +6,8 @@ import type { RenderScene } from "./types";
 export type ActionKind = SceneAction["action"];
 // Seconds from the scene's start; an action lasts until the next one or the scene end.
 export type TimedAction = { action: ActionKind; trigger: string; at: number; until: number };
-export type SyncedScene = RenderScene & { timedActions: TimedAction[] };
+// `spoken`: each narration word and when it is heard, in seconds from scene start.
+export type SyncedScene = RenderScene & { timedActions: TimedAction[]; spoken: { text: string; at: number }[] };
 
 // Each action's sound, as a cue the SFX library already understands.
 const ACTION_SFX: Record<ActionKind, string> = {
@@ -27,7 +28,7 @@ const MAX_CUES = 3;
 type Token = { text: string; scene: number; start: number };
 
 // Tolerates inflection (e.g. "স্ক্রিপ্ট" / "স্ক্রিপ্টটি", "video" / "videos").
-const same = (a: string, b: string) =>
+export const same = (a: string, b: string) =>
   a === b || (Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a)));
 
 // Walks narration and voice words in order; unmatched narration words are
@@ -128,6 +129,7 @@ export function syncToNarration(scenes: RenderScene[], totalSeconds: number, wor
       duration_seconds: dur,
       sound_effects: [...actionCues, ...planned].slice(0, MAX_CUES),
       timedActions,
+      spoken: own.map((t) => ({ text: t.text, at: Math.max(0, t.start - starts[i]) })),
     };
   });
   return { scenes: result, synced };
