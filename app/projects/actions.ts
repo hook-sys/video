@@ -18,6 +18,7 @@ import {
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
 import { generateProductBrief } from "@/lib/ai/product-brief";
+import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 
 export type CreateProjectState = { error?: string };
 
@@ -189,6 +190,52 @@ export async function generateBrief(projectId: string) {
     await briefUpdate({ brief, brief_status: "completed", brief_error: null });
   } catch (e) {
     await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));
+  }
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function generateVoice(projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // RLS: only returns the project if this user owns it.
+  const { data: project } = await supabase
+    .from("projects")
+    .select("brief, brief_status, voice_language, voice_style")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (!project) return;
+
+  const admin = createAdminClient();
+  const voiceUpdate = (fields: Record<string, unknown>) =>
+    admin.from("projects").update(fields).eq("id", projectId).eq("user_id", user.id);
+
+  const script = project.brief_status === "completed" ? project.brief?.script : undefined;
+  if (typeof script !== "string" || !script.trim()) {
+    await voiceUpdate({ voice_status: "failed", voice_error: "Generate the brief first." });
+    revalidatePath(`/projects/${projectId}`);
+    return;
+  }
+
+  const staleBefore = new Date(Date.now() - STALE_GENERATION_MS).toISOString();
+  const { data: claimed } = await voiceUpdate({ voice_status: "generating", voice_error: null })
+    .or(`voice_status.neq.generating,updated_at.lt.${staleBefore}`)
+    .select("id");
+  if (!claimed?.length) return;
+
+  try {
+    const result = await generateFalVoice({
+      script,
+      language: project.voice_language,
+      style: project.voice_style,
+    });
+    await voiceUpdate({ voice_status: "completed", voice_error: null, voice_result: result });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Voice generation failed.";
+    await voiceUpdate({ voice_status: "failed", voice_error: message.slice(0, 500) });
   }
   revalidatePath(`/projects/${projectId}`);
 }

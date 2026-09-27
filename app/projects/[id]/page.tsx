@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
-import { generateBrief } from "@/app/projects/actions";
+import { generateBrief, generateVoice } from "@/app/projects/actions";
 import { SubmitButton } from "@/components/submit-button";
 
 // Allows the AI brief call to finish.
@@ -130,6 +130,24 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           <pre className="max-h-96 overflow-auto rounded-md bg-foreground/5 p-3 text-xs whitespace-pre-wrap">
             {JSON.stringify(project.brief, null, 2)}
           </pre>
+        )}
+      </section>
+      <section className="flex flex-col gap-2 text-sm">
+        <h2 className="font-medium">
+          Voice: <span className="text-foreground/70">{project.voice_status}</span>
+        </h2>
+        {project.voice_error && <p className="text-red-600">{project.voice_error}</p>}
+        <form action={generateVoice.bind(null, id)}>
+          <SubmitButton
+            pendingLabel="Generating voice…"
+            disabled={project.brief_status !== "completed" || project.voice_status === "generating"}
+            className="rounded-md border border-foreground/20 px-3 py-1.5 disabled:opacity-50"
+          >
+            {project.voice_result ? "Regenerate voice" : "Generate voice"}
+          </SubmitButton>
+        </form>
+        {project.voice_status === "completed" && project.voice_result?.audioUrl && (
+          <audio controls src={project.voice_result.audioUrl} className="w-full" />
         )}
       </section>
       <button
