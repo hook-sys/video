@@ -23,7 +23,8 @@ import { type AssetManifest, buildAssetManifest } from "@/lib/asset-manifest";
 import { generateAsset } from "@/lib/generated-assets";
 import { RENDER_PROJECT_COLUMNS, buildRenderInput } from "@/lib/render-input";
 import { renderStoryboardMp4 } from "@/lib/render-video";
-import { RESOLUTIONS, type Resolution } from "@/components/video/types";
+import { validateForRender } from "@/lib/render-validation";
+import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 
@@ -358,39 +359,52 @@ export async function generateVisualAssets(projectId: string) {
 const STALE_RENDER_MS = 30 * 60 * 1000;
 
 export async function renderVideo(projectId: string, formData: FormData) {
-  const resolution = Object.keys(RESOLUTIONS).find((r) => r === formData.get("resolution")) as
-    | Resolution
-    | undefined;
-  if (!resolution) return;
-
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // RLS: only returns the project if this user owns it.
-  const { data: project } = await supabase
-    .from("projects")
-    .select(RENDER_PROJECT_COLUMNS)
-    .eq("id", projectId)
-    .maybeSingle();
+  // RLS: only returns rows this user owns.
+  const [{ data: project }, { data: capture }] = await Promise.all([
+    supabase.from("projects").select(RENDER_PROJECT_COLUMNS).eq("id", projectId).maybeSingle(),
+    supabase
+      .from("website_captures")
+      .select("title, meta_description, visible_text")
+      .eq("project_id", projectId)
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
   if (!project) return;
 
   const admin = createAdminClient();
   const renderUpdate = (fields: Record<string, unknown>) =>
     admin.from("projects").update(fields).eq("id", projectId).eq("user_id", user.id);
 
+  // Validate immediately before rendering; Remotion never starts on failure.
   // Signed URLs must outlive the render.
   const input = await buildRenderInput(supabase, project, 2 * 60 * 60);
-  if (!input.props || input.problems.length) {
+  const requested = String(formData.get("resolution") ?? "");
+  const problems = validateForRender({
+    brief: project.brief,
+    assetsManifest: project.assets_manifest,
+    format: project.format,
+    durationSeconds: project.duration_seconds,
+    resolution: requested,
+    sourceText: [capture?.title, capture?.meta_description, capture?.visible_text].join("\n"),
+    missing: input.problems,
+  });
+  if (!input.props || problems.length) {
     await renderUpdate({
       render_status: "failed",
-      render_error: input.problems.join(" "),
+      render_error: `Validation failed: ${problems.join(" ")}`.slice(0, 500),
     }).neq("render_status", "processing");
     revalidatePath(`/projects/${projectId}`);
     return;
   }
+  const resolution = requested as Resolution;
 
   const staleBefore = new Date(Date.now() - STALE_RENDER_MS).toISOString();
   const { data: claimed } = await renderUpdate({
