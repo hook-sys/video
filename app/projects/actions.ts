@@ -18,12 +18,14 @@ import {
   validateScreenshots,
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
-import { ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
+import { type BriefUsage, ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
 import { type AssetManifest, buildAssetManifest } from "@/lib/asset-manifest";
 import { generateAsset } from "@/lib/generated-assets";
 import { RENDER_PROJECT_COLUMNS, buildRenderInput } from "@/lib/render-input";
 import { renderStoryboardMp4 } from "@/lib/render-video";
 import { validateForRender } from "@/lib/render-validation";
+import { falCost, openaiCost, renderCost, storageCost } from "@/lib/costs/pricing";
+import { recordCost } from "@/lib/costs/record";
 import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
@@ -177,27 +179,44 @@ export async function generateBrief(projectId: string) {
     .select("id");
   if (!claimed?.length) return;
 
+  // Captured even if the call fails after tokens were used.
+  let usage: BriefUsage | undefined;
   try {
-    const brief = await generateProductBrief({
-      website: capture
-        ? {
-            url: capture.url,
-            title: capture.title,
-            meta_description: capture.meta_description,
-            visible_text: capture.visible_text,
-          }
-        : undefined,
-      direction: project.direction,
-      duration_seconds: project.duration_seconds,
-      format: project.format,
-      voice_language: project.voice_language,
-      voice_style: project.voice_style,
-      screenshots: (screenshots ?? []).map((s) => s.original_filename),
-      has_website_screenshot: !!capture?.screenshot_path,
-    });
+    const brief = await generateProductBrief(
+      {
+        website: capture
+          ? {
+              url: capture.url,
+              title: capture.title,
+              meta_description: capture.meta_description,
+              visible_text: capture.visible_text,
+            }
+          : undefined,
+        direction: project.direction,
+        duration_seconds: project.duration_seconds,
+        format: project.format,
+        voice_language: project.voice_language,
+        voice_style: project.voice_style,
+        screenshots: (screenshots ?? []).map((s) => s.original_filename),
+        has_website_screenshot: !!capture?.screenshot_path,
+      },
+      (u) => (usage = u),
+    );
     await briefUpdate({ brief, brief_status: "completed", brief_error: null });
   } catch (e) {
     await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));
+  } finally {
+    if (usage) {
+      await recordCost(admin, {
+        project_id: projectId,
+        user_id: user.id,
+        operation: "openai_brief",
+        model: usage.model,
+        quantity: usage.inputTokens + usage.outputTokens,
+        estimated_cost_usd: openaiCost(usage.model, usage.inputTokens, usage.outputTokens),
+        metadata: { input_tokens: usage.inputTokens, output_tokens: usage.outputTokens },
+      });
+    }
   }
   revalidatePath(`/projects/${projectId}`);
 }
@@ -240,7 +259,25 @@ export async function generateVoice(projectId: string) {
       language: project.voice_language,
       style: project.voice_style,
     });
-    const storagePath = await storeVoiceAudio(admin, audioUrl, user.id, projectId);
+    const stored = await storeVoiceAudio(admin, audioUrl, user.id, projectId);
+    const storagePath = stored.path;
+    const owner = { project_id: projectId, user_id: user.id };
+    // Voice is priced per script character; the stored file costs storage.
+    await recordCost(admin, {
+      ...owner,
+      operation: "fal_voice",
+      model,
+      quantity: script.length,
+      estimated_cost_usd: falCost(model, script.length),
+      metadata: { unit: "characters", request_id: requestId },
+    });
+    await recordCost(admin, {
+      ...owner,
+      operation: "storage",
+      quantity: stored.bytes,
+      estimated_cost_usd: storageCost(stored.bytes),
+      metadata: { kind: "voice", unit: "bytes" },
+    });
     const previousPath = project.voice_result?.storagePath;
     if (previousPath && previousPath !== storagePath) {
       await admin.storage.from(AUDIO_BUCKET).remove([previousPath]);
@@ -421,12 +458,33 @@ export async function renderVideo(projectId: string, formData: FormData) {
   const props = input.props;
   after(async () => {
     try {
+      const started = Date.now();
       const mp4 = await renderStoryboardMp4(props, resolution);
+      const renderMs = Date.now() - started;
       const videoPath = `${user.id}/${projectId}/final.mp4`;
       const { error } = await admin.storage
         .from(VIDEOS_BUCKET)
         .upload(videoPath, mp4, { contentType: "video/mp4", upsert: true });
       if (error) throw new Error(`Video storage failed: ${error.message}`);
+      const owner = { project_id: projectId, user_id: user.id };
+      await recordCost(admin, {
+        ...owner,
+        operation: "remotion_render",
+        model: "remotion",
+        duration_seconds: props.durationSeconds,
+        resolution,
+        quantity: props.durationSeconds,
+        estimated_cost_usd: renderCost(resolution, props.durationSeconds),
+        metadata: { unit: "video_seconds", render_ms: renderMs, bytes: mp4.byteLength },
+      });
+      await recordCost(admin, {
+        ...owner,
+        operation: "storage",
+        resolution,
+        quantity: mp4.byteLength,
+        estimated_cost_usd: storageCost(mp4.byteLength),
+        metadata: { kind: "video", unit: "bytes" },
+      });
       await renderUpdate({
         render_status: "completed",
         render_error: null,

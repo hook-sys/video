@@ -62,12 +62,18 @@ function fitDurations(brief: ProductBrief, target: number): ProductBrief {
   return { ...brief, scenes };
 }
 
-export async function generateProductBrief(input: BriefInput): Promise<ProductBrief> {
+export type BriefUsage = { model: string; inputTokens: number; outputTokens: number };
+
+export async function generateProductBrief(
+  input: BriefInput,
+  onUsage?: (usage: BriefUsage) => void,
+): Promise<ProductBrief> {
   if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
   const client = new OpenAI({ timeout: 50_000, maxRetries: 1 });
 
+  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
   const response = await client.responses.parse({
-    model: process.env.OPENAI_MODEL || "gpt-5-mini",
+    model,
     instructions: INSTRUCTIONS,
     input: JSON.stringify({
       REQUEST: {
@@ -86,6 +92,11 @@ export async function generateProductBrief(input: BriefInput): Promise<ProductBr
     text: { format: zodTextFormat(ProductBrief, "product_brief") },
   });
 
+  onUsage?.({
+    model,
+    inputTokens: response.usage?.input_tokens ?? 0,
+    outputTokens: response.usage?.output_tokens ?? 0,
+  });
   if (!response.output_parsed) throw new Error("AI returned no structured output.");
   return fitDurations(ProductBrief.parse(response.output_parsed), input.duration_seconds);
 }

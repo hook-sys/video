@@ -4,6 +4,8 @@ import { generateImage } from "@/lib/ai/fal";
 import type { AssetManifest } from "@/lib/asset-manifest";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { isPublicHost } from "@/lib/website-capture";
+import { falCost, storageCost } from "@/lib/costs/pricing";
+import { recordCost } from "@/lib/costs/record";
 
 type Asset = AssetManifest["assets"][number];
 
@@ -41,7 +43,7 @@ export async function generateAsset(
   }
   if (!asset.prompt) return { ...asset, status: "failed", error: "Asset has no prompt." };
   try {
-    const { imageUrl } = await generateImage({
+    const { imageUrl, model, requestId } = await generateImage({
       prompt: asset.prompt,
       format: asset.type === "icon" ? "1:1" : ctx.format,
     });
@@ -51,6 +53,22 @@ export async function generateAsset(
       .from(SCREENSHOTS_BUCKET)
       .upload(path, body, { contentType: type, upsert: true });
     if (error) throw new Error(`Asset storage failed: ${error.message}`);
+    const owner = { project_id: ctx.projectId, user_id: ctx.userId };
+    await recordCost(admin, {
+      ...owner,
+      operation: "fal_image",
+      model,
+      quantity: 1,
+      estimated_cost_usd: falCost(model, 1),
+      metadata: { asset_id: asset.id, asset_type: asset.type, request_id: requestId },
+    });
+    await recordCost(admin, {
+      ...owner,
+      operation: "storage",
+      quantity: body.byteLength,
+      estimated_cost_usd: storageCost(body.byteLength),
+      metadata: { kind: "asset", asset_id: asset.id, unit: "bytes" },
+    });
     return { ...asset, storage_path: path, status: "completed", error: undefined };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Asset generation failed.";

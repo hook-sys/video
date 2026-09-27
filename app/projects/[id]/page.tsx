@@ -11,6 +11,7 @@ import {
   renderVideo,
 } from "@/app/projects/actions";
 import type { AssetManifest } from "@/lib/asset-manifest";
+import { getProjectCostSummary } from "@/lib/costs/benchmark";
 import { SubmitButton } from "@/components/submit-button";
 
 // Allows the AI brief call to finish.
@@ -77,6 +78,12 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           .from(VIDEOS_BUCKET)
           .createSignedUrl(project.video_path, 3600, { download: "video.mp4" })
       : { data: null };
+
+  const costs =
+    process.env.NODE_ENV !== "production"
+      ? await getProjectCostSummary(supabase, id, project.duration_seconds)
+      : null;
+  const usd = (n: number) => `$${n.toFixed(4)}`;
 
   const rows: [string, string][] = [
     ["Website URL", project.website_url ?? "—"],
@@ -242,6 +249,34 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           </details>
         )}
       </section>
+      {costs && (
+        <section className="flex flex-col gap-2 rounded-md border border-dashed border-foreground/20 p-3 text-sm">
+          <h2 className="font-medium">Cost Breakdown (dev)</h2>
+          <p className="text-xs text-foreground/60">
+            Estimated internal provider cost, not customer billing. Unpriced models show $0.
+          </p>
+          <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1">
+            {(
+              [
+                ["Total (estimated)", costs.total_cost_usd],
+                ["OpenAI", costs.cost_by_operation.openai_brief],
+                ["Voice", costs.cost_by_operation.fal_voice],
+                ["Images", costs.cost_by_operation.fal_image],
+                ["Render", costs.cost_by_operation.remotion_render],
+                ["Storage", costs.cost_by_operation.storage],
+                ["Per video minute", costs.cost_per_video_minute],
+                ["1080p per minute", costs.by_resolution["1080p"].cost_per_video_minute],
+                ["4K per minute", costs.by_resolution["4k"].cost_per_video_minute],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label} className="contents">
+                <dt className="text-foreground/60">{label}</dt>
+                <dd>{usd(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
       {process.env.NODE_ENV !== "production" && project.brief_status === "completed" && (
         <Link href={`/projects/${id}/preview`} className="self-start text-sm underline">
           Preview storyboard (dev)

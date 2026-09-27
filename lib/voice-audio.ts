@@ -21,13 +21,13 @@ const EXTENSIONS: Record<string, string> = {
   "audio/webm": "webm",
 };
 
-// Downloads temporary provider audio and stores it privately. Returns the storage path.
+// Downloads temporary provider audio and stores it privately.
 export async function storeVoiceAudio(
   admin: SupabaseClient,
   audioUrl: string,
   userId: string,
   projectId: string,
-): Promise<string> {
+): Promise<{ path: string; bytes: number }> {
   const url = new URL(audioUrl);
   if (url.protocol !== "https:" || !(await isPublicHost(url.hostname))) {
     throw new Error("Voice audio URL is not allowed.");
@@ -55,5 +55,5 @@ export async function storeVoiceAudio(
     .from(AUDIO_BUCKET)
     .upload(path, body, { contentType, upsert: true });
   if (error) throw new Error(`Audio storage failed: ${error.message}`);
-  return path;
+  return { path, bytes: body.byteLength };
 }
