@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { devToolsEnabled } from "@/lib/dev-tools";
 import { RENDER_PROJECT_COLUMNS, buildRenderInput } from "@/lib/render-input";
 import { PreviewPlayer } from "./preview-player";
 
-// Development-only storyboard preview.
+// Storyboard preview for the project owner (RLS-scoped).
 export default async function PreviewPage({ params }: PageProps<"/projects/[id]/preview">) {
-  if (!devToolsEnabled()) notFound();
   const { id } = await params;
 
   const supabase = await createClient();
@@ -26,7 +24,7 @@ export default async function PreviewPage({ params }: PageProps<"/projects/[id]/
       <Link href={`/projects/${id}`} className="text-sm text-foreground/70 underline">
         ← Project
       </Link>
-      <h1 className="text-xl font-semibold">Storyboard preview (dev)</h1>
+      <h1 className="text-xl font-semibold">Video preview</h1>
       <PreviewPlayer {...props} />
       {!props.audioUrl && <p className="text-sm text-foreground/60">No voice yet — silent preview.</p>}
     </main>

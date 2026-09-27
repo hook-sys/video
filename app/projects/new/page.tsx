@@ -1,8 +1,8 @@
 import { VERCEL_SCREENSHOT_TOTAL_BYTES } from "@/lib/projects";
 import { CreateProjectForm } from "./create-project-form";
 
-// Allows the post-response website capture to finish.
-export const maxDuration = 60;
+// The generation pipeline runs after the response (after()) within this limit.
+export const maxDuration = 300;
 
 export default function NewProjectPage() {
   return (

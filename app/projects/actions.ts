@@ -19,6 +19,7 @@ import {
   VERCEL_SCREENSHOT_TOTAL_BYTES,
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
+
 import { type BriefUsage, ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
 import { type AssetManifest, buildAssetManifest } from "@/lib/asset-manifest";
 import { generateAsset } from "@/lib/generated-assets";
@@ -28,6 +29,11 @@ import { validateForRender } from "@/lib/render-validation";
 import { falCost, openaiCost, renderCost, storageCost } from "@/lib/costs/pricing";
 import { recordCost } from "@/lib/costs/record";
 import { devToolsEnabled } from "@/lib/dev-tools";
+import {
+  NEEDS_SCREENSHOTS_MESSAGE,
+  RENDER_WORKER_MESSAGE,
+  type PipelineStep,
+} from "@/lib/pipeline";
 import {
   BENCHMARK_CASES,
   cloneProjectForBenchmark,
@@ -125,22 +131,14 @@ export async function createProject(
   }
 
   if (websiteUrl) {
-    const { data: capture } = await supabase
+    // Captured by the pipeline's first step.
+    await supabase
       .from("website_captures")
-      .insert({ project_id: data.id, user_id: user.id, url: websiteUrl })
-      .select("id")
-      .single();
-    if (capture) {
-      after(() =>
-        runWebsiteCapture(supabase, {
-          id: capture.id,
-          userId: user.id,
-          projectId: data.id,
-          url: websiteUrl,
-        }),
-      );
-    }
+      .insert({ project_id: data.id, user_id: user.id, url: websiteUrl });
   }
+
+  await claimPipeline(data.id, user.id);
+  after(() => runPipeline(data.id, user.id));
 
   redirect(`/projects/${data.id}`);
 }
@@ -464,7 +462,7 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
   if (process.env.VERCEL) {
     await renderUpdate({
       render_status: "failed",
-      render_error: "Video rendering requires the production render worker.",
+      render_error: RENDER_WORKER_MESSAGE,
     }).neq("render_status", "processing");
     revalidatePath(`/projects/${projectId}`);
     return;
@@ -618,4 +616,167 @@ export async function runBenchmark(sourceProjectId: string, formData: FormData) 
     }
   }
   revalidatePath(`/projects/${sourceProjectId}`);
+}
+
+// --- Automatic generation pipeline ------------------------------------------
+
+const STALE_PIPELINE_MS = 15 * 60 * 1000;
+
+// Marks the pipeline running; returns false if a run is already in progress.
+async function claimPipeline(projectId: string, userId: string) {
+  const staleBefore = new Date(Date.now() - STALE_PIPELINE_MS).toISOString();
+  const { data } = await createAdminClient()
+    .from("projects")
+    .update({ pipeline_status: "running", pipeline_step: "analyzing", pipeline_error: null })
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .or(`pipeline_status.neq.running,updated_at.lt.${staleBefore}`)
+    .select("id");
+  return !!data?.length;
+}
+
+/**
+ * Runs every generation step in order, reusing the individual step actions.
+ * Completed steps are skipped, so a retry resumes where the last run stopped.
+ * Never throws; the outcome is stored on the project.
+ */
+async function runPipeline(projectId: string, userId: string) {
+  const admin = createAdminClient();
+  const setPipeline = (fields: Record<string, unknown>) =>
+    admin.from("projects").update(fields).eq("id", projectId).eq("user_id", userId);
+  const state = async () =>
+    (
+      await admin
+        .from("projects")
+        .select(
+          "resolution, brief_status, brief_error, voice_status, voice_error, assets_status, assets_error, assets_manifest, render_status, render_error",
+        )
+        .eq("id", projectId)
+        .single()
+    ).data!;
+  // Step actions finish with revalidatePath, which may not be allowed here;
+  // their results are read back from the database either way.
+  const attempt = async (fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+    } catch (e) {
+      console.error("pipeline step:", e);
+    }
+  };
+  let step: PipelineStep = "analyzing";
+  const enter = (next: PipelineStep) => {
+    step = next;
+    return setPipeline({ pipeline_step: next });
+  };
+  const fail = (message: string, status = "failed") =>
+    setPipeline({ pipeline_status: status, pipeline_step: step, pipeline_error: message.slice(0, 500) });
+
+  try {
+    // 1. Website capture (pending captures only) and source check.
+    await enter("analyzing");
+    const supabase = await createClient();
+    const { data: pending } = await supabase
+      .from("website_captures")
+      .select("id, url")
+      .eq("project_id", projectId)
+      .eq("status", "pending");
+    for (const c of pending ?? []) {
+      await runWebsiteCapture(supabase, { id: c.id, userId, projectId, url: c.url });
+    }
+    const [{ count: captured }, { count: shots }] = await Promise.all([
+      supabase
+        .from("website_captures")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId)
+        .eq("status", "completed"),
+      supabase
+        .from("project_screenshots")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId),
+    ]);
+    // Never generate from the URL alone: that would mean inventing the product.
+    if (!captured && !shots) return void (await fail(NEEDS_SCREENSHOTS_MESSAGE, "needs_input"));
+
+    // 2. Product brief + script.
+    await enter("writing");
+    let p = await state();
+    if (p.brief_status !== "completed") {
+      await attempt(() => generateBrief(projectId));
+      p = await state();
+      if (p.brief_status !== "completed") return void (await fail(p.brief_error ?? "Brief failed."));
+    }
+
+    // 3. Voice.
+    await enter("voice");
+    if (p.voice_status !== "completed") {
+      await attempt(() => generateVoice(projectId));
+      p = await state();
+      if (p.voice_status !== "completed") return void (await fail(p.voice_error ?? "Voice failed."));
+    }
+
+    // 4. Visual asset manifest, then generated assets.
+    await enter("visuals");
+    if (p.assets_status !== "completed" || !p.assets_manifest) {
+      await attempt(() => prepareAssets(projectId));
+    }
+    p = await state();
+    const needsGeneration = (p.assets_manifest as AssetManifest | null)?.assets.some(
+      (a) => a.source === "generated" && a.status !== "completed",
+    );
+    if (p.assets_status === "completed" && needsGeneration) {
+      await attempt(() => generateVisualAssets(projectId));
+      p = await state();
+    }
+    if (p.assets_status !== "completed") return void (await fail(p.assets_error ?? "Assets failed."));
+
+    // 5–6. Validation runs first inside startRender; rendering only where supported.
+    await enter("validating");
+    await attempt(() => startRender(projectId, p.resolution, true));
+    p = await state();
+    if (p.render_status === "completed") {
+      return void (await setPipeline({ pipeline_status: "completed", pipeline_step: null, pipeline_error: null }));
+    }
+    if (p.render_error?.startsWith("Validation failed")) return void (await fail(p.render_error));
+    if (p.render_error === RENDER_WORKER_MESSAGE) {
+      // Honest end state: everything but the MP4 is ready; no fake render.
+      return void (await setPipeline({
+        pipeline_status: "preview_ready",
+        pipeline_step: "rendering",
+        pipeline_error: RENDER_WORKER_MESSAGE,
+      }));
+    }
+    step = "rendering";
+    await fail(p.render_error ?? "Render failed.");
+  } catch (e) {
+    await fail(e instanceof Error ? e.message : "Generation failed.");
+  }
+}
+
+// Retries the pipeline from the failed step. After a validation failure the
+// script is regenerated (with its voice and visuals) instead of re-checking it.
+export async function retryPipeline(projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // RLS: only returns the project if this user owns it.
+  const { data: project } = await supabase
+    .from("projects")
+    .select("pipeline_status, pipeline_step")
+    .eq("id", projectId)
+    .maybeSingle();
+  // Failed runs resume; projects created before the pipeline existed can start.
+  if (!project || !["failed", "idle"].includes(project.pipeline_status)) return;
+
+  if (project.pipeline_step === "validating") {
+    await createAdminClient()
+      .from("projects")
+      .update({ brief_status: "none", voice_status: "none", assets_status: "none", assets_manifest: null })
+      .eq("id", projectId)
+      .eq("user_id", user.id);
+  }
+  if (await claimPipeline(projectId, user.id)) after(() => runPipeline(projectId, user.id));
+  revalidatePath(`/projects/${projectId}`);
 }

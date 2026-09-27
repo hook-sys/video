@@ -9,8 +9,11 @@ import {
   generateVoice,
   prepareAssets,
   renderVideo,
+  retryPipeline,
   runBenchmark,
 } from "@/app/projects/actions";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { PipelineProgress } from "@/components/pipeline-progress";
 import { BENCHMARK_CASES } from "@/lib/benchmark";
 import type { AssetManifest } from "@/lib/asset-manifest";
 import { getProjectCostSummary } from "@/lib/costs/benchmark";
@@ -116,29 +119,33 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         ← Dashboard
       </Link>
       <h1 className="text-2xl font-semibold">Project</h1>
-      <ol className="flex flex-wrap gap-2 text-xs">
-        {(
-          [
-            ["Brief", project.brief_status],
-            ["Voice", project.voice_status],
-            ["Assets", project.assets_status],
-            ["Render", project.render_status],
-          ] as const
-        ).map(([step, status]) => (
-          <li
-            key={step}
-            className={`rounded-full border px-3 py-1 ${
-              status === "completed"
-                ? "border-green-600/40 text-green-600"
-                : status === "failed"
-                  ? "border-red-600/40 text-red-600"
-                  : "border-foreground/20 text-foreground/70"
-            }`}
+      <AutoRefresh active={project.pipeline_status === "running"} />
+      <PipelineProgress
+        status={project.pipeline_status}
+        step={project.pipeline_step}
+        error={project.pipeline_error}
+      />
+      {(project.pipeline_status === "failed" || project.pipeline_status === "idle") && (
+        <form action={retryPipeline.bind(null, id)}>
+          <SubmitButton
+            pendingLabel="Starting…"
+            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background"
           >
-            {step}: {status}
-          </li>
-        ))}
-      </ol>
+            {project.pipeline_status === "failed" ? "Retry" : "Generate video"}
+          </SubmitButton>
+        </form>
+      )}
+      {(project.pipeline_status === "preview_ready" || project.pipeline_status === "completed") && (
+        <Link href={`/projects/${id}/preview`} className="self-start text-sm underline">
+          Watch video preview
+        </Link>
+      )}
+      {video?.signedUrl && <video controls src={video.signedUrl} className="w-full rounded-md" />}
+      {download?.signedUrl && (
+        <a href={download.signedUrl} className="self-start text-sm underline">
+          Download MP4
+        </a>
+      )}
       <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 text-sm">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
@@ -162,6 +169,11 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           )}
         </div>
       )}
+      {devToolsEnabled() && (
+        <>
+          <h2 className="mt-4 text-xs font-medium tracking-wide text-foreground/50 uppercase">
+            Developer tools
+          </h2>
       {capture && (
         <section className="flex flex-col gap-2 text-sm">
           <h2 className="font-medium">
@@ -286,6 +298,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           </details>
         )}
       </section>
+        </>
+      )}
       {costs && (
         <section className="flex flex-col gap-2 rounded-md border border-dashed border-foreground/20 p-3 text-sm">
           <h2 className="font-medium">Cost Breakdown</h2>
@@ -375,6 +389,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           Preview storyboard (dev)
         </Link>
       )}
+      {devToolsEnabled() && (
       <section className="flex flex-col gap-2 text-sm">
         <h2 className="font-medium">
           Video:{" "}
@@ -402,15 +417,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             Render Video
           </SubmitButton>
         </form>
-        {video?.signedUrl && (
-          <video controls src={video.signedUrl} className="w-full rounded-md" />
-        )}
-        {download?.signedUrl && (
-          <a href={download.signedUrl} className="self-start underline">
-            Download MP4
-          </a>
-        )}
       </section>
+      )}
     </main>
   );
 }
