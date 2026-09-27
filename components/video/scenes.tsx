@@ -12,32 +12,21 @@ import {
 import { tokenize } from "@/lib/voice-timing";
 import { enter, motionFor } from "./animations";
 import { ActionLayer, graphemes } from "./actions";
-import { CameraLayer, CameraProvider, cameraPresetFor, useSceneSpan } from "./camera";
+import { CameraLayer, CameraProvider, focusOn, orderKeys, pose, useSceneSpan, type CameraKey } from "./camera";
+import { Burst, Chip, Core, Obj, Particles, SkeletonCard, type IconName } from "./objects";
 import { SceneSfx } from "./sfx";
 import { same, type SyncedScene, type TimedAction } from "./sync";
-import { sceneEdgeStyle, transitionFor } from "./transitions";
+import { sceneEdgeStyle, TRANSITION_FRAMES, transitionFor } from "./transitions";
+import { ACCENT, ACCENT_2, BG, clamp, FG, FONT, glass, inset } from "./theme";
 import type { RenderScene } from "./types";
 
 type SyncedView = RenderScene & Partial<Pick<SyncedScene, "timedActions" | "spoken">>;
 
-const BG = "#0b0d12";
-const FG = "#f5f7fb";
-const ACCENT = "#6d8cff";
-const ACCENT_2 = "#a071ff";
-const FONT = "Inter, system-ui, sans-serif";
-// AbsoluteFill defaults to 100% width/height; reset so top/bottom insets apply.
-const inset = { width: "auto", height: "auto" } as const;
-const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
-
-const glass = {
-  background: "rgba(255,255,255,0.08)",
-  border: "1px solid rgba(255,255,255,0.18)",
-  boxShadow: "0 30px 80px rgba(0,0,0,.45)",
-  backdropFilter: "blur(18px)",
-} as const;
-
-// Parallax depths: background moves 1x, the main subject and text move more.
-const DEPTH = { subject: 1.3, text: 1.6 };
+// Parallax depths: background 1x, midground objects, main subject, text, then
+// the blurred foreground nearest the lens.
+const DEPTH = { mid: 1.2, subject: 1.3, text: 1.45, fore: 1.65 };
+// App window placement, as fractions of the frame.
+const WINDOW = { top: 0.07, bottom: 0.3, left: 0.09 };
 
 // Full-frame generated image on the camera's background plane.
 function ImageBackground({ scene }: { scene: RenderScene }) {
@@ -45,7 +34,7 @@ function ImageBackground({ scene }: { scene: RenderScene }) {
   return (
     <AbsoluteFill style={{ background: BG, overflow: "hidden" }}>
       <CameraLayer>
-        <Img src={scene.backgroundUrl} style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.06)" }} />
+        <Img src={scene.backgroundUrl} style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.15)" }} />
       </CameraLayer>
       {/* Legibility scrim keeps text crisp over any image. */}
       <AbsoluteFill
@@ -241,57 +230,186 @@ function Caption({ text }: { text: string }) {
 // `lines`: on-screen text not already shown elsewhere; `typed`: the line the UI types.
 type VisualProps = { scene: SyncedView; isFinal?: boolean; lines: string[]; typed: string };
 
-// typography / abstract: image-led hero with animated headline.
-function HeroScene({ scene, isFinal, lines }: VisualProps) {
+// Foreground depth-of-field layer: nearest, fastest-moving, softly blurred.
+function Foreground({ seed, chip, at }: { seed: number; chip?: IconName; at?: number }) {
+  const { width, height } = useVideoConfig();
+  const base = Math.min(width, height);
+  return (
+    <CameraLayer depth={DEPTH.fore} zoom={1} blur={2.5}>
+      <Particles n={12} seed={seed} size={base * 0.012} />
+      {chip && at !== undefined && (
+        <Obj x={seed % 2 ? 88 : 12} y={seed % 2 ? 24 : 70} at={at} from="depth" float={2} seed={seed}>
+          <Chip icon={chip} size={base * 0.11} />
+        </Obj>
+      )}
+    </CameraLayer>
+  );
+}
+
+const CHIP_ICONS: IconName[] = ["sparkle", "bolt", "layers", "dot"];
+
+// typography / abstract: kinetic headline with objects around it at three depths.
+function KineticScene({ scene, lines }: VisualProps) {
   const frame = useCurrentFrame();
   const { fps, height, width } = useVideoConfig();
+  const span = useSceneSpan();
   const base = Math.min(width, height);
-  const cta = spring({ frame: frame - 18, fps, config: { damping: 14 } });
-  const pulse = 0.5 + 0.5 * Math.sin(frame / 8);
+  const highlight = actionFrames(scene, "highlight", fps);
+  const lit = highlight ? spring({ frame: frame - highlight[0], fps, config: { damping: 14 } }) : 0;
+  const idx = Number(scene.id.split("-")[1] ?? 0);
   return (
     <AbsoluteFill>
       <ImageBackground scene={scene} />
-      <CameraLayer depth={DEPTH.text} zoom={0.4}>
-        <AbsoluteFill
-          style={{
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "0 8%",
-            paddingBottom: height * 0.08,
-          }}
-        >
+      <CameraLayer depth={DEPTH.mid} zoom={0.9}>
+        {/* Glow behind the headline brightens when the key phrase is spoken. */}
+        <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", paddingBottom: height * 0.08 }}>
+          <div style={{ width: base * 0.9, height: base * 0.5, borderRadius: "50%", background: `radial-gradient(closest-side, ${ACCENT_2}${lit > 0.5 ? "66" : "33"}, transparent)`, transform: `scale(${0.9 + 0.2 * lit})` }} />
+        </AbsoluteFill>
+        <Obj x={20} y={30} at={10} from="left" float={1.2} seed={idx}>
+          <Chip icon={CHIP_ICONS[idx % 4]} size={base * 0.1} />
+        </Obj>
+        <Obj x={80} y={66} at={18} from="right" exitAt={Math.round(span * 0.82)} exitTo="depth" seed={idx + 1}>
+          <Chip icon={CHIP_ICONS[(idx + 1) % 4]} size={base * 0.085} tint={ACCENT_2} />
+        </Obj>
+      </CameraLayer>
+      <CameraLayer depth={DEPTH.text} zoom={0.45}>
+        <AbsoluteFill style={{ flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "0 10%", paddingBottom: height * 0.08 }}>
           <Headline scene={scene} lines={lines} />
-          {isFinal && (
-            // Closing call-to-action: gradient button with a soft pulsing glow.
-            <div
-              style={{
-                marginTop: base * 0.05,
-                width: base * 0.34,
-                height: base * 0.09,
-                borderRadius: 999,
-                background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`,
-                boxShadow: `0 0 ${base * (0.04 + pulse * 0.04)}px ${ACCENT_2}aa`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#fff",
-                fontFamily: FONT,
-                fontWeight: 700,
-                fontSize: base * 0.04,
-                transform: `scale(${cta})`,
-              }}
-            >
-              →
-            </div>
-          )}
         </AbsoluteFill>
       </CameraLayer>
+      <Foreground seed={idx + 3} chip={CHIP_ICONS[(idx + 2) % 4]} at={6} />
     </AbsoluteFill>
   );
 }
 
-// ui / screenshot: real screenshot in a tilted frame, or an animated app mockup.
+// Beats of a scene that turns input into a result: input card flies into the
+// processing core, particles stream in while progress advances, then the core
+// bursts into a result card (which the camera flies through into the next scene).
+function processBeats(scene: SyncedView, fps: number, span: number) {
+  const P = actionFrames(scene, "processing", fps)?.[0] ?? 14;
+  const R = actionFrames(scene, "reveal", fps)?.[0] ?? Math.max(P + fps * 1.5, Math.round(span * 0.6));
+  return { P: Math.max(P, 8), R: Math.max(R, P + 18) };
+}
+const CORE: Point = [50, 56];
+
+function ProcessingScene({ scene, lines }: VisualProps) {
+  const frame = useCurrentFrame();
+  const { fps, height, width } = useVideoConfig();
+  const span = useSceneSpan();
+  const base = Math.min(width, height);
+  const { P, R } = processBeats(scene, fps, span);
+  const progress = interpolate(frame, [P, R], [0, 1], { ...clamp, easing: Easing.inOut(Easing.quad) });
+  const reveal = spring({ frame: frame - R, fps, config: { damping: 14 } });
+  // In the transition tail the result card rushes toward the camera.
+  const through = Easing.in(Easing.cubic)(interpolate(frame, [span, span + TRANSITION_FRAMES], [0, 1], clamp));
+  return (
+    <AbsoluteFill>
+      <ImageBackground scene={scene} />
+      <CameraLayer depth={1.1} zoom={0.95}>
+        <Particles n={22} seed={11} size={base * 0.008} into={{ x: CORE[0], y: CORE[1], from: P, to: R }} color={ACCENT_2} />
+        <Obj x={27} y={60} at={R + 6} from="left" float={0.8} seed={2} style={{ transform: "translate(-50%,-50%) rotate(-7deg)" }}>
+          <SkeletonCard w={base * 0.22} variant="panel" fill={reveal} />
+        </Obj>
+        <Obj x={73} y={60} at={R + 10} from="right" float={0.8} seed={3} style={{ transform: "translate(-50%,-50%) rotate(7deg)" }}>
+          <SkeletonCard w={base * 0.22} variant="doc" fill={reveal} />
+        </Obj>
+      </CameraLayer>
+      <CameraLayer depth={DEPTH.mid} zoom={0.8}>
+        {/* Input card enters, then is pulled into the core. */}
+        <Obj x={24} y={CORE[1]} at={Math.max(4, P - 16)} from="left" exitAt={P + 4} exitTo="right" seed={1}>
+          <SkeletonCard w={base * 0.24} variant="doc" fill={interpolate(frame, [P - 16, P], [0.3, 1], clamp)} />
+        </Obj>
+        <Obj x={CORE[0]} y={CORE[1]} at={P - 6} from="depth" exitAt={R - 3} exitTo="depth" float={0.5}>
+          <Core size={base * 0.26} progress={progress} frame={frame} />
+        </Obj>
+        <Burst x={CORE[0]} y={CORE[1]} at={R} size={base * 0.5} />
+        <div style={{ position: "absolute", inset: 0, transform: `scale(${1 + through * 2.4})`, transformOrigin: `${CORE[0]}% ${CORE[1]}%` }}>
+          <Obj x={CORE[0]} y={CORE[1]} at={R} from="depth" float={0.6}>
+            <SkeletonCard w={base * 0.34} variant="result" fill={reveal} glow={reveal * (1 - through)} />
+          </Obj>
+        </div>
+      </CameraLayer>
+      <CameraLayer depth={DEPTH.text} zoom={0.4}>
+        <AbsoluteFill style={{ ...inset, top: height * 0.08, height: height * 0.24, justifyContent: "center", padding: "0 10%" }}>
+          <Headline scene={scene} lines={lines} scale={0.7} />
+        </AbsoluteFill>
+      </CameraLayer>
+      <Foreground seed={5} chip="sparkle" at={P + 4} />
+    </AbsoluteFill>
+  );
+}
+
+// Closing scene: the result settles among other cards at different depths,
+// the camera pulls back to reveal them, and the call-to-action enters.
+function ResultScene({ scene, lines }: VisualProps) {
+  const frame = useCurrentFrame();
+  const { fps, height, width } = useVideoConfig();
+  const span = useSceneSpan();
+  const base = Math.min(width, height);
+  const success = actionFrames(scene, "success", fps);
+  const check = success ? spring({ frame: frame - success[0], fps, config: { damping: 10 } }) : 0;
+  const ctaAt = Math.round(span * 0.42);
+  const cta = spring({ frame: frame - ctaAt, fps, config: { damping: 12 } });
+  const pulse = 0.5 + 0.5 * Math.sin(frame / 8);
+  const fill = interpolate(frame, [6, 30], [0, 1], clamp);
+  return (
+    <AbsoluteFill>
+      <ImageBackground scene={scene} />
+      {/* Finished results fanned out behind the main one, each on its own depth. */}
+      <CameraLayer depth={1.05} zoom={0.9}>
+        <Obj x={31} y={47} at={16} from="depth" float={0.8} seed={4} style={{ transform: "translate(-50%,-50%) rotate(-12deg)" }}>
+          <SkeletonCard w={base * 0.22} variant="result" fill={fill} />
+        </Obj>
+        <Obj x={69} y={47} at={20} from="depth" float={0.8} seed={5} style={{ transform: "translate(-50%,-50%) rotate(12deg)" }}>
+          <SkeletonCard w={base * 0.22} variant="result" fill={fill} />
+        </Obj>
+      </CameraLayer>
+      <CameraLayer depth={1.18} zoom={0.9}>
+        <Obj x={18} y={36} at={24} from="left" float={1.4} seed={9}>
+          <Chip icon="layers" size={base * 0.08} />
+        </Obj>
+        <Obj x={82} y={62} at={28} from="right" float={1.4} seed={10}>
+          <Chip icon="sparkle" size={base * 0.08} tint={ACCENT_2} />
+        </Obj>
+      </CameraLayer>
+      <CameraLayer depth={DEPTH.mid} zoom={0.8}>
+        <Obj x={50} y={50} at={4} from="depth" float={0.6} seed={6}>
+          <SkeletonCard w={base * 0.32} variant="result" fill={fill} check={check} glow={0.4 + 0.3 * check} />
+        </Obj>
+      </CameraLayer>
+      <CameraLayer depth={DEPTH.text} zoom={0.4}>
+        <AbsoluteFill style={{ ...inset, top: height * 0.06, height: height * 0.22, justifyContent: "center", padding: "0 10%" }}>
+          <Headline scene={scene} lines={lines} scale={0.7} />
+        </AbsoluteFill>
+        <AbsoluteFill style={{ ...inset, top: height * 0.72, height: height * 0.1, alignItems: "center", justifyContent: "center" }}>
+          <div
+            style={{
+              width: base * 0.3,
+              height: base * 0.08,
+              borderRadius: 999,
+              background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_2})`,
+              boxShadow: `0 0 ${base * (0.03 + pulse * 0.03)}px ${ACCENT_2}aa`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              fontFamily: FONT,
+              fontWeight: 700,
+              fontSize: base * 0.04,
+              opacity: Math.min(1, cta * 1.5),
+              transform: `translateY(${(1 - cta) * 30}px) scale(${0.8 + 0.2 * cta})`,
+            }}
+          >
+            →
+          </div>
+        </AbsoluteFill>
+      </CameraLayer>
+      <Foreground seed={8} chip={success ? "check" : undefined} at={success ? success[0] + 4 : undefined} />
+    </AbsoluteFill>
+  );
+}
+
+// ui / screenshot: real screenshot in a tilted frame, or the animated app mockup.
 function ProductScene({ scene, lines, typed }: VisualProps) {
   const frame = useCurrentFrame();
   const { fps, height, width } = useVideoConfig();
@@ -302,6 +420,7 @@ function ProductScene({ scene, lines, typed }: VisualProps) {
   const screenshot = scene.assetKind === "screenshot" ? scene.assetUrl : undefined;
   // Inside the window the screenshot scrolls gently: a second, independent move.
   const scroll = interpolate(frame, [0, span], [0, -6], clamp);
+  const beats = mockupBeats(scene, fps, span, graphemes(typed).length);
 
   return (
     <AbsoluteFill>
@@ -310,10 +429,10 @@ function ProductScene({ scene, lines, typed }: VisualProps) {
         <AbsoluteFill
           style={{
             ...inset,
-            top: height * 0.07,
-            bottom: height * 0.3,
-            left: "9%",
-            right: "9%",
+            top: height * WINDOW.top,
+            bottom: height * WINDOW.bottom,
+            left: `${WINDOW.left * 100}%`,
+            right: `${WINDOW.left * 100}%`,
             perspective: 1600,
           }}
         >
@@ -344,12 +463,19 @@ function ProductScene({ scene, lines, typed }: VisualProps) {
             )}
           </div>
         </AbsoluteFill>
+        {/* A completion badge pops off the window once results are in. */}
+        {!screenshot && beats.full && (
+          <Obj x={88} y={14} at={beats.progEnd + 4} from="depth" float={1.2}>
+            <Chip icon="check" size={base * 0.09} tint="#34d399" />
+          </Obj>
+        )}
       </CameraLayer>
       <CameraLayer depth={DEPTH.text} zoom={0.35}>
         <AbsoluteFill style={{ ...inset, top: height * 0.72, bottom: height * 0.1, justifyContent: "center" }}>
           <Headline scene={scene} lines={lines} scale={0.55} />
         </AbsoluteFill>
       </CameraLayer>
+      <Foreground seed={2} chip={screenshot ? "sparkle" : undefined} at={screenshot ? 12 : undefined} />
     </AbsoluteFill>
   );
 }
@@ -379,6 +505,22 @@ function cursorAt(frame: number, keys: { f: number; to: Point }[], start: Point)
   return pos;
 }
 
+// Beats of the app-mockup interaction, shared by the UI and the camera. Typing
+// runs at a readable pace (it may continue into the transition). Short scenes
+// get the simple version (cursor enters, clicks the input, types) instead of a
+// rushed click → processing → result sequence.
+function mockupBeats(scene: SyncedView, fps: number, span: number, typedLength: number) {
+  const typing = actionFrames(scene, "typing", fps);
+  const T = typing ? typing[0] : Math.round(fps * 0.9);
+  const typeEnd = T + Math.max(10, Math.min(typedLength * 2.5, fps * 2.4));
+  const proc = actionFrames(scene, "processing", fps);
+  const clickAct = actionFrames(scene, "click", fps);
+  const clickButton = clickAct?.[0] ?? proc?.[0] ?? Math.round(typeEnd + fps * 0.5);
+  const full = !!clickAct || !!proc || clickButton + fps * 1.2 <= span;
+  const progEnd = Math.max(proc ? proc[1] : Math.min(span - 6, clickButton + fps * 1.2), clickButton + 12);
+  return { T, clickInput: T - 3, typeEnd, clickButton, progEnd, full };
+}
+
 // Generic editor-style window with a scripted interaction: the cursor glides
 // in, clicks the input, the scene's line types in, the cursor moves to the
 // generate button, hovers, clicks, the progress bar runs and results pop in.
@@ -391,33 +533,31 @@ function AppMockup({ scene, typed }: { scene: SyncedView; typed: string }) {
   const base = Math.min(width, height);
   const text = graphemes(typed);
 
-  const typing = actionFrames(scene, "typing", fps);
-  const T = typing ? typing[0] : Math.round(fps * 0.9);
-  // Finish typing before the scene's end (or the next action), speeding up if needed.
-  const typeEnd = Math.max(T + 6, Math.min((typing ? typing[1] : span * 0.6) - 8, T + fps * 2.4, T + text.length * 3));
-  const clickInput = T - 3;
-  const proc = actionFrames(scene, "processing", fps);
-  const clickButton = actionFrames(scene, "click", fps)?.[0] ?? proc?.[0] ?? Math.round(typeEnd + fps * 0.4);
-  // Results always follow the click (short scenes finish in the transition tail).
-  const progEnd = Math.max(proc ? proc[1] : Math.min(span - 6, clickButton + fps * 1.2), clickButton + 12);
+  const { T, clickInput, typeEnd, clickButton, progEnd, full } = mockupBeats(scene, fps, span, text.length);
 
-  const shown = Math.floor(interpolate(frame, [T, Math.max(typeEnd, T + 1)], [0, text.length], clamp));
-  const progress = interpolate(frame, [clickButton + 3, Math.max(progEnd, clickButton + 4)], [0, 1], clamp);
+  const shown = Math.floor(interpolate(frame, [T, typeEnd], [0, text.length], clamp));
+  const progress = full ? interpolate(frame, [clickButton + 3, Math.max(progEnd, clickButton + 4)], [0, 1], clamp) : 0;
   const focused = frame >= clickInput;
-  const hover = frame >= clickButton - 7 && frame < clickButton;
-  const press = interpolate(frame - clickButton, [0, 3, 8], [1, 0.9, 1], clamp);
-  const done = frame >= progEnd;
+  const hover = full && frame >= clickButton - 7 && frame < clickButton;
+  const press = full ? interpolate(frame - clickButton, [0, 3, 8], [1, 0.9, 1], clamp) : 1;
+  const done = full && frame >= progEnd;
 
   // Cursor keyframes in % of the window: input, button, then drifts aside.
   const INPUT: Point = [30, 26];
   const BUTTON: Point = [93, 91];
-  const keys = [
-    { f: clickInput, to: INPUT },
-    { f: clickButton, to: BUTTON },
-    { f: clickButton + 28, to: [78, 70] as Point },
-  ];
+  const keys = full
+    ? [
+        { f: clickInput, to: INPUT },
+        { f: clickButton, to: BUTTON },
+        { f: clickButton + 28, to: [78, 70] as Point },
+      ]
+    : [
+        { f: clickInput, to: INPUT },
+        // Moves aside while the text types, out of the way of the reader.
+        { f: clickInput + 26, to: [46, 58] as Point },
+      ];
   const [cx, cy] = cursorAt(frame, keys, [112, 118]);
-  const clicks = [clickInput, clickButton];
+  const clicks = full ? [clickInput, clickButton] : [clickInput];
   const lastClick = clicks.filter((c) => frame >= c).at(-1);
   const tap = clicks.reduce((s, c) => s * interpolate(frame - c, [0, 3, 7], [1, 0.8, 1], clamp), 1);
   const ripple = lastClick === undefined ? 1 : interpolate(frame - lastClick, [0, 14], [0, 1], clamp);
@@ -607,17 +747,87 @@ function IconScene({ scene, lines }: VisualProps) {
           </div>
         </AbsoluteFill>
       </CameraLayer>
+      <Foreground seed={7} chip="sparkle" at={20} />
     </AbsoluteFill>
   );
 }
 
-const VISUALS: Record<RenderScene["visual"], React.ComponentType<VisualProps>> = {
-  ui: ProductScene,
-  screenshot: ProductScene,
-  typography: HeroScene,
+type Kind = "product" | "processing" | "result" | "icon" | "kinetic";
+
+// Composition chosen from the storyboard's meaning: UI scenes show the app,
+// scenes that process/reveal show input → core → result, the closing scene
+// settles on the result and CTA, the rest are kinetic typography.
+function sceneKind(scene: SyncedView, isFinal?: boolean): Kind {
+  const has = (k: TimedAction["action"]) => scene.timedActions?.some((a) => a.action === k);
+  if (scene.visual === "ui" || scene.visual === "screenshot") return "product";
+  if (isFinal) return "result";
+  if (has("processing") || has("reveal")) return "processing";
+  if (scene.visual === "icon") return "icon";
+  return "kinetic";
+}
+
+// The transition a scene leaves with. A processing scene ends with its result
+// card rushing at the camera, so it always zooms through into the next scene.
+export function exitTransition(scene: SyncedView, isFinal?: boolean) {
+  return sceneKind(scene, isFinal) === "processing" ? "zoom through" : (scene.transition ?? "fade");
+}
+
+const COMPOSITIONS: Record<Kind, React.ComponentType<VisualProps>> = {
+  product: ProductScene,
+  processing: ProcessingScene,
+  result: ResultScene,
   icon: IconScene,
-  abstract: HeroScene,
+  kinetic: KineticScene,
 };
+
+// Camera choreography per composition: starts slightly close (the scene
+// emerges from the transition), opens wide as objects enter, follows the
+// action to its focal point, and keeps pushing into the transition tail.
+function choreography(kind: Kind, scene: SyncedView, fps: number, span: number, typedLength: number, index: number): CameraKey[] {
+  const end = span + TRANSITION_FRAMES;
+  const side = index % 2 ? -1 : 1;
+  const k = (f: number, p: CameraKey["pose"]) => ({ f: Math.round(f), pose: p });
+  const push = (p: CameraKey["pose"], by: number) => ({ ...p, scale: p.scale + by });
+  if (kind === "product") {
+    const mockup = !(scene.assetKind === "screenshot" && scene.assetUrl);
+    if (!mockup) return orderKeys([k(0, pose(1.1, 0, 2)), k(16, pose(1, 0, 0)), k(span * 0.5, focusOn(0, -10, 1.14, 1.3, 0.45, -1)), k(span, focusOn(0, -10, 1.2, 1.3, 0.45, 1)), k(end, focusOn(0, -10, 1.45))]);
+    const b = mockupBeats(scene, fps, span, typedLength);
+    // Frame offsets (%) of the input box, the button and the results row.
+    const input = focusOn(8, -21, 1.22);
+    const keys = [k(0, pose(1.1, 0, 3)), k(14, pose(1, 0, 0)), k(b.clickInput - 10, input), k(b.typeEnd, push(input, 0.05))];
+    if (b.full) keys.push(k(b.clickButton - 6, focusOn(35, 14, 1.2)), k(b.progEnd, focusOn(8, 2, 1.08)), k(span, focusOn(8, 2, 1.12)));
+    keys.push(k(end, push(keys[keys.length - 1].pose, 0.25)));
+    return orderKeys(keys);
+  }
+  if (kind === "processing") {
+    const { P, R } = processBeats(scene, fps, span);
+    const core = (s: number) => focusOn(CORE[0] - 50, CORE[1] - 50, s);
+    return orderKeys([
+      k(0, pose(1.12, 6, 0)),
+      k(P - 8, pose(1, 6, 0)), // wide, looking toward the incoming input card
+      k(P + 16, core(1.12)), // follows it into the core
+      k(R - 4, core(1.26)), // pushes in while it processes
+      k(R + 14, core(1.12)), // eases back as the result appears
+      k(span, core(1.18)),
+      k(end, core(1.55)), // flies into the result card
+    ]);
+  }
+  if (kind === "result") {
+    return orderKeys([k(0, pose(1.32, 0, -2)), k(14, pose(1.3, 0, -2)), k(span * 0.5, pose(1.02, 0, 0)), k(span, pose(1, 0, 0))]);
+  }
+  if (kind === "icon") {
+    return orderKeys([k(0, pose(1.1, 0, 0, -2 * side)), k(16, pose(1, 2 * side, 0, -1.5 * side)), k(span, pose(1.16, -2 * side, -1, 1.5 * side)), k(end, pose(1.4, -2 * side, -1, 2 * side))]);
+  }
+  const hl = actionFrames(scene, "highlight", fps);
+  const beat = hl ? hl[0] - 6 : span * 0.5;
+  return orderKeys([
+    k(0, pose(1.12, 2 * side, 0)),
+    k(16, pose(1, 3 * side, 1, -0.6 * side)),
+    k(beat, focusOn(0, -4, 1.12, 1.45, 0.45, 0.4 * side)), // settles on the headline as the key phrase is heard
+    k(span, pose(1.18, -2 * side, -1, 0.8 * side)),
+    k(end, pose(1.45, -2 * side, -1, 1 * side)),
+  ]);
+}
 
 const sameText = (a: string, b: string) => tokenize(a).join(" ") === tokenize(b).join(" ");
 
@@ -645,8 +855,10 @@ export function SceneView({
   prevTransition?: string;
 }) {
   const frame = useCurrentFrame();
-  const Visual = VISUALS[scene.visual];
-  const product = Visual === ProductScene;
+  const { fps } = useVideoConfig();
+  const kind = sceneKind(scene, isFinal);
+  const Visual = COMPOSITIONS[kind];
+  const product = kind === "product";
   const mockup = product && !(scene.assetKind === "screenshot" && scene.assetUrl);
   const actions = scene.timedActions ?? [];
   const has = (kind: TimedAction["action"]) => actions.some((a) => a.action === kind);
@@ -657,10 +869,16 @@ export function SceneView({
   const typedHere = mockup || has("typing");
   const lines = typedHere ? scene.on_screen_text.slice(1) : scene.on_screen_text;
   const typedLine = scene.on_screen_text[0] || scene.narration;
-  const headlineShown = Visual !== IconScene && lines.length > 0;
+  const headlineShown = kind !== "icon" && lines.length > 0;
+  // Actions the composition itself performs are not repeated as overlay cards.
+  const handled: Partial<Record<Kind, TimedAction["action"][]>> = {
+    processing: ["processing", "reveal"],
+    result: ["success", "reveal"],
+  };
   const overlay = actions.filter(
     (a) =>
       !(mockup && (a.action === "typing" || a.action === "processing" || a.action === "click")) &&
+      !handled[kind]?.includes(a.action) &&
       !(headlineShown && a.action === "highlight"),
   );
   const onScreen = [...scene.on_screen_text, ...(has("typing") && !scene.on_screen_text[0] ? [typedLine] : [])];
@@ -670,7 +888,7 @@ export function SceneView({
     frame,
     span,
     prevTransition === undefined ? null : transitionFor(prevTransition),
-    isFinal ? null : transitionFor(scene.transition),
+    isFinal ? null : transitionFor(exitTransition(scene, isFinal)),
   );
   // Only the very start and end of the video touch black; every cut between
   // scenes blends two live scenes.
@@ -683,7 +901,7 @@ export function SceneView({
   return (
     <AbsoluteFill style={{ opacity }}>
       <AbsoluteFill style={{ ...edge, overflow: "hidden" }}>
-        <CameraProvider value={{ preset: cameraPresetFor(scene.animation, index), frame, span }}>
+        <CameraProvider value={{ keys: choreography(kind, scene, fps, span, graphemes(typedLine).length, index), frame, span }}>
           <Visual scene={scene} isFinal={isFinal} lines={lines} typed={typedLine} />
           <Hud span={span}>
             <ActionLayer actions={overlay} text={typedLine} placement={product ? "center" : "lower"} />

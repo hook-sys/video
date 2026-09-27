@@ -57,8 +57,8 @@ export function transitionStyle(
         const i = (1 - e) * 28;
         return { clipPath: `inset(${i}% ${i}% ${i}% ${i}% round ${(1 - e) * 64}px)`, transform: `scale(${1.1 - 0.1 * e})` };
       }
-      default: // cross-dissolve with a settling push
-        return { opacity: e, transform: `scale(${1.05 - 0.05 * e})` };
+      default: // push-through dissolve: the new scene settles as the old one is passed
+        return { opacity: e, transform: `scale(${1.1 - 0.1 * e})`, filter: `blur(${(1 - e) * 6}px)` };
     }
   }
   switch (kind) {
@@ -73,7 +73,7 @@ export function transitionStyle(
     case "morph":
       return { transform: `scale(${1 + 0.15 * e})`, filter: `blur(${e * 6}px)` };
     default:
-      return { transform: `scale(${1 + 0.05 * e})` };
+      return { transform: `scale(${1 + 0.25 * e})`, filter: `blur(${e * 6}px)` };
   }
 }
 

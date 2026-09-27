@@ -1,5 +1,5 @@
 import { AbsoluteFill, Html5Audio, Sequence } from "remotion";
-import { SceneView } from "./scenes";
+import { exitTransition, SceneView } from "./scenes";
 import { syncToNarration } from "./sync";
 import { TRANSITION_FRAMES } from "./transitions";
 import { sceneTimings, type StoryboardProps } from "./types";
@@ -26,7 +26,7 @@ export function Storyboard({ scenes: planned, durationSeconds, audioUrl, words }
               index={i}
               span={frames[i]}
               isFinal={last}
-              prevTransition={i > 0 ? (scenes[i - 1].transition ?? "fade") : undefined}
+              prevTransition={i > 0 ? exitTransition(scenes[i - 1], false) : undefined}
             />
           </Sequence>
         );
