@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DIRECTION_MAX,
   DURATIONS,
@@ -146,11 +147,13 @@ export async function generateBrief(projectId: string) {
   ]);
   if (!project) return;
 
+  // Brief fields are system-managed: users can't write them, so write via the
+  // admin client, scoped to the project ownership verified above.
+  const admin = createAdminClient();
+  const briefUpdate = (fields: Record<string, unknown>) =>
+    admin.from("projects").update(fields).eq("id", projectId).eq("user_id", user.id);
   const fail = (message: string) =>
-    supabase
-      .from("projects")
-      .update({ brief_status: "failed", brief_error: message })
-      .eq("id", projectId);
+    briefUpdate({ brief_status: "failed", brief_error: message });
 
   if (!capture && !screenshots?.length) {
     await fail("Add a captured website or screenshots before generating a brief.");
@@ -160,10 +163,7 @@ export async function generateBrief(projectId: string) {
 
   // Claim the job so double submits don't trigger two paid AI calls.
   const staleBefore = new Date(Date.now() - STALE_GENERATION_MS).toISOString();
-  const { data: claimed } = await supabase
-    .from("projects")
-    .update({ brief_status: "generating", brief_error: null })
-    .eq("id", projectId)
+  const { data: claimed } = await briefUpdate({ brief_status: "generating", brief_error: null })
     .or(`brief_status.neq.generating,updated_at.lt.${staleBefore}`)
     .select("id");
   if (!claimed?.length) return;
@@ -186,10 +186,7 @@ export async function generateBrief(projectId: string) {
       screenshots: (screenshots ?? []).map((s) => s.original_filename),
       has_website_screenshot: !!capture?.screenshot_path,
     });
-    await supabase
-      .from("projects")
-      .update({ brief, brief_status: "completed", brief_error: null })
-      .eq("id", projectId);
+    await briefUpdate({ brief, brief_status: "completed", brief_error: null });
   } catch (e) {
     await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));
   }
