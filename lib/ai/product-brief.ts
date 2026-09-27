@@ -24,6 +24,13 @@ export type ProductBrief = z.infer<typeof ProductBrief>;
 
 export type BriefInput = {
   website?: { url: string; title: string | null; meta_description: string | null; visible_text: string | null };
+  // What vision analysis saw in the uploaded screenshots.
+  screenshot_evidence?: {
+    visible_product_name: string;
+    visible_features: string[];
+    visible_claims: string[];
+    visible_ui_elements: string[];
+  };
   direction: string;
   duration_seconds: number;
   format: string;
@@ -36,7 +43,7 @@ export type BriefInput = {
 const INSTRUCTIONS = `You are the director for a short promotional motion-graphics video about a software/digital product.
 Return compact JSON matching the schema.
 Rules:
-- Use ONLY facts found in SOURCE (website text, title, description, user direction). Never invent features, prices, statistics, numbers, testimonials, customer names, awards or performance claims.
+- Use ONLY facts found in SOURCE (website text, title, description, screenshot evidence, user direction). Never invent features, prices, statistics, numbers, testimonials, customer names, awards or performance claims.
 - supported_features and supported_claims must each be directly supported by SOURCE. If unsure, leave it out. Empty arrays are fine.
 - If SOURCE is thin, use safe generic wording (product name/category, "see it in action", "try it today").
 - Visuals: product UI, screenshots, typography, icons, abstract/geometric motion only. Never animals, real people or brand logos not in SOURCE.
@@ -83,7 +90,7 @@ export async function generateProductBrief(
         voice_style: input.voice_style,
         user_direction: input.direction,
       },
-      SOURCE: input.website ?? null,
+      SOURCE: { website: input.website ?? null, screenshot_evidence: input.screenshot_evidence ?? null },
       ASSETS: {
         uploaded_screenshots: input.screenshots,
         website_screenshot: input.has_website_screenshot,

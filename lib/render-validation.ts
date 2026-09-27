@@ -10,7 +10,7 @@ export type ValidationInput = {
   format: string;
   durationSeconds: number;
   resolution: string;
-  // Captured website text: the only accepted source for factual claims.
+  // Captured website text plus screenshot evidence: the only accepted sources for claims.
   sourceText: string;
   // Missing voice/assets reported by the render input builder.
   missing: string[];
@@ -90,7 +90,7 @@ export function validateForRender(input: ValidationInput): string[] {
     return words.filter((w) => source.includes(w)).length / words.length < 0.6;
   });
   if (ungrounded.length) {
-    problems.push(`Features/claims not found on the website: ${ungrounded.slice(0, 3).join("; ")}.`);
+    problems.push(`Features/claims not found on the website or screenshots: ${ungrounded.slice(0, 3).join("; ")}.`);
   }
 
   // Visuals: no animal or stock-photo imagery in prompts, scene directions or asset metadata.

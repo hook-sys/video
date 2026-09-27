@@ -22,6 +22,7 @@ import { runWebsiteCapture } from "@/lib/website-capture";
 
 import { type BriefUsage, ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
 import { type AssetManifest, buildAssetManifest } from "@/lib/asset-manifest";
+import { type ScreenshotEvidence, analyzeScreenshots, evidenceText } from "@/lib/ai/screenshot-evidence";
 import { generateAsset } from "@/lib/generated-assets";
 import { RENDER_PROJECT_COLUMNS, buildRenderInput } from "@/lib/render-input";
 import { renderStoryboardMp4 } from "@/lib/render-video";
@@ -162,7 +163,11 @@ export async function generateBrief(projectId: string) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from("project_screenshots").select("original_filename").eq("project_id", projectId),
+    supabase
+      .from("project_screenshots")
+      .select("original_filename, storage_path")
+      .eq("project_id", projectId)
+      .order("created_at"),
   ]);
   if (!project) return;
 
@@ -189,7 +194,21 @@ export async function generateBrief(projectId: string) {
 
   // Captured even if the call fails after tokens were used.
   let usage: BriefUsage | undefined;
+  let visionUsage: BriefUsage | undefined;
   try {
+    // Screenshot evidence (vision) is extracted once and reused; it lets
+    // screenshot-only projects support claims without website text.
+    let evidence = project.screenshot_evidence as ScreenshotEvidence | null;
+    if (!evidence && screenshots?.length) {
+      const { data: signed } = await supabase.storage
+        .from(SCREENSHOTS_BUCKET)
+        .createSignedUrls(screenshots.map((s) => s.storage_path), 600);
+      const urls = (signed ?? []).flatMap((s) => (s.signedUrl ? [s.signedUrl] : []));
+      if (!urls.length) throw new Error("Screenshots could not be loaded for analysis.");
+      evidence = await analyzeScreenshots(urls, (u) => (visionUsage = u));
+      await briefUpdate({ screenshot_evidence: evidence });
+    }
+
     const brief = await generateProductBrief(
       {
         website: capture
@@ -214,15 +233,19 @@ export async function generateBrief(projectId: string) {
   } catch (e) {
     await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));
   } finally {
-    if (usage) {
+    for (const [u, kind] of [
+      [visionUsage, "screenshot_analysis"],
+      [usage, "brief"],
+    ] as const) {
+      if (!u) continue;
       await recordCost(admin, {
         project_id: projectId,
         user_id: user.id,
         operation: "openai_brief",
-        model: usage.model,
-        quantity: usage.inputTokens + usage.outputTokens,
-        estimated_cost_usd: openaiCost(usage.model, usage.inputTokens, usage.outputTokens),
-        metadata: { input_tokens: usage.inputTokens, output_tokens: usage.outputTokens },
+        model: u.model,
+        quantity: u.inputTokens + u.outputTokens,
+        estimated_cost_usd: openaiCost(u.model, u.inputTokens, u.outputTokens),
+        metadata: { kind, input_tokens: u.inputTokens, output_tokens: u.outputTokens },
       });
     }
   }
@@ -444,7 +467,13 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
     format: project.format,
     durationSeconds: project.duration_seconds,
     resolution: requested,
-    sourceText: [capture?.title, capture?.meta_description, capture?.visible_text].join("\n"),
+    // Claims must be supported by website text or screenshot evidence.
+    sourceText: [
+      capture?.title,
+      capture?.meta_description,
+      capture?.visible_text,
+      evidenceText(project.screenshot_evidence as ScreenshotEvidence | null),
+    ].join("\n"),
     missing: input.problems,
   });
   if (!input.props || problems.length) {
