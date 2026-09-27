@@ -251,22 +251,22 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       </section>
       {costs && (
         <section className="flex flex-col gap-2 rounded-md border border-dashed border-foreground/20 p-3 text-sm">
-          <h2 className="font-medium">Cost Breakdown (dev)</h2>
-          <p className="text-xs text-foreground/60">
-            Estimated internal provider cost, not customer billing. Unpriced models show $0.
+          <h2 className="font-medium">Cost Breakdown</h2>
+          <p className="text-xs font-medium text-amber-600">
+            Development estimate — not billing. Unconfigured rates count as $0.
           </p>
           <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1">
             {(
               [
-                ["Total (estimated)", costs.total_cost_usd],
+                ["Total estimated cost", costs.total_cost_usd],
+                ["Cost per video minute", costs.cost_per_video_minute],
                 ["OpenAI", costs.cost_by_operation.openai_brief],
                 ["Voice", costs.cost_by_operation.fal_voice],
                 ["Images", costs.cost_by_operation.fal_image],
                 ["Render", costs.cost_by_operation.remotion_render],
                 ["Storage", costs.cost_by_operation.storage],
-                ["Per video minute", costs.cost_per_video_minute],
-                ["1080p per minute", costs.by_resolution["1080p"].cost_per_video_minute],
-                ["4K per minute", costs.by_resolution["4k"].cost_per_video_minute],
+                ["1080p estimated cost", costs.by_resolution["1080p"].total_cost_usd],
+                ["4K estimated cost", costs.by_resolution["4k"].total_cost_usd],
               ] as const
             ).map(([label, value]) => (
               <div key={label} className="contents">

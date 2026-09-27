@@ -1,27 +1,62 @@
 import "server-only";
 
-// Provider pricing lives only here. Nothing is hardcoded: set COST_PRICING_JSON
-// (server env) with current provider prices. Unknown prices estimate to $0.
-// Example:
-// {
-//   "openai": { "gpt-5-mini": { "input_per_1m_tokens": 0, "output_per_1m_tokens": 0 } },
-//   "fal": { "<model-id>": { "per_unit": 0 } },            // unit = characters (voice) or images
-//   "render": { "1080p": { "per_video_second": 0 }, "4k": { "per_video_second": 0 } },
-//   "storage": { "per_gb_month": 0 }
-// }
+// All provider rates live only in this file.
+//
+// Every default below is 0 on purpose: real prices must be taken from each
+// provider's current pricing page and entered here (or overridden per
+// environment via COST_PRICING_JSON). A 0 rate still records the operation and
+// quantity; it just estimates $0. Rates are keyed by the models configured in
+// OPENAI_MODEL, FAL_VOICE_MODEL and FAL_IMAGE_MODEL.
 type Pricing = {
   openai?: Record<string, { input_per_1m_tokens?: number; output_per_1m_tokens?: number }>;
+  // per_unit = USD per character (voice models) or per generated image (image models).
   fal?: Record<string, { per_unit?: number }>;
   render?: Record<string, { per_video_second?: number }>;
   storage?: { per_gb_month?: number };
 };
 
+function defaultRates(): Pricing {
+  const openaiModel = process.env.OPENAI_MODEL || "gpt-5-mini";
+  const voiceModel = process.env.FAL_VOICE_MODEL;
+  const imageModel = process.env.FAL_IMAGE_MODEL;
+  return {
+    openai: {
+      // External source: OpenAI API pricing page (USD per 1M tokens). Unknown → 0.
+      [openaiModel]: { input_per_1m_tokens: 0, output_per_1m_tokens: 0 },
+    },
+    fal: {
+      // External source: fal.ai model page (USD per character). Unknown → 0.
+      ...(voiceModel && { [voiceModel]: { per_unit: 0 } }),
+      // External source: fal.ai model page (USD per image). Unknown → 0.
+      ...(imageModel && { [imageModel]: { per_unit: 0 } }),
+    },
+    // Assumption to configure: our own compute cost per rendered video second
+    // (self-hosted server or Remotion Lambda), measured from benchmark render_ms. Unknown → 0.
+    render: { "1080p": { per_video_second: 0 }, "4k": { per_video_second: 0 } },
+    // External source: Supabase Storage pricing (USD per GB-month). Unknown → 0.
+    storage: { per_gb_month: 0 },
+  };
+}
+
+// Optional per-environment overrides, merged per model over the defaults, e.g.
+// COST_PRICING_JSON='{"openai":{"gpt-5-mini":{"input_per_1m_tokens":0.25}}}'
 function loadPricing(): Pricing {
+  let overrides: Pricing = {};
   try {
-    return JSON.parse(process.env.COST_PRICING_JSON || "{}");
-  } catch {
-    return {};
-  }
+    overrides = JSON.parse(process.env.COST_PRICING_JSON || "{}");
+  } catch {}
+  const base = defaultRates();
+  const merge = <T extends object>(a?: Record<string, T>, b?: Record<string, T>) => {
+    const out: Record<string, T> = { ...a };
+    for (const [k, v] of Object.entries(b ?? {})) out[k] = { ...out[k], ...v };
+    return out;
+  };
+  return {
+    openai: merge(base.openai, overrides.openai),
+    fal: merge(base.fal, overrides.fal),
+    render: merge(base.render, overrides.render),
+    storage: { ...base.storage, ...overrides.storage },
+  };
 }
 
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
