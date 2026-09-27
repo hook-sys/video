@@ -17,7 +17,8 @@ import {
   validateScreenshots,
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
-import { generateProductBrief } from "@/lib/ai/product-brief";
+import { ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
+import { buildAssetManifest } from "@/lib/asset-manifest";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 
@@ -247,6 +248,60 @@ export async function generateVoice(projectId: string) {
   } catch (e) {
     const message = e instanceof Error ? e.message : "Voice generation failed.";
     await voiceUpdate({ voice_status: "failed", voice_error: message.slice(0, 500) });
+  }
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function prepareAssets(projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // RLS: only returns rows this user owns.
+  const [{ data: project }, { data: screenshots }, { data: capture }] = await Promise.all([
+    supabase.from("projects").select("brief, brief_status, format").eq("id", projectId).maybeSingle(),
+    supabase
+      .from("project_screenshots")
+      .select("storage_path")
+      .eq("project_id", projectId)
+      .order("created_at"),
+    supabase
+      .from("website_captures")
+      .select("screenshot_path")
+      .eq("project_id", projectId)
+      .eq("status", "completed")
+      .not("screenshot_path", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (!project) return;
+
+  const admin = createAdminClient();
+  const assetsUpdate = (fields: Record<string, unknown>) =>
+    admin.from("projects").update(fields).eq("id", projectId).eq("user_id", user.id);
+
+  const staleBefore = new Date(Date.now() - STALE_GENERATION_MS).toISOString();
+  const { data: claimed } = await assetsUpdate({ assets_status: "preparing", assets_error: null })
+    .or(`assets_status.neq.preparing,updated_at.lt.${staleBefore}`)
+    .select("id");
+  if (!claimed?.length) return;
+
+  const brief = ProductBrief.safeParse(project.brief);
+  if (project.brief_status !== "completed" || !brief.success) {
+    await assetsUpdate({ assets_status: "failed", assets_error: "Generate a valid brief first." });
+  } else {
+    const paths = [
+      ...(capture?.screenshot_path ? [capture.screenshot_path] : []),
+      ...(screenshots ?? []).map((s) => s.storage_path),
+    ];
+    await assetsUpdate({
+      assets_status: "completed",
+      assets_error: null,
+      assets_manifest: buildAssetManifest(brief.data, paths, project.format),
+    });
   }
   revalidatePath(`/projects/${projectId}`);
 }

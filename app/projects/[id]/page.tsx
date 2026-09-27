@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
-import { generateBrief, generateVoice } from "@/app/projects/actions";
+import { generateBrief, generateVoice, prepareAssets } from "@/app/projects/actions";
 import { SubmitButton } from "@/components/submit-button";
 
 // Allows the AI brief call to finish.
@@ -156,6 +156,26 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </form>
         {voiceAudio?.signedUrl && (
           <audio controls src={voiceAudio.signedUrl} className="w-full" />
+        )}
+      </section>
+      <section className="flex flex-col gap-2 text-sm">
+        <h2 className="font-medium">
+          Visual assets: <span className="text-foreground/70">{project.assets_status}</span>
+        </h2>
+        {project.assets_error && <p className="text-red-600">{project.assets_error}</p>}
+        <form action={prepareAssets.bind(null, id)}>
+          <SubmitButton
+            pendingLabel="Preparing…"
+            disabled={project.brief_status !== "completed" || project.assets_status === "preparing"}
+            className="rounded-md border border-foreground/20 px-3 py-1.5 disabled:opacity-50"
+          >
+            Prepare Visual Assets
+          </SubmitButton>
+        </form>
+        {project.assets_manifest && (
+          <pre className="max-h-96 overflow-auto rounded-md bg-foreground/5 p-3 text-xs whitespace-pre-wrap">
+            {JSON.stringify(project.assets_manifest, null, 2)}
+          </pre>
         )}
       </section>
       <button
