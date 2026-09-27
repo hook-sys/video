@@ -7,9 +7,13 @@ import {
   useVideoConfig,
 } from "remotion";
 import { camera, enter, fadeInOut, motionFor } from "./animations";
+import { ActionLayer, graphemes } from "./actions";
 import { SceneSfx } from "./sfx";
+import type { TimedAction } from "./sync";
 import { sceneEdgeStyle, transitionFor } from "./transitions";
 import type { RenderScene } from "./types";
+
+type SyncedView = RenderScene & { timedActions?: TimedAction[] };
 
 const BG = "#0b0d12";
 const FG = "#f5f7fb";
@@ -281,7 +285,7 @@ function ProductScene({ scene }: { scene: RenderScene }) {
               }}
             />
           ) : (
-            <AppMockup scene={scene} />
+            <AppMockup scene={scene as SyncedView} />
           )}
         </div>
       </AbsoluteFill>
@@ -292,15 +296,26 @@ function ProductScene({ scene }: { scene: RenderScene }) {
   );
 }
 
+// Frame window of the scene's first action of `kind`, if the storyboard timed one.
+function actionFrames(scene: SyncedView, kind: TimedAction["action"], fps: number) {
+  const a = scene.timedActions?.find((x) => x.action === kind);
+  return a && ([Math.round(a.at * fps), Math.round(a.until * fps)] as const);
+}
+
 // Generic editor-style window: the scene's words type into an input while
 // panels and a progress bar animate. Illustrative only; no product claims.
-function AppMockup({ scene }: { scene: RenderScene }) {
+// Typing and progress follow the narration's typing/processing moments when timed.
+function AppMockup({ scene }: { scene: SyncedView }) {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
   const base = Math.min(width, height);
-  const text = scene.on_screen_text.join(" · ") || scene.narration;
-  const typed = Math.floor(interpolate(frame, [8, durationInFrames * 0.6], [0, text.length], clamp));
-  const progress = interpolate(frame, [durationInFrames * 0.35, durationInFrames * 0.95], [0, 1], clamp);
+  const text = graphemes(scene.on_screen_text.join(" · ") || scene.narration);
+  const typing = actionFrames(scene, "typing", fps);
+  const typeRange = typing ? [typing[0], Math.min(typing[1], typing[0] + fps * 2.4)] : [8, durationInFrames * 0.6];
+  const typed = Math.floor(interpolate(frame, [typeRange[0], Math.max(typeRange[1], typeRange[0] + 1)], [0, text.length], clamp));
+  const processing = actionFrames(scene, "processing", fps);
+  const progressRange = processing ?? [durationInFrames * 0.35, durationInFrames * 0.95];
+  const progress = interpolate(frame, [progressRange[0], Math.max(progressRange[1], progressRange[0] + 1)], [0, 1], clamp);
   const pad = base * 0.025;
   const bar = (w: string, delay: number, color = "rgba(255,255,255,0.14)") => {
     const p = spring({ frame: frame - delay, fps, config: { damping: 200 } });
@@ -336,7 +351,7 @@ function AppMockup({ scene }: { scene: RenderScene }) {
               lineHeight: 1.4,
             }}
           >
-            {text.slice(0, typed)}
+            {text.slice(0, typed).join("")}
             <span style={{ opacity: Math.floor(frame / 12) % 2 ? 0 : 1, color: ACCENT }}>▍</span>
           </div>
           <div style={{ display: "flex", gap: pad * 0.6 }}>
@@ -442,7 +457,7 @@ export function SceneView({
   isFinal,
   prevTransition,
 }: {
-  scene: RenderScene;
+  scene: SyncedView;
   isFinal?: boolean;
   // The previous scene's transition plays its "in" half here.
   prevTransition?: string;
@@ -450,6 +465,8 @@ export function SceneView({
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const Visual = VISUALS[scene.visual];
+  const product = Visual === ProductScene;
+  const mockup = product && !(scene.assetKind === "screenshot" && scene.assetUrl);
   const edge = sceneEdgeStyle(
     frame,
     durationInFrames,
@@ -466,6 +483,14 @@ export function SceneView({
     >
       <AbsoluteFill style={edge}>
         <Visual scene={scene} isFinal={isFinal} />
+        <ActionLayer
+          // The app mockup plays typing/processing itself; other actions float over the window.
+          actions={(scene.timedActions ?? []).filter(
+            (a) => !(mockup && (a.action === "typing" || a.action === "processing")),
+          )}
+          text={scene.narration}
+          placement={product ? "center" : "lower"}
+        />
         <Caption text={scene.narration} />
       </AbsoluteFill>
       <SceneSfx cues={scene.sound_effects ?? []} />

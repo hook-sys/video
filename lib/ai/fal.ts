@@ -1,8 +1,17 @@
 import "server-only";
 import { createFalClient } from "@fal-ai/client";
+import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
 
 export type VoiceInput = { script: string; language: string; style: string; gender: string };
-export type VoiceResult = { model: string; requestId: string; audioUrl: string };
+export type VoiceResult = {
+  model: string;
+  requestId: string;
+  audioUrl: string;
+  // Provider word timestamps; null when the model returned none we can read.
+  words: WordTiming[] | null;
+  // Short sample of an unreadable timestamp payload, for diagnosis only.
+  timestampsSample?: string;
+};
 export type ImageInput = { prompt: string; format: string };
 export type ImageResult = { model: string; requestId: string; imageUrl: string };
 
@@ -98,19 +107,23 @@ export async function generateVoice({
   const text = script.trim().slice(0, SCRIPT_MAX);
   if (!text) throw new Error("The brief has no script to narrate.");
 
-  const fal = falClient();
-  const result = await fal.subscribe(model, {
-    input: buildInput(process.env.FAL_VOICE_INPUT_TEMPLATE || '{"text":"{{text}}"}', {
-      text,
-      language,
-      style,
-      gender,
-      voice: voiceForGender(gender),
-    }),
-    abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+  const input = buildInput(process.env.FAL_VOICE_INPUT_TEMPLATE || '{"text":"{{text}}"}', {
+    text,
+    language,
+    style,
+    gender,
+    voice: voiceForGender(gender),
   });
+  // fal-ai/elevenlabs/tts/* return per-word timestamps only when asked.
+  if (model.includes("elevenlabs/tts/") && input.timestamps === undefined) input.timestamps = true;
+
+  const fal = falClient();
+  const result = await fal.subscribe(model, { input, abortSignal: AbortSignal.timeout(TIMEOUT_MS) });
 
   const audioUrl = findMediaUrl(result.data, "audio");
   if (!audioUrl) throw new Error("Voice model returned no audio URL.");
-  return { model, requestId: result.requestId, audioUrl };
+  const raw = (result.data as Record<string, unknown> | null)?.timestamps;
+  const words = parseWordTimings(raw);
+  const timestampsSample = !words && raw != null ? JSON.stringify(raw).slice(0, 300) : undefined;
+  return { model, requestId: result.requestId, audioUrl, words, timestampsSample };
 }

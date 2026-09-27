@@ -289,7 +289,7 @@ export async function generateVoice(projectId: string) {
   if (!claimed?.length) return;
 
   try {
-    const { model, requestId, audioUrl } = await generateFalVoice({
+    const { model, requestId, audioUrl, words, timestampsSample } = await generateFalVoice({
       script,
       language: project.voice_language,
       style: project.voice_style,
@@ -323,7 +323,14 @@ export async function generateVoice(projectId: string) {
     await voiceUpdate({
       voice_status: "completed",
       voice_error: null,
-      voice_result: { model, requestId, storagePath },
+      // Word timing drives narration-synced motion; null = none available.
+      voice_result: {
+        model,
+        requestId,
+        storagePath,
+        timing: words ? { source: "provider", words } : null,
+        ...(timestampsSample && { timestampsSample }),
+      },
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Voice generation failed.";

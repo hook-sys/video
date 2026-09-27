@@ -5,6 +5,7 @@ import { type AssetManifest, sceneId } from "@/lib/asset-manifest";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import type { RenderScene } from "@/components/video/types";
+import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
 
 export type RenderProject = {
   format: string;
@@ -12,7 +13,7 @@ export type RenderProject = {
   brief: unknown;
   assets_manifest: unknown;
   voice_status: string;
-  voice_result: { storagePath?: string } | null;
+  voice_result: { storagePath?: string; timing?: { words?: WordTiming[] } | null } | null;
   screenshot_evidence?: unknown;
   direction?: string;
 };
@@ -88,6 +89,7 @@ export async function buildRenderInput(
       format: project.format,
       durationSeconds: project.duration_seconds,
       audioUrl: voice?.signedUrl,
+      words: voicePath ? (parseWordTimings(project.voice_result?.timing?.words) ?? undefined) : undefined,
     },
   };
 }

@@ -1,4 +1,5 @@
 import type { ProductBrief } from "@/lib/ai/product-brief";
+import type { WordTiming } from "@/lib/voice-timing";
 
 export type RenderScene = ProductBrief["scenes"][number] & {
   id: string;
@@ -15,6 +16,8 @@ export type StoryboardProps = {
   durationSeconds: number;
   // Signed URL of the stored narration audio, if generated.
   audioUrl?: string;
+  // Word timestamps of that narration; motion is estimated when absent.
+  words?: WordTiming[];
 };
 
 // Props for server rendering; `format` only drives composition size.
