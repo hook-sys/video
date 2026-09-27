@@ -14,6 +14,8 @@ import {
 } from "@/app/projects/actions";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { PipelineProgress } from "@/components/pipeline-progress";
+import { GenerationScreen } from "@/components/generation-screen";
+import { PIPELINE_STEPS } from "@/lib/pipeline";
 import { BENCHMARK_CASES } from "@/lib/benchmark";
 import type { AssetManifest } from "@/lib/asset-manifest";
 import { getProjectCostSummary } from "@/lib/costs/benchmark";
@@ -118,34 +120,101 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       <Link href="/dashboard" className="text-sm text-foreground/70 underline">
         ← Dashboard
       </Link>
-      <h1 className="text-2xl font-semibold">Project</h1>
       <AutoRefresh active={project.pipeline_status === "running"} />
-      <PipelineProgress
-        status={project.pipeline_status}
-        step={project.pipeline_step}
-        error={project.pipeline_error}
-      />
-      {(project.pipeline_status === "failed" || project.pipeline_status === "idle") && (
-        <form action={retryPipeline.bind(null, id)}>
-          <SubmitButton
-            pendingLabel="Starting…"
-            className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background"
-          >
-            {project.pipeline_status === "failed" ? "Retry" : "Generate video"}
-          </SubmitButton>
-        </form>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-3xl font-semibold tracking-tight">Your video</h1>
+        <p className="text-sm text-foreground/60">
+          {project.duration_seconds} sec · {project.format} · {project.voice_language} ·{" "}
+          {project.voice_style}
+        </p>
+      </div>
+
+      {project.pipeline_status === "running" && <GenerationScreen />}
+
+      {(project.pipeline_status === "completed" || project.pipeline_status === "preview_ready") && (
+        <section className="flex flex-col items-center gap-6 rounded-3xl border border-foreground/10 bg-gradient-to-b from-indigo-500/[0.06] to-transparent px-6 py-10 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-2xl text-white shadow-lg shadow-indigo-500/30">
+            ✓
+          </div>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {project.pipeline_status === "completed" ? "Your video is ready" : "Your video preview is ready"}
+          </h2>
+          <div className="flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row">
+            <a
+              href={video?.signedUrl ? "#video" : `/projects/${id}/preview`}
+              className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:brightness-110"
+            >
+              ▶ Watch Video
+            </a>
+            {download?.signedUrl ? (
+              <a
+                href={download.signedUrl}
+                className="rounded-2xl border border-foreground/15 px-6 py-3 font-semibold transition hover:bg-foreground/5"
+              >
+                ↓ Download MP4
+              </a>
+            ) : (
+              <span
+                aria-disabled
+                className="cursor-not-allowed rounded-2xl border border-foreground/10 px-6 py-3 font-semibold text-foreground/40"
+              >
+                ↓ Download MP4
+              </span>
+            )}
+          </div>
+          {!download?.signedUrl && (
+            <p className="max-w-sm text-xs text-foreground/50">
+              The MP4 download will be available once final rendering is enabled.
+            </p>
+          )}
+          {video?.signedUrl && (
+            <video id="video" controls src={video.signedUrl} className="w-full rounded-2xl" />
+          )}
+        </section>
       )}
-      {(project.pipeline_status === "preview_ready" || project.pipeline_status === "completed") && (
-        <Link href={`/projects/${id}/preview`} className="self-start text-sm underline">
-          Watch video preview
-        </Link>
+
+      {(project.pipeline_status === "failed" ||
+        project.pipeline_status === "needs_input" ||
+        project.pipeline_status === "idle") && (
+        <section className="flex flex-col items-center gap-4 rounded-3xl border border-foreground/10 px-6 py-10 text-center">
+          <p className="max-w-md text-foreground/80">
+            {project.pipeline_status === "idle"
+              ? "Your video hasn't been generated yet."
+              : project.pipeline_status === "needs_input"
+                ? project.pipeline_error
+                : (PIPELINE_STEPS.find((s) => s.key === project.pipeline_step)?.error ??
+                  "Something went wrong while creating your video.")}
+          </p>
+          {project.pipeline_status === "needs_input" ? (
+            <Link
+              href="/projects/new"
+              className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:brightness-110"
+            >
+              Create a new video
+            </Link>
+          ) : (
+            <form action={retryPipeline.bind(null, id)}>
+              <SubmitButton
+                pendingLabel="Starting…"
+                className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:brightness-110 disabled:opacity-60"
+              >
+                {project.pipeline_status === "failed" ? "Try again" : "✦ Generate Video"}
+              </SubmitButton>
+            </form>
+          )}
+        </section>
       )}
-      {video?.signedUrl && <video controls src={video.signedUrl} className="w-full rounded-md" />}
-      {download?.signedUrl && (
-        <a href={download.signedUrl} className="self-start text-sm underline">
-          Download MP4
-        </a>
-      )}
+
+      {devToolsEnabled() && (
+        <>
+          <h2 className="mt-4 text-xs font-medium tracking-wide text-foreground/50 uppercase">
+            Developer tools
+          </h2>
+          <PipelineProgress
+            status={project.pipeline_status}
+            step={project.pipeline_step}
+            error={project.pipeline_error}
+          />
       <dl className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-3 text-sm">
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
@@ -169,11 +238,6 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           )}
         </div>
       )}
-      {devToolsEnabled() && (
-        <>
-          <h2 className="mt-4 text-xs font-medium tracking-wide text-foreground/50 uppercase">
-            Developer tools
-          </h2>
       {capture && (
         <section className="flex flex-col gap-2 text-sm">
           <h2 className="font-medium">

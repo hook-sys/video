@@ -1,5 +1,8 @@
 export const DIRECTION_MAX = 500;
-export const DURATIONS = [30, 45, 60] as const;
+export const DURATIONS = [15, 30, 60] as const;
+
+// Sent to the AI as part of the direction text (no separate backend field).
+export const VISUAL_STYLES = ["Premium SaaS", "Minimal", "Bold", "Corporate", "Energetic", "Tech"] as const;
 export const FORMATS = ["16:9", "9:16", "1:1"] as const;
 export const VOICE_LANGUAGES = [
   "English (US)",

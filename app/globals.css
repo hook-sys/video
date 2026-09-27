@@ -23,3 +23,24 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Generation screen motion */
+@keyframes gen-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6%, -8%) scale(1.08); }
+}
+@keyframes gen-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes gen-rise {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { opacity: 0.8; }
+  100% { transform: translateY(-140px); opacity: 0; }
+}
+@keyframes gen-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-motion, .gen-motion * { animation: none !important; }
+}

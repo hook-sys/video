@@ -2,113 +2,169 @@
 
 import { useActionState, useState } from "react";
 import { createProject } from "@/app/projects/actions";
+import { GenerationScreen } from "@/components/generation-screen";
 import {
   DIRECTION_MAX,
   DURATIONS,
   FORMATS,
+  VISUAL_STYLES,
   VOICE_LANGUAGES,
   VOICE_STYLES,
   validateScreenshots,
 } from "@/lib/projects";
 
-const field = "rounded-md border border-foreground/20 bg-transparent px-3 py-2";
-const label = "flex flex-col gap-1.5 text-sm font-medium";
+const sectionLabel = "text-sm font-medium";
+const select =
+  "w-full rounded-xl border border-foreground/15 bg-transparent px-3 py-2.5 text-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20";
+
+// The visual style travels with the script in the direction text.
+const styleSuffix = (style: string) => `\n\nVisual style: ${style}`;
+const SCRIPT_MAX = DIRECTION_MAX - Math.max(...VISUAL_STYLES.map((s) => styleSuffix(s).length));
 
 export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number }) {
   const [state, action, pending] = useActionState(createProject, {});
-  const [direction, setDirection] = useState("");
+  const [script, setScript] = useState("");
+  const [style, setStyle] = useState<string>(VISUAL_STYLES[0]);
   const [files, setFiles] = useState<string[]>([]);
   const [fileError, setFileError] = useState<string>();
 
+  const error = fileError ?? state.error;
+
   return (
-    <form action={action} className="flex flex-col gap-5">
-      {(fileError ?? state.error) && (
-        <p className="text-sm text-red-600">{fileError ?? state.error}</p>
-      )}
+    <>
+      {pending && <GenerationScreen />}
+      <form action={action} className={`flex flex-col gap-8 ${pending ? "hidden" : ""}`}>
+        <input type="hidden" name="direction" value={script.trim() ? `${script.trim()}${styleSuffix(style)}` : ""} />
 
-      <label className={label}>
-        Website URL (optional)
-        <input name="website_url" type="url" placeholder="https://example.com" className={field} />
-      </label>
-
-      <label className={label}>
-        Screenshots
-        <span className="flex flex-col items-center gap-1 rounded-md border border-dashed border-foreground/30 px-3 py-6 text-center font-normal text-foreground/70">
-          Click to choose product screenshots (PNG, JPG, WebP)
-          <span className="text-xs">
-            Up to 5 images, 5 MB each
-            {maxTotalBytes ? `, ${Math.floor(maxTotalBytes / 1024 / 1024)} MB total` : ""}.
+        <label className="flex flex-col gap-2">
+          <span className={sectionLabel}>Tell us what you want to create</span>
+          <textarea
+            required
+            rows={7}
+            maxLength={SCRIPT_MAX}
+            value={script}
+            onChange={(e) => setScript(e.target.value)}
+            placeholder="Write your script here..."
+            className="w-full resize-y rounded-2xl border border-foreground/15 bg-foreground/[0.02] p-4 text-base leading-relaxed shadow-sm transition placeholder:text-foreground/40 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/15"
+          />
+          <span className="self-end text-xs text-foreground/50">
+            {script.length}/{SCRIPT_MAX}
           </span>
-          {files.length > 0 && <span className="text-xs">{files.join(", ")}</span>}
-        </span>
-        <input
-          name="screenshots"
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          multiple
-          className="sr-only"
-          onChange={(e) => {
-            const chosen = Array.from(e.target.files ?? []);
-            setFiles(chosen.map((f) => f.name));
-            setFileError(validateScreenshots(chosen, maxTotalBytes));
-          }}
-        />
-      </label>
+        </label>
 
-      <label className={label}>
-        Video direction
-        <textarea
-          name="direction"
-          required
-          rows={4}
-          maxLength={DIRECTION_MAX}
-          value={direction}
-          onChange={(e) => setDirection(e.target.value)}
-          className={field}
-        />
-        <span className="self-end text-xs font-normal text-foreground/60">
-          {direction.length}/{DIRECTION_MAX}
-        </span>
-      </label>
+        <Choice name="visual_style" title="Visual style" options={VISUAL_STYLES} value={style} onChange={setStyle} />
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Select name="duration_seconds" title="Duration" options={DURATIONS} format={(d) => `${d} sec`} />
-        <Select name="format" title="Format" options={FORMATS} />
-        <Select name="voice_language" title="Voice language" options={VOICE_LANGUAGES} />
-        <Select name="voice_style" title="Voice style" options={VOICE_STYLES} />
-      </div>
+        <div className="grid gap-8 sm:grid-cols-2">
+          <Choice name="duration_seconds" title="Duration" options={DURATIONS} defaultValue={DURATIONS[0]} format={(d) => `${d} sec`} columns={3} />
+          <Choice name="format" title="Format" options={FORMATS} defaultValue={FORMATS[0]} columns={3} />
+        </div>
 
-      <button
-        disabled={pending || !!fileError}
-        className="rounded-md bg-foreground px-3 py-2 font-medium text-background disabled:opacity-60"
-      >
-        {pending ? "Creating…" : "Create Project"}
-      </button>
-    </form>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <label className="flex flex-col gap-2">
+            <span className={sectionLabel}>Voice</span>
+            <select name="voice_language" required className={select}>
+              {VOICE_LANGUAGES.map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-2">
+            <span className={sectionLabel}>Voice style</span>
+            <select name="voice_style" required className={select}>
+              {VOICE_STYLES.map((o) => (
+                <option key={o}>{o}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <details className="group rounded-2xl border border-foreground/10 p-4 open:bg-foreground/[0.02]">
+          <summary className="cursor-pointer list-none text-sm font-medium">
+            <span className="mr-1 inline-block transition group-open:rotate-90">›</span>
+            Add product screenshots <span className="font-normal text-foreground/50">(recommended)</span>
+          </summary>
+          <p className="mt-2 text-xs text-foreground/60">
+            Screenshots show us your real product, so the video only features what it actually does.
+          </p>
+          <label className="mt-3 flex cursor-pointer flex-col items-center gap-1 rounded-xl border border-dashed border-foreground/20 px-3 py-6 text-center text-sm text-foreground/70 transition hover:border-indigo-500/60 hover:bg-indigo-500/5">
+            Click to choose images (PNG, JPG, WebP)
+            <span className="text-xs text-foreground/50">
+              Up to 5 images, 5 MB each
+              {maxTotalBytes ? `, ${Math.floor(maxTotalBytes / 1024 / 1024)} MB total` : ""}.
+            </span>
+            {files.length > 0 && <span className="text-xs text-foreground">{files.join(", ")}</span>}
+            <input
+              name="screenshots"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              className="sr-only"
+              onChange={(e) => {
+                const chosen = Array.from(e.target.files ?? []);
+                setFiles(chosen.map((f) => f.name));
+                setFileError(validateScreenshots(chosen, maxTotalBytes));
+              }}
+            />
+          </label>
+        </details>
+
+        {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600">{error}</p>}
+
+        <button
+          disabled={pending || !!fileError}
+          className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:shadow-xl hover:shadow-indigo-600/30 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/30 disabled:opacity-60"
+        >
+          ✦ Generate Video
+        </button>
+      </form>
+    </>
   );
 }
 
-function Select<T extends string | number>({
+// Segmented radio cards.
+function Choice<T extends string | number>({
   name,
   title,
   options,
+  value,
+  defaultValue,
+  onChange,
   format = String,
+  columns,
 }: {
   name: string;
   title: string;
   options: readonly T[];
+  value?: T;
+  defaultValue?: T;
+  onChange?: (value: T) => void;
   format?: (value: T) => string;
+  columns?: number;
 }) {
   return (
-    <label className={label}>
-      {title}
-      <select name={name} required className={field}>
+    <fieldset className="flex flex-col gap-2">
+      <legend className={`${sectionLabel} mb-2`}>{title}</legend>
+      <div
+        className={`grid gap-2 ${columns === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3"}`}
+      >
         {options.map((o) => (
-          <option key={o} value={o}>
-            {format(o)}
-          </option>
+          <label key={o} className="cursor-pointer">
+            <input
+              type="radio"
+              name={name}
+              value={o}
+              required
+              className="peer sr-only"
+              {...(value !== undefined
+                ? { checked: value === o, onChange: () => onChange?.(o) }
+                : { defaultChecked: defaultValue === o })}
+            />
+            <span className="block rounded-xl border border-foreground/15 px-3 py-2.5 text-center text-sm transition hover:border-foreground/30 peer-checked:border-indigo-500 peer-checked:bg-indigo-500/10 peer-checked:font-medium peer-checked:text-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/30 dark:peer-checked:text-indigo-300">
+              {format(o)}
+            </span>
+          </label>
         ))}
-      </select>
-    </label>
+      </div>
+    </fieldset>
   );
 }
