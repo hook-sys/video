@@ -26,7 +26,7 @@ function isPublicIp(ip: string) {
   return family !== 0 && !blocked.check(ip, family === 4 ? "ipv4" : "ipv6");
 }
 
-async function isPublicHost(hostname: string) {
+export async function isPublicHost(hostname: string) {
   const host = hostname.replace(/^\[|\]$/g, "");
   if (isIP(host)) return isPublicIp(host);
   if (host === "localhost" || host.endsWith(".localhost")) return false;

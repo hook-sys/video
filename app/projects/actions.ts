@@ -19,6 +19,7 @@ import {
 import { runWebsiteCapture } from "@/lib/website-capture";
 import { generateProductBrief } from "@/lib/ai/product-brief";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
+import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 
 export type CreateProjectState = { error?: string };
 
@@ -204,7 +205,7 @@ export async function generateVoice(projectId: string) {
   // RLS: only returns the project if this user owns it.
   const { data: project } = await supabase
     .from("projects")
-    .select("brief, brief_status, voice_language, voice_style")
+    .select("brief, brief_status, voice_language, voice_style, voice_result")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return;
@@ -227,12 +228,22 @@ export async function generateVoice(projectId: string) {
   if (!claimed?.length) return;
 
   try {
-    const result = await generateFalVoice({
+    const { model, requestId, audioUrl } = await generateFalVoice({
       script,
       language: project.voice_language,
       style: project.voice_style,
     });
-    await voiceUpdate({ voice_status: "completed", voice_error: null, voice_result: result });
+    const storagePath = await storeVoiceAudio(admin, audioUrl, user.id, projectId);
+    const previousPath = project.voice_result?.storagePath;
+    if (previousPath && previousPath !== storagePath) {
+      await admin.storage.from(AUDIO_BUCKET).remove([previousPath]);
+    }
+    // Only the permanent path is persisted, never the temporary provider URL.
+    await voiceUpdate({
+      voice_status: "completed",
+      voice_error: null,
+      voice_result: { model, requestId, storagePath },
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Voice generation failed.";
     await voiceUpdate({ voice_status: "failed", voice_error: message.slice(0, 500) });

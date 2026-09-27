@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
+import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { generateBrief, generateVoice } from "@/app/projects/actions";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -41,6 +42,13 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         .from(SCREENSHOTS_BUCKET)
         .createSignedUrl(capture.screenshot_path, 3600)
     : { data: null };
+
+  const { data: voiceAudio } =
+    project.voice_status === "completed" && project.voice_result?.storagePath
+      ? await supabase.storage
+          .from(AUDIO_BUCKET)
+          .createSignedUrl(project.voice_result.storagePath, 3600)
+      : { data: null };
 
   const rows: [string, string][] = [
     ["Website URL", project.website_url ?? "—"],
@@ -146,8 +154,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             {project.voice_result ? "Regenerate voice" : "Generate voice"}
           </SubmitButton>
         </form>
-        {project.voice_status === "completed" && project.voice_result?.audioUrl && (
-          <audio controls src={project.voice_result.audioUrl} className="w-full" />
+        {voiceAudio?.signedUrl && (
+          <audio controls src={voiceAudio.signedUrl} className="w-full" />
         )}
       </section>
       <button
