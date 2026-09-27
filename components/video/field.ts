@@ -11,12 +11,14 @@ export type Skin = "task" | "tab" | "card";
 // x/y: centre in % of frame; s: scale; rot: degrees; o: opacity.
 export type Pose = { x: number; y: number; s: number; rot: number; o: number };
 export type Rect = { x: number; y: number; w: number; h: number; o: number };
-export type FieldItem = { id: number; skin: Skin; from: Pose; to: Pose; spawned: boolean };
+// `fromSkin` differs from `skin` when the object transforms in this scene.
+export type FieldItem = { id: number; skin: Skin; fromSkin: Skin; from: Pose; to: Pose; spawned: boolean };
 export type FieldScene = {
   items: FieldItem[];
   workspace: { from: Rect; to: Rect };
   chart: { from: number; to: number }; // 0 hidden → 1 fully grown
   complete: boolean;
+  hub: { x: number; y: number } | null; // "connect": lines from a hub to every object
 };
 
 const SPAWN: Partial<Record<string, { skin: Skin; n: number }>> = {
@@ -94,9 +96,12 @@ export function buildField(plans: (VisualPlan | null | undefined)[]): (FieldScen
     }
 
     const involves = (o: string) => plan.primary_object === o || plan.supporting_objects.includes(o as never);
-    const action = plan.object_action;
+    const action = plan.action;
     const withChart = involves("progress_chart");
     const inWorkspace = plan.primary_object === "workspace" || withChart || action === "merge" || action === "move_to" || action === "arrange" || action === "complete";
+    const skinsBefore = new Map(items.map((it) => [it.id, it.skin]));
+    // "transform": the existing objects become result cards.
+    if (action === "transform") items = items.map((it) => ({ ...it, skin: "card" }));
     ws = inWorkspace ? (action === "expand" ? { ...WORKSPACE, w: 76, h: 72 } : WORKSPACE) : HIDDEN_RECT;
     chart = withChart ? 1 : inWorkspace ? chart : 0;
 
@@ -104,7 +109,9 @@ export function buildField(plans: (VisualPlan | null | undefined)[]): (FieldScen
     items = items.map((it, i) => {
       const isNew = spawnedIds.has(it.id);
       let pose: Pose;
-      if (inWorkspace) {
+      if (action === "connect") {
+        pose = { ...scatter(it.id, i, n), rot: 0, s: 0.7 };
+      } else if (inWorkspace) {
         pose = action === "merge" || action === "move_to" ? gathered(it.id, ws) : column(i, n, ws, chart > 0);
       } else if (action === "scatter") {
         pose = scatter(it.id, i, n);
@@ -120,11 +127,12 @@ export function buildField(plans: (VisualPlan | null | undefined)[]): (FieldScen
     return {
       items: items.map((it) => {
         const spawned = spawnedIds.has(it.id);
-        return { id: it.id, skin: it.skin, spawned, from: spawned ? offscreen(it.pose, it.id) : before.get(it.id)!, to: it.pose };
+        return { id: it.id, skin: it.skin, fromSkin: skinsBefore.get(it.id) ?? it.skin, spawned, from: spawned ? offscreen(it.pose, it.id) : before.get(it.id)!, to: it.pose };
       }),
       workspace: { from: wsFrom, to: ws },
       chart: { from: chartFrom, to: chart },
       complete: action === "complete",
+      hub: action === "connect" ? { x: 50, y: 56 } : null,
     };
   });
 }

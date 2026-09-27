@@ -348,7 +348,7 @@ export async function prepareAssets(projectId: string) {
 
   // RLS: only returns rows this user owns.
   const [{ data: project }, { data: screenshots }, { data: capture }] = await Promise.all([
-    supabase.from("projects").select("brief, brief_status, format").eq("id", projectId).maybeSingle(),
+    supabase.from("projects").select("brief, brief_status, format, direction").eq("id", projectId).maybeSingle(),
     supabase
       .from("project_screenshots")
       .select("storage_path")
@@ -387,7 +387,8 @@ export async function prepareAssets(projectId: string) {
     await assetsUpdate({
       assets_status: "completed",
       assets_error: null,
-      assets_manifest: buildAssetManifest(brief.data, paths, project.format),
+      // The customer's chosen visual style (appended to the direction) shapes image prompts.
+      assets_manifest: buildAssetManifest(brief.data, paths, project.format, project.direction?.match(/Visual style:\s*(.+)\s*$/m)?.[1]),
     });
   }
   revalidatePath(`/projects/${projectId}`);

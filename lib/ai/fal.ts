@@ -74,13 +74,15 @@ export async function generateImage({ prompt, format }: ImageInput): Promise<Ima
   if (!model) throw new Error("FAL_IMAGE_MODEL is not configured.");
   const fal = falClient();
 
-  const result = await fal.subscribe(model, {
-    input: buildInput(process.env.FAL_IMAGE_INPUT_TEMPLATE || '{"prompt":"{{prompt}}"}', {
-      prompt: `${prompt.trim().slice(0, 1_000)} ${IMAGE_GUARDRAILS}`,
-      format,
-    }),
-    abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+  const input = buildInput(process.env.FAL_IMAGE_INPUT_TEMPLATE || '{"prompt":"{{prompt}}"}', {
+    prompt: `${prompt.trim().slice(0, 1_000)} ${IMAGE_GUARDRAILS}`,
+    format,
   });
+  // fal-ai/nano-banana-2 takes the video's aspect ratio directly ("16:9", "9:16", "1:1").
+  if (model.includes("nano-banana") && input.aspect_ratio === undefined && ["16:9", "9:16", "1:1"].includes(format)) {
+    input.aspect_ratio = format;
+  }
+  const result = await fal.subscribe(model, { input, abortSignal: AbortSignal.timeout(TIMEOUT_MS) });
 
   const imageUrl = findMediaUrl(result.data, "image");
   if (!imageUrl) throw new Error("Image model returned no image URL.");

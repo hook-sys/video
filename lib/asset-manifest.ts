@@ -1,4 +1,5 @@
 import type { ProductBrief } from "@/lib/ai/product-brief";
+import { buildImagePrompt } from "@/lib/image-prompt";
 
 export type AssetManifest = {
   assets: {
@@ -35,6 +36,7 @@ export function buildAssetManifest(
   brief: ProductBrief,
   screenshotPaths: string[],
   format: string,
+  style?: string,
 ): AssetManifest {
   const assets: AssetManifest["assets"] = [];
   const byKey = new Map<string, AssetManifest["assets"][number]>();
@@ -51,7 +53,7 @@ export function buildAssetManifest(
     asset.scene_ids.push(scene);
   };
 
-  // Every scene gets its own generated background image so no frame is text-only.
+  // V3 behaviour (no visual plan): every scene gets its own generated background.
   const background = (scene: string, purpose: string) =>
     addToAsset(`bg:${scene}`, () => ({
       type: "abstract",
@@ -62,10 +64,22 @@ export function buildAssetManifest(
       }. Glossy abstract shapes, soft volumetric light, depth of field, rich indigo and violet gradient palette, ${format} composition, ${SAFE}`,
     }), scene);
 
+  // Planned scenes only get an image when the plan asks for one (a complex hero
+  // visual the shape objects cannot build); the prompt describes the visual
+  // concept, never the narration. Scenes without a plan keep the V3 behaviour.
+  const plannedImage = (scene: string, plan: NonNullable<ProductBrief["scenes"][number]["visual_plan"]>, purpose: string) =>
+    addToAsset(`bg:${scene}`, () => ({
+      type: "abstract",
+      source: "generated",
+      role: "background",
+      prompt: buildImagePrompt({ plan, concept: neutral(purpose), style, format }),
+    }), scene);
+
   let nextShot = 0;
   brief.scenes.forEach((scene, i) => {
     const id = sceneId(i);
-    background(id, scene.purpose);
+    if (!scene.visual_plan) background(id, scene.purpose);
+    else if (scene.visual_plan.generate_image) plannedImage(id, scene.visual_plan, scene.purpose);
     switch (scene.visual) {
       case "ui":
       case "screenshot": {

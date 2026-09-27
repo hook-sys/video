@@ -17,7 +17,7 @@ export function Storyboard({ scenes: planned, durationSeconds, audioUrl, words }
   const starts = frames.map((_, i) => frames.slice(0, i).reduce((n, f) => n + f, 0));
   const kinds = scenes.map((s, i) => sceneKind(s, i === scenes.length - 1));
   // Persistent objects laid out from each scene's semantic plan.
-  const fields = buildField(scenes.map((s, i) => (kinds[i] === "field" ? s.plan : null)));
+  const fields = buildField(scenes.map((s, i) => (kinds[i] === "field" ? s.visual_plan : null)));
   return (
     <AbsoluteFill style={{ background: "#0b0d12" }}>
       {audioUrl && <Html5Audio src={audioUrl} />}

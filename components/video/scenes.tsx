@@ -31,14 +31,14 @@ const WINDOW = { top: 0.07, bottom: 0.3, left: 0.09 };
 
 // Full-frame generated image on the camera's background plane. Softened and
 // dimmed so it supports the composition instead of being the main visual.
-function ImageBackground({ scene }: { scene: RenderScene }) {
+function ImageBackground({ scene, hero = false }: { scene: RenderScene; hero?: boolean }) {
   return (
     <AbsoluteFill style={{ background: BG, overflow: "hidden" }}>
       <CameraLayer>
         {scene.backgroundUrl ? (
           <Img
             src={scene.backgroundUrl}
-            style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.15)", filter: "blur(6px) saturate(0.7) brightness(0.55)" }}
+            style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scale(1.15)", filter: hero ? "brightness(0.85)" : "blur(6px) saturate(0.7) brightness(0.55)" }}
           />
         ) : (
           <AbsoluteFill style={{ background: `radial-gradient(circle at 30% 20%, #1b2340, ${BG})`, transform: "scale(1.15)" }} />
@@ -383,7 +383,10 @@ function FieldScene({ scene, lines, isFinal, field }: VisualProps) {
   const rect = { x: lerp(ws.from.x, ws.to.x, wsP), y: lerp(ws.from.y, ws.to.y, wsP), w: lerp(ws.from.w, ws.to.w, wsP), h: lerp(ws.from.h, ws.to.h, wsP), o: lerp(ws.from.o, ws.to.o, wsP) };
   const chartAt = actionFrames(scene, "reveal", fps)?.[0] ?? Math.round(span * 0.5);
   const grow = field.chart.to > field.chart.from ? interpolate(frame, [chartAt, chartAt + fps * 1.2], [0, 1], { ...clamp, easing: Easing.out(Easing.cubic) }) : field.chart.to;
-  const doneAt = actionFrames(scene, "success", fps)?.[0] ?? beat + 10;
+  const success = actionFrames(scene, "success", fps);
+  const doneAt = success?.[0] ?? beat + 10;
+  // Completed items tick on "complete" scenes and on a success moment in the narration.
+  const completing = field.complete || !!success;
   const cta = spring({ frame: frame - Math.round(span * 0.45), fps, config: { damping: 12 } });
   let spawnOrder = 0;
   return (
@@ -400,6 +403,22 @@ function FieldScene({ scene, lines, isFinal, field }: VisualProps) {
             )}
           </div>
         )}
+        {field.hub && (
+          // "connect": lines draw from a central hub out to every object.
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+            {field.items.map((it, i) => {
+              const t = interpolate(frame, [beat + 10 + i * 3, beat + 26 + i * 3], [0, 1], clamp);
+              return (
+                <line key={it.id} x1={field.hub!.x} y1={field.hub!.y} x2={field.hub!.x + (it.to.x - field.hub!.x) * t} y2={field.hub!.y + (it.to.y - field.hub!.y) * t} stroke={ACCENT} strokeOpacity={0.6} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+              );
+            })}
+          </svg>
+        )}
+        {field.hub && (
+          <Obj x={field.hub.x} y={field.hub.y} at={beat} from="depth" float={0.4}>
+            <Chip icon="layers" size={base * 0.12} />
+          </Obj>
+        )}
         {field.items.map((it, i) => {
           const order = it.spawned ? spawnOrder++ : i;
           const delay = beat + (it.spawned ? order * 5 : order * 2);
@@ -412,7 +431,9 @@ function FieldScene({ scene, lines, isFinal, field }: VisualProps) {
             o: lerp(it.from.o, it.to.o, Math.min(1, p * 1.5)),
           };
           const w = base * (it.skin === "tab" ? 0.3 : it.skin === "card" ? 0.26 : 0.28);
-          const done = field.complete && it.skin === "task" ? spring({ frame: frame - doneAt - order * 3, fps, config: { damping: 12 } }) : 0;
+          const done = completing && it.skin === "task" ? spring({ frame: frame - doneAt - order * 3, fps, config: { damping: 12 } }) : 0;
+          const skinOf = (skin: typeof it.skin) =>
+            skin === "task" ? <TaskCard w={w} tint={FIELD_TINTS[it.id % 5]} done={done} /> : skin === "tab" ? <BrowserTab w={w} tint={FIELD_TINTS[(it.id + 2) % 5]} /> : <SkeletonCard w={w} variant="result" fill={1} />;
           return (
             <div
               key={it.id}
@@ -425,12 +446,14 @@ function FieldScene({ scene, lines, isFinal, field }: VisualProps) {
                 filter: at.o < 0.6 ? "blur(1.5px)" : undefined,
               }}
             >
-              {it.skin === "task" ? (
-                <TaskCard w={w} tint={FIELD_TINTS[it.id % 5]} done={done} />
-              ) : it.skin === "tab" ? (
-                <BrowserTab w={w} tint={FIELD_TINTS[(it.id + 2) % 5]} />
+              {it.fromSkin === it.skin ? (
+                skinOf(it.skin)
               ) : (
-                <SkeletonCard w={w} variant="result" fill={1} />
+                // "transform": the old object turns into the new one as it moves.
+                <div style={{ position: "relative" }}>
+                  <div style={{ opacity: 1 - p, transform: `rotateY(${p * 90}deg)` }}>{skinOf(it.fromSkin)}</div>
+                  <div style={{ position: "absolute", left: "50%", top: "50%", opacity: p, transform: `translate(-50%, -50%) rotateY(${(1 - p) * -90}deg)` }}>{skinOf(it.skin)}</div>
+                </div>
               )}
             </div>
           );
@@ -453,6 +476,27 @@ function FieldScene({ scene, lines, isFinal, field }: VisualProps) {
           </AbsoluteFill>
         )}
       </CameraLayer>
+    </AbsoluteFill>
+  );
+}
+
+// hero_visual: the generated image is the hero (sharp, prominent) while the
+// headline and a reacting object still animate in front of it.
+function HeroVisualScene({ scene, lines }: VisualProps) {
+  const { fps, height } = useVideoConfig();
+  const span = useSceneSpan();
+  const { emphasisAt } = headlineBeats(scene, lines, fps, span);
+  const idx = Number(scene.id.split("-")[1] ?? 0);
+  return (
+    <AbsoluteFill>
+      <ImageBackground scene={scene} hero />
+      <AbsoluteFill style={{ background: "linear-gradient(180deg, rgba(8,10,18,0) 45%, rgba(8,10,18,0.75) 100%)" }} />
+      <CameraLayer depth={DEPTH.text} zoom={0.4}>
+        <AbsoluteFill style={{ ...inset, top: height * 0.68, height: height * 0.24, justifyContent: "center", padding: "0 10%" }}>
+          <Headline scene={scene} lines={lines} scale={0.8} />
+        </AbsoluteFill>
+      </CameraLayer>
+      {emphasisAt !== undefined && <Foreground seed={idx} chip={CHIP_ICONS[idx % 4]} at={emphasisAt + 4} />}
     </AbsoluteFill>
   );
 }
@@ -949,7 +993,7 @@ function IconScene({ scene, lines }: VisualProps) {
 
 // Compositions: kinetic intro, script input (app), AI processing, feature
 // showcase, icon, and the closing result + CTA.
-export type Kind = "product" | "processing" | "result" | "feature" | "icon" | "kinetic" | "field";
+export type Kind = "product" | "processing" | "result" | "feature" | "icon" | "kinetic" | "field" | "hero";
 
 // Composition chosen from what the storyboard (AI) decided for the scene: its
 // visual type, its timed actions and its on-screen phrases.
@@ -958,15 +1002,17 @@ export function sceneKind(scene: SyncedView, isFinal?: boolean): Kind {
   // A real screenshot is always shown as the product.
   if (scene.visual === "screenshot" && scene.assetUrl) return "product";
   // The storyboard's semantic plan picks the composition from the scene's meaning.
-  const plan = scene.plan;
+  const plan = scene.visual_plan;
   if (plan) {
     const o = plan.primary_object;
     if (FIELD_OBJECTS.includes(o)) return "field";
-    if (o === "input_field" || o === "button") return "product";
+    if (o === "input_field" || o === "button" || o === "cursor") return "product";
+    if (o === "hero_visual") return scene.backgroundUrl ? "hero" : "kinetic";
+    if (o === "icon") return "icon";
     if (o === "processing_core") return "processing";
     if (o === "feature_card") return scene.on_screen_text.length >= 2 ? "feature" : "kinetic";
     if (o === "result_card" || o === "video_card") {
-      return ["stack", "scatter", "arrange", "merge", "move_to"].includes(plan.object_action) ? "field" : isFinal ? "result" : "processing";
+      return ["stack", "scatter", "arrange", "merge", "move_to", "connect", "transform"].includes(plan.action) ? "field" : isFinal ? "result" : "processing";
     }
     return "kinetic";
   }
@@ -1002,6 +1048,7 @@ const COMPOSITIONS: Record<Kind, React.ComponentType<VisualProps>> = {
   result: ResultScene,
   feature: FeatureScene,
   field: FieldScene,
+  hero: HeroVisualScene,
   icon: IconScene,
   kinetic: KineticScene,
 };
@@ -1043,20 +1090,27 @@ function choreography(kind: Kind, scene: SyncedView, fps: number, span: number, 
     return orderKeys([k(0, pose(1.32, 0, -2)), k(14, pose(1.3, 0, -2)), k(span * 0.5, pose(1.02, 0, 0)), k(span, pose(1, 0, 0))]);
   }
   if (kind === "field" && field) {
-    // Follows the objects: starts framed on where they were, moves with them to
-    // where they go, and settles back to the shared framing, so consecutive
-    // field scenes meet at the same camera position.
-    const centre = (poses: Pose[]) => (poses.length ? [poses.reduce((n, p) => n + p.x, 0) / poses.length, poses.reduce((n, p) => n + p.y, 0) / poses.length] : [50, 56]);
+    // Follows the object named in the plan's camera_focus: frames where that
+    // object is at the start, moves with it to where it goes, and settles back
+    // to the shared framing so consecutive field scenes meet seamlessly.
+    const target = scene.visual_plan?.camera_focus ?? "wide";
+    const skinOf: Partial<Record<string, string>> = { task_cards: "task", browser_tabs: "tab", result_card: "card", video_card: "card", feature_card: "card" };
+    const centre = (poses: Pose[]): [number, number] =>
+      poses.length ? [poses.reduce((n, p) => n + p.x, 0) / poses.length, poses.reduce((n, p) => n + p.y, 0) / poses.length] : [50, 56];
+    const tracked = field.items.filter((it) => !skinOf[target] || it.skin === skinOf[target]);
+    const ws = field.workspace.to;
+    // The shared framing: centre of all objects (end of one scene = start of the next).
     const [fx, fy] = centre(field.items.filter((it) => !it.spawned).map((it) => it.from));
-    const [tx, ty] = centre(field.items.map((it) => it.to));
-    const focus = scene.plan?.camera_focus ?? "primary";
-    const zoom = focus === "close" ? 1.24 : focus === "wide" ? 1.02 : 1.14;
+    const [ax, ay] = centre(field.items.map((it) => it.to));
+    const [tx, ty] =
+      target === "workspace" ? [ws.x, ws.y] : target === "progress_chart" ? [ws.x + ws.w * 0.1, ws.y + ws.h * 0.25] : centre(tracked.map((it) => it.to));
+    const wide = target === "wide";
     const beat = fieldBeat(scene, fps);
     const home = (x: number, y: number) => focusOn(x - 50, y - 50, 1.06, DEPTH.subject, 0.3);
     return orderKeys([
       k(0, home(fx, fy)),
-      k(beat + (focus === "follow" ? 30 : 20), focusOn(tx - 50, ty - 50, zoom, DEPTH.subject, focus === "wide" ? 0.1 : 0.4)),
-      k(span, home(tx, ty)),
+      k(beat + 24, wide ? pose(1.0, 0, 0) : focusOn(tx - 50, ty - 50, target === "progress_chart" ? 1.22 : 1.15, DEPTH.subject, 0.45)),
+      k(span, home(ax, ay)),
     ]);
   }
   if (kind === "feature") {
