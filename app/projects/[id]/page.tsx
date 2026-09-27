@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 
 export default async function ProjectPage({ params }: PageProps<"/projects/[id]">) {
   const { id } = await params;
@@ -11,6 +12,17 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
     .eq("id", id)
     .maybeSingle();
   if (!project) notFound();
+
+  const { data: screenshots } = await supabase
+    .from("project_screenshots")
+    .select("storage_path, original_filename")
+    .eq("project_id", id)
+    .order("created_at");
+  const { data: signed } = screenshots?.length
+    ? await supabase.storage
+        .from(SCREENSHOTS_BUCKET)
+        .createSignedUrls(screenshots.map((s) => s.storage_path), 3600)
+    : { data: [] };
 
   const rows: [string, string][] = [
     ["Website URL", project.website_url ?? "—"],
@@ -36,6 +48,21 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           </div>
         ))}
       </dl>
+      {screenshots && screenshots.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {screenshots.map((s, i) =>
+            signed?.[i]?.signedUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- short-lived signed URLs
+              <img
+                key={s.storage_path}
+                src={signed[i].signedUrl}
+                alt={s.original_filename}
+                className="aspect-video w-full rounded-md border border-foreground/10 object-cover"
+              />
+            ) : null,
+          )}
+        </div>
+      )}
       <button
         disabled
         title="Coming soon"

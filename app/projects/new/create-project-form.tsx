@@ -8,6 +8,7 @@ import {
   FORMATS,
   VOICE_LANGUAGES,
   VOICE_STYLES,
+  validateScreenshots,
 } from "@/lib/projects";
 
 const field = "rounded-md border border-foreground/20 bg-transparent px-3 py-2";
@@ -17,10 +18,13 @@ export function CreateProjectForm() {
   const [state, action, pending] = useActionState(createProject, {});
   const [direction, setDirection] = useState("");
   const [files, setFiles] = useState<string[]>([]);
+  const [fileError, setFileError] = useState<string>();
 
   return (
     <form action={action} className="flex flex-col gap-5">
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {(fileError ?? state.error) && (
+        <p className="text-sm text-red-600">{fileError ?? state.error}</p>
+      )}
 
       <label className={label}>
         Website URL (optional)
@@ -31,15 +35,20 @@ export function CreateProjectForm() {
         Screenshots
         <span className="flex flex-col items-center gap-1 rounded-md border border-dashed border-foreground/30 px-3 py-6 text-center font-normal text-foreground/70">
           Click to choose product screenshots (PNG, JPG, WebP)
-          <span className="text-xs">Uploading is not enabled yet.</span>
+          <span className="text-xs">Up to 5 images, 5 MB each.</span>
           {files.length > 0 && <span className="text-xs">{files.join(", ")}</span>}
         </span>
         <input
+          name="screenshots"
           type="file"
           accept="image/png,image/jpeg,image/webp"
           multiple
           className="sr-only"
-          onChange={(e) => setFiles(Array.from(e.target.files ?? [], (f) => f.name))}
+          onChange={(e) => {
+            const chosen = Array.from(e.target.files ?? []);
+            setFiles(chosen.map((f) => f.name));
+            setFileError(validateScreenshots(chosen));
+          }}
         />
       </label>
 
@@ -67,7 +76,7 @@ export function CreateProjectForm() {
       </div>
 
       <button
-        disabled={pending}
+        disabled={pending || !!fileError}
         className="rounded-md bg-foreground px-3 py-2 font-medium text-background disabled:opacity-60"
       >
         {pending ? "Creating…" : "Create Project"}
