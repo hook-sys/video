@@ -1,17 +1,23 @@
 import type { CSSProperties } from "react";
+import ALIASES from "./aliases.json";
 import ICONS from "./icons.json";
 
-// Motion-graphics icon library: 24×24 line icons (Lucide, ISC), one compact
-// path each. Built by `npm run icons:build` from scripts/icons/catalog.mjs.
+// Motion-graphics icon library: every Lucide icon (ISC) as a 24×24 line icon,
+// one compact path each; Lucide's older names resolve through aliases.json.
+// Built by `npm run icons:build` (curated categories in scripts/icons/catalog.mjs).
 // Search keywords and categories live in catalog.json (server/Director side).
 
 // A string is the stroke path; a pair is [stroke, fill] for icons with solid dots.
 type IconData = string | string[];
 const DATA = ICONS as Record<string, IconData>;
+const ALIAS = ALIASES as Record<string, string>;
 
 export const ICON_NAMES = Object.keys(DATA);
-export type IconName = keyof typeof ICONS;
-export const isIconName = (name: unknown): name is IconName => typeof name === "string" && name in DATA;
+export type IconName = keyof typeof ICONS | keyof typeof ALIASES;
+// Current name for any accepted name (older Lucide names included), else null.
+export const resolveIcon = (name: unknown): string | null =>
+  typeof name !== "string" ? null : name in DATA ? name : (ALIAS[name] ?? null);
+export const isIconName = (name: unknown): name is IconName => resolveIcon(name) !== null;
 
 export type IconProps = {
   name: string;
@@ -25,8 +31,9 @@ export type IconProps = {
 };
 
 export function Icon({ name, size = 24, color = "currentColor", strokeWidth = 2, draw = 1, style }: IconProps) {
-  const data = DATA[name];
-  if (!data) return null;
+  const key = resolveIcon(name);
+  if (!key) return null;
+  const data = DATA[key];
   const [stroke, fill] = typeof data === "string" ? [data, ""] : data;
   const t = Math.min(1, Math.max(0, draw));
   return (

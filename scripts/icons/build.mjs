@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Builds the motion-graphics icon library from the curated catalog.
+// Builds the motion-graphics icon library: every Lucide icon, plus the curated
+// promo-video categories from catalog.mjs.
 //
 //   npm run icons:build
 //
@@ -7,12 +8,14 @@
 //   components/video/icons/icons.json   name → one compact SVG path (24×24,
 //                                        stroke), plus a fill path for the few
 //                                        icons with solid dots
+//   components/video/icons/aliases.json Lucide's older names → current name
+//                                        (same drawing, stored once)
 //   components/video/icons/catalog.json categories + search keywords (for the
 //                                        Visual Director), no geometry
 // Every shape (circle, rect, line, polyline…) becomes path data so an icon is a
 // single <path>: small, and it can be "drawn on" with pathLength.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CATEGORIES } from "./catalog.mjs";
@@ -84,33 +87,45 @@ const minify = (d) =>
     .replace(/(^|[^\d.])0\.(\d)/g, "$1.$2")
     .trim();
 
-const icons = {};
+function iconData(name) {
+  const stroke = [];
+  const fill = [];
+  for (const [tag, attrs] of nodes[name]) (attrs.fill && attrs.fill !== "none" ? fill : stroke).push(minify(toPath(tag, attrs)));
+  return fill.length ? [stroke.join(""), fill.join("")] : stroke.join("");
+}
+
+const names = Object.keys(nodes).sort();
+const icons = Object.fromEntries(names.map((k) => [k, iconData(k)]));
+
+// Older names ship as duplicate SVG files; map each to the identical current icon.
+const svgBody = (file) =>
+  readFileSync(path.join(lucide, "icons", `${file}.svg`), "utf8").replace(/<!--[\s\S]*?-->/g, "").replace(/class="[^"]*"/g, "").replace(/\s+/g, " ").trim();
+const byBody = new Map(names.map((k) => [svgBody(k), k]));
+const aliases = {};
+for (const file of readdirSync(path.join(lucide, "icons")).map((f) => f.replace(/\.svg$/, "")).sort()) {
+  if (nodes[file]) continue;
+  const target = byBody.get(svgBody(file));
+  if (target) aliases[file] = target;
+}
+
 const missing = [];
 const categories = {};
-for (const [cat, names] of Object.entries(CATEGORIES)) {
+for (const [cat, list] of Object.entries(CATEGORIES)) {
   categories[cat] = [];
-  for (const name of names) {
-    if (!nodes[name]) {
-      missing.push(`${cat}/${name}`);
-      continue;
-    }
-    if (!categories[cat].includes(name)) categories[cat].push(name);
-    if (icons[name]) continue;
-    const stroke = [];
-    const fill = [];
-    for (const [tag, attrs] of nodes[name]) (attrs.fill && attrs.fill !== "none" ? fill : stroke).push(minify(toPath(tag, attrs)));
-    icons[name] = fill.length ? [stroke.join(""), fill.join("")] : stroke.join("");
+  for (const raw of list) {
+    const name = nodes[raw] ? raw : aliases[raw];
+    if (!name) missing.push(`${cat}/${raw}`);
+    else if (!categories[cat].includes(name)) categories[cat].push(name);
   }
 }
 
-const names = Object.keys(icons).sort();
-const sorted = Object.fromEntries(names.map((k) => [k, icons[k]]));
-const keywords = Object.fromEntries(names.map((k) => [k, (tags[k] ?? []).slice(0, 8)]));
+const keywords = Object.fromEntries(names.map((k) => [k, (tags[k] ?? []).slice(0, 6)]));
 const outDir = path.join(root, "components/video/icons");
-writeFileSync(path.join(outDir, "icons.json"), JSON.stringify(sorted));
+writeFileSync(path.join(outDir, "icons.json"), JSON.stringify(icons));
+writeFileSync(path.join(outDir, "aliases.json"), JSON.stringify(aliases));
 writeFileSync(path.join(outDir, "catalog.json"), JSON.stringify({ source: `lucide-static@${version} (ISC)`, categories, keywords }));
 
 const size = (file) => readFileSync(path.join(outDir, file)).byteLength;
-console.log(`icons: ${names.length} unique across ${Object.keys(categories).length} categories`);
-console.log(`icons.json ${(size("icons.json") / 1024).toFixed(1)} KB, catalog.json ${(size("catalog.json") / 1024).toFixed(1)} KB`);
+console.log(`icons: ${names.length} drawings + ${Object.keys(aliases).length} alias names = ${names.length + Object.keys(aliases).length} usable names; ${Object.keys(categories).length} curated categories`);
+console.log(`icons.json ${(size("icons.json") / 1024).toFixed(1)} KB, aliases.json ${(size("aliases.json") / 1024).toFixed(1)} KB, catalog.json ${(size("catalog.json") / 1024).toFixed(1)} KB`);
 if (missing.length) console.log(`skipped (not in Lucide ${version}): ${missing.join(", ")}`);
