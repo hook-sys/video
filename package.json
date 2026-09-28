@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "check:story": "node scripts/story-check/run.mjs"
+    "check:story": "node scripts/story-check/run.mjs",
+    "icons:build": "node scripts/icons/build.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
@@ -33,6 +34,7 @@
     "esbuild": "0.28.1",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "lucide-static": "1.48.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

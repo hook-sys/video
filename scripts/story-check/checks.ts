@@ -13,6 +13,8 @@ import { ECOMMERCE_NARRATION, ECOMMERCE_STORY } from "@/components/video/engine/
 import { evaluatePose } from "@/components/video/engine/timeline";
 import { needsLegacyImages, usableStory } from "@/lib/story-engine";
 import type { AssetManifest } from "@/lib/asset-manifest";
+import ICONS from "@/components/video/icons/icons.json";
+import { ICON_CATEGORIES, searchIcons } from "@/lib/icons";
 import zlib from "node:zlib";
 
 // Deterministic stand-in images for generated assets (a lit gradient with a
@@ -142,11 +144,32 @@ function legacyImageGating(): Check[] {
   return checks;
 }
 
+// Motion-graphics icon library: enough icons, all valid, small, searchable.
+function iconLibrary(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  const icons = ICONS as Record<string, string | string[]>;
+  const names = Object.keys(icons);
+  add("at least 500 icons", names.length >= 500, `${names.length} icons in ${Object.keys(ICON_CATEGORIES).length} categories`);
+  const PATH = /^[Mm][-+.\d\sMmLlHhVvCcSsQqTtAaZz]*$/;
+  const bad = names.filter((n) => [icons[n]].flat().some((d) => !d || !PATH.test(d)));
+  add("every icon has valid path data", bad.length === 0, bad.length ? `invalid: ${bad.slice(0, 5).join(", ")}` : "all paths are plain SVG path syntax");
+  const orphans = Object.values(ICON_CATEGORIES).flat().filter((n) => !(n in icons));
+  add("every catalog name has geometry", orphans.length === 0, orphans.length ? orphans.join(", ") : "catalog and geometry agree");
+  const bytes = new TextEncoder().encode(JSON.stringify(icons)).byteLength;
+  add("library stays small", bytes < 160 * 1024, `${(bytes / 1024).toFixed(1)} KB raw (budget 160 KB)`);
+  const probes: [string, string][] = [["shopping cart", "shopping-cart"], ["delivery truck", "truck"], ["credit card", "credit-card"], ["package", "package"], ["security shield", "shield"]];
+  const misses = probes.filter(([q, want]) => !searchIcons(q, 3).includes(want));
+  add("concept search finds the obvious icon", misses.length === 0, misses.length ? misses.map(([q]) => `"${q}" → ${searchIcons(q, 3).join("/")}`).join("; ") : probes.map(([q]) => `"${q}" → ${searchIcons(q, 1)[0]}`).join(", "));
+  return checks;
+}
+
 export function runChecks(): Section[] {
   const sections: Section[] = [
     { name: "stored ProductBrief compatibility", checks: briefCompatibility() },
     { name: "VisualStory validation", checks: storyValidation() },
     { name: "legacy image generation gating", checks: legacyImageGating() },
+    { name: "icon library", checks: iconLibrary() },
   ];
   for (const f of FIXTURES) {
     const n = normalizeStory(f.story);
