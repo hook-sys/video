@@ -1,13 +1,14 @@
 import { type CSSProperties, useState } from "react";
-import { AbsoluteFill, continueRender, delayRender, Html5Audio, interpolateColors, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, continueRender, delayRender, Html5Audio, Img, interpolateColors, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import { SFX_LIBRARY } from "@/components/video/sfx";
 import { Icon } from "@/components/video/icons";
 import { isLottieName, LottieAnim } from "@/components/video/lottie";
 import { clamp01, num, ramp, step, vec } from "./eval";
 import { FLOW_FONT, type FlowTheme, lottieColors, THEMES } from "./themes";
+import { computeStates, type NodeState } from "./states";
 import { UiPlane } from "./ui-plane";
 import { fitSize, labelWorldSize, splitLines, TYPE } from "./typography";
-import type { FlowLink, FlowNode, FlowPlan, FlowText, ThemeName, Vec } from "./types";
+import type { FlowBrand, FlowLink, FlowList, FlowNode, FlowPanel, FlowPlan, FlowText, ThemeName, Vec } from "./types";
 
 // Renders a FlowPlan: a themed world, persistent nodes under one camera,
 // links with travelling packets, kinetic text and Lottie accents.
@@ -46,28 +47,6 @@ function useFlowFont() {
   });
 }
 
-type NodeState = { node: FlowNode; pos: Vec; scale: number; opacity: number };
-
-// Node positions at a frame; orbiting nodes circle their centre node
-// (blending in and out of their own keyed path).
-function computeStates(plan: FlowPlan, frame: number) {
-  const states = new Map<string, NodeState>();
-  const base = (n: FlowNode): NodeState => ({ node: n, pos: vec(n.pos, frame), scale: num(n.scale, frame, 1), opacity: num(n.opacity, frame, 1) });
-  for (const n of plan.nodes) if (!n.orbit) states.set(n.id, base(n));
-  for (const n of plan.nodes) {
-    if (!n.orbit) continue;
-    const s = base(n);
-    const o = n.orbit;
-    const c = states.get(o.center)?.pos ?? [0, 0];
-    const a = ((o.angle + o.speed * (frame - o.start)) * Math.PI) / 180;
-    const r = num(o.radius, frame, 0);
-    const w = ramp(frame, o.start, 14, "inOut") * (1 - (o.end !== undefined ? ramp(frame, o.end, 14, "inOut") : 0));
-    const orbitPos: Vec = [c[0] + Math.cos(a) * r, c[1] + Math.sin(a) * r];
-    states.set(n.id, { ...s, pos: [s.pos[0] + (orbitPos[0] - s.pos[0]) * w, s.pos[1] + (orbitPos[1] - s.pos[1]) * w] });
-  }
-  return states;
-}
-
 export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowSceneProps) {
   useFlowFont();
   const frame = useCurrentFrame();
@@ -90,8 +69,9 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
     return { ir, k, x: width / 2 + (tx - width / 2) * k, y: height / 2 + (ty - height / 2) * k, r: r0 + (r1 - r0) * k, done: frame >= ir.start + ir.dur };
   });
   const member = new Set(irises.flatMap((i) => i.ir.members));
-  // The world recedes behind a display line so the words carry the frame.
-  const dim = num(plan.dim, frame, 0);
+  // The world recedes behind a display line so the words carry the frame, and
+  // clears completely for the brand lockup.
+  const dim = Math.max(num(plan.dim, frame, 0), plan.brand ? ramp(frame, plan.brand.start - 6, 14, "inOut") : 0);
   const content = (include: (id: string) => boolean, withExtras: boolean) => (
     <div style={{ position: "absolute", left: width / 2, top: height / 2, transform: camera }}>
       {[...states.values()].filter((s) => s.node.kind === "ui" && include(s.node.id)).map((s) => (
@@ -122,7 +102,9 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
   return (
     <AbsoluteFill style={{ fontFamily: FLOW_FONT, overflow: "hidden" }}>
       <World theme={theme} frame={frame} camera={[cx, cy]} />
-      <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - 0.82 * dim, filter: `blur(${dim * 12}px)`, transform: `scale(${1 - 0.04 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
+      {dim < 0.999 && (
+        <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - dim, filter: `blur(${dim * 14}px)`, transform: `scale(${1 - 0.05 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
+      )}
       {irises.filter((i) => !i.done).map((i, n) => (
         <AbsoluteFill key={n} style={{ clipPath: i.k > 0 ? `circle(${i.r}px at ${i.x}px ${i.y}px)` : undefined }}>
           {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} />}
@@ -132,9 +114,16 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
       {irises.filter((i) => i.k > 0 && !i.done).map((i, n) => (
         <div key={n} style={{ position: "absolute", left: i.x - i.r, top: i.y - i.r, width: i.r * 2, height: i.r * 2, borderRadius: "50%", border: `${6 + i.k * 4}px solid ${theme.dark ? "rgba(255,255,255,.85)" : "#fff"}`, boxShadow: `0 0 60px ${theme.glow}0.45), inset 0 0 40px ${theme.glow}0.25)`, opacity: Math.min(1, i.k * 6) }} />
       ))}
+      {(plan.panels ?? []).map((p, i) => (
+        <Panel key={`panel-${i}`} p={p} frame={frame} theme={theme} width={width} height={height} toScreen={toScreen} />
+      ))}
+      {(plan.lists ?? []).map((l, i) => (
+        <RollingList key={`list-${i}`} list={l} frame={frame} theme={theme} />
+      ))}
       {plan.texts.map((t, i) => (
         <Kinetic key={i} t={t} frame={frame} theme={theme} />
       ))}
+      {plan.brand && <BrandLockup brand={plan.brand} frame={frame} theme={theme} />}
       {audioUrl && <Html5Audio src={audioUrl} />}
       {plannedSfx(plan).map((s, i) => (
         <Sequence key={`sfx-${i}`} from={s.frame} layout="none">
@@ -153,20 +142,28 @@ function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan[
 }
 
 // ── world ───────────────────────────────────────────────────────────────────
+// A soft mesh of coloured light that keeps drifting (and moves a little with
+// the camera), so the frame breathes even when nothing else moves.
 function World({ theme, frame, camera }: { theme: FlowTheme; frame: number; camera: Vec }) {
   const par = (k: number): Vec => [-camera[0] * k, -camera[1] * k];
   const blob = (i: number, base: Vec, size: number, color: string, alpha: number) => {
-    const [px, py] = par(0.12 + i * 0.05);
-    const x = base[0] + px + Math.sin(frame / (140 + i * 30) + i) * 60;
-    const y = base[1] + py + Math.cos(frame / (160 + i * 25) + i * 2) * 40;
-    return <div key={i} style={{ position: "absolute", left: x - size / 2, top: y - size / 2, width: size, height: size, borderRadius: "50%", background: color, opacity: alpha, filter: "blur(140px)" }} />;
+    const [px, py] = par(0.1 + i * 0.04);
+    const x = base[0] + px + Math.sin(frame / (120 + i * 26) + i * 1.7) * 170;
+    const y = base[1] + py + Math.cos(frame / (150 + i * 22) + i * 2.3) * 120;
+    const s = size * (1 + 0.08 * Math.sin(frame / (90 + i * 17) + i));
+    return <div key={i} style={{ position: "absolute", left: x - s / 2, top: y - s / 2, width: s, height: s, borderRadius: "50%", background: color, opacity: alpha, filter: "blur(150px)" }} />;
   };
   return (
-    <AbsoluteFill style={{ background: theme.dark ? `radial-gradient(120% 90% at 50% 40%, ${theme.bg[0]}, ${theme.bg[1]})` : `radial-gradient(110% 90% at 50% 45%, ${theme.bg[0]} 30%, ${theme.bg[1]})` }}>
+    <AbsoluteFill style={{ background: theme.dark ? `radial-gradient(120% 90% at 50% 40%, ${theme.bg[0]}, ${theme.bg[1]})` : `linear-gradient(160deg, ${theme.bg[0]} 20%, ${theme.bg[1]})` }}>
       {theme.dark
         ? [blob(0, [120, -80], 900, theme.blobs[0], 0.5), blob(1, [1800, -60], 900, theme.blobs[1], 0.45), blob(2, [960, 1250], 800, theme.blobs[2], 0.18)]
-        : [blob(0, [200, 120], 900, theme.blobs[0], 0.45), blob(1, [1750, 950], 1000, theme.blobs[1], 0.7), blob(2, [1500, 80], 700, theme.blobs[2], 0.28)]}
-      <AbsoluteFill style={{ background: theme.dark ? "radial-gradient(80% 70% at 50% 50%, transparent 55%, rgba(0,0,0,.45))" : "radial-gradient(90% 80% at 50% 50%, transparent 60%, rgba(91,79,245,.08))" }} />
+        : [
+            blob(0, [260, 180], 1100, theme.blobs[0], 0.42),
+            blob(1, [1700, 900], 1200, theme.blobs[1], 0.55),
+            blob(2, [1650, 120], 850, theme.blobs[2], 0.45),
+            blob(3, [520, 1020], 950, theme.blobs[0], 0.28),
+          ]}
+      <AbsoluteFill style={{ background: theme.dark ? "radial-gradient(80% 70% at 50% 50%, transparent 55%, rgba(0,0,0,.45))" : `radial-gradient(90% 80% at 50% 50%, transparent 62%, ${theme.glow}0.06))` }} />
     </AbsoluteFill>
   );
 }
@@ -206,8 +203,8 @@ function Caption({ track, frame, theme, y, size }: { track: FlowNode["label"]; f
     opacity: v,
     whiteSpace: "nowrap",
     fontSize: size,
-    fontWeight: 700,
-    letterSpacing: -size * 0.015,
+    fontWeight: 600,
+    letterSpacing: -size * 0.012,
     color: theme.ink,
   });
   return (
@@ -218,47 +215,61 @@ function Caption({ track, frame, theme, y, size }: { track: FlowNode["label"]; f
   );
 }
 
+// The subject is a glossy sphere in the theme's gradient; every other node is
+// a frosted glass tile (circle or rounded square) with a coloured icon.
 function Orb({ s, frame, theme, zoom }: { s: NodeState; frame: number; theme: FlowTheme; zoom: number }) {
   const { node, pos, scale, opacity } = s;
   if (scale < 0.01 || opacity < 0.01) return null;
   const d = node.size;
   const solid = node.variant !== "soft";
+  const tile = node.shape ? node.shape === "tile" : !solid;
+  const radius = tile ? d * 0.26 : d / 2;
   const ring = num(node.ring, frame, 0);
   const ringR = d / 2 + 16;
-  const circ = 2 * Math.PI * ringR;
   const badge = node.check !== undefined ? ramp(frame, node.check, 14, "back") : 0;
   const bg = solid
-    ? `radial-gradient(circle at 35% 30%, ${theme.primary2}, ${theme.primary} 70%)`
+    ? `radial-gradient(circle at 32% 26%, rgba(255,255,255,.55), rgba(255,255,255,0) 38%), linear-gradient(145deg, ${theme.primary} 25%, ${theme.primary2})`
     : theme.dark
-      ? "linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,.03))"
-      : theme.surface;
+      ? "linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03))"
+      : "linear-gradient(160deg, rgba(255,255,255,.96), rgba(255,255,255,.72))";
   const shadow = solid
-    ? `0 ${d * 0.18}px ${d * 0.5}px ${theme.glow}0.45), 0 0 0 ${d * 0.07}px ${theme.glow}0.10), inset 0 2px 0 rgba(255,255,255,.35)`
+    ? `0 ${d * 0.16}px ${d * 0.45}px ${theme.glow}0.4), 0 0 0 ${d * 0.06}px ${theme.glow}0.08), inset 0 -${d * 0.06}px ${d * 0.14}px rgba(0,0,0,.12), inset 0 2px 0 rgba(255,255,255,.4)`
     : theme.dark
-      ? "0 30px 80px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.12)"
-      : `0 ${d * 0.14}px ${d * 0.42}px ${theme.glow}0.22), inset 0 0 0 1px rgba(91,79,245,.08)`;
+      ? "0 30px 80px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.14)"
+      : `0 ${d * 0.12}px ${d * 0.36}px ${theme.glow}0.18), inset 0 0 0 1.5px rgba(255,255,255,.9), 0 0 0 1px ${theme.glow}0.08)`;
+  // Progress ring: a circle, or a rounded square around a tile.
+  const rw = tile ? d + 32 : ringR * 2;
   return (
     <div style={{ position: "absolute", left: pos[0], top: pos[1], width: 0, height: 0, opacity, transform: `scale(${scale})` }}>
       {(node.pulses ?? []).map((p, i) => {
         const k = clamp01((frame - p) / 34);
         if (frame < p || k >= 1) return null;
         const r = d * (1 + k * 1.1);
-        return <div key={i} style={{ position: "absolute", left: -r / 2, top: -r / 2, width: r, height: r, borderRadius: "50%", border: `3px solid ${theme.primary}`, opacity: (1 - k) * 0.55 }} />;
+        return <div key={i} style={{ position: "absolute", left: -r / 2, top: -r / 2, width: r, height: r, borderRadius: tile ? r * 0.28 : "50%", border: `3px solid ${theme.primary}`, opacity: (1 - k) * 0.5 }} />;
       })}
       {ring > 0 && (
-        <svg width={ringR * 2 + 12} height={ringR * 2 + 12} style={{ position: "absolute", left: -ringR - 6, top: -ringR - 6, transform: "rotate(-90deg)" }}>
+        <svg width={rw + 12} height={rw + 12} style={{ position: "absolute", left: -rw / 2 - 6, top: -rw / 2 - 6, overflow: "visible" }}>
           <defs>
             <linearGradient id={`rg-${node.id}`} x1="0" y1="0" x2="1" y2="1">
               <stop offset="0" stopColor={theme.primary} />
               <stop offset="1" stopColor={theme.accent} />
             </linearGradient>
           </defs>
-          <circle cx={ringR + 6} cy={ringR + 6} r={ringR} fill="none" stroke={theme.dark ? "rgba(255,255,255,.08)" : "rgba(91,79,245,.12)"} strokeWidth={8} />
-          <circle cx={ringR + 6} cy={ringR + 6} r={ringR} fill="none" stroke={`url(#rg-${node.id})`} strokeWidth={8} strokeLinecap="round" strokeDasharray={`${circ * ring} ${circ}`} />
+          {tile ? (
+            <>
+              <rect x={6} y={6} width={rw} height={rw} rx={rw * 0.28} fill="none" stroke={theme.soft} strokeWidth={8} />
+              <rect x={6} y={6} width={rw} height={rw} rx={rw * 0.28} fill="none" stroke={`url(#rg-${node.id})`} strokeWidth={8} strokeLinecap="round" pathLength={1} strokeDasharray={`${ring} 1`} />
+            </>
+          ) : (
+            <>
+              <circle cx={ringR + 6} cy={ringR + 6} r={ringR} fill="none" stroke={theme.dark ? "rgba(255,255,255,.08)" : theme.soft} strokeWidth={8} />
+              <circle cx={ringR + 6} cy={ringR + 6} r={ringR} fill="none" stroke={`url(#rg-${node.id})`} strokeWidth={8} strokeLinecap="round" pathLength={1} strokeDasharray={`${ring} 1`} transform={`rotate(-90 ${ringR + 6} ${ringR + 6})`} />
+            </>
+          )}
         </svg>
       )}
-      <div style={{ position: "absolute", left: -d / 2, top: -d / 2, width: d, height: d, borderRadius: "50%", background: bg, boxShadow: shadow, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <IconMorph track={node.icon} frame={frame} size={d * 0.44} color={solid ? "#fff" : theme.primary} />
+      <div style={{ position: "absolute", left: -d / 2, top: -d / 2, width: d, height: d, borderRadius: radius, background: bg, boxShadow: shadow, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <IconMorph track={node.icon} frame={frame} size={d * (tile ? 0.42 : 0.44)} color={solid ? "#fff" : theme.primary} />
       </div>
       {badge > 0 && (
         <div style={{ position: "absolute", left: d * 0.36 - d * 0.15, top: -d * 0.36 - d * 0.15, width: d * 0.3, height: d * 0.3, borderRadius: "50%", background: theme.success, transform: `scale(${badge})`, boxShadow: `0 8px 20px ${theme.success}66`, display: "flex", alignItems: "center", justifyContent: "center", border: `4px solid ${theme.dark ? theme.bg[0] : "#fff"}` }}>
@@ -341,8 +352,8 @@ function Packet({ link, packet, states, frame, theme }: { link: FlowLink; packet
 }
 
 // ── kinetic text (screen space) ─────────────────────────────────────────────
-// Words rise into place through a mask exactly when they are spoken (their
-// voice timestamps), then the line lifts away together.
+// Each word comes into focus (blur → sharp, rising slightly) exactly when it
+// is spoken (its voice timestamp), then the line lifts away together.
 function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowTheme }) {
   if (frame < t.start - 2 || frame > t.end + 16) return null;
   const style = t.style ?? "headline";
@@ -353,23 +364,30 @@ function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowT
   const at = (i: number) => t.words?.[i] ?? t.start + i * 3;
   const exit = ramp(frame, t.end, 12, "in");
   const lines = style === "side" ? splitLines(t.text, t.accent) : [t.text];
+  const onPanel = style === "panel";
+  const ink = onPanel ? "#FFFFFF" : theme.ink;
   let wi = 0;
   const word = (w: string, last: boolean, strong: boolean) => {
     const i = wi++;
-    const k = ramp(frame, at(i), 12, "out");
+    const k = ramp(frame, at(i), 14, "out");
     const isAccent = accent.has(bare(w));
     return (
-      <span key={i} style={{ display: "inline-block", overflow: "hidden", verticalAlign: "top", padding: "0.04em 0 0.14em", margin: "-0.04em 0 -0.14em", marginRight: last ? 0 : "0.26em" }}>
-        <span
-          style={{
-            display: "inline-block",
-            transform: `translateY(${(1 - k) * 108}%)`,
-            fontWeight: strong ? type.weight : Math.max(500, type.weight - 220),
-            ...(isAccent && { backgroundImage: `linear-gradient(90deg, ${theme.primary}, ${theme.accent})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }),
-          }}
-        >
-          {w}
-        </span>
+      <span
+        key={i}
+        style={{
+          display: "inline-block",
+          marginRight: last ? 0 : "0.26em",
+          opacity: k,
+          filter: k < 0.99 ? `blur(${(1 - k) * 12}px)` : undefined,
+          transform: `translateY(${(1 - k) * 0.32}em)`,
+          fontWeight: strong ? type.weight : Math.max(420, type.weight - 180),
+          ...(isAccent &&
+            (onPanel
+              ? { color: theme.dark ? theme.bg[1] : theme.ink }
+              : { backgroundImage: `linear-gradient(90deg, ${theme.primary}, ${theme.accent})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" })),
+        }}
+      >
+        {w}
       </span>
     );
   };
@@ -383,24 +401,179 @@ function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowT
         top: "50%",
         transform: `translate(${side ? "0" : "-50%"}, calc(-50% + ${t.pos[1] - exit * 36}px)) scale(${pillK})`,
         opacity: 1 - exit,
+        filter: exit > 0.01 ? `blur(${exit * 10}px)` : undefined,
         fontSize: size,
         fontWeight: type.weight,
         letterSpacing: `${type.track}em`,
         lineHeight: type.lineHeight,
-        color: theme.ink,
+        color: ink,
         textAlign: side ? "left" : "center",
         whiteSpace: "nowrap",
-        ...(style === "pill" && { padding: `${size * 0.36}px ${size * 0.7}px`, borderRadius: size, background: theme.dark ? "rgba(255,255,255,.08)" : "#fff", boxShadow: `0 24px 60px ${theme.glow}0.25)` }),
+        ...(style === "pill" && {
+          padding: `${size * 0.36}px ${size * 0.7}px`,
+          borderRadius: size,
+          background: theme.dark ? "rgba(255,255,255,.08)" : "rgba(255,255,255,.78)",
+          boxShadow: `0 24px 60px ${theme.glow}0.2), inset 0 0 0 1.5px rgba(255,255,255,.95)`,
+          backdropFilter: "blur(18px)",
+        }),
       }}
     >
       {lines.map((line, li) => {
         const ws = line.split(/\s+/).filter(Boolean);
         // Side layout: a lighter lead-in line, then the strong accent line.
         const strong = !side || li === lines.length - 1 || lines.length === 1;
-        return (
-          <div key={li}>{ws.map((w, j) => word(w, j === ws.length - 1, strong))}</div>
-        );
+        return <div key={li}>{ws.map((w, j) => word(w, j === ws.length - 1, strong))}</div>;
       })}
     </div>
+  );
+}
+
+// ── colour panel ────────────────────────────────────────────────────────────
+// Grows as a circle from the subject until it fills the frame (the camera
+// pushes through the subject), then sweeps off to the left.
+function Panel({ p, frame, theme, width, height, toScreen }: { p: FlowPanel; frame: number; theme: FlowTheme; width: number; height: number; toScreen: (v: Vec) => Vec }) {
+  if (frame < p.start || frame > p.end + 16) return null;
+  const k = ramp(frame, p.start, 16, "inOut");
+  const out = ramp(frame, p.end, 16, "in");
+  const [x, y] = toScreen(p.from);
+  const r = 40 + k * (Math.hypot(Math.max(x, width - x), Math.max(y, height - y)) + 40);
+  return (
+    <AbsoluteFill style={{ clipPath: `circle(${r}px at ${x}px ${y}px)`, transform: `translateX(${-out * 105}%)` }}>
+      <AbsoluteFill style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.primary2})` }} />
+      <AbsoluteFill
+        style={{
+          background: `radial-gradient(60% 70% at ${30 + Math.sin(frame / 60) * 10}% 30%, rgba(255,255,255,.28), transparent 70%), radial-gradient(50% 60% at 80% ${80 + Math.cos(frame / 70) * 8}%, rgba(0,0,0,.12), transparent 70%)`,
+        }}
+      />
+      <AbsoluteFill style={{ backgroundImage: "radial-gradient(rgba(255,255,255,.14) 2px, transparent 2.5px)", backgroundSize: "34px 34px", maskImage: "linear-gradient(90deg, #000, transparent 45%)", WebkitMaskImage: "linear-gradient(90deg, #000, transparent 45%)" }} />
+    </AbsoluteFill>
+  );
+}
+
+// ── rolling checklist ───────────────────────────────────────────────────────
+function RollingList({ list, frame, theme }: { list: FlowList; frame: number; theme: FlowTheme }) {
+  if (frame < list.at[0] - 4 || frame > list.end + 16) return null;
+  const size = 64;
+  const gap = size * 1.7;
+  // Scroll position: advances by one item as each item is spoken.
+  const pos = list.at.slice(1).reduce((acc, a) => acc + ramp(frame, a - 6, 16, "inOut"), 0);
+  const inK = ramp(frame, list.at[0] - 4, 14, "out");
+  const exit = ramp(frame, list.end, 14, "in");
+  return (
+    <AbsoluteFill style={{ opacity: inK * (1 - exit), transform: `translateY(${-exit * 40}px)` }}>
+      {list.items.map((item, j) => {
+        const dj = j - pos;
+        if (Math.abs(dj) > 1.8) return null;
+        const focus = 1 - Math.min(1, Math.abs(dj));
+        const tick = ramp(frame, list.at[j] + 4, 12, "back");
+        return (
+          <div
+            key={j}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              transform: `translate(-50%, calc(-50% + ${dj * gap}px)) scale(${0.86 + 0.14 * focus})`,
+              opacity: 0.18 + 0.82 * focus,
+              filter: focus < 0.98 ? `blur(${(1 - focus) * 5}px)` : undefined,
+              display: "flex",
+              alignItems: "center",
+              gap: size * 0.4,
+              whiteSpace: "nowrap",
+              fontSize: size,
+              fontWeight: 560,
+              letterSpacing: "-0.02em",
+              color: theme.ink,
+            }}
+          >
+            <div style={{ width: size * 0.9, height: size * 0.9, borderRadius: size * 0.22, background: `linear-gradient(145deg, ${theme.primary}, ${theme.primary2})`, boxShadow: `0 10px 26px ${theme.glow}0.35)`, display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${0.6 + 0.4 * tick})` }}>
+              <Icon name="check" size={size * 0.56} color="#fff" strokeWidth={3} draw={tick} />
+            </div>
+            {item}
+          </div>
+        );
+      })}
+    </AbsoluteFill>
+  );
+}
+
+// ── brand lockup ────────────────────────────────────────────────────────────
+// The logo comes into focus alone, then slides aside as the product name
+// reveals next to it; the call to action settles in below. A wide logo (a
+// wordmark) is shown on its own.
+function useImageAspect(src?: string) {
+  const [aspect, setAspect] = useState<number | null>(null);
+  useState(() => {
+    if (!src || typeof Image === "undefined") return;
+    const handle = delayRender("Loading logo");
+    const img = new Image();
+    img.onload = () => {
+      setAspect(img.naturalWidth / Math.max(1, img.naturalHeight));
+      continueRender(handle);
+    };
+    img.onerror = () => continueRender(handle);
+    img.src = src;
+  });
+  return aspect;
+}
+
+function BrandLockup({ brand, frame, theme }: { brand: FlowBrand; frame: number; theme: FlowTheme }) {
+  const aspect = useImageAspect(brand.logo);
+  if (frame < brand.start - 2) return null;
+  const f = frame - brand.start;
+  const inK = ramp(f, 0, 18, "out");
+  const wordmark = !!brand.logo && ((aspect ?? 1) > 1.8 || !brand.name);
+  const nameSize = 118;
+  const mark = 170;
+  const nameW = wordmark ? 0 : brand.name.length * 0.56 * nameSize;
+  const slide = wordmark ? 0 : ramp(f, 14, 22, "inOut");
+  const reveal = wordmark ? 0 : ramp(f, 18, 24, "out");
+  const cta = ramp(f, 34, 18, "out");
+  const breathe = 1 + 0.025 * clamp01(f / 120);
+  const gapX = 40;
+  // The logo is centred alone first, then the pair (logo, gap, name) is.
+  const markX = slide * (mark / 2 - (mark + gapX + nameW) / 2);
+  return (
+    <AbsoluteFill style={{ transform: `scale(${breathe})` }}>
+      <div style={{ position: "absolute", left: "50%", top: "46%", transform: `translate(calc(-50% + ${markX}px), -50%) scale(${0.7 + 0.3 * inK})`, opacity: inK, filter: inK < 0.99 ? `blur(${(1 - inK) * 16}px)` : undefined }}>
+        {brand.logo ? (
+          wordmark ? (
+            <Img src={brand.logo} style={{ display: "block", maxWidth: 820, maxHeight: 240, objectFit: "contain" }} />
+          ) : (
+            <div style={{ width: mark, height: mark, borderRadius: mark * 0.26, background: "rgba(255,255,255,.92)", boxShadow: `0 24px 60px ${theme.glow}0.25), inset 0 0 0 1.5px #fff`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              <Img src={brand.logo} style={{ width: mark * 0.74, height: mark * 0.74, objectFit: "contain" }} />
+            </div>
+          )
+        ) : (
+          <div style={{ width: mark, height: mark, borderRadius: mark * 0.26, background: `linear-gradient(145deg, ${theme.primary}, ${theme.primary2})`, boxShadow: `0 24px 60px ${theme.glow}0.35)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon name={brand.icon ?? "sparkles"} size={mark * 0.46} color="#fff" strokeWidth={1.9} />
+          </div>
+        )}
+      </div>
+      {!wordmark && (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "46%",
+            transform: `translate(${markX + mark / 2 + gapX}px, -50%)`,
+            clipPath: `inset(-20% ${(1 - reveal) * 100}% -20% 0)`,
+            fontSize: nameSize,
+            fontWeight: 680,
+            letterSpacing: "-0.035em",
+            color: theme.ink,
+            whiteSpace: "nowrap",
+            opacity: reveal > 0 ? 1 : 0,
+          }}
+        >
+          {brand.name}
+        </div>
+      )}
+      {brand.cta && (
+        <div style={{ position: "absolute", left: "50%", top: "62%", transform: `translate(-50%, ${(1 - cta) * 24}px)`, opacity: cta, filter: cta < 0.99 ? `blur(${(1 - cta) * 8}px)` : undefined, fontSize: 44, fontWeight: 520, letterSpacing: "-0.01em", color: theme.sub, whiteSpace: "nowrap" }}>
+          {brand.cta}
+        </div>
+      )}
+    </AbsoluteFill>
   );
 }

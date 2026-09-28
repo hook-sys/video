@@ -10,12 +10,17 @@ import {
   DIRECTION_MAX,
   DURATIONS,
   FORMATS,
+  LOGO_MAX_BYTES,
   MOTION_LEVELS,
+  SCREENSHOT_MAX_BYTES,
+  SCREENSHOT_MAX_FILES,
   VISUAL_DENSITIES,
   VISUAL_STYLES,
   VOICE_GENDERS,
   VOICE_LANGUAGES,
   VOICE_STYLES,
+  validateLogo,
+  validateScreenshots,
 } from "@/lib/projects";
 
 const sectionLabel = "text-sm font-medium";
@@ -26,11 +31,20 @@ const select =
 const styleSuffix = (style: string) => `\n\nVisual style: ${style}`;
 const SCRIPT_MAX = DIRECTION_MAX - Math.max(...VISUAL_STYLES.map((s) => styleSuffix(s).length));
 
-export function CreateProjectForm() {
+export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState("");
   const [style, setStyle] = useState<string>(VISUAL_STYLES[0]);
-  const error = state.error;
+  const [logo, setLogo] = useState<{ name: string; url: string; size: number } | null>(null);
+  const [logoError, setLogoError] = useState<string>();
+  const [shots, setShots] = useState<{ names: string[]; size: number }>({ names: [], size: 0 });
+  const [shotError, setShotError] = useState<string>();
+  // The logo and screenshots share the upload budget on this server.
+  const budgetError =
+    maxTotalBytes && (logo?.size ?? 0) + shots.size > maxTotalBytes
+      ? `Logo and screenshots must total ${Math.floor(maxTotalBytes / 1024 / 1024)} MB or less.`
+      : undefined;
+  const error = logoError ?? shotError ?? budgetError ?? state.error;
 
   return (
     <>
@@ -114,10 +128,64 @@ export function CreateProjectForm() {
           </span>
         </label>
 
+        <div className="grid gap-8 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <span className={sectionLabel}>Logo</span>
+            <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-foreground/20 px-3 py-4 text-center text-sm text-foreground/70 transition hover:border-indigo-500/60 hover:bg-indigo-500/5">
+              {logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logo.url} alt="" className="max-h-14 max-w-[80%] object-contain" />
+              ) : (
+                <span>Upload your logo</span>
+              )}
+              <span className="text-xs text-foreground/50">{logo ? logo.name : `PNG, JPG or WebP, up to ${LOGO_MAX_BYTES / 1024 / 1024} MB`}</span>
+              <input
+                name="logo"
+                type="file"
+                required
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (logo) URL.revokeObjectURL(logo.url);
+                  setLogo(file ? { name: file.name, url: URL.createObjectURL(file), size: file.size } : null);
+                  setLogoError(validateLogo(file));
+                }}
+              />
+            </label>
+            <span className="text-xs text-foreground/50">Shown at the end of your video. A transparent PNG works best.</span>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className={sectionLabel}>
+              Product screenshots <span className="font-normal text-foreground/50">(optional)</span>
+            </span>
+            <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-foreground/20 px-3 py-4 text-center text-sm text-foreground/70 transition hover:border-indigo-500/60 hover:bg-indigo-500/5">
+              {shots.names.length ? `${shots.names.length} selected` : "Add screenshots"}
+              <span className="text-xs text-foreground/50">
+                {shots.names.length ? shots.names.join(", ") : `Up to ${SCREENSHOT_MAX_FILES} images, ${SCREENSHOT_MAX_BYTES / 1024 / 1024} MB each`}
+              </span>
+              <input
+                name="screenshots"
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                onChange={(e) => {
+                  const chosen = Array.from(e.target.files ?? []);
+                  setShots({ names: chosen.map((f) => f.name), size: chosen.reduce((n, f) => n + f.size, 0) });
+                  setShotError(validateScreenshots(chosen));
+                }}
+              />
+            </label>
+            <span className="text-xs text-foreground/50">Your app or website, shown inside the video.</span>
+          </div>
+        </div>
+
         {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600">{error}</p>}
 
         <button
-          disabled={pending}
+          disabled={pending || !!logoError || !!shotError || !!budgetError}
           className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:shadow-xl hover:shadow-indigo-600/30 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/30 disabled:opacity-60"
         >
           ✦ Generate Video

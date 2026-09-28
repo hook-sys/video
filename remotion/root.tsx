@@ -82,7 +82,7 @@ export function RemotionRoot() {
         width={1920}
         height={1080}
         durationInFrames={Math.round(fx.durationSeconds * FPS)}
-        defaultProps={{ plan: compileFlowScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words }) } as FlowSceneProps}
+        defaultProps={{ plan: compileFlowScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words, brand: fx.brand, screenshots: fx.screenshots }) } as FlowSceneProps}
       />
     ))}
     {/* QA only: every Lottie micro-animation in one grid. */}

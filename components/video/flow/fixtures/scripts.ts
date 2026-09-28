@@ -1,9 +1,13 @@
 import type { FlowScript } from "@/lib/flow-script";
 import type { WordTiming } from "@/lib/voice-timing";
+import type { CompileBrand } from "../compile";
 
 // FlowScripts in exactly the shape the Visual Director returns, used to test
 // the compiler across different kinds of stories.
-type Fixture = { name: string; narration: string; durationSeconds: number; script: FlowScript; words?: WordTiming[] };
+type Fixture = { name: string; narration: string; durationSeconds: number; script: FlowScript; words?: WordTiming[]; brand?: CompileBrand; screenshots?: string[] };
+
+// A stand-in logo mark for fixtures (a real project uses the customer's upload).
+const DEMO_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0F9B6C"/><stop offset="1" stop-color="#B7D334"/></linearGradient></defs><path d="M28 70a18 18 0 0 1 2-36 24 24 0 0 1 45 6 15 15 0 0 1-3 30z" fill="url(#g)"/><path d="M40 52l8 8 14-16" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>')}`;
 const beat = (b: Partial<FlowScript["beats"][number]> & Pick<FlowScript["beats"][number], "cue" | "action">): FlowScript["beats"][number] => ({
   id: null,
   icon: null,
@@ -15,6 +19,7 @@ const beat = (b: Partial<FlowScript["beats"][number]> & Pick<FlowScript["beats"]
   accent: null,
   lottie: null,
   layout: null,
+  items: null,
   ...b,
 });
 
@@ -182,3 +187,56 @@ export const FLOW_SCRIPT_FIXTURES: Fixture[] = [
 
 // v2 shares the first run's real voice timing.
 FLOW_SCRIPT_FIXTURES[FLOW_SCRIPT_FIXTURES.length - 1].words = FLOW_SCRIPT_FIXTURES.find((f) => f.name === "video-editor")!.words;
+
+const FILE_BACKUP_NARRATION = "Your files are everywhere. Photos, documents, projects, and important data can easily get lost. Keep everything safely backed up in one place, and access what you need whenever you need it.";
+const FILE_BACKUP_WORDS: WordTiming[] = [["Your", 0, 0.16], ["files", 0.213, 0.48], ["are", 0.52, 0.64], ["everywhere.", 0.684, 1.2], ["Photos,", 1.326, 2.16], ["documents", 2.248, 3.04], [",", 3.04, 3.36], ["projects,", 3.422, 4.32], ["and", 4.36, 4.48], ["important", 4.528, 4.96], ["data", 5.024, 5.28], ["can", 5.34, 5.52], ["easily", 5.589, 6], ["get", 6.04, 6.16], ["lost.", 6.256, 6.72], ["Keep", 6.864, 7.44], ["everything", 7.498, 8.08], ["safely", 8.137, 8.48], ["backed", 8.537, 8.88], ["up", 8.933, 9.04], ["in", 9.067, 9.12], ["one", 9.18, 9.36], ["place", 9.427, 9.76], [",", 9.76, 10.16], ["and", 10.2, 10.32], ["access", 10.411, 10.96], ["what", 10.992, 11.12], ["you", 11.16, 11.28], ["need", 11.344, 11.6], ["whenever", 11.662, 12.16], ["you", 12.18, 12.24], ["need", 12.288, 12.48], ["it.", 12.533, 12.72]].map(([text, start, end]) => ({ text: text as string, start: start as number, end: end as number }));
+
+// The second real Director run (Preview, 28 Sep), verbatim with its voice
+// timing: labels, the pill and the returning subject overlapped here.
+FLOW_SCRIPT_FIXTURES.push({
+  name: "file-backup",
+  narration: FILE_BACKUP_NARRATION,
+  durationSeconds: 15,
+  words: FILE_BACKUP_WORDS,
+  brand: { name: "File Backup", cta: "Keep everything safely backed up." },
+  script: {
+    theme: "lavender",
+    beats: [
+      beat({ cue: "Your files", action: "hero_enter", id: "files", icon: "files", label: "Your files" }),
+      beat({ cue: "are everywhere.", action: "orbit", satellites: [{ id: "photos", icon: "image", label: "Photos" }, { id: "documents", icon: "file-text", label: "Documents" }, { id: "projects", icon: "folder-kanban", label: "Projects" }, { id: "data", icon: "database", label: "Important data" }] }),
+      beat({ cue: "projects, and important data", action: "hero_morph", id: "files", icon: "folder-kanban", label: "Projects & data" }),
+      beat({ cue: "can easily get lost.", action: "statement", text: "can easily get lost.", accent: "lost.", layout: "pill" }),
+      beat({ cue: "Keep everything", action: "converge", id: "files", icon: "files", label: "Everything" }),
+      beat({ cue: "safely", action: "celebrate", lottie: "shield-check" }),
+      beat({ cue: "backed up", action: "hero_morph", id: "files", icon: "cloud-check", label: "Backed up" }),
+      beat({ cue: "in one place", action: "statement", text: "in one place", accent: "one place", layout: "display" }),
+      beat({ cue: "and access", action: "hero_morph", id: "files", icon: "cloud-download", label: "Easy access" }),
+      beat({ cue: "what you need", action: "confirm" }),
+      beat({ cue: "whenever you need it.", action: "statement", text: "whenever you need it.", accent: "whenever", layout: "display" }),
+    ],
+  },
+});
+
+// The same narration and voice directed with the new vocabulary: a rolling
+// list, a colour panel, a clean display line and the brand lockup (mint).
+FLOW_SCRIPT_FIXTURES.push({
+  name: "file-backup-v2",
+  narration: FILE_BACKUP_NARRATION,
+  durationSeconds: 15,
+  words: FILE_BACKUP_WORDS,
+  brand: { name: "File Backup", logo: DEMO_LOGO, cta: "Keep everything safely backed up." },
+  script: {
+    theme: "mint",
+    beats: [
+      beat({ cue: "Your files", action: "hero_enter", icon: "files", label: "Your files" }),
+      beat({ cue: "Photos, documents,", action: "list", items: ["Photos", "Documents", "Projects", "Important data"] }),
+      beat({ cue: "can easily get lost.", action: "statement", text: "can easily get lost.", accent: "lost.", layout: "panel" }),
+      beat({ cue: "Keep everything", action: "hero_morph", icon: "archive", label: "Everything" }),
+      beat({ cue: "backed up", action: "hero_morph", icon: "cloud-check", label: "Backed up" }),
+      beat({ cue: "in one place", action: "statement", text: "in one place", accent: "one place", layout: "display" }),
+      beat({ cue: "and access", action: "hero_morph", icon: "cloud-download", label: "Easy access" }),
+      beat({ cue: "what you need", action: "confirm" }),
+      beat({ cue: "whenever you need it.", action: "statement", text: "whenever you need it.", accent: "whenever" }),
+    ],
+  },
+});

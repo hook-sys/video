@@ -34,16 +34,22 @@ PATTERNS (action):
 - orbit: 2–6 satellites {id, icon, label|null} spiral out and circle the subject — for connecting, integrating, "everything in one place".
 - converge: everything on stage flows back into the subject (optional icon for its final form) — the resolution ("all in one", "everything stays on track").
 - celebrate: a Lottie accent at the subject or a node (id|null, lottie).
-- statement: the narration's key phrase as big kinetic type — each word appears exactly as it is spoken. text = the phrase copied from the narration (≤10 words, cue = its first words), accent = the 1–3 words to highlight, layout:
-  • "display": the words alone, huge, the scene recedes behind them — for the core promise or a turning point.
+- statement: the narration's key phrase as big kinetic type — each word comes into focus exactly as it is spoken. text = the phrase copied from the narration (≤10 words, cue = its first words), accent = the 1–3 words to highlight, layout:
+  • "display": the words alone on a clean frame, the scene clears behind them — for the core promise.
+  • "panel": the camera pushes through the subject into a full colour panel with the words in white — for a turning point, the problem, or "Meet <product>".
   • "side": two lines beside the subject (lighter lead-in, strong accent line) — to name what the subject is doing.
   • "pill": a short line or question in a capsule over the scene (≤6 words).
-  The last beat is normally a statement on the closing phrase (its layout is chosen automatically). Use 2–3 statements per video: typography is a main design element, not only an end card.
+  The last beat is normally a statement on the closing phrase (its layout is chosen automatically). Use 2–3 statements per video with DIFFERENT layouts: typography is a main design element, not only an end card.
+- list: when the narration names 3–5 things in a row (features, benefits, problems), show them as a rolling checklist, one item in focus at a time as it is spoken. items = 3–5 short phrases (≤4 words each, taken from the narration, in spoken order); cue = the words where the list starts.
 
 STRUCTURE — pick ONE arc and follow it, so every video has the same designed rhythm:
 - PROCESS (a flow, an order, a journey): hero_enter (or actor_enter → hero_enter) → hero_morph / add_step ×2–4 with confirms → statement (side) mid-way → converge → closing statement.
-- PLATFORM (an app, a dashboard, integrations): ui_showcase (≥1.6 s) → iris_to_hub → orbit → confirm → statement (display) → closing statement.
-- TRANSFORMATION (before → after, raw → polished): hero_enter → statement (pill, the problem) → hero_morph ×1–2 → celebrate → statement (display, the promise) → closing statement.
+- PLATFORM (an app, a dashboard, integrations): ui_showcase (≥1.6 s) → iris_to_hub → orbit → confirm → statement (panel or display) → closing statement.
+- TRANSFORMATION (before → after, raw → polished): hero_enter → statement (pill, the problem) → hero_morph ×1–2 → celebrate → statement (panel, the promise) → closing statement.
+- BENEFITS (a list of what you get): hero_enter → hero_morph / orbit → list (the benefits as spoken) → statement (display) → closing statement.
+
+SCREENSHOTS: when SCREENSHOTS > 0 the client uploaded real product screenshots; include one ui_showcase (they are shown on it) where the narration talks about the product, and describe its rows/title from the narration.
+ENDING: the video always closes on the brand lockup (the client's logo and product name), added automatically in the last ~2 seconds; your closing statement comes just before it.
 
 PACING (the picture moves with the voice from the first word to the last)
 - Spread beats over the WHOLE narration: never more than 3 s of speech without a new beat (a ui_showcase may hold up to 7 s, a statement up to 4 s).
@@ -56,7 +62,7 @@ RULES
 - Every beat must change what the viewer sees; do not repeat an action twice in a row unless it continues a chain (add_step).
 - Icons: Lucide icon names (e.g. shopping-bag, package, truck, credit-card, house, calendar-check, shield-check, users, landmark, wallet, bell-ring, mail, rocket, sparkles). Pick the most literal icon for each noun.
 - Labels are 1–3 words taken from or implied by the narration. No invented facts, prices, percentages or customer names in labels or titles.
-- theme: "lavender" (bright, friendly SaaS) or "midnight" (dark, dramatic, premium). Use creative_preferences.visual_style: Premium SaaS / Minimal / Corporate → lavender; Bold / Futuristic / Cinematic → midnight.
+- theme: "lavender" (bright, friendly SaaS), "mint" (fresh white and green: health, wellness, finance, sustainability, calm), "teal" (clean white and teal: operations, B2B platforms, data, security, logistics) or "midnight" (dark, dramatic, premium). Pick the one that fits the product; use creative_preferences.visual_style as a hint: Bold / Futuristic / Cinematic → midnight; Minimal / Corporate → teal or mint; Premium SaaS → lavender, mint or teal.
 - Unused fields are null.
 
 VISUAL CONCEPT SOURCE
@@ -68,6 +74,7 @@ ${LOTTIES}`;
 
 export type FlowDirectorInput = {
   narration: string;
+  screenshots?: number; // product screenshots the client uploaded
   words?: WordTiming[] | null;
   duration_seconds: number;
   product_name?: string;
@@ -91,7 +98,9 @@ export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (us
     if (problems.length) return { script: null, problems, notes: [] as string[] };
     let notes: string[] = [];
     try {
-      notes = qualityProblems(planQuality(compileFlowScript(script, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds })));
+      // Judged as it will render: with the closing brand lockup.
+      const brand = { name: input.product_name ?? "", logo: "logo" };
+      notes = qualityProblems(planQuality(compileFlowScript(script, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, brand })));
     } catch (e) {
       return { script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], notes };
     }
@@ -112,6 +121,7 @@ export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (us
           WORDS: input.words?.length ? input.words.filter((w) => tokenize(w.text).length).map((w) => [w.text, Math.round(w.start * 100) / 100]) : null,
           duration_seconds: input.duration_seconds,
           product_name: input.product_name ?? null,
+          SCREENSHOTS: input.screenshots ?? 0,
           ADVANCED_DIRECTION: input.creative_preferences?.advanced_direction?.trim() || null,
           creative_preferences: input.creative_preferences ? { ...input.creative_preferences, advanced_direction: undefined } : null,
         }),

@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ProductBrief } from "@/lib/ai/product-brief";
 import { type AssetManifest, sceneId } from "@/lib/asset-manifest";
-import { SCREENSHOTS_BUCKET } from "@/lib/projects";
+import { LOGO_FILE_PREFIX, SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import type { RenderScene } from "@/components/video/types";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
@@ -10,6 +10,8 @@ import { storyAssetsEnabled, usableFlow, usableStory } from "@/lib/story-engine"
 import { compileFlowScript } from "@/components/video/flow/compile";
 
 export type RenderProject = {
+  id?: string;
+  user_id?: string;
   format: string;
   duration_seconds: number;
   brief: unknown;
@@ -21,7 +23,7 @@ export type RenderProject = {
 };
 
 export const RENDER_PROJECT_COLUMNS =
-  "format, duration_seconds, brief, assets_manifest, voice_status, voice_result, screenshot_evidence, direction";
+  "id, user_id, format, duration_seconds, brief, assets_manifest, voice_status, voice_result, screenshot_evidence, direction";
 
 // Resolves storyboard scenes, assets and narration into composition props with signed URLs.
 // `problems` lists anything missing that a final render must not proceed without.
@@ -99,12 +101,40 @@ export async function buildRenderInput(
     storyAssetPaths.flatMap((a, i) => (storySigned?.[i]?.signedUrl ? [[a.continuity_id, storySigned[i].signedUrl]] : [])),
   );
 
+  // Flow only: the customer's logo (closing lockup) and product screenshots
+  // (shown on the UI planes). Missing files simply leave them out.
+  let logoUrl: string | undefined;
+  let screenshotUrls: string[] = [];
+  if (flow && project.id && project.user_id) {
+    const folder = `${project.user_id}/${project.id}`;
+    const [{ data: files }, { data: shots }] = await Promise.all([
+      supabase.storage.from(SCREENSHOTS_BUCKET).list(folder, { search: LOGO_FILE_PREFIX }),
+      supabase.from("project_screenshots").select("storage_path").eq("project_id", project.id).order("created_at"),
+    ]);
+    const logoFile = files?.find((f) => f.name.startsWith(LOGO_FILE_PREFIX));
+    const paths = [...(logoFile ? [`${folder}/${logoFile.name}`] : []), ...(shots ?? []).map((x) => x.storage_path as string)];
+    const { data: signedFlow } = paths.length ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(paths, expiresIn) : { data: [] };
+    const urls = (signedFlow ?? []).map((x) => x.signedUrl || undefined);
+    if (logoFile) logoUrl = urls.shift();
+    screenshotUrls = urls.filter((u): u is string => !!u);
+  }
+
   return {
     problems,
     props: {
       story: story ? { story, narration: brief.data.script, assets: storyAssets } : null,
       // Compiled on the voice's real word timestamps (no model call here).
-      flow: flow ? { plan: compileFlowScript(flow, { narration: brief.data.script, words: wordTimings, durationSeconds: project.duration_seconds }) } : null,
+      flow: flow
+        ? {
+            plan: compileFlowScript(flow, {
+              narration: brief.data.script,
+              words: wordTimings,
+              durationSeconds: project.duration_seconds,
+              brand: { name: brief.data.product_name, logo: logoUrl, cta: brief.data.cta },
+              screenshots: screenshotUrls,
+            }),
+          }
+        : null,
       scenes,
       format: project.format,
       durationSeconds: project.duration_seconds,

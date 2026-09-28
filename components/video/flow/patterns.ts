@@ -1,4 +1,4 @@
-import type { Ease, FlowLink, FlowNode, FlowPlan, FlowText, FlowUi, ThemeName, Track, UiRow, Vec, Vec3 } from "./types";
+import type { Ease, FlowBrand, FlowLink, FlowNode, FlowPlan, FlowText, FlowUi, ThemeName, Track, UiRow, Vec, Vec3 } from "./types";
 
 // Plane tilts (rotateX, rotateY, rotateZ): an isometric desk view, a hero
 // three-quarter view, and face-on.
@@ -116,6 +116,23 @@ export class FlowNodeHandle {
     (this.ui.cursor ??= { path: [[t, [0.5, 0.5]]], clicks: [] }).clicks.push(t);
     return this;
   }
+  // Focus pull in: fades up from a blur while settling from slightly large.
+  focusIn(t: number, dur = 22) {
+    set(this.scaleTrack(), t, 1.1);
+    put(this.scaleTrack(), t + dur, 1, "out");
+    const o = this.opacityTrack();
+    // A node that has not been shown yet stays invisible until t.
+    if (o.length === 1 && o[0][0] === 0) o[0][1] = 0;
+    set(o, t, 0);
+    put(o, t + Math.round(dur * 0.8), 1, "out");
+    return this;
+  }
+  // Focus pull out: grows a little while it blurs away.
+  focusOut(t: number, dur = 12) {
+    animate(this.scaleTrack(), t, dur, 1.08, "in");
+    animate(this.opacityTrack(), t, dur, 0, "in");
+    return this;
+  }
   // Appear in place (no pop): used when an iris closes onto this node.
   appear(t: number, dur = 6) {
     set(this.scaleTrack(), t, 1);
@@ -200,6 +217,19 @@ export class Flow {
     nodes.forEach((n, i) => n.move(t + i * 2, dur, at, "in").resize(t + i * 2, dur, 0.2, "in").fade(t + i * 2 + dur - 6, 6, 0));
     this.links.forEach((l) => (l.fade = [t, t + 12]));
     into.move(t, dur, at, "inOut").pulse(t + dur);
+    return this;
+  }
+  // A colour panel grows from a world point to fill the frame, then sweeps off.
+  panel(start: number, end: number, from: Vec) {
+    (this.plan.panels ??= []).push({ start, end, from });
+    return this;
+  }
+  list(items: string[], at: number[], end: number) {
+    (this.plan.lists ??= []).push({ items, at, end });
+    return this;
+  }
+  brand(brand: FlowBrand) {
+    this.plan.brand = brand;
     return this;
   }
   sfx(frame: number, kind: NonNullable<FlowPlan["sfx"]>[number]["kind"]) {

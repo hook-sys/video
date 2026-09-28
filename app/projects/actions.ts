@@ -21,7 +21,9 @@ import {
   VOICE_LANGUAGES,
   VOICE_GENDERS,
   VOICE_STYLES,
+  logoPath,
   parseHttpUrl,
+  validateLogo,
   validateScreenshots,
   VERCEL_SCREENSHOT_TOTAL_BYTES,
 } from "@/lib/projects";
@@ -90,13 +92,19 @@ export async function createProject(
   if (websiteUrl && !parseHttpUrl(websiteUrl))
     return { error: "Website URL must be a valid http:// or https:// address." };
 
+  // The logo is required; screenshots are optional.
+  const logoEntry = formData.get("logo");
+  const logo = logoEntry instanceof File ? logoEntry : null;
+  const logoError = validateLogo(logo);
+  if (logoError) return { error: logoError };
   // Browsers send an empty, unnamed File when no file is chosen.
   const screenshots = formData
     .getAll("screenshots")
     .filter((f): f is File => f instanceof File && (f.size > 0 || f.name !== ""));
+  // On Vercel the logo shares the request-size budget with the screenshots.
   const screenshotError = validateScreenshots(
     screenshots,
-    process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES : undefined,
+    process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES - logo!.size : undefined,
   );
   if (screenshotError) return { error: screenshotError };
 
@@ -128,6 +136,12 @@ export async function createProject(
   if (error) return { error: error.message };
 
   const uploaded: string[] = [];
+  const logoAt = logoPath(user.id, data.id, SCREENSHOT_TYPES[logo!.type]);
+  const logoUpload = await supabase.storage.from(SCREENSHOTS_BUCKET).upload(logoAt, logo!, { contentType: logo!.type });
+  if (logoUpload.error) {
+    await supabase.from("projects").delete().eq("id", data.id);
+    return { error: "Logo upload failed. Please try again." };
+  }
   for (const file of screenshots) {
     const path = `${user.id}/${data.id}/${crypto.randomUUID()}.${SCREENSHOT_TYPES[file.type]}`;
     const upload = await supabase.storage
@@ -152,7 +166,7 @@ export async function createProject(
 
   if (!saved) {
     // Roll back so the user can retry cleanly.
-    if (uploaded.length) await supabase.storage.from(SCREENSHOTS_BUCKET).remove(uploaded);
+    await supabase.storage.from(SCREENSHOTS_BUCKET).remove([logoAt, ...uploaded]);
     await supabase.from("projects").delete().eq("id", data.id);
     return { error: "Screenshot upload failed. Please try again." };
   }
@@ -309,10 +323,11 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   const brief = ProductBrief.safeParse(project?.brief);
   if (!project || project.voice_status !== "completed" || !brief.success || brief.data.flow || project.format !== "16:9") return;
   const words = parseWordTimings((project.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
-  console.info("flow director start:", { projectId, timing: words?.length ? "voice" : "estimated", words: words?.length ?? 0 });
+  const { count: screenshots } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
+  console.info("flow director start:", { projectId, timing: words?.length ? "voice" : "estimated", words: words?.length ?? 0, screenshots: screenshots ?? 0 });
   let usage: BriefUsage | undefined;
   const result = await generateFlowScript(
-    { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, creative_preferences: creativePreferences(project) },
+    { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project) },
     (u) => (usage = u),
     budgetMs,
   );

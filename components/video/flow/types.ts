@@ -10,7 +10,8 @@ export type Vec3 = [number, number, number];
 export type Key<T> = [number, T, Ease?];
 export type Track<T> = Key<T>[];
 
-export type ThemeName = "lavender" | "midnight";
+export const THEME_NAMES = ["lavender", "midnight", "mint", "teal"] as const;
+export type ThemeName = (typeof THEME_NAMES)[number];
 
 // A product UI shown as a plane in 3D: a screenshot (src) or a procedural mock
 // (title + rows). Points on the plane are [u, v] in 0..1.
@@ -45,6 +46,7 @@ export type FlowNode = {
   pulses?: number[]; // frames a ripple fires
   ui?: FlowUi;
   orbit?: FlowOrbit;
+  shape?: "circle" | "tile"; // tile: a rounded glass square
 };
 
 export type FlowLink = {
@@ -69,9 +71,22 @@ export type FlowText = {
   accent?: string; // words shown in the accent gradient
   // Typography role: display (alone, huge), headline, side (two lines beside
   // the subject), pill (a short line in a capsule), caption (under the subject).
-  style?: "display" | "headline" | "side" | "pill" | "caption";
+  // panel: set in white on a colour panel that sweeps over the scene.
+  style?: "display" | "headline" | "side" | "pill" | "caption" | "panel";
   words?: number[]; // frame each word reveals (its spoken time); else a cascade
 };
+
+// A rolling checklist: one item at a time in focus, the previous one lifting
+// away above it and the next one waiting, faded, below.
+export type FlowList = { items: string[]; at: number[]; end: number };
+
+// A colour panel that grows from a point (the subject) to fill the frame, then
+// sweeps off: the scene "pushes through" the subject into a statement.
+export type FlowPanel = { start: number; end: number; from: Vec };
+
+// The closing brand lockup: the logo (or the subject's icon), the product name
+// revealed beside it, and a call to action.
+export type FlowBrand = { start: number; name: string; logo?: string; icon?: string; cta?: string };
 
 export type FlowLottie = { name: string; start: number; node?: string; pos?: Vec; size: number };
 
@@ -88,6 +103,9 @@ export type FlowPlan = {
   iris?: { start: number; dur: number; members: string[]; into: string }[];
   // 0..1: how far the world recedes (dims, blurs) behind a display line.
   dim?: Track<number>;
+  lists?: FlowList[];
+  panels?: FlowPanel[];
+  brand?: FlowBrand;
   // Sound effects tied to motion (kinds from components/video/sfx.tsx).
   sfx?: { frame: number; kind: "whoosh" | "soft_pop" | "click" | "reveal" | "success_chime" | "subtle_impact" | "digital_processing" | "typing" }[];
 };

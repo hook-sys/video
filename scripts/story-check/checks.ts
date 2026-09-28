@@ -254,7 +254,7 @@ function flowDirector(): Check[] {
       add("video-editor (first real run): pacing rules reject its 0.7 s UI; still compiles", blockers.some((e) => e.includes("ui_showcase")) && errors.length === 0, [...blockers, ...errors].slice(0, 2).join("; "));
       continue;
     }
-    const plan = compileFlowScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words });
+    const plan = compileFlowScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words, brand: fx.brand, screenshots: fx.screenshots });
     const errors = validateFlowPlan(plan);
     add(`${fx.name}: script valid and compiles`, blockers.length + errors.length === 0, [...blockers, ...errors].join("; ") || `${fx.script.beats.length} beats → ${plan.nodes.length} nodes, ${plan.links.length} links, ${plan.sfx?.length ?? 0} sounds, ${plan.camera.center.length} camera keys`);
     const q = planQuality(plan);
@@ -292,20 +292,23 @@ function flowDirector(): Check[] {
               "actor_enter",
               "ui_showcase",
               "statement",
+              "list",
               ...(ui ? ["iris_to_hub"] : []),
             ]
       ) as FlowScript["beats"][number]["action"][];
       const action = last ? "statement" : pick(options);
-      w += action === "ui_showcase" ? 6 : 4;
-      const b: FlowScript["beats"][number] = { cue, action, id: null, icon: null, label: null, packet_icon: null, ui: null, satellites: null, text: null, accent: null, lottie: null, layout: null };
+      w += action === "ui_showcase" || action === "list" ? 6 : 4;
+      const b: FlowScript["beats"][number] = { cue, action, id: null, icon: null, label: null, packet_icon: null, ui: null, satellites: null, text: null, accent: null, lottie: null, layout: null, items: null };
       if (["hero_enter", "hero_morph", "actor_enter", "add_step", "iris_to_hub"].includes(action)) b.icon = pick(["package", "truck", "user", "wallet", "house", "bell"]);
       if (action === "actor_enter" || action === "add_step") b.id = `n${uid++}`;
-      if (action === "orbit") b.satellites = Array.from({ length: 2 + Math.floor(rnd() * 5) }, () => ({ id: `n${uid++}`, icon: "cloud", label: null }));
+      if (action === "orbit") b.satellites = Array.from({ length: 2 + Math.floor(rnd() * 5) }, () => ({ id: `n${uid++}`, icon: "cloud", label: rnd() < 0.5 ? "Label" : null }));
+      if (["hero_enter", "hero_morph", "add_step", "actor_enter", "confirm"].includes(action) && rnd() < 0.7) b.label = pick(["Order", "Backed up", "Projects & data", "Easy access"]);
       if (action === "ui_showcase") b.ui = { title: "App", rows: [{ icon: "store", text: "A", value: "1", status: "Paid" }, { icon: "truck", text: "B", value: null, status: null }, { icon: "users", text: "C", value: null, status: null }], callouts: rnd() < 0.5 ? [{ text: "Fast", icon: "zap" }] : [], click_row: rnd() < 0.5 ? 1 : null };
       if (action === "title" || action === "statement") {
         b.text = "A short line of words";
-        b.layout = pick([null, "display", "side", "pill"] as const);
+        b.layout = pick([null, "display", "side", "pill", "panel"] as const);
       }
+      if (action === "list") b.items = ["First item", "Second item", "Third item"].slice(0, 3 + Math.floor(rnd() * 2));
       if (action === "celebrate") b.lottie = "confetti-burst";
       if (action === "hero_enter") hero = true;
       if (action === "iris_to_hub") {
@@ -316,13 +319,13 @@ function flowDirector(): Check[] {
       if (action === "add_step") steps++;
       beats.push(b);
     }
-    const script: FlowScript = { theme: rnd() < 0.5 ? "lavender" : "midnight", beats };
+    const script: FlowScript = { theme: pick(["lavender", "midnight", "mint", "teal"] as const), beats };
     const narration = words.join(" ");
     const dur = Math.max(10, Math.round(words.length * 0.3));
     if (flowScriptBlockers(script, narration, null, dur).length) continue;
     fuzzCount++;
     try {
-      const plan = compileFlowScript(script, { narration, durationSeconds: dur });
+      const plan = compileFlowScript(script, { narration, durationSeconds: dur, brand: rnd() < 0.5 ? { name: "Acme", cta: "Try it today" } : null });
       const errs = [...validateFlowPlan(plan), ...qualityProblems(planQuality(plan)).filter((p) => !p.includes("nothing new"))];
       if (errs.length) fuzzFails.push(`${beats.map((x) => x.action).join(">")}: ${errs[0]}`);
     } catch (e) {

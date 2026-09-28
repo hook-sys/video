@@ -49,6 +49,20 @@ export const SCREENSHOT_TYPES: Record<string, string> = {
   "image/webp": "webp",
 };
 
+// The customer's logo (required for new projects), stored next to the
+// screenshots at `${userId}/${projectId}/logo.${ext}`. SVG is not accepted
+// (it can carry scripts); a transparent PNG works best.
+export const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+export const LOGO_FILE_PREFIX = "logo.";
+export const logoPath = (userId: string, projectId: string, ext: string) => `${userId}/${projectId}/${LOGO_FILE_PREFIX}${ext}`;
+
+export function validateLogo(file: File | null | undefined): string | undefined {
+  if (!file || (file.size === 0 && file.name === "")) return "Please upload your logo.";
+  if (!SCREENSHOT_TYPES[file.type]) return `${file.name}: the logo must be a PNG, JPG or WebP image.`;
+  if (file.size === 0) return `${file.name}: file is empty.`;
+  if (file.size > LOGO_MAX_BYTES) return `${file.name}: the logo must be 2 MB or smaller.`;
+}
+
 // Vercel Functions reject request bodies over 4.5 MB; keep uploads (plus form
 // overhead) under that on Vercel deployments.
 export const VERCEL_SCREENSHOT_TOTAL_BYTES = 4 * 1024 * 1024;

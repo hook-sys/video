@@ -32,7 +32,8 @@ export function UiPlane({ node, frame, theme, scale, opacity }: { node: FlowNode
   const cur = ui.cursor ? vec(ui.cursor.path, frame) : null;
   const click = ui.cursor?.clicks.reduce((k, c) => Math.max(k, frame >= c && frame < c + 24 ? 1 - (frame - c) / 24 : 0), 0) ?? 0;
   return (
-    <div style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, opacity, perspective: 2600, transform: `scale(${scale})` }}>
+    // Focus pull: the plane is blurred while it fades in or out.
+    <div style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, opacity, perspective: 2600, transform: `scale(${scale})`, filter: opacity < 0.99 ? `blur(${(1 - opacity) * 22}px)` : undefined }}>
       <div style={{ position: "absolute", left: -w / 2, top: -h / 2, width: w, height: h, transformStyle: "preserve-3d", transform: `rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg)` }}>
         {/* soft contact shadow under the plane */}
         <div style={{ position: "absolute", inset: 0, borderRadius: 28, transform: "translateZ(-40px)", background: dark ? "rgba(0,0,0,.55)" : `${theme.glow}0.28)`, filter: "blur(40px)" }} />
