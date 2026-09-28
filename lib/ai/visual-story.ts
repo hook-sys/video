@@ -181,8 +181,8 @@ const ASSET_GUIDANCE = `
 
 GENERATED VISUAL ASSETS (optional per moment):
 - asset = { required, type, description, continuity_id } requests one AI-generated image that the renderer brings to life with motion and camera (reveal, scale, drift, parallax), alongside the procedural objects. Otherwise null.
-- Prefer a generated asset when the narration needs a visual concept the object library cannot show well: a real product, a place or environment, a physical object (package, parcel, device), a cinematic scene, a person/character when truly needed, or a complex visual metaphor.
-- Never for simple text, simple UI, basic metrics, simple shapes or transitions; never on every moment; the video must not become a slideshow of images. At most ${MAX_STORY_ASSETS} distinct assets.
+- The default is NO asset: most software, service and process videos need none, because icons, UI and motion show them better. Request one only when the narration names a real physical thing or place the object library cannot show: a specific product, a real environment (store, home, restaurant, warehouse), or a physical object that carries the story (package, parcel, device); a person/character only when truly needed.
+- Never for simple text, UI, metrics, shapes, abstract ideas or transitions; never on every moment; the video must not become a slideshow of images. At most ${MAX_STORY_ASSETS} distinct assets per video, and fewer is better.
 - type: product_scene, environment, object, cinematic_scene, character, metaphor.
 - description: one concrete visual sentence of what the image shows (subject, setting, angle, lighting), consistent with the narration and ADVANCED_DIRECTION; no text, logos or UI in the image; never coordinates, sizes or animation.
 - continuity_id: a short id for the subject (e.g. "product", "parcel"). When a later moment shows the SAME subject again, repeat the same continuity_id (the same image is reused); the first description for an id is the one generated.`;

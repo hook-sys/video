@@ -54,7 +54,7 @@ export const Event = z.object({
 });
 
 export const ASSET_TYPES = ["product_scene", "environment", "object", "cinematic_scene", "character", "metaphor"] as const;
-export const MAX_STORY_ASSETS = 3; // distinct generated images per video
+export const MAX_STORY_ASSETS = 2; // distinct generated images per video (default: none)
 export const StoryAsset = z.object({
   required: z.boolean(),
   type: z.enum(ASSET_TYPES),

@@ -1,5 +1,5 @@
 // An e-commerce story that uses generated visual assets (VISUAL_ASSETS=on):
-// three distinct images, with the parcel reused across two moments by its
+// two distinct images, with the parcel reused across three moments by its
 // continuity_id. Hand-written in the Visual Director's output shape.
 
 export const ECOMMERCE_NARRATION =
@@ -27,7 +27,7 @@ export const ECOMMERCE_STORY = {
       area: "store",
       events: [{ verb: "enter", targets: "order" }],
       camera: { shot: "push", subject: "order" },
-      asset: { required: true, type: "product_scene", description: "A premium red sneaker on a clean studio surface, viewed from a cinematic three-quarter angle", continuity_id: "product" },
+      asset: { required: true, type: "object", description: "A kraft cardboard parcel being sealed with tape at a bright packing table", continuity_id: "parcel" },
     },
     {
       cue: "The product is packed",
