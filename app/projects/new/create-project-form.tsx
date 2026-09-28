@@ -4,9 +4,14 @@ import { useActionState, useState } from "react";
 import { createProject } from "@/app/projects/actions";
 import { GenerationScreen } from "@/components/generation-screen";
 import {
+  ADVANCED_DIRECTION_MAX,
+  CREATIVE_DEFAULTS,
+  CREATIVE_DIRECTIONS,
   DIRECTION_MAX,
   DURATIONS,
   FORMATS,
+  MOTION_LEVELS,
+  VISUAL_DENSITIES,
   VISUAL_STYLES,
   VOICE_GENDERS,
   VOICE_LANGUAGES,
@@ -49,7 +54,24 @@ export function CreateProjectForm() {
           </span>
         </label>
 
-        <Choice name="visual_style" title="Visual style" options={VISUAL_STYLES} value={style} onChange={setStyle} />
+        <Choice name="visual_style" title="Visual Style" options={VISUAL_STYLES} value={style} onChange={setStyle} />
+        <Choice
+          name="creative_direction"
+          title="Creative Direction"
+          options={CREATIVE_DIRECTIONS}
+          defaultValue={CREATIVE_DEFAULTS.creative_direction}
+        />
+
+        <div className="grid gap-8 sm:grid-cols-2">
+          <Choice name="motion_level" title="Motion" options={MOTION_LEVELS} defaultValue={CREATIVE_DEFAULTS.motion_level} columns={2} />
+          <Choice
+            name="visual_density"
+            title="Visual Density"
+            options={VISUAL_DENSITIES}
+            defaultValue={CREATIVE_DEFAULTS.visual_density}
+            columns={3}
+          />
+        </div>
 
         <div className="grid gap-8 sm:grid-cols-2">
           <Choice name="duration_seconds" title="Duration" options={DURATIONS} defaultValue={DURATIONS[0]} format={(d) => `${d} sec`} columns={3} />
@@ -76,6 +98,21 @@ export function CreateProjectForm() {
         </div>
         {/* Voice style isn't offered to customers; keep the existing default. */}
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
+
+        <label className="flex flex-col gap-2">
+          <span className={sectionLabel}>Advanced Direction (Optional)</span>
+          <textarea
+            name="advanced_direction"
+            rows={3}
+            maxLength={ADVANCED_DIRECTION_MAX}
+            placeholder="Tell the AI how you want the video to feel or look..."
+            className="w-full resize-y rounded-xl border border-foreground/15 bg-transparent p-3 text-sm leading-relaxed transition placeholder:text-foreground/40 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
+          <span className="text-xs text-foreground/50">
+            e.g. &ldquo;Show the tasks becoming organized inside one workspace. Keep the motion dynamic and make the ending
+            feel premium.&rdquo;
+          </span>
+        </label>
 
         {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600">{error}</p>}
 

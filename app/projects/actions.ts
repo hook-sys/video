@@ -6,12 +6,18 @@ import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  ADVANCED_DIRECTION_MAX,
+  CREATIVE_DEFAULTS,
+  CREATIVE_DIRECTIONS,
   DIRECTION_MAX,
   DURATIONS,
   FORMATS,
+  MOTION_LEVELS,
   SCREENSHOT_TYPES,
   SCREENSHOTS_BUCKET,
   VIDEOS_BUCKET,
+  VISUAL_DENSITIES,
+  VISUAL_STYLES,
   VOICE_LANGUAGES,
   VOICE_GENDERS,
   VOICE_STYLES,
@@ -62,10 +68,16 @@ export async function createProject(
   const voiceLanguage = oneOf(VOICE_LANGUAGES, formData.get("voice_language"));
   const voiceStyle = oneOf(VOICE_STYLES, formData.get("voice_style"));
   const voiceGender = oneOf(VOICE_GENDERS, formData.get("voice_gender")) ?? "male";
+  const creativeDirection = oneOf(CREATIVE_DIRECTIONS, formData.get("creative_direction")) ?? CREATIVE_DEFAULTS.creative_direction;
+  const motionLevel = oneOf(MOTION_LEVELS, formData.get("motion_level")) ?? CREATIVE_DEFAULTS.motion_level;
+  const visualDensity = oneOf(VISUAL_DENSITIES, formData.get("visual_density")) ?? CREATIVE_DEFAULTS.visual_density;
+  const advancedDirection = String(formData.get("advanced_direction") ?? "").trim();
 
   if (!direction) return { error: "Video direction is required." };
   if (direction.length > DIRECTION_MAX)
     return { error: `Direction must be ${DIRECTION_MAX} characters or less.` };
+  if (advancedDirection.length > ADVANCED_DIRECTION_MAX)
+    return { error: `Advanced direction must be ${ADVANCED_DIRECTION_MAX} characters or less.` };
   if (!duration || !format || !voiceLanguage || !voiceStyle)
     return { error: "Please choose a valid option for every field." };
   if (websiteUrl && !parseHttpUrl(websiteUrl))
@@ -98,6 +110,10 @@ export async function createProject(
       voice_language: voiceLanguage,
       voice_style: voiceStyle,
       voice_gender: voiceGender,
+      creative_direction: creativeDirection,
+      motion_level: motionLevel,
+      visual_density: visualDensity,
+      advanced_direction: advancedDirection,
     })
     .select("id")
     .single();
@@ -228,6 +244,14 @@ export async function generateBrief(projectId: string) {
         format: project.format,
         voice_language: project.voice_language,
         voice_style: project.voice_style,
+        // Older projects have no preferences: fall back to the neutral defaults.
+        creative_preferences: {
+          visual_style: project.direction?.match(/Visual style:\s*(.+)\s*$/m)?.[1] ?? VISUAL_STYLES[0],
+          creative_direction: project.creative_direction ?? CREATIVE_DEFAULTS.creative_direction,
+          motion_level: project.motion_level ?? CREATIVE_DEFAULTS.motion_level,
+          visual_density: project.visual_density ?? CREATIVE_DEFAULTS.visual_density,
+          advanced_direction: project.advanced_direction ?? "",
+        },
         screenshots: (screenshots ?? []).map((s) => s.original_filename),
         has_website_screenshot: !!capture?.screenshot_path,
       },

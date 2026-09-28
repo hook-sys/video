@@ -2,7 +2,18 @@ export const DIRECTION_MAX = 500;
 export const DURATIONS = [15, 30, 60] as const;
 
 // Sent to the AI as part of the direction text (no separate backend field).
-export const VISUAL_STYLES = ["Premium SaaS", "Minimal", "Bold", "Corporate", "Energetic", "Tech"] as const;
+export const VISUAL_STYLES = ["Premium SaaS", "Minimal", "Bold", "Corporate", "Futuristic", "Cinematic"] as const;
+// Creative preferences: guidance for the AI director only (never facts).
+export const CREATIVE_DIRECTIONS = ["Auto", "Story Ad", "Product Demo", "Fast Promo", "Cinematic Brand", "Explainer"] as const;
+export const MOTION_LEVELS = ["Subtle", "Balanced", "Dynamic", "High Energy"] as const;
+export const VISUAL_DENSITIES = ["Clean", "Balanced", "Rich"] as const;
+export const ADVANCED_DIRECTION_MAX = 300;
+// Also the database defaults, so projects created before these existed get them.
+export const CREATIVE_DEFAULTS = {
+  creative_direction: "Auto",
+  motion_level: "Balanced",
+  visual_density: "Balanced",
+} as const;
 export const FORMATS = ["16:9", "9:16", "1:1"] as const;
 export const VOICE_LANGUAGES = [
   "English (US)",
