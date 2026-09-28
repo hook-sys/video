@@ -1,0 +1,350 @@
+{
+ "success-check": {
+  "category": "status",
+  "loop": false,
+  "frames": 50,
+  "description": "Circle draws, fills, and a check mark draws on: success, done, confirmed."
+ },
+ "error-x": {
+  "category": "status",
+  "loop": false,
+  "frames": 50,
+  "description": "Red disc pops, an X draws and shakes: error, failed, rejected."
+ },
+ "warning-pulse": {
+  "category": "status",
+  "loop": true,
+  "frames": 60,
+  "description": "Warning triangle with a pulsing ring: attention, risk, alert."
+ },
+ "info-pop": {
+  "category": "status",
+  "loop": false,
+  "frames": 40,
+  "description": "Soft disc pops and an info mark draws: tip, note, information."
+ },
+ "loading-spinner": {
+  "category": "status",
+  "loop": true,
+  "frames": 30,
+  "description": "Arc spinning around a soft track: loading, processing, working."
+ },
+ "dots-loader": {
+  "category": "status",
+  "loop": true,
+  "frames": 30,
+  "description": "Three dots bouncing in sequence: waiting, thinking, loading."
+ },
+ "bars-loader": {
+  "category": "status",
+  "loop": true,
+  "frames": 30,
+  "description": "Four bars pulsing up and down: audio, activity, processing."
+ },
+ "progress-ring": {
+  "category": "status",
+  "loop": false,
+  "frames": 60,
+  "description": "Ring fills all the way round: progress, completion, 100%."
+ },
+ "pulse-ring": {
+  "category": "status",
+  "loop": true,
+  "frames": 60,
+  "description": "Rings ripple out from a dot: live, broadcasting, active."
+ },
+ "radar-ping": {
+  "category": "status",
+  "loop": true,
+  "frames": 45,
+  "description": "Dot with an expanding ping: location found, signal, online."
+ },
+ "badge-pop": {
+  "category": "status",
+  "loop": false,
+  "frames": 45,
+  "description": "Verified badge pops with a spark burst: verified, approved, quality."
+ },
+ "star-burst": {
+  "category": "status",
+  "loop": false,
+  "frames": 45,
+  "description": "Gold star pops with rays: rating, favourite, top pick."
+ },
+ "confetti-burst": {
+  "category": "celebration",
+  "loop": false,
+  "frames": 60,
+  "description": "Confetti bursts out and falls: celebration, launch, win."
+ },
+ "sparkle-twinkle": {
+  "category": "celebration",
+  "loop": true,
+  "frames": 60,
+  "description": "Three sparkles twinkle in turn: magic, AI, new, premium."
+ },
+ "fireworks": {
+  "category": "celebration",
+  "loop": false,
+  "frames": 60,
+  "description": "Two firework bursts: celebration, milestone, success."
+ },
+ "heart-like": {
+  "category": "celebration",
+  "loop": false,
+  "frames": 45,
+  "description": "Heart fills and pops with a ring: like, love, favourite."
+ },
+ "cursor-click": {
+  "category": "ui",
+  "loop": false,
+  "frames": 50,
+  "description": "Cursor glides in and clicks with a ripple: click, select, try it."
+ },
+ "button-press": {
+  "category": "ui",
+  "loop": false,
+  "frames": 45,
+  "description": "Button presses and its label becomes a check: submit, buy, confirm."
+ },
+ "toggle-on": {
+  "category": "ui",
+  "loop": false,
+  "frames": 36,
+  "description": "Switch slides on and turns colour: enable, activate, turn on."
+ },
+ "checkbox-tick": {
+  "category": "ui",
+  "loop": false,
+  "frames": 36,
+  "description": "Checkbox fills and ticks: task done, selected, agreed."
+ },
+ "typing-dots": {
+  "category": "ui",
+  "loop": true,
+  "frames": 36,
+  "description": "Chat bubble with typing dots: replying, AI answering, chat."
+ },
+ "notification-bell": {
+  "category": "ui",
+  "loop": false,
+  "frames": 45,
+  "description": "Bell rings and a badge dot pops: notification, reminder, alert."
+ },
+ "search-scan": {
+  "category": "ui",
+  "loop": true,
+  "frames": 60,
+  "description": "Magnifier sweeps over content: search, discover, find."
+ },
+ "upload-arrow": {
+  "category": "ui",
+  "loop": true,
+  "frames": 40,
+  "description": "Arrow rises out of a tray: upload, publish, send data."
+ },
+ "download-arrow": {
+  "category": "ui",
+  "loop": true,
+  "frames": 40,
+  "description": "Arrow drops into a tray: download, receive, import."
+ },
+ "refresh-spin": {
+  "category": "ui",
+  "loop": true,
+  "frames": 40,
+  "description": "Refresh arrows spin: sync, update, retry, automation."
+ },
+ "cart-add": {
+  "category": "commerce",
+  "loop": false,
+  "frames": 50,
+  "description": "A box drops into a cart that bounces, badge pops: add to cart, order."
+ },
+ "card-swipe": {
+  "category": "payments",
+  "loop": false,
+  "frames": 50,
+  "description": "Card slides in and gets a success tick: card payment accepted."
+ },
+ "coin-stack": {
+  "category": "payments",
+  "loop": false,
+  "frames": 50,
+  "description": "Three coins drop and stack: savings, revenue, earnings, rewards."
+ },
+ "payment-success": {
+  "category": "payments",
+  "loop": false,
+  "frames": 45,
+  "description": "Card icon with a success badge: payment confirmed, paid."
+ },
+ "package-drop": {
+  "category": "delivery",
+  "loop": false,
+  "frames": 45,
+  "description": "Parcel drops in and squashes on landing: shipped, packed, order ready."
+ },
+ "gift-bounce": {
+  "category": "commerce",
+  "loop": false,
+  "frames": 50,
+  "description": "Gift shakes, then pops with sparkles: reward, offer, surprise."
+ },
+ "truck-drive": {
+  "category": "delivery",
+  "loop": true,
+  "frames": 40,
+  "description": "Delivery truck bobbing with speed lines: shipping, on the way."
+ },
+ "map-pin-drop": {
+  "category": "delivery",
+  "loop": false,
+  "frames": 45,
+  "description": "Pin drops onto the map with a ripple: location, destination, store."
+ },
+ "route-draw": {
+  "category": "delivery",
+  "loop": false,
+  "frames": 50,
+  "description": "A dashed route draws from start to a destination pin: journey, tracking."
+ },
+ "delivery-done": {
+  "category": "delivery",
+  "loop": false,
+  "frames": 50,
+  "description": "Parcel slides to the door, check badge pops: delivered."
+ },
+ "receipt-print": {
+  "category": "payments",
+  "loop": false,
+  "frames": 45,
+  "description": "Receipt slides up and gets a tick: invoice, order summary, billing."
+ },
+ "price-tag": {
+  "category": "commerce",
+  "loop": false,
+  "frames": 45,
+  "description": "Price tag swings on its hook: pricing, discount, sale."
+ },
+ "bars-grow": {
+  "category": "data",
+  "loop": false,
+  "frames": 45,
+  "description": "Bars grow from a baseline one after another: growth, results, metrics."
+ },
+ "line-chart-draw": {
+  "category": "data",
+  "loop": false,
+  "frames": 50,
+  "description": "A rising line chart draws and marks its peak: trend, performance."
+ },
+ "pie-fill": {
+  "category": "data",
+  "loop": false,
+  "frames": 50,
+  "description": "Donut chart fills in three segments: share, breakdown, allocation."
+ },
+ "trend-up": {
+  "category": "data",
+  "loop": false,
+  "frames": 45,
+  "description": "Trending-up arrow draws and lifts: growth, increase, ROI."
+ },
+ "gauge-needle": {
+  "category": "data",
+  "loop": false,
+  "frames": 50,
+  "description": "Gauge fills and the needle swings high: score, speed, performance."
+ },
+ "shield-check": {
+  "category": "security",
+  "loop": false,
+  "frames": 50,
+  "description": "Shield draws, a check appears, it pulses: secure, protected, safe."
+ },
+ "lock-secure": {
+  "category": "security",
+  "loop": false,
+  "frames": 45,
+  "description": "Padlock drops in with a green pulse: locked, encrypted, private."
+ },
+ "fingerprint-scan": {
+  "category": "security",
+  "loop": true,
+  "frames": 60,
+  "description": "Fingerprint with a scanning line: biometric, identity, sign in."
+ },
+ "gear-spin": {
+  "category": "tech",
+  "loop": true,
+  "frames": 60,
+  "description": "Two gears turning together: settings, automation, integration."
+ },
+ "cloud-sync": {
+  "category": "tech",
+  "loop": true,
+  "frames": 60,
+  "description": "Cloud with spinning sync arrows: cloud backup, syncing, SaaS."
+ },
+ "rocket-launch": {
+  "category": "tech",
+  "loop": false,
+  "frames": 50,
+  "description": "Rocket shakes and launches with a trail: launch, go live, boost."
+ },
+ "ai-sparkle": {
+  "category": "tech",
+  "loop": true,
+  "frames": 60,
+  "description": "Wand with twinkling sparkles: AI, magic, auto-generate."
+ },
+ "send-plane": {
+  "category": "communication",
+  "loop": false,
+  "frames": 45,
+  "description": "Paper plane pulls back and shoots off with a trail: send, share, deliver."
+ },
+ "mail-arrive": {
+  "category": "communication",
+  "loop": false,
+  "frames": 45,
+  "description": "Envelope slides in and a badge dot pops: new email, message received."
+ },
+ "chat-pop": {
+  "category": "communication",
+  "loop": false,
+  "frames": 45,
+  "description": "Two chat bubbles pop in turn: conversation, support, messaging."
+ },
+ "phone-ring": {
+  "category": "communication",
+  "loop": true,
+  "frames": 40,
+  "description": "Phone vibrates with call waves: call, support line, contact."
+ },
+ "clock-tick": {
+  "category": "time",
+  "loop": true,
+  "frames": 60,
+  "description": "Clock hands sweep round: time saved, scheduling, speed."
+ },
+ "hourglass-flip": {
+  "category": "time",
+  "loop": true,
+  "frames": 60,
+  "description": "Hourglass waits, then flips: waiting, time running, deadline."
+ },
+ "calendar-check": {
+  "category": "time",
+  "loop": false,
+  "frames": 45,
+  "description": "Calendar with a check drawing on: booked, scheduled, confirmed date."
+ },
+ "users-join": {
+  "category": "people",
+  "loop": false,
+  "frames": 45,
+  "description": "People pop in one after another: team, community, sign-ups."
+ }
+}

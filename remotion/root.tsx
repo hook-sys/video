@@ -4,6 +4,7 @@ import { ReferenceDemo } from "@/components/video/reference/reference-demo";
 import { REFERENCE_NARRATION, REFERENCE_STORY } from "@/components/video/engine/fixtures/reference-story";
 import { STORY_WORLD_ID, StoryWorld, type StoryWorldProps } from "@/components/video/engine/story-world";
 import { Storyboard } from "@/components/video/storyboard";
+import { GALLERY_CELL, GALLERY_COLS, LOTTIE_GALLERY_ID, LottieGallery, galleryRows } from "@/components/video/lottie/gallery";
 import {
   COMPOSITION_ID,
   DIMENSIONS,
@@ -44,6 +45,15 @@ export function RemotionRoot() {
       durationInFrames={450}
       defaultProps={{ story: REFERENCE_STORY, narration: REFERENCE_NARRATION, durationSeconds: 15 } as StoryWorldProps}
       calculateMetadata={({ props }) => ({ durationInFrames: Math.max(1, Math.round(props.durationSeconds * FPS)) })}
+    />
+    {/* QA only: every Lottie micro-animation in one grid. */}
+    <Composition
+      id={LOTTIE_GALLERY_ID}
+      component={LottieGallery}
+      fps={FPS}
+      width={GALLERY_COLS * GALLERY_CELL}
+      height={galleryRows() * GALLERY_CELL}
+      durationInFrames={60}
     />
     </>
   );

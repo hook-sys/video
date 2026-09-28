@@ -9,15 +9,18 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "check:story": "node scripts/story-check/run.mjs",
-    "icons:build": "node scripts/icons/build.mjs"
+    "icons:build": "node scripts/icons/build.mjs",
+    "lottie:build": "node scripts/lottie/build.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
     "@remotion/bundler": "4.0.529",
+    "@remotion/lottie": "4.0.529",
     "@remotion/player": "4.0.529",
     "@remotion/renderer": "4.0.529",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
+    "lottie-web": "5.13.0",
     "next": "16.3.6",
     "openai": "^7.23.0",
     "playwright-core": "^1.63.0",

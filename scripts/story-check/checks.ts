@@ -16,7 +16,12 @@ import type { AssetManifest } from "@/lib/asset-manifest";
 import ICONS from "@/components/video/icons/icons.json";
 import ALIASES from "@/components/video/icons/aliases.json";
 import { ICON_CATEGORIES, searchIcons } from "@/lib/icons";
+import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
+import { LOTTIE_LOADERS } from "@/components/video/lottie/registry";
+import { LOTTIE_PALETTE, recolorLottie } from "@/components/video/lottie/recolor";
+import { readdirSync, readFileSync } from "node:fs";
 import zlib from "node:zlib";
+import path from "node:path";
 
 // Deterministic stand-in images for generated assets (a lit gradient with a
 // soft subject disc), as data URLs, so asset rendering is checked offline.
@@ -168,12 +173,47 @@ function iconLibrary(): Check[] {
   return checks;
 }
 
+// Our Lottie micro-animations: enough of them, structurally valid, consistent
+// with the manifest/registry, small, and themeable.
+export const LOTTIE_NAMES = Object.keys(LOTTIE_MANIFEST);
+function lottieLibrary(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  const dir = path.join(process.cwd(), "components/video/lottie/anims");
+  const files = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, ""));
+  const manifest = LOTTIE_MANIFEST as Record<string, { frames: number; loop: boolean; category: string }>;
+  add("at least 50 animations", LOTTIE_NAMES.length >= 50, `${LOTTIE_NAMES.length} animations in ${new Set(Object.values(manifest).map((m) => m.category)).size} categories`);
+  const mismatch = [...new Set([...files, ...LOTTIE_NAMES, ...Object.keys(LOTTIE_LOADERS)])].filter((n) => !files.includes(n) || !(n in manifest) || !(n in LOTTIE_LOADERS));
+  add("files, manifest and registry agree", mismatch.length === 0, mismatch.length ? mismatch.join(", ") : "every animation has a file, a manifest entry and a loader");
+  let bytes = 0;
+  const invalid: string[] = [];
+  for (const n of files) {
+    const text = readFileSync(path.join(dir, `${n}.json`), "utf8");
+    bytes += text.length;
+    const d = JSON.parse(text);
+    const ok = d.fr === 30 && d.w === 200 && d.h === 200 && d.ip === 0 && d.op === manifest[n]?.frames && Array.isArray(d.layers) && d.layers.length > 0 &&
+      d.layers.every((l: { ty: number; ks: unknown; shapes: unknown[] }) => l.ty === 4 && l.ks && Array.isArray(l.shapes) && l.shapes.length > 0);
+    if (!ok) invalid.push(n);
+  }
+  add("every animation is a valid 200×200 30fps Lottie", invalid.length === 0, invalid.length ? invalid.join(", ") : `${files.length} files valid`);
+  add("animations stay small", bytes < 300 * 1024, `${(bytes / 1024).toFixed(1)} KB total (budget 300 KB)`);
+  const sample = JSON.parse(readFileSync(path.join(dir, "success-check.json"), "utf8"));
+  const before = JSON.stringify(sample);
+  const red = recolorLottie(sample, { primary: "#FF0000" });
+  const text = JSON.stringify(red);
+  const primary = LOTTIE_PALETTE.primary;
+  add("theme recolour works", JSON.stringify(sample) === before && text.includes("[1,0,0,1]") && !text.includes(JSON.stringify([0, 2, 4].map((i) => Math.round((parseInt(primary.slice(1 + i, 3 + i), 16) / 255) * 1000) / 1000).concat(1))),
+    "primary → #FF0000 everywhere, source untouched");
+  return checks;
+}
+
 export function runChecks(): Section[] {
   const sections: Section[] = [
     { name: "stored ProductBrief compatibility", checks: briefCompatibility() },
     { name: "VisualStory validation", checks: storyValidation() },
     { name: "legacy image generation gating", checks: legacyImageGating() },
     { name: "icon library", checks: iconLibrary() },
+    { name: "lottie library", checks: lottieLibrary() },
   ];
   for (const f of FIXTURES) {
     const n = normalizeStory(f.story);
