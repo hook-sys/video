@@ -235,6 +235,7 @@ export async function generateBrief(projectId: string) {
     );
     await briefUpdate({ brief, brief_status: "completed", brief_error: null });
   } catch (e) {
+    console.error("brief generation failed:", projectId, e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : e);
     await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));
   } finally {
     for (const [u, kind] of [
