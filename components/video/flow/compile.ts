@@ -1,7 +1,9 @@
-import { estimateWords, type FlowBeat, type FlowScript } from "@/lib/flow-script";
-import { spokenCueTimes, type WordTiming } from "@/lib/voice-timing";
+import { estimateWords, type FlowAction, type FlowBeat, type FlowScript } from "@/lib/flow-script";
+import { sameWord, spokenCueTimes, tokenize, type WordTiming } from "@/lib/voice-timing";
+import { num, vec } from "./eval";
 import { Flow, type FlowNodeHandle, TILT } from "./patterns";
-import type { FlowPlan, ThemeName, Vec } from "./types";
+import type { FlowPlan, FlowText, ThemeName, Vec } from "./types";
+import { fitSize } from "./typography";
 
 // FlowScript (the Director's beats) → FlowPlan (keyframes), deterministically.
 // Beats start on the voice's real word timestamps (slightly ahead, so motion
@@ -30,9 +32,65 @@ export function beatFrames(script: FlowScript, narration: string, words: WordTim
   });
 }
 
+// Each pattern needs time to read. A beat never starts before the previous one
+// has had its minimum; a small accent (confirm/celebrate) that would land too
+// long after its words is dropped rather than shown late.
+const MIN_FRAMES: Record<FlowAction, number> = {
+  ui_showcase: 72,
+  orbit: 40,
+  statement: 36,
+  title: 36,
+  iris_to_hub: 36,
+  converge: 30,
+  hero_enter: 22,
+  add_step: 22,
+  hero_morph: 18,
+  actor_enter: 16,
+  confirm: 16,
+  celebrate: 12,
+};
+const MINOR = new Set<FlowAction>(["confirm", "celebrate"]);
+const MAX_LAG = 24;
+
+export function scheduleBeats(script: FlowScript, narration: string, words: WordTiming[] | null | undefined, durationSeconds: number) {
+  const total = Math.round(durationSeconds * FPS);
+  const cues = beatFrames(script, narration, words, durationSeconds);
+  const beats: FlowBeat[] = [];
+  const starts: number[] = [];
+  script.beats.forEach((b, i) => {
+    const prev = beats[beats.length - 1];
+    const earliest = prev ? starts[starts.length - 1] + MIN_FRAMES[prev.action] : 0;
+    const t = Math.min(total - 30, Math.max(cues[i], earliest));
+    if (MINOR.has(b.action) && t - cues[i] > MAX_LAG) return;
+    beats.push(b);
+    starts.push(t);
+  });
+  return { beats, starts, cues };
+}
+
+// Frame each word of `text` is spoken, matched in order in the voice's word
+// stream from `fromSec`; words not spoken verbatim cascade 4 frames apart.
+export function wordFrames(text: string, fromSec: number, timeline: WordTiming[]) {
+  const stream = timeline.flatMap((w) => tokenize(w.text).map((t) => ({ t, start: w.start })));
+  let j = Math.max(0, stream.findIndex((s) => s.start >= fromSec - 0.35));
+  const out: number[] = [];
+  for (const w of text.split(/\s+/).filter(Boolean)) {
+    const tok = tokenize(w)[0];
+    let hit = -1;
+    if (tok) for (let k = j; k < Math.min(stream.length, j + 30); k++) if (sameWord(stream[k].t, tok)) { hit = k; break; }
+    const prev = out[out.length - 1];
+    if (hit >= 0) {
+      out.push(Math.max(prev === undefined ? 0 : prev + 2, Math.round(stream[hit].start * FPS) - 2));
+      j = hit + 1;
+    } else out.push(prev === undefined ? Math.round(fromSec * FPS) : prev + 4);
+  }
+  return out;
+}
+
 export function compileFlowScript(script: FlowScript, { narration, words, durationSeconds, theme }: { narration: string; words?: WordTiming[] | null; durationSeconds: number; theme?: ThemeName }): FlowPlan {
   const total = Math.round(durationSeconds * FPS);
-  const starts = beatFrames(script, narration, words, durationSeconds);
+  const { beats, starts } = scheduleBeats(script, narration, words, durationSeconds);
+  const timeline = words?.length ? words : estimateWords(narration, durationSeconds);
   const f = new Flow(theme ?? script.theme, total, { center: [0, 0], zoom: 1.08 });
   const nodes = new Map<string, FlowNodeHandle>();
   const shown = new Map<string, Extent>(); // what the camera should frame
@@ -43,7 +101,15 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
   let sats: FlowNodeHandle[] = [];
   let ui: FlowNodeHandle | null = null;
   let hiddenForUi: string[] = [];
-  let title: { start: number } | null = null;
+  // Text on screen and the room it needs (the camera frames around it).
+  const lines: { start: number; end: number; style: NonNullable<FlowText["style"]> }[] = [];
+  const reserveAt = (t: number) => {
+    const on = lines.filter((l) => t >= l.start - 2 && t < l.end);
+    return {
+      bottom: on.some((l) => l.style === "caption") ? 250 : on.some((l) => l.style === "pill") ? 170 : 0,
+      left: on.some((l) => l.style === "side") ? 880 : 0,
+    };
+  };
   let orbitR = 0;
 
   const show = (n: FlowNodeHandle, pos: Vec, w: number, h = w) => shown.set(n.id, { pos, w, h });
@@ -63,38 +129,47 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
     sats = [];
   };
 
-  // Frame everything on stage (leaving room for a title), within zoom limits.
-  const frame = (t: number, dur: number) => {
+  // Frame everything on stage (leaving room for text), within zoom limits,
+  // then keep drifting in slowly until the next beat so no moment is static.
+  const frame = (t: number, dur: number, span: number) => {
     const boxes = [...shown.values()];
     if (!boxes.length) return;
     const minX = Math.min(...boxes.map((b) => b.pos[0] - b.w / 2));
     const maxX = Math.max(...boxes.map((b) => b.pos[0] + b.w / 2));
     const minY = Math.min(...boxes.map((b) => b.pos[1] - b.h / 2)) - 20;
-    const maxY = Math.max(...boxes.map((b) => b.pos[1] + b.h / 2)) + 70; // captions
-    const reserve = title ? 250 : 0;
-    const zoom = Math.max(0.6, Math.min(1.12, (1920 - 360) / (maxX - minX), (1080 - 260 - reserve) / (maxY - minY)));
-    const center: Vec = [(minX + maxX) / 2, (minY + maxY) / 2 + reserve / 2 / zoom];
+    const maxY = Math.max(...boxes.map((b) => b.pos[1] + b.h / 2)) + 80; // captions
+    // Moves finish before the video ends (never cut off mid-move).
+    dur = Math.max(8, Math.min(dur, total - 8 - t));
+    span = Math.min(span, total - t);
+    const r = reserveAt(t + dur);
+    const zoom = Math.max(0.6, Math.min(1.12, (1920 - 360 - r.left) / (maxX - minX), (1080 - 260 - r.bottom) / (maxY - minY)));
+    const center: Vec = [(minX + maxX) / 2 - r.left / 2 / zoom, (minY + maxY) / 2 + r.bottom / 2 / zoom];
     f.camera(t, dur, center, zoom);
+    if (span - dur > 18) f.camera(t + dur, span - dur, center, zoom * (1 + 0.00055 * (span - dur)), "linear");
   };
 
-  const beats = script.beats;
   beats.forEach((b: FlowBeat, i) => {
-    const t = starts[i];
-    const span = (starts[i + 1] ?? total) - t;
+    let t = starts[i];
+    let span = (starts[i + 1] ?? total) - t;
     const camDur = Math.max(16, Math.min(44, Math.round(span * 0.8)));
 
-    // Leaving the UI (unless this beat closes it through the iris).
-    if (ui && b.action !== "iris_to_hub") {
-      ui.tilt(t, 16, TILT.iso, "in").exit(t + 2, { dur: 16 });
+    // Leaving the UI (unless this beat closes it through the iris, or is a
+    // pill line that floats over it).
+    const overUi = b.action === "statement" && b.layout === "pill";
+    if (ui && b.action !== "iris_to_hub" && !overUi) {
+      ui.tilt(t, 14, TILT.iso, "in").exit(t, { dur: 12 });
       hide(ui);
       for (const id of hiddenForUi) {
         const n = nodes.get(id);
         if (!n) continue;
-        n.fade(t + 6, 14, 1);
+        n.fade(t + 10, 12, 1);
         show(n, n.spec.pos[n.spec.pos.length - 1][1], n.spec.size);
       }
       hiddenForUi = [];
       ui = null;
+      // The interface clears the stage before this beat's objects arrive.
+      t += 10;
+      span -= 10;
     }
     // Actors hand over to the story once it moves on.
     if (actors.length && ["add_step", "orbit", "ui_showcase"].includes(b.action)) {
@@ -264,18 +339,127 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
         f.sfx(t, "whoosh").sfx(t + 22, "subtle_impact");
         break;
       }
+      case "statement":
       case "title": {
-        title = { start: t };
-        const next = beats.findIndex((x, k) => k > i && x.action === "title");
-        // A closing line needs ~1.5 s on screen to finish revealing and read.
-        const at = next === -1 ? Math.max(Math.min(t + 2, total - 48), (starts[i - 1] ?? 0) + 8) : t + 2;
-        // Fit the line to the frame width (~0.52 em per character at 1920 px).
-        const size = Math.max(52, Math.min(88, Math.floor(1700 / (b.text!.length * 0.52))));
-        f.text(b.text!, at, next === -1 ? total + 30 : starts[next] - 4, { pos: [0, 330], size, accent: b.accent ?? undefined });
+        const text = b.text!;
+        const last = !beats.slice(i + 1).some((x) => x.action !== "confirm" && x.action !== "celebrate");
+        // Side text needs a compact stage (one subject, not a wide chain or orbit).
+        const boxes = [...shown.values()];
+        const stageW = boxes.length ? Math.max(...boxes.map((x) => x.pos[0] + x.w / 2)) - Math.min(...boxes.map((x) => x.pos[0] - x.w / 2)) : 0;
+        const compact = !!hero && stageW <= 760;
+        let style: NonNullable<FlowText["style"]> =
+          b.layout === "pill" ? "pill" : b.layout === "side" && hero ? "side" : b.layout === "display" ? "display" : last || b.action === "title" ? (hero ? "caption" : "display") : hero ? "side" : "display";
+        if (style === "side" && !compact) style = "caption";
+        const cueSec = (starts[i] + 3) / FPS;
+        const wf = wordFrames(text, cueSec - 0.2, timeline);
+        const start = Math.min(t + 2, wf[0]);
+        const nextLine = beats.findIndex((x, k) => k > i && (x.action === "statement" || x.action === "title"));
+        const nextStart = starts[i + 1] ?? total;
+        const hardEnd = nextLine === -1 ? total + 30 : starts[nextLine] - 4;
+        const wordsEnd = wf[wf.length - 1] + 36;
+        const end = last ? total + 30 : Math.min(hardEnd, style === "display" ? Math.max(wordsEnd, nextStart - 2) : Math.max(wordsEnd, nextStart + 20));
+        lines.push({ start, end, style });
+        const pos: Vec = style === "side" ? [-860, 0] : style === "caption" ? [0, 330] : style === "pill" ? [0, 360] : [0, 0];
+        f.text(text, start, end, { style, pos, size: fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: wf });
+        if (style === "display") {
+          f.dimTo(start - 4, 12, 1).dimTo(Math.min(end, total) - 6, 14, 0);
+          f.sfx(wf[0], "subtle_impact");
+        } else if (style === "pill") f.sfx(start, "soft_pop");
         break;
       }
     }
-    frame(t, camDur);
+    if (!(ui && overUi)) frame(t, camDur, span);
   });
-  return f.build();
+
+  // Long stretches without a new beat get a soft ripple on the subject, so
+  // the frame never sits still (unless a line of text is carrying it).
+  const subject = nodes.get("hero");
+  for (let i = 0; i < starts.length; i++) {
+    const a = starts[i];
+    const b = starts[i + 1] ?? total - 12;
+    if (b - a > 54 && subject && !lines.some((l) => l.start <= a + (b - a) / 2 && l.end > a + (b - a) / 2 && l.style === "display")) subject.pulse(Math.round(a + (b - a) / 2));
+  }
+
+  return smoothCamera(f.build());
+}
+
+// One continuous camera: sample the keyed path every frame and smooth it
+// (Gaussian, zoom in log space) so moves ease into each other with no
+// velocity jumps, whatever beats overlap.
+const SMOOTH_SIGMA = 10;
+const MAX_PAN_ACCEL = 0.9; // screen px / frame²
+const MAX_ZOOM_ACCEL = 0.0007; // log zoom / frame²
+export function smoothCamera(plan: FlowPlan): FlowPlan {
+  // Work on a path that runs 2 s past the end (holding its last key), so the
+  // smoothing never brakes artificially on the final frames; then cut.
+  const n = plan.duration + 60;
+  const raw = Array.from({ length: n }, (_, i) => {
+    const [x, y] = vec(plan.camera.center, i);
+    return [x, y, Math.log(num(plan.camera.zoom, i, 1))];
+  });
+  const r = Math.ceil(SMOOTH_SIGMA * 3);
+  const w = Array.from({ length: 2 * r + 1 }, (_, k) => Math.exp(-((k - r) ** 2) / (2 * SMOOTH_SIGMA ** 2)));
+  const smooth = raw.map((_, i) => {
+    const acc = [0, 0, 0];
+    let sum = 0;
+    for (let k = -r; k <= r; k++) {
+      const s = raw[Math.min(n - 1, Math.max(0, i + k))];
+      const wk = w[k + r];
+      acc[0] += s[0] * wk;
+      acc[1] += s[1] * wk;
+      acc[2] += s[2] * wk;
+      sum += wk;
+    }
+    return acc.map((v) => v / sum);
+  });
+  // Then follow that path with a critically damped spring whose acceleration
+  // is capped (screen px/frame², zoom in log units): where beats pile camera
+  // moves on top of each other the camera eases through instead of jolting.
+  const followed: number[][] = [];
+  let [x, y, lz] = smooth[0];
+  let [vx, vy, vz] = [0, 0, 0];
+  const w0 = 0.35;
+  const cap = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+  for (let i = 0; i < n; i++) {
+    const [gx, gy, gz] = smooth[i];
+    const z = Math.exp(lz);
+    const aPos = MAX_PAN_ACCEL / z;
+    const ax = cap(w0 * w0 * (gx - x) - 2 * w0 * vx, aPos);
+    const ay = cap(w0 * w0 * (gy - y) - 2 * w0 * vy, aPos);
+    const az = cap(w0 * w0 * (gz - lz) - 2 * w0 * vz, MAX_ZOOM_ACCEL);
+    vx += ax;
+    vy += ay;
+    vz += az;
+    x += vx;
+    y += vy;
+    lz += vz;
+    followed.push([x, y, lz]);
+  }
+  // A light final pass softens the spring's switch between capped and free.
+  const g = (arr: number[][], sigma: number) => {
+    const rr = Math.ceil(sigma * 3);
+    const ww = Array.from({ length: 2 * rr + 1 }, (_, k) => Math.exp(-((k - rr) ** 2) / (2 * sigma ** 2)));
+    return arr.map((_, i) => {
+      const acc = [0, 0, 0];
+      let sum = 0;
+      for (let k = -rr; k <= rr; k++) {
+        const s = arr[Math.min(arr.length - 1, Math.max(0, i + k))];
+        acc[0] += s[0] * ww[k + rr];
+        acc[1] += s[1] * ww[k + rr];
+        acc[2] += s[2] * ww[k + rr];
+        sum += ww[k + rr];
+      }
+      return acc.map((v) => v / sum);
+    });
+  };
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  smooth.splice(0, n, ...g(followed, 3));
+  const kept = smooth.slice(0, plan.duration);
+  return {
+    ...plan,
+    camera: {
+      center: kept.map((s, i) => [i, [r1(s[0]), r1(s[1])], "linear"]),
+      zoom: kept.map((s, i) => [i, Math.round(Math.exp(s[2]) * 10000) / 10000, "linear"]),
+    },
+  };
 }

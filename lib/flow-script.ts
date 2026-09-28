@@ -20,12 +20,14 @@ export const FLOW_ACTIONS = [
   "orbit", // satellites spiral out and circle the subject
   "converge", // everything flows back into the subject
   "celebrate", // a Lottie accent at the subject (or a node)
-  "title", // a short kinetic line of text
+  "statement", // the narration's key phrase as big kinetic type, word-synced
+  "title", // (older scripts) the closing line; compiled like a statement
 ] as const;
+export const STATEMENT_LAYOUTS = ["display", "side", "pill"] as const;
 export type FlowAction = (typeof FLOW_ACTIONS)[number];
 
 const Row = z.object({ icon: z.string(), text: z.string(), value: z.string().nullable(), status: z.string().nullable() });
-export const FlowBeat = z.object({
+const FlowBeat = z.object({
   cue: z.string(),
   action: z.enum(FLOW_ACTIONS),
   id: z.string().nullable(), // new actor/step/satellite id, or the node a confirm/celebrate targets
@@ -45,8 +47,13 @@ export const FlowBeat = z.object({
   accent: z.string().nullable(),
   lottie: z.string().nullable(),
 });
-export type FlowBeat = z.infer<typeof FlowBeat>;
-export const FlowScript = z.object({ theme: z.enum(["lavender", "midnight"]), beats: z.array(FlowBeat) });
+// What the model returns: every field present (structured outputs are strict).
+export const FlowBeatModel = FlowBeat.extend({ layout: z.enum(STATEMENT_LAYOUTS).nullable() });
+export const FlowScriptModel = z.object({ theme: z.enum(["lavender", "midnight"]), beats: z.array(FlowBeatModel) });
+// What is stored/compiled: `layout` may be missing in scripts stored earlier.
+export const FlowBeatStored = FlowBeat.extend({ layout: z.enum(STATEMENT_LAYOUTS).nullable().default(null) });
+export type FlowBeat = z.infer<typeof FlowBeatStored>;
+export const FlowScript = z.object({ theme: z.enum(["lavender", "midnight"]), beats: z.array(FlowBeatStored) });
 export type FlowScript = z.infer<typeof FlowScript>;
 
 export const MAX_BEATS = 14;
@@ -98,6 +105,22 @@ export function flowScriptBlockers(script: FlowScript, narration: string, voiceW
     if (t === null) errors.push(`beat ${i} cue "${beats[i].cue}" is not spoken in order (copy words exactly from the narration)`);
   });
   if (!tokenize(narration).length) errors.push("empty narration");
+
+  // Pacing: the picture keeps moving with the voice from start to finish.
+  if (!beats.some((b) => b.action === "statement" || b.action === "title")) errors.push("no statement: put the narration's key phrase on screen with at least one statement");
+  const spoken = times.map((t) => t ?? -1);
+  const speechEnd = timeline[timeline.length - 1]?.end ?? durationSeconds;
+  for (let i = 1; i < beats.length; i++) {
+    if (spoken[i] < 0 || spoken[i - 1] < 0) continue;
+    const gap = spoken[i] - spoken[i - 1];
+    // A UI showcase animates internally (tilt, click, callouts); a statement holds the frame.
+    const held = beats[i - 1].action === "ui_showcase" ? 7 : beats[i - 1].action === "statement" ? 4 : 3;
+    if (gap > held) errors.push(`${gap.toFixed(1)} s between beat ${i - 1} and beat ${i} with nothing new on screen; add a beat in between (max ${held} s)`);
+    if (beats[i - 1].action === "ui_showcase" && gap < 1.6) errors.push(`beat ${i - 1} (ui_showcase) gets only ${gap.toFixed(1)} s; the interface needs at least 1.6 s — cue the next beat later`);
+  }
+  const lastI = beats.length - 1;
+  if (lastI >= 0 && spoken[lastI] >= 0 && !["statement", "title", "converge"].includes(beats[lastI].action) && speechEnd - spoken[lastI] > 3)
+    errors.push(`the last ${(speechEnd - spoken[lastI]).toFixed(1)} s have no beat; direct the ending (a statement or converge near the end)`);
   const first = beats[0]?.action;
   if (first && !["hero_enter", "actor_enter", "ui_showcase", "title"].includes(first)) errors.push(`the first beat must establish the scene (hero_enter, actor_enter or ui_showcase), not ${first}`);
 
@@ -112,7 +135,8 @@ export function flowScriptBlockers(script: FlowScript, narration: string, voiceW
     // The UI stays on stage only until the next beat, which either closes it
     // through the iris or replaces it.
     const uiOpen = ui;
-    if (b.action !== "iris_to_hub") ui = false;
+    const floats = b.action === "statement" && b.layout === "pill";
+    if (b.action !== "iris_to_hub" && !floats) ui = false;
     const fresh = (id: string | null) => {
       need(id, i, "needs a new id");
       if (id && ids.has(id)) errors.push(`beat ${i}: id "${id}" is already used`);
@@ -166,8 +190,9 @@ export function flowScriptBlockers(script: FlowScript, narration: string, voiceW
       case "converge":
         need(hero, i, "the subject must enter first");
         break;
+      case "statement":
       case "title":
-        need(b.text && words(b.text) <= 8, i, "title text of at most 8 words");
+        need(b.text && words(b.text) <= 10, i, "text of at most 10 words");
         break;
     }
     if (b.label && words(b.label) > 3) errors.push(`beat ${i}: label "${b.label}" is longer than 3 words`);

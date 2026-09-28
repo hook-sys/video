@@ -3,7 +3,9 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
 import type { BriefUsage } from "@/lib/ai/product-brief";
-import { FlowScript, flowScriptBlockers, MAX_BEATS, MAX_STEPS, repairFlowScript } from "@/lib/flow-script";
+import { compileFlowScript } from "@/components/video/flow/compile";
+import { planQuality, qualityProblems } from "@/components/video/flow/quality";
+import { FlowScript, FlowScriptModel, flowScriptBlockers, MAX_BEATS, MAX_STEPS, repairFlowScript } from "@/lib/flow-script";
 import { tokenize, type WordTiming } from "@/lib/voice-timing";
 
 // Visual Director for the Flow engine: turns the finished narration (and its
@@ -32,7 +34,21 @@ PATTERNS (action):
 - orbit: 2–6 satellites {id, icon, label|null} spiral out and circle the subject — for connecting, integrating, "everything in one place".
 - converge: everything on stage flows back into the subject (optional icon for its final form) — the resolution ("all in one", "everything stays on track").
 - celebrate: a Lottie accent at the subject or a node (id|null, lottie).
-- title: one short kinetic line (text ≤8 words, taken from the narration's key phrase; accent = the 1–3 words to highlight). Usually the last beat, cued on the closing phrase.
+- statement: the narration's key phrase as big kinetic type — each word appears exactly as it is spoken. text = the phrase copied from the narration (≤10 words, cue = its first words), accent = the 1–3 words to highlight, layout:
+  • "display": the words alone, huge, the scene recedes behind them — for the core promise or a turning point.
+  • "side": two lines beside the subject (lighter lead-in, strong accent line) — to name what the subject is doing.
+  • "pill": a short line or question in a capsule over the scene (≤6 words).
+  The last beat is normally a statement on the closing phrase (its layout is chosen automatically). Use 2–3 statements per video: typography is a main design element, not only an end card.
+
+STRUCTURE — pick ONE arc and follow it, so every video has the same designed rhythm:
+- PROCESS (a flow, an order, a journey): hero_enter (or actor_enter → hero_enter) → hero_morph / add_step ×2–4 with confirms → statement (side) mid-way → converge → closing statement.
+- PLATFORM (an app, a dashboard, integrations): ui_showcase (≥1.6 s) → iris_to_hub → orbit → confirm → statement (display) → closing statement.
+- TRANSFORMATION (before → after, raw → polished): hero_enter → statement (pill, the problem) → hero_morph ×1–2 → celebrate → statement (display, the promise) → closing statement.
+
+PACING (the picture moves with the voice from the first word to the last)
+- Spread beats over the WHOLE narration: never more than 3 s of speech without a new beat (a ui_showcase may hold up to 7 s, a statement up to 4 s).
+- ui_showcase needs at least 1.6 s before the next beat; orbit about 1.3 s; put quick accents (confirm, celebrate) between bigger moves.
+- The final 3 s must carry a beat — usually the closing statement.
 
 RULES
 - ${MAX_BEATS} beats at most; about one beat every 1–2 seconds of narration; first beat establishes the scene (hero_enter, actor_enter or ui_showcase).
@@ -64,12 +80,22 @@ export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (us
   const timing = input.words?.length ? "voice" : "estimated";
   const model = process.env.OPENAI_MODEL || "gpt-5-mini";
   const usage = { model, inputTokens: 0, outputTokens: 0 };
-  const format = { format: zodTextFormat(FlowScript, "flow_script") };
+  const format = { format: zodTextFormat(FlowScriptModel, "flow_script") };
+  // Blockers reject a script; quality notes (dead time, overflowing text,
+  // camera jolts, measured on the compiled plan) ask for one revision but do
+  // not reject it.
   const check = (raw: FlowScript | null) => {
-    if (!raw) return { script: null, problems: ["no structured output"] };
-    const script = repairFlowScript(raw);
+    if (!raw) return { script: null, problems: ["no structured output"], notes: [] as string[] };
+    const script = repairFlowScript(FlowScript.parse(raw));
     const problems = flowScriptBlockers(script, input.narration, input.words, input.duration_seconds);
-    return { script: problems.length ? null : script, problems };
+    if (problems.length) return { script: null, problems, notes: [] as string[] };
+    let notes: string[] = [];
+    try {
+      notes = qualityProblems(planQuality(compileFlowScript(script, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds })));
+    } catch (e) {
+      return { script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], notes };
+    }
+    return { script, problems, notes };
   };
   let attempts = 0;
   let problems: string[] = [];
@@ -96,9 +122,9 @@ export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (us
     usage.inputTokens += first.usage?.input_tokens ?? 0;
     usage.outputTokens += first.usage?.output_tokens ?? 0;
     let result = check(first.output_parsed);
-    problems = result.problems;
+    problems = result.problems.length ? result.problems : result.notes;
     const left = budgetMs - (Date.now() - started);
-    if (!result.script && first.id && left > 25_000) {
+    if ((!result.script || result.notes.length) && first.id && left > 25_000) {
       attempts++;
       const revised = await client.responses.parse(
         { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your beats failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete FlowScript.`, text: format },
@@ -106,8 +132,10 @@ export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (us
       );
       usage.inputTokens += revised.usage?.input_tokens ?? 0;
       usage.outputTokens += revised.usage?.output_tokens ?? 0;
-      result = check(revised.output_parsed);
-      problems = result.problems;
+      const second = check(revised.output_parsed);
+      // Keep the revision if it is usable; otherwise a usable first draft.
+      if (second.script || !result.script) result = second;
+      problems = result.problems.length ? result.problems : result.notes;
     }
     return { script: result.script, attempts, revised: attempts > 1, errors: problems, ms: Date.now() - started, timing };
   } catch (e) {

@@ -27,6 +27,7 @@ import { FLOW_SCRIPT_FIXTURES } from "@/components/video/flow/fixtures/scripts";
 import { beatFrames, compileFlowScript } from "@/components/video/flow/compile";
 import { type FlowScript, flowScriptBlockers, repairFlowScript } from "@/lib/flow-script";
 import { flowEngineEnabled, usableFlow } from "@/lib/story-engine";
+import { planQuality, QUALITY_BAR, qualityProblems } from "@/components/video/flow/quality";
 import zlib from "node:zlib";
 import path from "node:path";
 
@@ -245,9 +246,24 @@ function flowDirector(): Check[] {
   const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
   for (const fx of FLOW_SCRIPT_FIXTURES) {
     const blockers = flowScriptBlockers(fx.script, fx.narration, fx.words, fx.durationSeconds);
+    if (fx.name === "video-editor") {
+      // The first real run, kept verbatim: its UI got 0.7 s, which the pacing
+      // rules now reject (the Director must revise) — but it must still compile.
+      const plan = compileFlowScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words });
+      const errors = validateFlowPlan(plan);
+      add("video-editor (first real run): pacing rules reject its 0.7 s UI; still compiles", blockers.some((e) => e.includes("ui_showcase")) && errors.length === 0, [...blockers, ...errors].slice(0, 2).join("; "));
+      continue;
+    }
     const plan = compileFlowScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words });
     const errors = validateFlowPlan(plan);
     add(`${fx.name}: script valid and compiles`, blockers.length + errors.length === 0, [...blockers, ...errors].join("; ") || `${fx.script.beats.length} beats → ${plan.nodes.length} nodes, ${plan.links.length} links, ${plan.sfx?.length ?? 0} sounds, ${plan.camera.center.length} camera keys`);
+    const q = planQuality(plan);
+    const qp = qualityProblems(q);
+    add(`${fx.name}: meets the motion quality bar`, qp.length === 0, qp.join("; ") || `longest still ${(q.deadFrames / 30).toFixed(1)} s (≤ ${(QUALITY_BAR.deadFrames / 30).toFixed(1)}), smallest label ${q.minLabelPx}px, camera accel ${q.cameraAccel} px/f², no text overflow`);
+  }
+  for (const [name, plan] of [["hand-directed e-commerce", ecommercePlan()], ["hand-directed payments hub", paymentsHubPlan()]] as const) {
+    const qp = qualityProblems(planQuality(plan));
+    add(`${name}: meets the motion quality bar`, qp.length === 0, qp.join("; ") || "ok");
   }
   // Fuzz: many random but valid beat orders must compile without throwing and
   // produce valid plans (the first real run crashed on an unseen order).
@@ -258,14 +274,16 @@ function flowDirector(): Check[] {
   let fuzzCount = 0;
   for (let n = 0; n < 400; n++) {
     const len = 4 + Math.floor(rnd() * 9);
-    const words = Array.from({ length: len * 3 }, (_, i) => `word${i}`);
+    const words = Array.from({ length: len * 6 + 6 }, (_, i) => `word${i}`);
+    let w = 0;
     const beats: FlowScript["beats"] = [];
     let hero = false;
     let ui = false;
     let steps = 0;
     let uid = 0;
     for (let i = 0; i < len; i++) {
-      const cue = words[i * 3];
+      const cue = words[w];
+      const last = i === len - 1;
       const options = (
         i === 0
           ? ["hero_enter", "actor_enter", "ui_showcase"]
@@ -273,17 +291,21 @@ function flowDirector(): Check[] {
               ...(!hero ? ["hero_enter"] : ["hero_morph", "confirm", "celebrate", "orbit", "converge", ...(steps < 4 ? ["add_step"] : [])]),
               "actor_enter",
               "ui_showcase",
-              "title",
+              "statement",
               ...(ui ? ["iris_to_hub"] : []),
             ]
       ) as FlowScript["beats"][number]["action"][];
-      const action = pick(options);
-      const b: FlowScript["beats"][number] = { cue, action, id: null, icon: null, label: null, packet_icon: null, ui: null, satellites: null, text: null, accent: null, lottie: null };
+      const action = last ? "statement" : pick(options);
+      w += action === "ui_showcase" ? 6 : 4;
+      const b: FlowScript["beats"][number] = { cue, action, id: null, icon: null, label: null, packet_icon: null, ui: null, satellites: null, text: null, accent: null, lottie: null, layout: null };
       if (["hero_enter", "hero_morph", "actor_enter", "add_step", "iris_to_hub"].includes(action)) b.icon = pick(["package", "truck", "user", "wallet", "house", "bell"]);
       if (action === "actor_enter" || action === "add_step") b.id = `n${uid++}`;
       if (action === "orbit") b.satellites = Array.from({ length: 2 + Math.floor(rnd() * 5) }, () => ({ id: `n${uid++}`, icon: "cloud", label: null }));
       if (action === "ui_showcase") b.ui = { title: "App", rows: [{ icon: "store", text: "A", value: "1", status: "Paid" }, { icon: "truck", text: "B", value: null, status: null }, { icon: "users", text: "C", value: null, status: null }], callouts: rnd() < 0.5 ? [{ text: "Fast", icon: "zap" }] : [], click_row: rnd() < 0.5 ? 1 : null };
-      if (action === "title") b.text = "A short line";
+      if (action === "title" || action === "statement") {
+        b.text = "A short line of words";
+        b.layout = pick([null, "display", "side", "pill"] as const);
+      }
       if (action === "celebrate") b.lottie = "confetti-burst";
       if (action === "hero_enter") hero = true;
       if (action === "iris_to_hub") {
@@ -296,16 +318,18 @@ function flowDirector(): Check[] {
     }
     const script: FlowScript = { theme: rnd() < 0.5 ? "lavender" : "midnight", beats };
     const narration = words.join(" ");
-    if (flowScriptBlockers(script, narration, null, 15).length) continue;
+    const dur = Math.max(10, Math.round(words.length * 0.3));
+    if (flowScriptBlockers(script, narration, null, dur).length) continue;
     fuzzCount++;
     try {
-      const errs = validateFlowPlan(compileFlowScript(script, { narration, durationSeconds: 15 }));
+      const plan = compileFlowScript(script, { narration, durationSeconds: dur });
+      const errs = [...validateFlowPlan(plan), ...qualityProblems(planQuality(plan)).filter((p) => !p.includes("nothing new"))];
       if (errs.length) fuzzFails.push(`${beats.map((x) => x.action).join(">")}: ${errs[0]}`);
     } catch (e) {
       fuzzFails.push(`${beats.map((x) => x.action).join(">")}: threw ${e instanceof Error ? e.message : e}`);
     }
   }
-  add("fuzz: random valid beat orders compile to valid plans", fuzzFails.length === 0 && fuzzCount >= 100, fuzzFails.length ? `${fuzzFails.length}/${fuzzCount} failed, e.g. ${fuzzFails.slice(0, 2).join(" | ")}` : `${fuzzCount} random scripts compiled cleanly`);
+  add("fuzz: random valid beat orders compile to valid, smooth, legible plans", fuzzFails.length === 0 && fuzzCount >= 100, fuzzFails.length ? `${fuzzFails.length}/${fuzzCount} failed, e.g. ${fuzzFails.slice(0, 2).join(" | ")}` : `${fuzzCount} random scripts compiled cleanly`);
 
   // Real voice timing: uneven word times (speech speeds up and pauses).
   const fx = FLOW_SCRIPT_FIXTURES[0];

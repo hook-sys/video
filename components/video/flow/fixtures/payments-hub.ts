@@ -1,3 +1,4 @@
+import { smoothCamera } from "../compile";
 import { Flow, TILT } from "../patterns";
 import type { ThemeName } from "../types";
 
@@ -60,5 +61,5 @@ export function paymentsHubPlan(theme: ThemeName = "lavender") {
   f.camera(300, 44, [0, 150], 0.78, "inOut");
   f.text("One hub for every payment.", 330, 450, { pos: [0, 380], size: 88, accent: "every payment." });
 
-  return f.build();
+  return smoothCamera(f.build());
 }

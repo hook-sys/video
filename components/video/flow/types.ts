@@ -67,6 +67,10 @@ export type FlowText = {
   size: number;
   weight?: number;
   accent?: string; // words shown in the accent gradient
+  // Typography role: display (alone, huge), headline, side (two lines beside
+  // the subject), pill (a short line in a capsule), caption (under the subject).
+  style?: "display" | "headline" | "side" | "pill" | "caption";
+  words?: number[]; // frame each word reveals (its spoken time); else a cascade
 };
 
 export type FlowLottie = { name: string; start: number; node?: string; pos?: Vec; size: number };
@@ -82,6 +86,8 @@ export type FlowPlan = {
   rings?: { center: string; radius: number; start: number; end?: number }[]; // dashed orbit paths
   // Iris: the member nodes are framed by a circle that closes onto `into`.
   iris?: { start: number; dur: number; members: string[]; into: string }[];
+  // 0..1: how far the world recedes (dims, blurs) behind a display line.
+  dim?: Track<number>;
   // Sound effects tied to motion (kinds from components/video/sfx.tsx).
   sfx?: { frame: number; kind: "whoosh" | "soft_pop" | "click" | "reveal" | "success_chime" | "subtle_impact" | "digital_processing" | "typing" }[];
 };

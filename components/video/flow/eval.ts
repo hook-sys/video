@@ -1,16 +1,8 @@
-import { Easing } from "remotion";
-import type { Ease, Track, Vec } from "./types";
+import { CURVES } from "./ease";
+import type { Track, Vec } from "./types";
 
 // Keyframe evaluation: each key's ease shapes the segment arriving at it.
-const CURVES: Record<Ease, (t: number) => number> = {
-  linear: (t) => t,
-  out: Easing.bezier(0.22, 1, 0.36, 1),
-  in: Easing.bezier(0.55, 0, 0.85, 0.2),
-  inOut: Easing.bezier(0.65, 0, 0.35, 1),
-  back: Easing.bezier(0.34, 1.56, 0.64, 1),
-  snap: Easing.bezier(0.2, 0.9, 0.1, 1),
-};
-
+// Pure (no Remotion), so the compiler can sample tracks on the server.
 function segment<T>(track: Track<T>, frame: number): [T, T, number] {
   if (frame <= track[0][0]) return [track[0][1], track[0][1], 0];
   for (let i = 1; i < track.length; i++) {
@@ -44,4 +36,4 @@ export function step<T>(track: Track<T> | undefined, frame: number, dur: number)
 }
 
 export const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-export const ramp = (frame: number, start: number, dur: number, ease: Ease = "out") => CURVES[ease](clamp01((frame - start) / dur));
+export const ramp = (frame: number, start: number, dur: number, ease: keyof typeof CURVES = "out") => CURVES[ease](clamp01((frame - start) / dur));

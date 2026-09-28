@@ -1,4 +1,4 @@
-import type { Ease, FlowLink, FlowNode, FlowPlan, FlowUi, ThemeName, Track, UiRow, Vec, Vec3 } from "./types";
+import type { Ease, FlowLink, FlowNode, FlowPlan, FlowText, FlowUi, ThemeName, Track, UiRow, Vec, Vec3 } from "./types";
 
 // Plane tilts (rotateX, rotateY, rotateZ): an isometric desk view, a hero
 // three-quarter view, and face-on.
@@ -166,6 +166,11 @@ export class Flow {
     (this.plan.rings ??= []).push({ center: hub.id, radius, start: t + 6, end: until });
     return this;
   }
+  // The world recedes (0..1) behind a display line.
+  dimTo(t: number, dur: number, value: number) {
+    animate((this.plan.dim ??= [[0, 0]]), t, dur, value, "inOut");
+    return this;
+  }
   endRings(t: number) {
     for (const r of this.plan.rings ?? []) if (r.end === undefined || r.end > t) r.end = t;
     return this;
@@ -201,8 +206,8 @@ export class Flow {
     (this.plan.sfx ??= []).push({ frame: Math.max(0, Math.round(frame)), kind });
     return this;
   }
-  text(text: string, start: number, end: number, { pos = [0, 0] as Vec, size = 72, weight, accent }: { pos?: Vec; size?: number; weight?: number; accent?: string } = {}) {
-    this.plan.texts.push({ text, start, end, pos, size, weight, accent });
+  text(text: string, start: number, end: number, { pos = [0, 0] as Vec, size = 72, weight, accent, style, words }: { pos?: Vec; size?: number; weight?: number; accent?: string; style?: FlowText["style"]; words?: number[] } = {}) {
+    this.plan.texts.push({ text, start, end, pos, size, weight, accent, style, words });
     return this;
   }
   lottie(name: string, start: number, size: number, where: { node?: FlowNodeHandle; pos?: Vec }) {

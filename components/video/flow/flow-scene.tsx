@@ -6,6 +6,7 @@ import { isLottieName, LottieAnim } from "@/components/video/lottie";
 import { clamp01, num, ramp, step, vec } from "./eval";
 import { FLOW_FONT, type FlowTheme, lottieColors, THEMES } from "./themes";
 import { UiPlane } from "./ui-plane";
+import { fitSize, labelWorldSize, splitLines, TYPE } from "./typography";
 import type { FlowLink, FlowNode, FlowPlan, FlowText, ThemeName, Vec } from "./types";
 
 // Renders a FlowPlan: a themed world, persistent nodes under one camera,
@@ -89,6 +90,8 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
     return { ir, k, x: width / 2 + (tx - width / 2) * k, y: height / 2 + (ty - height / 2) * k, r: r0 + (r1 - r0) * k, done: frame >= ir.start + ir.dur };
   });
   const member = new Set(irises.flatMap((i) => i.ir.members));
+  // The world recedes behind a display line so the words carry the frame.
+  const dim = num(plan.dim, frame, 0);
   const content = (include: (id: string) => boolean, withExtras: boolean) => (
     <div style={{ position: "absolute", left: width / 2, top: height / 2, transform: camera }}>
       {[...states.values()].filter((s) => s.node.kind === "ui" && include(s.node.id)).map((s) => (
@@ -113,13 +116,13 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
           </Sequence>
         );
       })}
-      {[...states.values()].filter((s) => s.node.kind !== "ui" && include(s.node.id)).map((s) => (s.node.kind === "orb" ? <Orb key={s.node.id} s={s} frame={frame} theme={theme} /> : <Pill key={s.node.id} s={s} frame={frame} theme={theme} />))}
+      {[...states.values()].filter((s) => s.node.kind !== "ui" && include(s.node.id)).map((s) => (s.node.kind === "orb" ? <Orb key={s.node.id} s={s} frame={frame} theme={theme} zoom={zoom} /> : <Pill key={s.node.id} s={s} frame={frame} theme={theme} />))}
     </div>
   );
   return (
     <AbsoluteFill style={{ fontFamily: FLOW_FONT, overflow: "hidden" }}>
       <World theme={theme} frame={frame} camera={[cx, cy]} />
-      {content((id) => !member.has(id), true)}
+      <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - 0.82 * dim, filter: `blur(${dim * 12}px)`, transform: `scale(${1 - 0.04 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
       {irises.filter((i) => !i.done).map((i, n) => (
         <AbsoluteFill key={n} style={{ clipPath: i.k > 0 ? `circle(${i.r}px at ${i.x}px ${i.y}px)` : undefined }}>
           {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} />}
@@ -190,7 +193,7 @@ function IconMorph({ track, frame, size, color }: { track: FlowNode["icon"]; fra
   );
 }
 
-function Caption({ track, frame, theme, y, small }: { track: FlowNode["label"]; frame: number; theme: FlowTheme; y: number; small?: boolean }) {
+function Caption({ track, frame, theme, y, size }: { track: FlowNode["label"]; frame: number; theme: FlowTheme; y: number; size: number }) {
   const st = step(track, frame, 12);
   if (!st) return null;
   const k = ramp(frame, frame - st.since, 14, "out");
@@ -202,9 +205,9 @@ function Caption({ track, frame, theme, y, small }: { track: FlowNode["label"]; 
     transform: `translate(-50%, ${dy}px)`,
     opacity: v,
     whiteSpace: "nowrap",
-    fontSize: small ? 34 : 40,
-    fontWeight: 650,
-    letterSpacing: -0.4,
+    fontSize: size,
+    fontWeight: 700,
+    letterSpacing: -size * 0.015,
     color: theme.ink,
   });
   return (
@@ -215,7 +218,7 @@ function Caption({ track, frame, theme, y, small }: { track: FlowNode["label"]; 
   );
 }
 
-function Orb({ s, frame, theme }: { s: NodeState; frame: number; theme: FlowTheme }) {
+function Orb({ s, frame, theme, zoom }: { s: NodeState; frame: number; theme: FlowTheme; zoom: number }) {
   const { node, pos, scale, opacity } = s;
   if (scale < 0.01 || opacity < 0.01) return null;
   const d = node.size;
@@ -262,7 +265,7 @@ function Orb({ s, frame, theme }: { s: NodeState; frame: number; theme: FlowThem
           <Icon name="check" size={d * 0.18} color="#fff" strokeWidth={3} draw={ramp(frame, (node.check ?? 0) + 4, 12)} />
         </div>
       )}
-      <Caption track={node.label} frame={frame} theme={theme} y={d / 2 + (ring > 0 ? 40 : 26)} />
+      <Caption track={node.label} frame={frame} theme={theme} y={d / 2 + (ring > 0 ? 40 : 26)} size={labelWorldSize(zoom * scale)} />
     </div>
   );
 }
@@ -338,32 +341,64 @@ function Packet({ link, packet, states, frame, theme }: { link: FlowLink; packet
 }
 
 // ── kinetic text (screen space) ─────────────────────────────────────────────
+// Words rise into place through a mask exactly when they are spoken (their
+// voice timestamps), then the line lifts away together.
 function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowTheme }) {
-  if (frame < t.start - 2 || frame > t.end + 20) return null;
+  if (frame < t.start - 2 || frame > t.end + 16) return null;
+  const style = t.style ?? "headline";
+  const type = TYPE[style];
+  const size = t.size || fitSize(t.text, style, t.accent);
   const bare = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
   const accent = new Set((t.accent ?? "").split(/\s+/).map(bare).filter(Boolean));
-  let li = 0;
-  const words = t.text.split(" ");
-  // Letters cascade in, but the whole line lands within ~20 frames.
-  const stagger = Math.min(1.1, 20 / Math.max(1, t.text.length));
+  const at = (i: number) => t.words?.[i] ?? t.start + i * 3;
+  const exit = ramp(frame, t.end, 12, "in");
+  const lines = style === "side" ? splitLines(t.text, t.accent) : [t.text];
+  let wi = 0;
+  const word = (w: string, last: boolean, strong: boolean) => {
+    const i = wi++;
+    const k = ramp(frame, at(i), 12, "out");
+    const isAccent = accent.has(bare(w));
+    return (
+      <span key={i} style={{ display: "inline-block", overflow: "hidden", verticalAlign: "top", padding: "0.04em 0 0.14em", margin: "-0.04em 0 -0.14em", marginRight: last ? 0 : "0.26em" }}>
+        <span
+          style={{
+            display: "inline-block",
+            transform: `translateY(${(1 - k) * 108}%)`,
+            fontWeight: strong ? type.weight : Math.max(500, type.weight - 220),
+            ...(isAccent && { backgroundImage: `linear-gradient(90deg, ${theme.primary}, ${theme.accent})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }),
+          }}
+        >
+          {w}
+        </span>
+      </span>
+    );
+  };
+  const pillK = style === "pill" ? ramp(frame, t.start, 14, "back") : 1;
+  const side = style === "side";
   return (
-    <div style={{ position: "absolute", left: "50%", top: "50%", transform: `translate(calc(-50% + ${t.pos[0]}px), calc(-50% + ${t.pos[1]}px))`, fontSize: t.size, fontWeight: t.weight ?? 750, letterSpacing: -t.size * 0.03, color: theme.ink, whiteSpace: "nowrap", lineHeight: 1.1 }}>
-      {words.map((w, wi) => {
-        const isAccent = accent.has(bare(w));
+    <div
+      style={{
+        position: "absolute",
+        left: side ? `calc(50% + ${t.pos[0]}px)` : "50%",
+        top: "50%",
+        transform: `translate(${side ? "0" : "-50%"}, calc(-50% + ${t.pos[1] - exit * 36}px)) scale(${pillK})`,
+        opacity: 1 - exit,
+        fontSize: size,
+        fontWeight: type.weight,
+        letterSpacing: `${type.track}em`,
+        lineHeight: type.lineHeight,
+        color: theme.ink,
+        textAlign: side ? "left" : "center",
+        whiteSpace: "nowrap",
+        ...(style === "pill" && { padding: `${size * 0.36}px ${size * 0.7}px`, borderRadius: size, background: theme.dark ? "rgba(255,255,255,.08)" : "#fff", boxShadow: `0 24px 60px ${theme.glow}0.25)` }),
+      }}
+    >
+      {lines.map((line, li) => {
+        const ws = line.split(/\s+/).filter(Boolean);
+        // Side layout: a lighter lead-in line, then the strong accent line.
+        const strong = !side || li === lines.length - 1 || lines.length === 1;
         return (
-          <span key={wi} style={{ display: "inline-block", marginRight: wi < words.length - 1 ? "0.26em" : 0 }}>
-            {[...w].map((ch, ci) => {
-              const i = li++;
-              const kin = ramp(frame, t.start + i * stagger, 14, "out");
-              const kout = ramp(frame, t.end + i * 0.5, 10, "in");
-              const k = kin * (1 - kout);
-              return (
-                <span key={ci} style={{ display: "inline-block", opacity: k, transform: `translateY(${(1 - kin) * 0.45 + kout * -0.3}em)`, filter: `blur(${(1 - k) * 8}px)`, ...(isAccent && { backgroundImage: `linear-gradient(90deg, ${theme.primary}, ${theme.accent})`, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }) }}>
-                  {ch}
-                </span>
-              );
-            })}
-          </span>
+          <div key={li}>{ws.map((w, j) => word(w, j === ws.length - 1, strong))}</div>
         );
       })}
     </div>

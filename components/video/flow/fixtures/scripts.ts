@@ -14,6 +14,7 @@ const beat = (b: Partial<FlowScript["beats"][number]> & Pick<FlowScript["beats"]
   text: null,
   accent: null,
   lottie: null,
+  layout: null,
   ...b,
 });
 
@@ -30,7 +31,7 @@ export const FLOW_SCRIPT_FIXTURES: Fixture[] = [
         beat({ cue: "The product is packed", action: "hero_morph", icon: "package", label: "Packed" }),
         beat({ cue: "the payment is confirmed", action: "add_step", id: "paid", icon: "credit-card", label: "Paid", packet_icon: "circle-dollar-sign" }),
         beat({ cue: "and the package starts its journey", action: "add_step", id: "ship", icon: "truck", label: "Shipped", packet_icon: "package" }),
-        beat({ cue: "From one simple order", action: "confirm" }),
+        beat({ cue: "From one simple order", action: "statement", text: "From one simple order to a successful delivery,", accent: "successful delivery,", layout: "side" }),
         beat({ cue: "to a successful delivery", action: "add_step", id: "home", icon: "house", label: "Delivered", packet_icon: "truck" }),
         beat({ cue: "delivery", action: "celebrate", id: "home", lottie: "confetti-burst" }),
         beat({ cue: "everything stays", action: "converge", icon: "circle-check-big" }),
@@ -64,6 +65,7 @@ export const FLOW_SCRIPT_FIXTURES: Fixture[] = [
             click_row: 1,
           },
         }),
+        beat({ cue: "Approve in a click", action: "statement", text: "Approve in a click", accent: "click", layout: "pill" }),
         beat({ cue: "Then connect your bank", action: "iris_to_hub", icon: "wallet", label: "Payments hub" }),
         beat({
           cue: "cards and tools",
@@ -141,4 +143,42 @@ export const FLOW_SCRIPT_FIXTURES: Fixture[] = [
       ],
     },
   },
+  {
+    // The same narration and voice as the first real run, directed the way the
+    // Director is now asked to (TRANSFORMATION arc, statements, paced beats):
+    // the before/after reference for typography and timing.
+    name: "video-editor-v2",
+    narration: "Creating a great video takes more than just recording. You need to cut the right moments, arrange your clips, add the perfect effects, and bring everything together. Turn raw footage into a polished video, faster.",
+    durationSeconds: 15,
+    script: {
+      theme: "lavender",
+      beats: [
+        beat({ cue: "Creating a great video", action: "hero_enter", icon: "clapperboard", label: "Video Project" }),
+        beat({ cue: "more than just recording.", action: "statement", text: "More than just recording.", accent: "recording.", layout: "pill" }),
+        beat({
+          cue: "You need to cut",
+          action: "ui_showcase",
+          ui: {
+            title: "Editing Timeline",
+            rows: [
+              { icon: "scissors", text: "Cut the right moments", value: "0:12", status: "Selected" },
+              { icon: "rows-3", text: "Arrange clips", value: "0:34", status: null },
+              { icon: "wand-sparkles", text: "Add effects", value: "0:18", status: null },
+              { icon: "play", text: "Preview", value: "1:04", status: null },
+            ],
+            callouts: [{ icon: "scissors", text: "Cut the moment" }],
+            click_row: 0,
+          },
+        }),
+        beat({ cue: "arrange your clips,", action: "add_step", id: "arrange", icon: "rows-3", label: "Arrange", packet_icon: "film" }),
+        beat({ cue: "add the perfect effects,", action: "add_step", id: "effects", icon: "wand-sparkles", label: "Effects", packet_icon: "sparkles" }),
+        beat({ cue: "bring everything together.", action: "converge", icon: "square-play" }),
+        beat({ cue: "together.", action: "celebrate", lottie: "sparkle-twinkle" }),
+        beat({ cue: "Turn raw footage into", action: "statement", text: "Turn raw footage into a polished video, faster.", accent: "polished video," }),
+      ],
+    },
+  },
 ];
+
+// v2 shares the first run's real voice timing.
+FLOW_SCRIPT_FIXTURES[FLOW_SCRIPT_FIXTURES.length - 1].words = FLOW_SCRIPT_FIXTURES.find((f) => f.name === "video-editor")!.words;

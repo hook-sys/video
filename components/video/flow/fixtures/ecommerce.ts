@@ -1,3 +1,4 @@
+import { smoothCamera } from "../compile";
 import { Flow } from "../patterns";
 import type { ThemeName } from "../types";
 
@@ -53,5 +54,5 @@ export function ecommercePlan(theme: ThemeName = "lavender") {
   f.camera(346, 40, [280, 40], 1.0);
   f.text("Everything stays on track.", 386, 450, { pos: [0, 300], size: 96, accent: "on track." });
 
-  return f.build();
+  return smoothCamera(f.build());
 }
