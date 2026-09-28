@@ -103,6 +103,7 @@ export type FlowPlan = {
   iris?: { start: number; dur: number; members: string[]; into: string }[];
   // 0..1: how far the world recedes (dims, blurs) behind a display line.
   dim?: Track<number>;
+  brandColor?: string; // the customer's colour, applied over the theme
   lists?: FlowList[];
   panels?: FlowPanel[];
   brand?: FlowBrand;

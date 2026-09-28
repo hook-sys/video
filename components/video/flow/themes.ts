@@ -83,6 +83,31 @@ export const THEMES: Record<ThemeName, FlowTheme> = {
   },
 };
 
+// The customer's brand colour (#RRGGBB) takes over the theme's accent roles:
+// the subject, panels, highlights and the glow; the rest of the palette stays.
+const hex = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const toHex = (c: number[]) => `#${c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, "0")).join("")}`;
+const mix = (a: number[], b: number[], k: number) => a.map((v, i) => v + (b[i] - v) * k);
+export function withBrandColor(theme: FlowTheme, brand?: string | null): FlowTheme {
+  if (!brand || !/^#[0-9A-Fa-f]{6}$/.test(brand)) return theme;
+  const c = hex(brand);
+  const white = [255, 255, 255];
+  // A lighter partner for gradients, a readable accent (not too light).
+  const lum = (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+  const primary = lum > 0.62 ? toHex(mix(c, [0, 0, 0], 0.35)) : brand;
+  const p = hex(primary);
+  return {
+    ...theme,
+    primary,
+    primary2: toHex(mix(p, white, 0.35)),
+    accent: toHex(mix(p, hex(theme.accent), 0.4)),
+    blobs: theme.dark ? [primary, theme.blobs[1], theme.blobs[2]] : [toHex(mix(p, white, 0.35)), theme.blobs[1], toHex(mix(p, white, 0.6))],
+    soft: theme.dark ? theme.soft : toHex(mix(p, white, 0.86)),
+    line: theme.dark ? theme.line : toHex(mix(p, white, 0.6)),
+    glow: `rgba(${p.join(",")},`,
+  };
+}
+
 export const lottieColors = (t: FlowTheme): LottieColors => ({
   primary: t.primary,
   accent: t.accent,

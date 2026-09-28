@@ -7,6 +7,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   ADVANCED_DIRECTION_MAX,
+  AUDIENCE_MAX,
+  BRAND_NAME_MAX,
+  CTA_MAX,
+  isHexColor,
+  VIDEO_DIRECTION_MIN,
   CREATIVE_DEFAULTS,
   CREATIVE_DIRECTIONS,
   DIRECTION_MAX,
@@ -81,12 +86,23 @@ export async function createProject(
   const motionLevel = oneOf(MOTION_LEVELS, formData.get("motion_level")) ?? CREATIVE_DEFAULTS.motion_level;
   const visualDensity = oneOf(VISUAL_DENSITIES, formData.get("visual_density")) ?? CREATIVE_DEFAULTS.visual_density;
   const advancedDirection = String(formData.get("advanced_direction") ?? "").trim();
+  const brandName = String(formData.get("brand_name") ?? "").trim();
+  const brandColorRaw = String(formData.get("brand_color") ?? "").trim();
+  const brandColor = brandColorRaw && isHexColor(brandColorRaw) ? brandColorRaw.toUpperCase() : null;
+  const callToAction = String(formData.get("call_to_action") ?? "").trim();
+  const targetAudience = String(formData.get("target_audience") ?? "").trim();
 
-  if (!direction) return { error: "Video direction is required." };
+  if (!direction) return { error: "The voiceover script is required." };
   if (direction.length > DIRECTION_MAX)
-    return { error: `Direction must be ${DIRECTION_MAX} characters or less.` };
+    return { error: `The voiceover script must be ${DIRECTION_MAX} characters or less.` };
+  // The video direction is the visual brief: required for new projects.
+  if (advancedDirection.length < VIDEO_DIRECTION_MIN)
+    return { error: `Describe what the video should show (at least ${VIDEO_DIRECTION_MIN} characters).` };
   if (advancedDirection.length > ADVANCED_DIRECTION_MAX)
-    return { error: `Advanced direction must be ${ADVANCED_DIRECTION_MAX} characters or less.` };
+    return { error: `The video direction must be ${ADVANCED_DIRECTION_MAX} characters or less.` };
+  if (brandColorRaw && !brandColor) return { error: "Brand colour must be a hex colour like #0E9CA6." };
+  if (brandName.length > BRAND_NAME_MAX || callToAction.length > CTA_MAX || targetAudience.length > AUDIENCE_MAX)
+    return { error: "Brand name and call to action must be 60 characters or less, audience 200." };
   if (!duration || !format || !voiceLanguage || !voiceStyle)
     return { error: "Please choose a valid option for every field." };
   if (websiteUrl && !parseHttpUrl(websiteUrl))
@@ -129,6 +145,10 @@ export async function createProject(
       motion_level: motionLevel,
       visual_density: visualDensity,
       advanced_direction: advancedDirection,
+      brand_name: brandName,
+      brand_color: brandColor,
+      call_to_action: callToAction,
+      target_audience: targetAudience,
     })
     .select("id")
     .single();
@@ -170,6 +190,31 @@ export async function createProject(
     await supabase.from("projects").delete().eq("id", data.id);
     return { error: "Screenshot upload failed. Please try again." };
   }
+
+  // Direction library: what the customer asked for, kept as data the product
+  // learns from. Never blocks the project.
+  const { error: libraryError } = await createAdminClient()
+    .from("direction_library")
+    .insert({
+      project_id: data.id,
+      user_id: user.id,
+      voice_script: direction.replace(/\n\nVisual style:[\s\S]*$/, ""),
+      video_direction: advancedDirection,
+      visual_style: direction.match(/Visual style:\s*(.+)\s*$/m)?.[1] ?? null,
+      creative_direction: creativeDirection,
+      motion_level: motionLevel,
+      visual_density: visualDensity,
+      format,
+      duration_seconds: duration,
+      voice_language: voiceLanguage,
+      brand_name: brandName || null,
+      brand_color: brandColor,
+      call_to_action: callToAction || null,
+      target_audience: targetAudience || null,
+      has_logo: true,
+      screenshot_count: uploaded.length,
+    });
+  if (libraryError) console.error("direction library insert failed:", data.id, libraryError.message);
 
   if (websiteUrl) {
     // Captured by the pipeline's first step.
@@ -296,13 +341,15 @@ export async function generateBrief(projectId: string) {
 }
 
 // Older projects have no preferences: fall back to the neutral defaults.
-function creativePreferences(project: { direction?: string | null; creative_direction?: string | null; motion_level?: string | null; visual_density?: string | null; advanced_direction?: string | null }) {
+function creativePreferences(project: { direction?: string | null; creative_direction?: string | null; motion_level?: string | null; visual_density?: string | null; advanced_direction?: string | null; target_audience?: string | null; brand_name?: string | null }) {
   return {
     visual_style: project.direction?.match(/Visual style:\s*(.+)\s*$/m)?.[1] ?? VISUAL_STYLES[0],
     creative_direction: project.creative_direction ?? CREATIVE_DEFAULTS.creative_direction,
     motion_level: project.motion_level ?? CREATIVE_DEFAULTS.motion_level,
     visual_density: project.visual_density ?? CREATIVE_DEFAULTS.visual_density,
     advanced_direction: project.advanced_direction ?? "",
+    target_audience: project.target_audience ?? "",
+    brand_name: project.brand_name ?? "",
   };
 }
 
@@ -316,7 +363,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   const admin = createAdminClient();
   const { data: project } = await admin
     .from("projects")
-    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction, voice_status, voice_result")
+    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction, target_audience, brand_name, voice_status, voice_result")
     .eq("id", projectId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -350,6 +397,11 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
       await admin.from("projects").update({ brief: { ...(fresh!.brief as object), flow: result.script } }).eq("id", projectId).eq("user_id", userId);
     }
   }
+  // Direction library: what the Director made of the customer's direction.
+  await admin
+    .from("direction_library")
+    .update({ narration: brief.data.script, flow_script: result.script, outcome: { stored: !!result.script, attempts: result.attempts, problems: result.errors.slice(0, 6), theme: result.script?.theme ?? null }, updated_at: new Date().toISOString() })
+    .eq("project_id", projectId);
   if (usage) {
     await recordCost(admin, {
       project_id: projectId,
@@ -367,7 +419,7 @@ async function generateStory(projectId: string, userId: string, budgetMs: number
   const admin = createAdminClient();
   const { data: project } = await admin
     .from("projects")
-    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction, voice_status, voice_result")
+    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction, target_audience, brand_name, voice_status, voice_result")
     .eq("id", projectId)
     .eq("user_id", userId)
     .maybeSingle();

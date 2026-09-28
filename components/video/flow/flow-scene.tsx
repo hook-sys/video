@@ -4,7 +4,7 @@ import { SFX_LIBRARY } from "@/components/video/sfx";
 import { Icon } from "@/components/video/icons";
 import { isLottieName, LottieAnim } from "@/components/video/lottie";
 import { clamp01, num, ramp, step, vec } from "./eval";
-import { FLOW_FONT, type FlowTheme, lottieColors, THEMES } from "./themes";
+import { FLOW_FONT, type FlowTheme, lottieColors, THEMES, withBrandColor } from "./themes";
 import { computeStates, type NodeState } from "./states";
 import { UiPlane } from "./ui-plane";
 import { fitSize, labelWorldSize, splitLines, TYPE } from "./typography";
@@ -51,7 +51,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
   useFlowFont();
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
-  const theme = THEMES[themeOverride ?? plan.theme];
+  const theme = withBrandColor(THEMES[themeOverride ?? plan.theme], plan.brandColor);
   const states = computeStates(plan, frame);
   // One camera: keyed framing plus a slow hand-held drift so nothing is ever static.
   const [cx, cy] = vec(plan.camera.center, frame);
@@ -538,7 +538,7 @@ function BrandLockup({ brand, frame, theme }: { brand: FlowBrand; frame: number;
       <div style={{ position: "absolute", left: "50%", top: "46%", transform: `translate(calc(-50% + ${markX}px), -50%) scale(${0.7 + 0.3 * inK})`, opacity: inK, filter: inK < 0.99 ? `blur(${(1 - inK) * 16}px)` : undefined }}>
         {brand.logo ? (
           wordmark ? (
-            <Img src={brand.logo} style={{ display: "block", maxWidth: 820, maxHeight: 240, objectFit: "contain" }} />
+            <Img src={brand.logo} style={{ display: "block", height: Math.min(220, 860 / Math.max(1, aspect ?? 1)), width: "auto", maxWidth: 860, objectFit: "contain" }} />
           ) : (
             <div style={{ width: mark, height: mark, borderRadius: mark * 0.26, background: "rgba(255,255,255,.92)", boxShadow: `0 24px 60px ${theme.glow}0.25), inset 0 0 0 1.5px #fff`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               <Img src={brand.logo} style={{ width: mark * 0.74, height: mark * 0.74, objectFit: "contain" }} />

@@ -11,6 +11,9 @@ import { compileFlowScript } from "@/components/video/flow/compile";
 
 export type RenderProject = {
   id?: string;
+  brand_name?: string | null;
+  brand_color?: string | null;
+  call_to_action?: string | null;
   user_id?: string;
   format: string;
   duration_seconds: number;
@@ -23,7 +26,7 @@ export type RenderProject = {
 };
 
 export const RENDER_PROJECT_COLUMNS =
-  "id, user_id, format, duration_seconds, brief, assets_manifest, voice_status, voice_result, screenshot_evidence, direction";
+  "id, user_id, format, duration_seconds, brand_name, brand_color, call_to_action, brief, assets_manifest, voice_status, voice_result, screenshot_evidence, direction";
 
 // Resolves storyboard scenes, assets and narration into composition props with signed URLs.
 // `problems` lists anything missing that a final render must not proceed without.
@@ -130,7 +133,13 @@ export async function buildRenderInput(
               narration: brief.data.script,
               words: wordTimings,
               durationSeconds: project.duration_seconds,
-              brand: { name: brief.data.product_name, logo: logoUrl, cta: brief.data.cta },
+              // The customer's own brand inputs win over what the brief inferred.
+              brand: {
+                name: project.brand_name?.trim() || brief.data.product_name,
+                logo: logoUrl,
+                cta: project.call_to_action?.trim() || brief.data.cta,
+                color: project.brand_color,
+              },
               screenshots: screenshotUrls,
             }),
           }

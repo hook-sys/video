@@ -90,7 +90,7 @@ export function wordFrames(text: string, fromSec: number, timeline: WordTiming[]
   return out;
 }
 
-export type CompileBrand = { name: string; logo?: string | null; cta?: string | null };
+export type CompileBrand = { name: string; logo?: string | null; cta?: string | null; color?: string | null };
 export type CompileOptions = {
   narration: string;
   words?: WordTiming[] | null;
@@ -200,7 +200,8 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
     return { hardEnd: k === -1 ? lastEnd : starts[k] - 4, nextStart: starts[i + 1] ?? stageEnd };
   };
   // The closing line stays to the end, or until the brand lockup takes over.
-  const lastEnd = stageEnd < total ? stageEnd : total + 30;
+  // (it has left the frame by the time the lockup comes in).
+  const lastEnd = stageEnd < total ? stageEnd - 14 : total + 30;
 
   beats.forEach((b: FlowBeat, i) => {
     let t = starts[i];
@@ -421,7 +422,7 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
         if (style === "side" && !compact) style = "display";
         const cueSec = (starts[i] + 3) / FPS;
         // Words still to be spoken when the lockup starts appear just before it.
-        const wf = wordFrames(text, cueSec - 0.2, timeline).map((w) => Math.min(w, stageEnd - 8));
+        const wf = wordFrames(text, cueSec - 0.2, timeline).map((w) => Math.min(w, stageEnd - (stageEnd < total ? 24 : 8)));
         const start = Math.min(t + 2, wf[0]);
         const { hardEnd, nextStart } = nextLineAfter(i);
         const wordsEnd = wf[wf.length - 1] + 36;
@@ -454,7 +455,7 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
         for (const item of items) {
           const w = wordFrames(item, from, timeline)[0];
           const f0 = Math.max(at.length ? at[at.length - 1] + 18 : t + 2, w);
-          at.push(Math.min(f0, stageEnd - 20));
+          at.push(Math.min(f0, stageEnd - (stageEnd < total ? 34 : 20)));
           from = at[at.length - 1] / FPS;
         }
         const { hardEnd, nextStart } = nextLineAfter(i);
@@ -486,7 +487,9 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
     f.sfx(stageEnd, "reveal");
   }
 
-  return smoothCamera(f.build());
+  const plan = f.build();
+  if (brand?.color) plan.brandColor = brand.color;
+  return smoothCamera(plan);
 }
 
 // One continuous camera: sample the keyed path every frame and smooth it

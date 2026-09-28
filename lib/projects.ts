@@ -7,7 +7,14 @@ export const VISUAL_STYLES = ["Premium SaaS", "Minimal", "Bold", "Corporate", "F
 export const CREATIVE_DIRECTIONS = ["Auto", "Story Ad", "Product Demo", "Fast Promo", "Cinematic Brand", "Explainer"] as const;
 export const MOTION_LEVELS = ["Subtle", "Balanced", "Dynamic", "High Energy"] as const;
 export const VISUAL_DENSITIES = ["Clean", "Balanced", "Rich"] as const;
-export const ADVANCED_DIRECTION_MAX = 300;
+// The video direction (what the viewer should see) is required for new projects.
+export const ADVANCED_DIRECTION_MAX = 1500;
+export const VIDEO_DIRECTION_MIN = 20;
+// Brand inputs (optional): shown in the closing lockup and used for the palette.
+export const BRAND_NAME_MAX = 60;
+export const CTA_MAX = 60;
+export const AUDIENCE_MAX = 200;
+export const isHexColor = (v: string) => /^#[0-9A-Fa-f]{6}$/.test(v);
 // Also the database defaults, so projects created before these existed get them.
 export const CREATIVE_DEFAULTS = {
   creative_direction: "Auto",

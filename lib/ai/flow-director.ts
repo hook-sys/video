@@ -65,9 +65,11 @@ RULES
 - theme: "lavender" (bright, friendly SaaS), "mint" (fresh white and green: health, wellness, finance, sustainability, calm), "teal" (clean white and teal: operations, B2B platforms, data, security, logistics) or "midnight" (dark, dramatic, premium). Pick the one that fits the product; use creative_preferences.visual_style as a hint: Bold / Futuristic / Cinematic → midnight; Minimal / Corporate → teal or mint; Premium SaaS → lavender, mint or teal.
 - Unused fields are null.
 
-VISUAL CONCEPT SOURCE
-- If ADVANCED_DIRECTION is present, it is the client's visual concept: follow it closely (subject, world, what transforms) as long as it fits these patterns; never replace it with a generic concept.
+VISUAL CONCEPT SOURCE — the client's VIDEO DIRECTION comes first
+- ADVANCED_DIRECTION is the client's video direction: what the viewer should see. It is the brief for your beats. Follow it closely — its subject, objects, world, mood, the order things appear, what transforms, which moments get big type — translating each idea into the nearest pattern (a named object → hero_enter / hero_morph with the most literal icon; "show our app/dashboard" → ui_showcase; "list/benefits" → list; "everything connects" → orbit; "comes together" → converge; a key line → statement). Never replace it with a generic concept, and never repeat a default arc when the direction asks for something else.
+- Match its mood with the theme and statement layouts (e.g. calm/clean → mint or teal, display lines; bold/energetic → panels, more beats).
 - If it is empty, derive the concept from the narration itself: its subject, its process, its outcome.
+- creative_preferences.target_audience (if any) tells you who watches; brand_name is the product name.
 
 LOTTIE ACCENTS (celebrate.lottie must be one of these names):
 ${LOTTIES}`;

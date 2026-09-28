@@ -5,6 +5,10 @@ import { createProject } from "@/app/projects/actions";
 import { GenerationScreen } from "@/components/generation-screen";
 import {
   ADVANCED_DIRECTION_MAX,
+  AUDIENCE_MAX,
+  BRAND_NAME_MAX,
+  CTA_MAX,
+  VIDEO_DIRECTION_MIN,
   CREATIVE_DEFAULTS,
   CREATIVE_DIRECTIONS,
   DIRECTION_MAX,
@@ -24,6 +28,7 @@ import {
 } from "@/lib/projects";
 
 const sectionLabel = "text-sm font-medium";
+const input = "w-full rounded-xl border border-foreground/15 bg-transparent px-3 py-2.5 text-sm transition placeholder:text-foreground/40 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20";
 const select =
   "w-full rounded-xl border border-foreground/15 bg-transparent px-3 py-2.5 text-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20";
 
@@ -39,6 +44,9 @@ export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number })
   const [logoError, setLogoError] = useState<string>();
   const [shots, setShots] = useState<{ names: string[]; size: number }>({ names: [], size: 0 });
   const [shotError, setShotError] = useState<string>();
+  const [videoDirection, setVideoDirection] = useState("");
+  const [useBrandColor, setUseBrandColor] = useState(false);
+  const [brandColor, setBrandColor] = useState("#0E9CA6");
   // The logo and screenshots share the upload budget on this server.
   const budgetError =
     maxTotalBytes && (logo?.size ?? 0) + shots.size > maxTotalBytes
@@ -53,20 +61,91 @@ export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number })
         <input type="hidden" name="direction" value={script.trim() ? `${script.trim()}${styleSuffix(style)}` : ""} />
 
         <label className="flex flex-col gap-2">
-          <span className={sectionLabel}>Tell us what you want to create</span>
+          <span className={sectionLabel}>
+            Voiceover script <span className="text-red-500">*</span>
+          </span>
+          <span className="text-xs text-foreground/50">Exactly what the voice will say in your video.</span>
           <textarea
             required
             rows={7}
             maxLength={SCRIPT_MAX}
             value={script}
             onChange={(e) => setScript(e.target.value)}
-            placeholder="Write your script here..."
+            placeholder="e.g. Running an online store means juggling orders, stock and couriers. SeloraX brings it all into one dashboard…"
             className="w-full resize-y rounded-2xl border border-foreground/15 bg-foreground/[0.02] p-4 text-base leading-relaxed shadow-sm transition placeholder:text-foreground/40 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/15"
           />
           <span className="self-end text-xs text-foreground/50">
             {script.length}/{SCRIPT_MAX}
           </span>
         </label>
+
+        <label className="flex flex-col gap-2">
+          <span className={sectionLabel}>
+            Video direction <span className="text-red-500">*</span>
+          </span>
+          <span className="text-xs text-foreground/50">
+            What should the viewer see? Describe the scenes in order: the main object, what changes, what appears on each line, the
+            mood and the ending.
+          </span>
+          <textarea
+            name="advanced_direction"
+            required
+            rows={6}
+            minLength={VIDEO_DIRECTION_MIN}
+            maxLength={ADVANCED_DIRECTION_MAX}
+            value={videoDirection}
+            onChange={(e) => setVideoDirection(e.target.value)}
+            placeholder="e.g. Open on our dashboard in 3D. Orders, stock and couriers fly in as icons and circle the store. On “one dashboard” everything snaps into place. Show the benefits as a checklist. Clean, calm, teal. End on our logo."
+            className="w-full resize-y rounded-2xl border border-foreground/15 bg-foreground/[0.02] p-4 text-base leading-relaxed shadow-sm transition placeholder:text-foreground/40 focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/15"
+          />
+          <span className="self-end text-xs text-foreground/50">
+            {videoDirection.length}/{ADVANCED_DIRECTION_MAX}
+          </span>
+        </label>
+
+        <div className="grid gap-8 sm:grid-cols-2">
+          <label className="flex flex-col gap-2">
+            <span className={sectionLabel}>
+              Brand name <span className="font-normal text-foreground/50">(optional)</span>
+            </span>
+            <input name="brand_name" maxLength={BRAND_NAME_MAX} placeholder="e.g. SeloraX" className={input} />
+          </label>
+          <label className="flex flex-col gap-2">
+            <span className={sectionLabel}>
+              Call to action <span className="font-normal text-foreground/50">(optional)</span>
+            </span>
+            <input name="call_to_action" maxLength={CTA_MAX} placeholder="e.g. Start your free trial" className={input} />
+          </label>
+        </div>
+
+        <div className="grid gap-8 sm:grid-cols-2">
+          <label className="flex flex-col gap-2">
+            <span className={sectionLabel}>
+              Who is it for? <span className="font-normal text-foreground/50">(optional)</span>
+            </span>
+            <input name="target_audience" maxLength={AUDIENCE_MAX} placeholder="e.g. Small online shop owners" className={input} />
+          </label>
+          <div className="flex flex-col gap-2">
+            <span className={sectionLabel}>
+              Brand colour <span className="font-normal text-foreground/50">(optional)</span>
+            </span>
+            <div className="flex items-center gap-3 rounded-xl border border-foreground/15 px-3 py-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={useBrandColor} onChange={(e) => setUseBrandColor(e.target.checked)} />
+                Use my colour
+              </label>
+              <input
+                type="color"
+                aria-label="Brand colour"
+                value={brandColor}
+                disabled={!useBrandColor}
+                onChange={(e) => setBrandColor(e.target.value)}
+                className="ml-auto h-8 w-14 cursor-pointer rounded border-0 bg-transparent disabled:opacity-30"
+              />
+              <input type="hidden" name="brand_color" value={useBrandColor ? brandColor : ""} />
+            </div>
+          </div>
+        </div>
 
         <Choice name="visual_style" title="Visual Style" options={VISUAL_STYLES} value={style} onChange={setStyle} />
         <Choice
@@ -113,24 +192,11 @@ export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number })
         {/* Voice style isn't offered to customers; keep the existing default. */}
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
 
-        <label className="flex flex-col gap-2">
-          <span className={sectionLabel}>Advanced Direction (Optional)</span>
-          <textarea
-            name="advanced_direction"
-            rows={3}
-            maxLength={ADVANCED_DIRECTION_MAX}
-            placeholder="Tell the AI how you want the video to feel or look..."
-            className="w-full resize-y rounded-xl border border-foreground/15 bg-transparent p-3 text-sm leading-relaxed transition placeholder:text-foreground/40 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-          />
-          <span className="text-xs text-foreground/50">
-            e.g. &ldquo;Show the tasks becoming organized inside one workspace. Keep the motion dynamic and make the ending
-            feel premium.&rdquo;
-          </span>
-        </label>
-
         <div className="grid gap-8 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <span className={sectionLabel}>Logo</span>
+            <span className={sectionLabel}>
+              Logo <span className="text-red-500">*</span>
+            </span>
             <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-foreground/20 px-3 py-4 text-center text-sm text-foreground/70 transition hover:border-indigo-500/60 hover:bg-indigo-500/5">
               {logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
