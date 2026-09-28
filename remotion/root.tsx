@@ -4,6 +4,8 @@ import { ReferenceDemo } from "@/components/video/reference/reference-demo";
 import { REFERENCE_NARRATION, REFERENCE_STORY } from "@/components/video/engine/fixtures/reference-story";
 import { STORY_WORLD_ID, StoryWorld, type StoryWorldProps } from "@/components/video/engine/story-world";
 import { Storyboard } from "@/components/video/storyboard";
+import { FLOW_SCENE_ID, FlowScene, type FlowSceneProps } from "@/components/video/flow/flow-scene";
+import { ecommercePlan } from "@/components/video/flow/fixtures/ecommerce";
 import { GALLERY_CELL, GALLERY_COLS, LOTTIE_GALLERY_ID, LottieGallery, galleryRows } from "@/components/video/lottie/gallery";
 import {
   COMPOSITION_ID,
@@ -45,6 +47,17 @@ export function RemotionRoot() {
       durationInFrames={450}
       defaultProps={{ story: REFERENCE_STORY, narration: REFERENCE_NARRATION, durationSeconds: 15 } as StoryWorldProps}
       calculateMetadata={({ props }) => ({ durationInFrames: Math.max(1, Math.round(props.durationSeconds * FPS)) })}
+    />
+    {/* Flow engine: pattern-built continuous motion graphics (reference: e-commerce). */}
+    <Composition
+      id={FLOW_SCENE_ID}
+      component={FlowScene}
+      fps={FPS}
+      width={1920}
+      height={1080}
+      durationInFrames={450}
+      defaultProps={{ plan: ecommercePlan() } as FlowSceneProps}
+      calculateMetadata={({ props }) => ({ durationInFrames: props.plan.duration })}
     />
     {/* QA only: every Lottie micro-animation in one grid. */}
     <Composition

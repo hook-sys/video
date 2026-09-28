@@ -113,33 +113,39 @@ if (render) {
     entryPoint: path.join(root, "remotion/index.ts"),
     webpackOverride: (c) => ({ ...c, resolve: { ...c.resolve, alias: { ...c.resolve?.alias, "@": root } } }),
   });
-  for (const f of FIXTURES) {
-    const inputProps = { story: f.story, narration: f.narration, durationSeconds: f.durationSeconds, words: f.words ?? null, assets: f.assets ?? null };
-    const composition = await selectComposition({ serveUrl, id: "StoryWorld", inputProps, browserExecutable });
+  // Pixel checks on every rendered frame of a composition.
+  async function pixelSection(name, id, inputProps) {
+    const composition = await selectComposition({ serveUrl, id, inputProps, browserExecutable });
     const dir = mkdtempSync(path.join(tmpdir(), "story-check-"));
     await renderFrames({ serveUrl, composition, inputProps, outputDir: dir, imageFormat: "png", scale: 0.1, browserExecutable, onStart: () => {}, onFrameUpdate: () => {} });
     const stats = readdirSync(dir).filter((n) => n.endsWith(".png")).sort().map((n) => lumaStats(path.join(dir, n)));
     rmSync(dir, { recursive: true, force: true });
     const checks = [];
-    const add = (name, ok, detail) => checks.push({ name, ok, detail });
+    const add = (label, ok, detail) => checks.push({ name: label, ok, detail });
     // black flash: a (near-)black frame, or a sudden dip that recovers
     let flashes = 0;
-    stats.forEach((s, i) => {
-      const prev = stats[i - 1]?.mean ?? s.mean;
-      const next = stats[i + 1]?.mean ?? s.mean;
-      if (s.mean < 10 || (prev - s.mean > 40 && next - s.mean > 40)) flashes++;
+    stats.forEach((st, i) => {
+      const prev = stats[i - 1]?.mean ?? st.mean;
+      const next = stats[i + 1]?.mean ?? st.mean;
+      if (st.mean < 10 || (prev - st.mean > 40 && next - st.mean > 40)) flashes++;
     });
-    add("no black flashes", flashes === 0, flashes ? `${flashes} flash frame(s)` : `darkest frame luma ${Math.min(...stats.map((s) => s.mean)).toFixed(1)}/255`);
-    const jump = Math.max(...stats.slice(1).map((s, i) => Math.abs(s.mean - stats[i].mean)));
+    add("no black flashes", flashes === 0, flashes ? `${flashes} flash frame(s)` : `darkest frame luma ${Math.min(...stats.map((st) => st.mean)).toFixed(1)}/255`);
+    const jump = Math.max(...stats.slice(1).map((st, i) => Math.abs(st.mean - stats[i].mean)));
     add("no brightness jumps", jump < 40, `largest frame-to-frame change ${jump.toFixed(1)}/255`);
-    const flat = stats.filter((s) => s.sd < 2.5).length;
+    const flat = stats.filter((st) => st.sd < 2.5).length;
     add("no empty (flat) frames", flat === 0, flat ? `${flat} frame(s) with no visible detail` : `all ${stats.length} frames have visible content`);
-    console.log(`\n■ rendered pixels · ${f.name} (${stats.length} frames)`);
+    console.log(`\n■ rendered pixels · ${name} (${stats.length} frames)`);
     for (const c of checks) {
       console.log(`  ${c.ok ? "ok  " : "FAIL"} ${c.name}: ${c.detail}`);
-      if (!c.ok) failures.push(`pixels · ${f.name} · ${c.name}`);
+      if (!c.ok) failures.push(`pixels · ${name} · ${c.name}`);
     }
   }
+  for (const f of FIXTURES) {
+    await pixelSection(f.name, "StoryWorld", { story: f.story, narration: f.narration, durationSeconds: f.durationSeconds, words: f.words ?? null, assets: f.assets ?? null });
+  }
+  // Flow engine reference (default plan), in both themes.
+  await pixelSection("flow · e-commerce (lavender)", "FlowScene", {});
+  await pixelSection("flow · e-commerce (midnight)", "FlowScene", { theme: "midnight" });
 
   // Lottie micro-animations: every cell of the gallery must draw something and
   // actually move (sampled every 4th frame).

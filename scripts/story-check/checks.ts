@@ -20,6 +20,8 @@ import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
 import { LOTTIE_LOADERS } from "@/components/video/lottie/registry";
 import { LOTTIE_PALETTE, recolorLottie } from "@/components/video/lottie/recolor";
 import { readdirSync, readFileSync } from "node:fs";
+import { ecommercePlan } from "@/components/video/flow/fixtures/ecommerce";
+import { validateFlowPlan } from "@/components/video/flow/validate";
 import zlib from "node:zlib";
 import path from "node:path";
 
@@ -207,6 +209,23 @@ function lottieLibrary(): Check[] {
   return checks;
 }
 
+// Flow engine: the reference plan is valid in both themes, and a broken plan
+// is reported rather than rendered wrongly.
+function flowPlans(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  for (const theme of ["lavender", "midnight"] as const) {
+    const plan = ecommercePlan(theme);
+    const errors = validateFlowPlan(plan);
+    add(`e-commerce plan is valid (${theme})`, errors.length === 0, errors.length ? errors.join("; ") : `${plan.nodes.length} nodes, ${plan.links.length} links, ${plan.duration} frames`);
+  }
+  const plan = ecommercePlan();
+  const broken = { ...plan, links: [...plan.links, { id: "x", from: "order", to: "ghost", draw: [10, 5] as [number, number] }], nodes: [...plan.nodes, { ...plan.nodes[0], id: "bad", icon: [[0, "not-an-icon"]] as [number, string][] }] };
+  const errs = validateFlowPlan(broken);
+  add("broken plan is reported", errs.length >= 3, errs.join("; "));
+  return checks;
+}
+
 export function runChecks(): Section[] {
   const sections: Section[] = [
     { name: "stored ProductBrief compatibility", checks: briefCompatibility() },
@@ -214,6 +233,7 @@ export function runChecks(): Section[] {
     { name: "legacy image generation gating", checks: legacyImageGating() },
     { name: "icon library", checks: iconLibrary() },
     { name: "lottie library", checks: lottieLibrary() },
+    { name: "flow engine plans", checks: flowPlans() },
   ];
   for (const f of FIXTURES) {
     const n = normalizeStory(f.story);
