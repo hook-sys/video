@@ -50,6 +50,19 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
   const hide = (n: FlowNodeHandle) => shown.delete(n.id);
   const target = (id: string | null) => (id && nodes.get(id)) || hero || steps[steps.length - 1] || actors[0] || null;
 
+  // Satellites fold back into the subject (before the stage is used for
+  // something else); their orbit and dashed ring end.
+  const clearOrbit = (t: number) => {
+    if (!sats.length) return;
+    for (const s of sats) {
+      if (s.spec.orbit) s.spec.orbit.end = t;
+      s.resize(t, 12, 0.2, "in").fade(t + 6, 6, 0);
+    }
+    f.endRings(t);
+    shown.delete("orbit");
+    sats = [];
+  };
+
   // Frame everything on stage (leaving room for a title), within zoom limits.
   const frame = (t: number, dur: number) => {
     const boxes = [...shown.values()];
@@ -75,7 +88,8 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
       ui.tilt(t, 16, TILT.iso, "in").exit(t + 2, { dur: 16 });
       hide(ui);
       for (const id of hiddenForUi) {
-        const n = nodes.get(id)!;
+        const n = nodes.get(id);
+        if (!n) continue;
         n.fade(t + 6, 14, 1);
         show(n, n.spec.pos[n.spec.pos.length - 1][1], n.spec.size);
       }
@@ -126,6 +140,7 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
         break;
       }
       case "add_step": {
+        clearOrbit(t);
         const prev = steps[steps.length - 1] ?? hero!;
         if (!steps.length) hero!.resize(t, 18, 0.78);
         const pp = prev === hero ? heroPos : prev.spec.pos[prev.spec.pos.length - 1][1];
@@ -156,6 +171,7 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
       case "ui_showcase": {
         const u = b.ui!;
         const at: Vec = hero ? heroPos : [0, 0];
+        clearOrbit(t);
         hiddenForUi = [...shown.keys()];
         for (const id of hiddenForUi) {
           nodes.get(id)?.fade(t, 12, 0);
@@ -182,7 +198,17 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
         return; // camera handled above
       }
       case "iris_to_hub": {
-        const members = [ui!];
+        if (!ui) {
+          // No UI on stage (should not pass validation): treat as the subject's entrance.
+          if (!hero) {
+            hero = f.orb("hero", heroPos, { size: HERO, icon: b.icon!, variant: "solid" }).enter(t + 2);
+            nodes.set("hero", hero);
+          } else hero.morph(t + 2, b.icon!);
+          if (b.label) hero.label(t + 16, b.label);
+          show(hero, heroPos, HERO);
+          break;
+        }
+        const members = [ui];
         hiddenForUi = hiddenForUi.filter((id) => id !== "hero");
         if (!hero) {
           hero = f.orb("hero", heroPos, { size: HERO, icon: b.icon!, variant: "solid" });
@@ -202,6 +228,7 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
         break;
       }
       case "orbit": {
+        clearOrbit(t);
         let at = t;
         if (steps.length) {
           f.converge(steps, hero!, t, heroPos, 20);
@@ -230,15 +257,7 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
         if (all.length) f.converge(all, hero!, t, heroPos, 22);
         all.forEach(hide);
         steps.splice(0);
-        for (const s of sats) {
-          if (s.spec.orbit) s.spec.orbit.end = t;
-          s.resize(t + 4, 18, 0.2, "in").fade(t + 16, 6, 0);
-        }
-        if (sats.length) {
-          f.endRings(t);
-          shown.delete("orbit");
-          sats = [];
-        }
+        clearOrbit(t);
         hero!.label(t, "").pulse(t + 22);
         if (b.icon) hero!.morph(t + 18, b.icon).resize(t + 38, 14, 1.08);
         else hero!.resize(t + 18, 16, 1.08);
@@ -250,7 +269,9 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
         const next = beats.findIndex((x, k) => k > i && x.action === "title");
         // A closing line needs ~1.5 s on screen to finish revealing and read.
         const at = next === -1 ? Math.max(Math.min(t + 2, total - 48), (starts[i - 1] ?? 0) + 8) : t + 2;
-        f.text(b.text!, at, next === -1 ? total + 30 : starts[next] - 4, { pos: [0, 330], size: 88, accent: b.accent ?? undefined });
+        // Fit the line to the frame width (~0.52 em per character at 1920 px).
+        const size = Math.max(52, Math.min(88, Math.floor(1700 / (b.text!.length * 0.52))));
+        f.text(b.text!, at, next === -1 ? total + 30 : starts[next] - 4, { pos: [0, 330], size, accent: b.accent ?? undefined });
         break;
       }
     }

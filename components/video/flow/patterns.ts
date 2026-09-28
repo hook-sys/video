@@ -9,6 +9,14 @@ export const TILT: Record<"iso" | "hero" | "flat", Vec3> = { iso: [46, 0, -22], 
 // built in: a node enters once and then moves, morphs and connects until it
 // leaves. The Visual Director will compose these; fixtures use them by hand.
 
+// Every key goes through put(): a key never lands before the track's last key,
+// so tracks stay in time order whatever order patterns are applied in.
+function put<T>(track: Track<T>, t: number, value: T, ease?: Ease) {
+  const last = track[track.length - 1];
+  const at = last ? Math.max(t, last[0]) : t;
+  if (last && last[0] === at && ease === undefined) last[1] = value;
+  else track.push(ease ? [at, value, ease] : [at, value]);
+}
 function animate<T>(track: Track<T>, t: number, dur: number, value: T, ease: Ease = "inOut") {
   const last = track[track.length - 1];
   // Never start before the track's last key (keeps keys in time order).
@@ -17,11 +25,7 @@ function animate<T>(track: Track<T>, t: number, dur: number, value: T, ease: Eas
   track.push([t + dur, value, ease]);
 }
 // Set a value at t (replacing a key at the same frame).
-const set = <T,>(track: Track<T>, t: number, value: T) => {
-  const last = track[track.length - 1];
-  if (last[0] === t) last[1] = value;
-  else track.push([t, value]);
-};
+const set = <T,>(track: Track<T>, t: number, value: T) => put(track, t, value);
 
 export class FlowNodeHandle {
   constructor(readonly spec: FlowNode) {}
@@ -43,7 +47,7 @@ export class FlowNodeHandle {
     if (from) {
       const to = this.pos[this.pos.length - 1][1];
       set(this.pos, t, [to[0] + from[0], to[1] + from[1]]);
-      this.pos.push([t + dur + 4, to, "out"]);
+      put(this.pos, t + dur + 4, to, "out");
     }
     return this;
   }
@@ -67,16 +71,16 @@ export class FlowNodeHandle {
   }
   // Morph: the icon draws into a new one with a squash-and-settle.
   morph(t: number, icon: string, label?: string) {
-    (this.spec.icon ??= []).push([t, icon]);
+    put((this.spec.icon ??= []), t, icon);
     if (label !== undefined) this.label(t + 4, label);
     const s = this.scaleTrack();
     const base = s[s.length - 1][1];
     animate(s, t, 6, base * 0.88, "in");
-    s.push([t + 18, base, "back"]);
+    put(s, t + 18, base, "back");
     return this;
   }
   label(t: number, text: string) {
-    (this.spec.label ??= []).push([t, text]);
+    put((this.spec.label ??= []), t, text);
     return this;
   }
   pulse(t: number) {
@@ -117,7 +121,7 @@ export class FlowNodeHandle {
     set(this.scaleTrack(), t, 1);
     const o = this.opacityTrack();
     set(o, t, 0);
-    o.push([t + dur, 1, "out"]);
+    put(o, t + dur, 1, "out");
     return this;
   }
 

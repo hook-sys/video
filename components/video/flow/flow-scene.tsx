@@ -144,7 +144,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
 
 function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan["rings"]>[number]; states: Map<string, NodeState>; frame: number; theme: FlowTheme }) {
   const c = states.get(ring.center);
-  const k = ramp(frame, ring.start, 20, "out") * (1 - (ring.end !== undefined ? ramp(frame, ring.end, 14, "in") : 0));
+  const k = ramp(frame, ring.start, 20, "out") * (1 - (ring.end !== undefined ? ramp(frame, ring.end, 6, "in") : 0));
   if (!c || k <= 0) return null;
   return <circle cx={c.pos[0]} cy={c.pos[1]} r={ring.radius * (0.7 + 0.3 * k)} fill="none" stroke={theme.primary} strokeOpacity={0.35 * k} strokeWidth={3} strokeDasharray="3 14" strokeLinecap="round" />;
 }

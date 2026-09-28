@@ -1,8 +1,9 @@
 import type { FlowScript } from "@/lib/flow-script";
+import type { WordTiming } from "@/lib/voice-timing";
 
 // FlowScripts in exactly the shape the Visual Director returns, used to test
 // the compiler across different kinds of stories.
-type Fixture = { name: string; narration: string; durationSeconds: number; script: FlowScript };
+type Fixture = { name: string; narration: string; durationSeconds: number; script: FlowScript; words?: WordTiming[] };
 const beat = (b: Partial<FlowScript["beats"][number]> & Pick<FlowScript["beats"][number], "cue" | "action">): FlowScript["beats"][number] => ({
   id: null,
   icon: null,
@@ -94,6 +95,49 @@ export const FLOW_SCRIPT_FIXTURES: Fixture[] = [
         beat({ cue: "every appointment lands", action: "add_step", id: "calendar", icon: "calendar-check", label: "Scheduled", packet_icon: "clock" }),
         beat({ cue: "Less waiting", action: "converge", icon: "heart-pulse" }),
         beat({ cue: "more care", action: "title", text: "Less waiting, more care.", accent: "more care." }),
+      ],
+    },
+  },
+  {
+    // Regression: the first real Director run (Preview), verbatim, with its
+    // real ElevenLabs word timestamps. It orbits, then opens the UI — the
+    // compiler crashed on that order.
+    name: "video-editor",
+    narration: "Creating a great video takes more than just recording. You need to cut the right moments, arrange your clips, add the perfect effects, and bring everything together. Turn raw footage into a polished video, faster.",
+    durationSeconds: 15,
+    words: [
+      ["Creating", 0, 0.4], ["a", 0.44, 0.48], ["great", 0.533, 0.8], ["video", 0.867, 1.2], ["takes", 1.253, 1.52], ["more", 1.552, 1.68], ["than", 1.712, 1.84], ["just", 1.888, 2.08], ["recording.", 2.136, 3.2],
+      ["You", 3.24, 3.36], ["need", 3.392, 3.52], ["to", 3.6, 3.76], ["cut", 3.8, 3.92], ["the", 3.94, 4], ["right", 4.053, 4.32], ["moments", 4.39, 4.88], [",", 4.88, 5.2], ["arrange", 5.25, 5.6], ["your", 5.632, 5.76], ["clips,", 5.84, 6.72],
+      ["add", 6.78, 6.96], ["the", 7, 7.12], ["perfect", 7.17, 7.52], ["effects,", 7.6, 8.48], ["and", 8.5, 8.56], ["bring", 8.6, 8.8], ["everything", 8.858, 9.44], ["together.", 9.502, 10.08],
+      ["Turn", 10.24, 10.88], ["raw", 10.96, 11.2], ["footage", 11.27, 11.76], ["into", 11.84, 12.16], ["a", 12.2, 12.24], ["polished", 12.302, 12.8], ["video,", 12.867, 13.6], ["faster.", 13.691, 14.32],
+    ].map(([text, start, end]) => ({ text: text as string, start: start as number, end: end as number })),
+    script: {
+      theme: "lavender",
+      beats: [
+        beat({ cue: "Creating a great video", action: "hero_enter", id: "video-project", icon: "clapperboard", label: "Video Project" }),
+        beat({ cue: "more than just recording.", action: "orbit", satellites: [1, 2, 3, 4].map((i) => ({ id: `clip-${i}`, icon: "file-play", label: null })) }),
+        beat({
+          cue: "You need to cut",
+          action: "ui_showcase",
+          ui: {
+            title: "Editing Timeline",
+            rows: [
+              { icon: "scissors", text: "Cut Moments", value: null, status: "Selected" },
+              { icon: "rows-3", text: "Arrange Clips", value: null, status: null },
+              { icon: "wand-sparkles", text: "Add Effects", value: null, status: null },
+              { icon: "play", text: "Video Preview", value: null, status: null },
+            ],
+            callouts: [{ icon: "mouse-pointer-2", text: "Choose the moment" }],
+            click_row: 0,
+          },
+        }),
+        beat({ cue: "the right moments", action: "confirm" }),
+        beat({ cue: "arrange your clips,", action: "add_step", id: "arrange", icon: "rows-3", label: "Arrange Clips", packet_icon: "film" }),
+        beat({ cue: "add the perfect effects,", action: "add_step", id: "effects", icon: "wand-sparkles", label: "Perfect Effects", packet_icon: "film" }),
+        beat({ cue: "bring everything together.", action: "converge", icon: "film" }),
+        beat({ cue: "Turn raw footage into", action: "hero_morph", id: "video-project", icon: "square-play", label: "Polished Video" }),
+        beat({ cue: "a polished video,", action: "celebrate", lottie: "sparkle-twinkle" }),
+        beat({ cue: "faster.", action: "title", text: "Turn raw footage into a polished video, faster.", accent: "polished video" }),
       ],
     },
   },

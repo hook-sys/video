@@ -1,4 +1,6 @@
 import type { AssetManifest } from "@/lib/asset-manifest";
+import { compileFlowScript } from "@/components/video/flow/compile";
+import { validateFlowPlan } from "@/components/video/flow/validate";
 import { type FlowScript, flowScriptBlockers } from "@/lib/flow-script";
 import { storyBlockers, type VisualStory } from "@/lib/visual-story";
 import type { WordTiming } from "@/lib/voice-timing";
@@ -30,7 +32,17 @@ export const flowEngineEnabled = () => process.env.VERCEL_ENV === "preview" && p
 // it still validates against the narration (and its word timestamps).
 export function usableFlow(flow: FlowScript | null | undefined, narration: string, format: string, words: WordTiming[] | null | undefined, durationSeconds: number) {
   if (!flowEngineEnabled() || !flow || !STORY_FORMATS.includes(format)) return null;
-  return flowScriptBlockers(flow, narration, words, durationSeconds).length ? null : flow;
+  if (flowScriptBlockers(flow, narration, words, durationSeconds).length) return null;
+  // It must also compile to a valid plan; anything else falls back to the
+  // Storyboard (never a failed video).
+  try {
+    const errors = validateFlowPlan(compileFlowScript(flow, { narration, words, durationSeconds }));
+    if (errors.length) throw new Error(errors.slice(0, 3).join("; "));
+    return flow;
+  } catch (e) {
+    console.error("flow compile failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 // Legacy manifest images (Fal) are only needed by the Storyboard renderer.

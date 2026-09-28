@@ -109,6 +109,10 @@ export function flowScriptBlockers(script: FlowScript, narration: string, voiceW
     if (!cond) errors.push(`beat ${i} (${beats[i].action}): ${what}`);
   };
   beats.forEach((b, i) => {
+    // The UI stays on stage only until the next beat, which either closes it
+    // through the iris or replaces it.
+    const uiOpen = ui;
+    if (b.action !== "iris_to_hub") ui = false;
     const fresh = (id: string | null) => {
       need(id, i, "needs a new id");
       if (id && ids.has(id)) errors.push(`beat ${i}: id "${id}" is already used`);
@@ -149,7 +153,7 @@ export function flowScriptBlockers(script: FlowScript, narration: string, voiceW
         ui = true;
         break;
       case "iris_to_hub":
-        need(ui, i, "needs a ui_showcase before it");
+        need(uiOpen, i, "must directly follow a ui_showcase");
         need(b.icon, i, "needs the hub icon");
         hero = true;
         ui = false;
