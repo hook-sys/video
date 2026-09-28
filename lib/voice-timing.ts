@@ -60,3 +60,26 @@ export function tokenize(text: string): string[] {
     .split(/[^\p{L}\p{M}\p{N}]+/u)
     .filter(Boolean);
 }
+
+// Same word, tolerating inflection ("video"/"videos"); matches sync.ts.
+export const sameWord = (a: string, b: string) =>
+  a === b || (Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a)));
+
+// Where each cue phrase is actually spoken: the start time of its first word in
+// the voice's word stream, matched in order (each cue after the previous one).
+// null when the phrase isn't spoken (in that order).
+export function spokenCueTimes(cues: string[], words: WordTiming[]): (number | null)[] {
+  const stream = words.flatMap((w) => tokenize(w.text).map((t) => ({ t, start: w.start })));
+  let from = 0;
+  return cues.map((cue) => {
+    const want = tokenize(cue);
+    if (!want.length) return null;
+    for (let i = from; i < stream.length; i++) {
+      if (want.every((w, j) => stream[i + j] && sameWord(stream[i + j].t, w))) {
+        from = i + 1;
+        return stream[i].start;
+      }
+    }
+    return null;
+  });
+}

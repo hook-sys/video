@@ -99,6 +99,7 @@ export function checkTimeline(tl: RenderTimeline): { passed: boolean; checks: Ch
     maxJump = Math.max(maxJump, Math.hypot((c.x - prev.x) * c.z, (c.y - prev.y) * c.z), Math.abs(Math.log(c.z / prev.z)) * W);
     prev = c;
   }
+  add(0, "timing source", true, tl.timing === "voice" ? "voice word timestamps (authoritative)" : "estimated from the narration (no word timestamps)");
   add(0, "continuous camera", maxJump < 90, `largest per-frame camera move ${maxJump.toFixed(0)} px (limit 90)`, "error");
   const zooms = Array.from({ length: Math.ceil(tl.durationInFrames / 3) }, (_, i) => evaluateCamera(tl.camera, i * 3, tl.fps).z);
   const zMin = Math.min(...zooms);
@@ -123,8 +124,10 @@ export function checkTiming(tl: RenderTimeline, words?: WordTiming[] | null): { 
     // the spoken word this cue landed on
     const word = stream.find((w) => same(w.t, first) && Math.abs(Math.round(w.start * fps) - m.frame) <= 1);
     if (words?.length) add(m.frame, `cue on word · "${m.cue}"`, !!word, word ? `"${first}" spoken at ${word.start.toFixed(3)}s → frame ${m.frame}` : `no spoken "${first}" within 1 frame of frame ${m.frame}`, "error");
+    // Anticipation ≤ 0.12 s; only the opening may start earlier (at frame 0).
     const lead = m.action === null ? null : (m.action - m.frame) / fps;
-    if (lead !== null) add(m.frame, `action on cue · "${m.cue}"`, lead >= -0.5 && lead <= 0.45, `first action ${lead >= 0 ? "+" : ""}${lead.toFixed(2)}s from the word (allowed −0.50…+0.45)`, Math.abs(lead) > 1 ? "error" : "warn");
+    const opening = i === 0 && m.action === 0;
+    if (lead !== null) add(m.frame, `action on cue · "${m.cue}"`, opening || (lead >= -0.12 && lead <= 0.45), opening ? `opens at frame 0 (word at ${(m.frame / fps).toFixed(2)}s)` : `first action ${lead >= 0 ? "+" : ""}${lead.toFixed(2)}s from the word (allowed −0.12…+0.45)`, lead < -0.2 && !opening ? "error" : "warn");
     const near = m.action === null ? null : tl.sfx.reduce<number | null>((best, c) => (best === null || Math.abs(c.frame - m.action!) < Math.abs(best - m.action!) ? c.frame : best), null);
     const sfxGap = m.sfx !== null && near !== null && m.action !== null ? (near - m.action) / fps : null;
     if (m.sfx !== null) add(m.frame, `sound on action · "${m.cue}"`, sfxGap !== null && Math.abs(sfxGap) <= 0.5, sfxGap === null ? "its sound was dropped (spacing/cap)" : `nearest sound ${sfxGap >= 0 ? "+" : ""}${sfxGap.toFixed(2)}s from the action`);

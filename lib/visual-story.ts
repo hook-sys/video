@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { tokenize } from "@/lib/voice-timing";
+import { spokenCueTimes, tokenize, type WordTiming } from "@/lib/voice-timing";
 
 // VisualStory: what the AI Creative Director will describe. It is
 // purely semantic — which objects, where the story is, what happens to them on
@@ -175,7 +175,15 @@ export function validateStory(story: VisualStory, narration?: string): StoryIssu
 
 // What makes a story unusable for rendering against this narration: any error,
 // or a cue that isn't spoken (visuals would no longer match the words).
-export function storyBlockers(story: VisualStory, narration: string) {
+// With the voice's word timestamps, every cue must also be actually spoken, in
+// order (the voice is the timeline).
+export function storyBlockers(story: VisualStory, narration: string, words?: WordTiming[] | null) {
   const v = validateStory(story, narration);
-  return [...v.errors, ...v.warnings.filter((w) => w.includes("not found in the narration"))];
+  const out = [...v.errors, ...v.warnings.filter((w) => w.includes("not found in the narration"))];
+  if (words?.length) {
+    spokenCueTimes(story.moments.map((m) => m.cue), words).forEach((at, i) => {
+      if (at === null) out.push(`moment ${i + 1}: cue "${story.moments[i].cue}" is not spoken in the voice (in order)`);
+    });
+  }
+  return out;
 }

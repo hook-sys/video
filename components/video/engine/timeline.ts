@@ -63,6 +63,7 @@ export type RenderTimeline = {
   textTone: "dark" | "light";
   sfx: SfxCue[];
   moments: MomentMark[];
+  timing: "voice" | "estimated"; // voice word timestamps are the timeline when present
   issues: string[];
 };
 

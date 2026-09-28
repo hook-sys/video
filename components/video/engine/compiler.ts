@@ -22,6 +22,7 @@ export type CompileInput = {
 };
 
 const AREA_GAP = 2100;
+const ANTICIPATION = 3; // frames (0.10 s) an action may lead its spoken word
 const MAX_ZOOM = 2.1; // a single card can fill ~40–60% of the frame
 const CAMERA_SPEED = 1300; // screen px per second the camera may travel
 const WORLD_Y = 1000;
@@ -187,8 +188,11 @@ export function compileStory(input: CompileInput): RenderTimeline {
     const role = KINDS[t.kind].role;
     let startPose: Pose;
     if (role === "item" || role === "app") {
+      // Things fly in from off-frame; what opens the video glides in from
+      // close by instead, so the very first frame already shows it.
       const d = DIRS[dirIndex % DIRS.length];
-      startPose = { x: pose.x + d.x, y: pose.y + d.y, rot: pose.rot + d.tilt, scale: 1, opacity: 0 };
+      const k = at <= 0 ? 0.18 : 1;
+      startPose = { x: pose.x + d.x * k, y: pose.y + d.y * k, rot: pose.rot + d.tilt * k, scale: 1, opacity: 0 };
     } else {
       startPose = { ...pose, scale: 0.86, opacity: 0 };
     }
@@ -228,8 +232,10 @@ export function compileStory(input: CompileInput): RenderTimeline {
   story.moments.forEach((m, mi) => {
     const before = new Map([...tracks.values()].map((t) => [t.id, [t.motion.length, t.state.length, t.impulses.length]]));
     const sfxBefore = sfx.length;
-    // The video never opens on an empty world: the first moment is already arriving at frame 0.
-    const f = mi === 0 && starts[0] < sec(0.6) ? starts[0] - 3 - sec(0.35) : Math.max(0, starts[mi] - 3);
+    // Actions anticipate their spoken cue by ANTICIPATION (≤ 0.12 s); the voice
+    // stays the timeline. The opening never shows an empty world: the first
+    // moment starts at frame 0 when its first word is spoken near the start.
+    const f = mi === 0 && starts[0] <= sec(0.6) ? 0 : Math.max(0, starts[mi] - ANTICIPATION);
     const span = Math.max(sec(0.5), ends[mi] - starts[mi]);
     const area = placeOf(m.area);
     for (const ev of m.events) compileEvent(ev, m, f, span, area);
@@ -273,7 +279,9 @@ export function compileStory(input: CompileInput): RenderTimeline {
           } else {
             appear(id, at, isContainer(kind) ? centerPose(intoArea ?? home) : freePose(intoArea ?? home, id), home.id, 0);
           }
-          if (role === "item" || role === "app") sfxAt(at + 6, "soft_pop", i % 2 === 0 && i < 8);
+          // pops: every other arrival of a pile (at most 4); the first few single entrances
+          if (ev.verb === "accumulate") sfxAt(at + 6, "soft_pop", (role === "item" || role === "app") && i % 2 === 0 && i < 8);
+          else sfxAt(at + 4, "soft_pop", i < 3);
         });
         ids.filter(visibleAt).filter((id) => !fresh.includes(id)).forEach((id, i) => emphasize(id, f + i * 2));
         break;
@@ -362,6 +370,7 @@ export function compileStory(input: CompileInput): RenderTimeline {
           push(id, { frame: at, pose: dockPose(dest, k), pattern: "snap", dur: sec(0.45) });
           state(id, "morph", at, 1, sec(0.5));
           attach(id, dest, "dock", at);
+          sfxAt(at + 3, "click", j === 0);
         });
         // Column distribution: most to do, some in progress, some already done.
         const n = items.length;
@@ -421,6 +430,7 @@ export function compileStory(input: CompileInput): RenderTimeline {
             } else appear(id, f, freePose(home, id), home.id, 0);
           }
           state(id, "build", f + i * 4, 1, Math.max(sec(1.2), Math.min(span, sec(2.4))));
+          sfxAt(f + i * 4 + 4, "reveal", i === 0); // a subtle rise as it builds
           if (!status.get(id)!.container) state(id, "value", f + i * 4, 100, Math.max(sec(1.2), Math.min(span, sec(2.4))));
         });
         break;
@@ -712,6 +722,7 @@ export function compileStory(input: CompileInput): RenderTimeline {
     textTone: finalArea?.kind === "hero" ? "dark" : "light",
     sfx: planEventSfx(sfx, duration),
     moments: marks,
+    timing: synced ? "voice" : "estimated",
     issues: synced ? issues : [...issues, "no voice word timing: cue times estimated from the narration"],
   };
 }

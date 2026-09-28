@@ -50,6 +50,7 @@ import {
 import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { generateVisualStory } from "@/lib/ai/visual-story";
+import { parseWordTimings } from "@/lib/voice-timing";
 import { storyEngineEnabled } from "@/lib/story-engine";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 
@@ -290,29 +291,35 @@ function creativePreferences(project: { direction?: string | null; creative_dire
 // Preview-only (VISUAL_ENGINE=story): a separate VisualStory call after the
 // brief. Stores the story only when it validates; otherwise the brief keeps
 // story = null and the existing renderer is used. Never fails the project.
-async function generateStory(projectId: string, userId: string) {
+async function generateStory(projectId: string, userId: string, budgetMs: number) {
   const admin = createAdminClient();
   const { data: project } = await admin
     .from("projects")
-    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction")
+    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction, voice_status, voice_result")
     .eq("id", projectId)
     .eq("user_id", userId)
     .maybeSingle();
   const brief = ProductBrief.safeParse(project?.brief);
-  if (!project || !brief.success || brief.data.story || project.format !== "16:9") return;
+  // Only after the voice exists; the locked script is never rewritten here.
+  if (!project || project.voice_status !== "completed" || !brief.success || brief.data.story || project.format !== "16:9") return;
+  const words = parseWordTimings((project.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
+  console.info("visual story start:", { projectId, after: "voice completed", timing: words?.length ? "voice" : "estimated", words: words?.length ?? 0 });
   let usage: BriefUsage | undefined;
   const result = await generateVisualStory(
     {
       narration: brief.data.script,
+      words,
       duration_seconds: project.duration_seconds,
       product_name: brief.data.product_name || undefined,
       creative_preferences: creativePreferences(project),
     },
     (u) => (usage = u),
+    budgetMs,
   );
   console.info("visual story:", {
     projectId,
     outcome: result.story ? "stored" : "none",
+    timing: result.timing,
     attempts: result.attempts,
     ms: result.ms,
     input_tokens: usage?.inputTokens,
@@ -335,7 +342,7 @@ async function generateStory(projectId: string, userId: string) {
       model: usage.model,
       quantity: usage.inputTokens + usage.outputTokens,
       estimated_cost_usd: openaiCost(usage.model, usage.inputTokens, usage.outputTokens),
-      metadata: { kind: "visual_story", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts: result.attempts, latency_ms: result.ms, stored: !!result.story },
+      metadata: { kind: "visual_story", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts: result.attempts, latency_ms: result.ms, stored: !!result.story, timing: result.timing },
     });
   }
 }
@@ -768,7 +775,11 @@ async function claimPipeline(projectId: string, userId: string) {
  * Completed steps are skipped, so a retry resumes where the last run stopped.
  * Never throws; the outcome is stored on the project.
  */
+// The whole pipeline runs within one request (maxDuration 300 s).
+const PIPELINE_BUDGET_MS = 280_000;
+
 async function runPipeline(projectId: string, userId: string) {
+  const pipelineStarted = Date.now();
   const admin = createAdminClient();
   const setPipeline = (fields: Record<string, unknown>) =>
     admin.from("projects").update(fields).eq("id", projectId).eq("user_id", userId);
@@ -838,18 +849,18 @@ async function runPipeline(projectId: string, userId: string) {
       if (p.brief_status !== "completed") return void (await fail(p.brief_error ?? "Brief failed."));
     }
 
-    // 3. Voice (and, Preview-only, the visual story alongside it).
+    // 3. Voice: one track for the locked script, with word timestamps.
     await enter("voice");
-    const story = storyEngineEnabled() ? attempt(() => generateStory(projectId, userId)) : null;
     if (p.voice_status !== "completed") {
       await attempt(() => generateVoice(projectId));
       p = await state();
-      if (p.voice_status !== "completed") {
-        await story;
-        return void (await fail(p.voice_error ?? "Voice failed."));
-      }
+      if (p.voice_status !== "completed") return void (await fail(p.voice_error ?? "Voice failed."));
     }
-    await story;
+
+    // Preview-only: the Visual Director starts only after the voice exists
+    // (its words are the timeline); it runs alongside the visuals step.
+    const budget = PIPELINE_BUDGET_MS - (Date.now() - pipelineStarted);
+    const story = storyEngineEnabled() && budget > 45_000 ? attempt(() => generateStory(projectId, userId, Math.min(110_000, budget - 30_000))) : null;
 
     // 4. Visual asset manifest, then generated assets.
     await enter("visuals");
@@ -864,6 +875,7 @@ async function runPipeline(projectId: string, userId: string) {
       await attempt(() => generateVisualAssets(projectId));
       p = await state();
     }
+    await story;
     if (p.assets_status !== "completed") return void (await fail(p.assets_error ?? "Assets failed."));
 
     // 5–6. Validation runs first inside startRender; rendering only where supported.
