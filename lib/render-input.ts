@@ -6,6 +6,7 @@ import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import type { RenderScene } from "@/components/video/types";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
+import { usableStory } from "@/lib/story-engine";
 
 export type RenderProject = {
   format: string;
@@ -82,9 +83,13 @@ export async function buildRenderInput(
     };
   });
 
+  // Preview-only story engine: the validated story, else null (→ Storyboard).
+  const story = usableStory(brief.data.story, brief.data.script, project.format);
+
   return {
     problems,
     props: {
+      story: story ? { story, narration: brief.data.script } : null,
       scenes,
       format: project.format,
       durationSeconds: project.duration_seconds,

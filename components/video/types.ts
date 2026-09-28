@@ -21,9 +21,11 @@ export type StoryboardProps = {
 };
 
 // Props for server rendering; `format` only drives composition size.
-export type RenderProps = StoryboardProps & { format: string };
+// `story` set → the Preview-only continuous story engine renders instead.
+export type RenderProps = StoryboardProps & { format: string; story?: { story: unknown; narration: string } | null };
 
 export const COMPOSITION_ID = "Storyboard";
+export const STORY_WORLD_ID = "StoryWorld"; // Preview-only continuous story engine
 
 export const FPS = 30;
 

@@ -49,6 +49,8 @@ import {
 } from "@/lib/benchmark";
 import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
+import { generateVisualStory } from "@/lib/ai/visual-story";
+import { storyEngineEnabled } from "@/lib/story-engine";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 
 export type CreateProjectState = { error?: string };
@@ -244,14 +246,7 @@ export async function generateBrief(projectId: string) {
         format: project.format,
         voice_language: project.voice_language,
         voice_style: project.voice_style,
-        // Older projects have no preferences: fall back to the neutral defaults.
-        creative_preferences: {
-          visual_style: project.direction?.match(/Visual style:\s*(.+)\s*$/m)?.[1] ?? VISUAL_STYLES[0],
-          creative_direction: project.creative_direction ?? CREATIVE_DEFAULTS.creative_direction,
-          motion_level: project.motion_level ?? CREATIVE_DEFAULTS.motion_level,
-          visual_density: project.visual_density ?? CREATIVE_DEFAULTS.visual_density,
-          advanced_direction: project.advanced_direction ?? "",
-        },
+        creative_preferences: creativePreferences(project),
         screenshots: (screenshots ?? []).map((s) => s.original_filename),
         has_website_screenshot: !!capture?.screenshot_path,
       },
@@ -279,6 +274,70 @@ export async function generateBrief(projectId: string) {
     }
   }
   revalidatePath(`/projects/${projectId}`);
+}
+
+// Older projects have no preferences: fall back to the neutral defaults.
+function creativePreferences(project: { direction?: string | null; creative_direction?: string | null; motion_level?: string | null; visual_density?: string | null; advanced_direction?: string | null }) {
+  return {
+    visual_style: project.direction?.match(/Visual style:\s*(.+)\s*$/m)?.[1] ?? VISUAL_STYLES[0],
+    creative_direction: project.creative_direction ?? CREATIVE_DEFAULTS.creative_direction,
+    motion_level: project.motion_level ?? CREATIVE_DEFAULTS.motion_level,
+    visual_density: project.visual_density ?? CREATIVE_DEFAULTS.visual_density,
+    advanced_direction: project.advanced_direction ?? "",
+  };
+}
+
+// Preview-only (VISUAL_ENGINE=story): a separate VisualStory call after the
+// brief. Stores the story only when it validates; otherwise the brief keeps
+// story = null and the existing renderer is used. Never fails the project.
+async function generateStory(projectId: string, userId: string) {
+  const admin = createAdminClient();
+  const { data: project } = await admin
+    .from("projects")
+    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction")
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  const brief = ProductBrief.safeParse(project?.brief);
+  if (!project || !brief.success || brief.data.story || project.format !== "16:9") return;
+  let usage: BriefUsage | undefined;
+  const result = await generateVisualStory(
+    {
+      narration: brief.data.script,
+      duration_seconds: project.duration_seconds,
+      product_name: brief.data.product_name || undefined,
+      creative_preferences: creativePreferences(project),
+    },
+    (u) => (usage = u),
+  );
+  console.info("visual story:", {
+    projectId,
+    outcome: result.story ? "stored" : "none",
+    attempts: result.attempts,
+    ms: result.ms,
+    input_tokens: usage?.inputTokens,
+    output_tokens: usage?.outputTokens,
+    problems: result.errors.slice(0, 6),
+  });
+  if (result.story) {
+    // Re-read so nothing written meanwhile is lost; only `story` changes.
+    const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
+    const current = ProductBrief.safeParse(fresh?.brief);
+    if (current.success && !current.data.story) {
+      await admin.from("projects").update({ brief: { ...(fresh!.brief as object), story: result.story } }).eq("id", projectId).eq("user_id", userId);
+    }
+  }
+  if (usage) {
+    await recordCost(admin, {
+      project_id: projectId,
+      user_id: userId,
+      operation: "openai_brief",
+      model: usage.model,
+      quantity: usage.inputTokens + usage.outputTokens,
+      estimated_cost_usd: openaiCost(usage.model, usage.inputTokens, usage.outputTokens),
+      metadata: { kind: "visual_story", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts: result.attempts, latency_ms: result.ms, stored: !!result.story },
+    });
+  }
 }
 
 export async function generateVoice(projectId: string) {
@@ -779,13 +838,18 @@ async function runPipeline(projectId: string, userId: string) {
       if (p.brief_status !== "completed") return void (await fail(p.brief_error ?? "Brief failed."));
     }
 
-    // 3. Voice.
+    // 3. Voice (and, Preview-only, the visual story alongside it).
     await enter("voice");
+    const story = storyEngineEnabled() ? attempt(() => generateStory(projectId, userId)) : null;
     if (p.voice_status !== "completed") {
       await attempt(() => generateVoice(projectId));
       p = await state();
-      if (p.voice_status !== "completed") return void (await fail(p.voice_error ?? "Voice failed."));
+      if (p.voice_status !== "completed") {
+        await story;
+        return void (await fail(p.voice_error ?? "Voice failed."));
+      }
     }
+    await story;
 
     // 4. Visual asset manifest, then generated assets.
     await enter("visuals");

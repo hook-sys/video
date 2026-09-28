@@ -21,7 +21,7 @@ export type StoryWorldProps = {
   title?: string;
 };
 
-export const STORY_WORLD_ID = "StoryWorld";
+export { STORY_WORLD_ID } from "../types";
 const SFX_VOLUME = 0.25;
 
 export function useTimeline({ story, narration, durationSeconds, words, title }: StoryWorldProps) {

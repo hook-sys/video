@@ -172,3 +172,10 @@ export function validateStory(story: VisualStory, narration?: string): StoryIssu
   if (story.closing.text.length > 3) warnings.push("more than 3 closing lines (only 3 are shown)");
   return { errors, warnings };
 }
+
+// What makes a story unusable for rendering against this narration: any error,
+// or a cue that isn't spoken (visuals would no longer match the words).
+export function storyBlockers(story: VisualStory, narration: string) {
+  const v = validateStory(story, narration);
+  return [...v.errors, ...v.warnings.filter((w) => w.includes("not found in the narration"))];
+}

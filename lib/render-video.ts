@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   COMPOSITION_ID,
   RESOLUTIONS,
+  STORY_WORLD_ID,
   type RenderProps,
   type Resolution,
 } from "@/components/video/types";
@@ -42,10 +43,13 @@ export async function renderStoryboardMp4(
   const { renderMedia, selectComposition } = await import("@remotion/renderer");
   const serveUrl = await getServeUrl();
   const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE || null;
-  const inputProps = props as unknown as Record<string, unknown>;
+  // Preview-only story engine when a validated story came with the props.
+  const inputProps = (
+    props.story ? { ...props.story, durationSeconds: props.durationSeconds, words: props.words ?? null, audioUrl: props.audioUrl } : props
+  ) as unknown as Record<string, unknown>;
   const composition = await selectComposition({
     serveUrl,
-    id: COMPOSITION_ID,
+    id: props.story ? STORY_WORLD_ID : COMPOSITION_ID,
     inputProps,
     browserExecutable,
   });
