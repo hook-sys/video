@@ -1,3 +1,4 @@
+import { INDUSTRY_TEMPLATES } from "./templates-industries";
 import type { Block, CardContent, CardTemplate } from "./types";
 
 // The card templates. Content slots ({title}, {value}, {items} …) come from
@@ -16,7 +17,7 @@ const T = (id: string, category: string, description: string, tags: string, w: n
 
 const rows = (items: [string, string, string?, string?][]) => items.map(([icon, text, value, status]) => ({ icon, text, value, status }));
 
-export const CARD_TEMPLATES: CardTemplate[] = [
+const CORE_TEMPLATES: CardTemplate[] = [
   // ── commerce ──────────────────────────────────────────────────────────────
   T("order", "commerce", "A new order: item, amount, status", "order purchase sale checkout new", 460, [
     { type: "header", icon: "shopping-bag", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "success" },
@@ -117,8 +118,8 @@ export const CARD_TEMPLATES: CardTemplate[] = [
   ], { value: "$48,210", label: "Balance", delta: "+12%" }),
   T("transactions", "finance", "Recent transactions", "transactions history payments list", 520, [
     { type: "header", icon: "arrow-left-right", title: "{title}" },
-    { type: "rows", items: rows([["arrow-down-left", "Order #1042", "+$48", "In"], ["arrow-up-right", "Courier fee", "-$6", "Out"], ["arrow-down-left", "Order #1043", "+$120", "In"]]) },
-  ], { title: "Transactions" }),
+    { type: "rows", items: "{items}", icon: "arrow-left-right" },
+  ], { title: "Transactions", items: ["Invoice #204 · +$480 · In", "Software · -$59 · Out", "Invoice #205 · +$1,200 · In"] }),
   T("bank-card", "finance", "A bank card", "card credit debit bank", 460, [
     { type: "header", icon: "credit-card", title: "{title}", sub: "{subtitle}" },
     { type: "text", text: "•••• •••• •••• 4242", size: "l" },
@@ -159,24 +160,24 @@ export const CARD_TEMPLATES: CardTemplate[] = [
   T("bar-chart", "analytics", "A bar chart", "chart bars comparison graph", 500, [
     { type: "header", icon: "chart-column", title: "{title}", sub: "{subtitle}" },
     { type: "bars", values: [5, 8, 6, 11, 9, 14, 18] },
-  ], { title: "Weekly orders", subtitle: "Last 7 days" }),
+  ], { title: "This week", subtitle: "Last 7 days" }),
   T("donut-chart", "analytics", "A share / percentage", "donut pie share percent", 440, [
     { type: "header", icon: "chart-pie", title: "{title}" },
     { type: "donut", value: 76, label: "{label}" },
-  ], { title: "Conversion", label: "of visitors buy" }),
+  ], { title: "Conversion", label: "of visitors convert" }),
   T("funnel", "analytics", "A conversion funnel", "funnel conversion stages", 480, [
     { type: "header", icon: "filter", title: "{title}" },
-    { type: "progress", label: "Visits", value: 100 },
-    { type: "progress", label: "Carts", value: 42 },
-    { type: "progress", label: "Orders", value: 18 },
-  ], { title: "Funnel" }),
+    { type: "progress", label: "{label}", value: 100 },
+    { type: "progress", label: "{subtitle}", value: 42 },
+    { type: "progress", label: "{status}", value: 18 },
+  ], { title: "Funnel", label: "Visitors", subtitle: "Sign-ups", status: "Customers" }),
   T("leaderboard", "analytics", "Top items ranking", "top ranking leaderboard best", 480, [
     { type: "header", icon: "trophy", title: "{title}" },
-    { type: "rows", items: rows([["medal", "Sneakers", "412"], ["medal", "T-shirt", "388"], ["medal", "Cap", "240"]]) },
-  ], { title: "Best sellers" }),
+    { type: "rows", items: "{items}", icon: "medal" },
+  ], { title: "Top performers", items: ["North team · 412", "West team · 388", "South team · 240"] }),
   T("report-table", "analytics", "A report table", "report table data rows", 560, [
     { type: "header", icon: "table", title: "{title}", sub: "{subtitle}" },
-    { type: "table", cols: ["Channel", "Orders", "Revenue"], rows: [["Facebook", "412", "$9.8K"], ["Website", "288", "$7.1K"], ["Instagram", "140", "$3.2K"]] },
+    { type: "table", cols: ["Channel", "Leads", "Revenue"], rows: [["Search", "412", "$9.8K"], ["Website", "288", "$7.1K"], ["Social", "140", "$3.2K"]] },
   ], { title: "Channels", subtitle: "This month" }),
   T("activity-heat", "analytics", "Activity heatmap", "heatmap activity usage", 520, [
     { type: "header", icon: "activity", title: "{title}" },
@@ -192,19 +193,19 @@ export const CARD_TEMPLATES: CardTemplate[] = [
   T("task", "operations", "A task with status", "task todo work item", 440, [
     { type: "header", icon: "square-check", title: "{title}", sub: "{subtitle}", badge: "{status}" },
     { type: "progress", value: 60 },
-  ], { title: "Pack orders", subtitle: "Due today", status: "In progress" }),
+  ], { title: "Review report", subtitle: "Due today", status: "In progress" }),
   T("checklist", "operations", "A checklist ticking off", "checklist steps done todo", 440, [
     { type: "text", text: "{title}", size: "m" },
     { type: "checklist", items: "{items}" },
-  ], { title: "Today", items: ["Confirm orders", "Update stock", "Book couriers"] }),
+  ], { title: "Today", items: ["Review requests", "Send updates", "Close the week"] }),
   T("workflow", "operations", "An automated workflow", "workflow automation steps pipeline", 520, [
     { type: "header", icon: "workflow", title: "{title}", badge: "{status}", tone: "success" },
-    { type: "rows", items: rows([["zap", "When an order arrives"], ["boxes", "Update inventory"], ["truck", "Book the courier"]]) },
-  ], { title: "Automation", status: "On" }),
+    { type: "rows", items: "{items}", icon: "zap" },
+  ], { title: "Automation", status: "On", items: ["When a form is submitted", "Create the record", "Notify the team"] }),
   T("approval", "operations", "An approval request", "approval approve review request", 440, [
     { type: "header", icon: "stamp", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "warn" },
     { type: "button", text: "{action}", icon: "check" },
-  ], { title: "Refund request", subtitle: "Needs approval", status: "Pending", action: "Approve" }),
+  ], { title: "Request", subtitle: "Needs approval", status: "Pending", action: "Approve" }),
   T("calendar-event", "operations", "A calendar with booked days", "calendar schedule booking date appointment", 460, [
     { type: "header", icon: "calendar", title: "{title}", sub: "{subtitle}" },
     { type: "calendar", days: [4, 9, 12, 18, 23] },
@@ -216,37 +217,36 @@ export const CARD_TEMPLATES: CardTemplate[] = [
   ], { title: "Weekly sync", date: "Today · 3:00 PM", items: ["Team", "30 min"], action: "Join" }),
   T("integration", "operations", "Connected apps", "integrations connect apps plugins", 480, [
     { type: "header", icon: "plug", title: "{title}", badge: "{status}", tone: "success" },
-    { type: "toggle", label: "Facebook shop", on: true },
-    { type: "toggle", label: "Courier API", on: true },
-  ], { title: "Integrations", status: "Connected" }),
+    { type: "rows", items: "{items}", icon: "plug" },
+  ], { title: "Integrations", status: "Connected", items: ["Slack · On", "Google Drive · On", "Zapier · On"] }),
   T("sync", "operations", "Data syncing", "sync syncing update realtime", 420, [
     { type: "header", icon: "refresh-cw", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "info" },
     { type: "progress", value: 84 },
-  ], { title: "Syncing", subtitle: "All channels", status: "Live" }),
+  ], { title: "Syncing", subtitle: "All sources", status: "Live" }),
   T("status-page", "operations", "Systems status", "status uptime health system", 480, [
     { type: "header", icon: "server", title: "{title}", badge: "{status}", tone: "success" },
-    { type: "rows", items: rows([["globe", "Storefront", undefined, "OK"], ["credit-card", "Payments", undefined, "OK"], ["truck", "Couriers", undefined, "OK"]]) },
-  ], { title: "All systems", status: "Operational" }),
+    { type: "rows", items: "{items}", icon: "circle-check" },
+  ], { title: "All systems", status: "Operational", items: ["Website · · OK", "API · · OK", "Database · · OK"] }),
   T("settings", "operations", "Settings toggles", "settings preferences toggle options", 440, [
     { type: "text", text: "{title}", size: "m" },
-    { type: "toggle", label: "Auto-confirm orders", on: true },
-    { type: "toggle", label: "SMS updates", on: true },
-  ], { title: "Settings" }),
+    { type: "toggle", label: "{label}", on: true },
+    { type: "toggle", label: "{subtitle}", on: true },
+  ], { title: "Settings", label: "Automations", subtitle: "Notifications" }),
   T("kanban", "operations", "A kanban column", "kanban board column tasks", 380, [
     { type: "chip", text: "{title}", tone: "info" },
-    { type: "rows", items: rows([["circle", "Pack #1042"], ["circle", "Pack #1043"], ["circle", "Label #1044"]]) },
-  ], { title: "To do" }),
+    { type: "rows", items: "{items}", icon: "circle" },
+  ], { title: "To do", items: ["Design review", "Write copy", "QA pass"] }),
 
   // ── communication ─────────────────────────────────────────────────────────
   T("chat", "communication", "A chat conversation", "chat message conversation support", 480, [
     { type: "avatar", name: "{name}", sub: "{subtitle}" },
     { type: "bubble", text: "{note}", side: "left" },
     { type: "bubble", text: "{action}", side: "right" },
-  ], { name: "Customer", subtitle: "Online", note: "Where is my order?", action: "It's on the way — arriving today!" }),
+  ], { name: "Customer", subtitle: "Online", note: "Can you help me with this?", action: "Done — it's sorted!" }),
   T("message", "communication", "A single customer message", "message inbox customer question", 440, [
     { type: "avatar", name: "{name}", sub: "{subtitle}", badge: "{status}", tone: "info" },
     { type: "bubble", text: "{note}" },
-  ], { name: "Rafi Ahmed", subtitle: "Messenger", status: "New", note: "Is this available in size 42?" }),
+  ], { name: "Rafi Ahmed", subtitle: "Inbox", status: "New", note: "Is this available this week?" }),
   T("typing", "communication", "Someone typing a reply", "typing reply chat", 380, [
     { type: "avatar", name: "{name}", sub: "{subtitle}" },
     { type: "typing" },
@@ -255,57 +255,57 @@ export const CARD_TEMPLATES: CardTemplate[] = [
     { type: "header", icon: "mail", title: "{title}", sub: "{subtitle}" },
     { type: "text", text: "{note}", muted: true, size: "s" },
     { type: "button", text: "{action}" },
-  ], { title: "Your order is confirmed", subtitle: "to customer@mail.com", note: "Thanks for shopping with us. We're packing it now.", action: "Track order" }),
+  ], { title: "You're all set", subtitle: "to you@mail.com", note: "Thanks for signing up. Here's what happens next.", action: "Get started" }),
   T("sms", "communication", "An SMS notification", "sms text phone notification", 400, [
     { type: "header", icon: "message-square", title: "{title}", sub: "{subtitle}" },
     { type: "bubble", text: "{note}" },
-  ], { title: "SMS", subtitle: "Just now", note: "Your parcel is out for delivery." }),
+  ], { title: "SMS", subtitle: "Just now", note: "Your booking is confirmed for tomorrow." }),
   T("call", "communication", "A phone call", "call phone verify voice", 420, [
     { type: "avatar", name: "{name}", sub: "{subtitle}", badge: "{status}", tone: "success" },
     { type: "button", text: "{action}", icon: "phone" },
-  ], { name: "AI assistant", subtitle: "Calling customer", status: "Live", action: "Order confirmed" }),
+  ], { name: "AI assistant", subtitle: "On a call", status: "Live", action: "Confirmed" }),
   T("notification", "communication", "A notification toast", "notification toast alert update", 440, [
     { type: "header", icon: "bell", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "success" },
-  ], { title: "New order", subtitle: "#1045 · $64", status: "Now" }),
+  ], { title: "New update", subtitle: "Just now", status: "Now" }),
   T("success-toast", "communication", "A success message", "success done complete toast", 420, [
     { type: "header", icon: "circle-check", title: "{title}", sub: "{subtitle}", tone: "success" },
   ], { title: "All set", subtitle: "Everything is synced" }),
   T("error-toast", "communication", "An error / problem message", "error problem failed warning", 420, [
     { type: "header", icon: "circle-x", title: "{title}", sub: "{subtitle}", tone: "danger" },
-  ], { title: "Failed delivery", subtitle: "Wrong address" }),
+  ], { title: "Something failed", subtitle: "Action needed" }),
 
   // ── AI ────────────────────────────────────────────────────────────────────
   T("ai-prompt", "ai", "Typing a prompt to an AI", "ai prompt ask assistant input", 520, [
     { type: "header", icon: "sparkles", title: "{title}" },
     { type: "input", label: "{label}", value: "{note}", icon: "sparkles" },
-  ], { title: "AI assistant", label: "Ask anything", note: "Which orders look fake?" }),
+  ], { title: "AI assistant", label: "Ask anything", note: "Summarise this week for me" }),
   T("ai-answer", "ai", "An AI answer / insight", "ai answer insight result assistant", 520, [
     { type: "header", icon: "sparkles", title: "{title}", badge: "{status}", tone: "brand" },
     { type: "text", text: "{note}", size: "s" },
     { type: "tags", items: "{items}" },
-  ], { title: "AI insight", status: "Done", note: "3 orders look suspicious — hold them before shipping.", items: ["#1051", "#1054", "#1060"] }),
+  ], { title: "AI insight", status: "Done", note: "Three items need your attention before Friday.", items: ["Priority", "Due soon", "Follow up"] }),
   T("ai-automation", "ai", "AI handling work automatically", "ai automation automatic handled", 480, [
     { type: "header", icon: "bot", title: "{title}", badge: "{status}", tone: "success" },
     { type: "checklist", items: "{items}" },
-  ], { title: "Handled by AI", status: "Auto", items: ["Confirmed 42 orders", "Flagged 3 fake", "Booked couriers"] }),
+  ], { title: "Handled by AI", status: "Auto", items: ["Sorted 42 requests", "Flagged 3 issues", "Sent the replies"] }),
   T("ai-score", "ai", "An AI score / risk check", "ai score risk fraud check", 420, [
     { type: "header", icon: "shield-check", title: "{title}", sub: "{subtitle}" },
     { type: "donut", value: 92, label: "{label}" },
-  ], { title: "Order check", subtitle: "#1042", label: "Genuine" }),
+  ], { title: "AI check", subtitle: "Latest item", label: "Confidence" }),
   T("ai-suggestions", "ai", "AI suggestions", "ai suggestions recommendations ideas", 480, [
     { type: "header", icon: "lightbulb", title: "{title}" },
     { type: "rows", items: "{items}" },
-  ], { title: "Suggestions", items: ["Restock sneakers", "Boost the weekend offer", "Follow up 5 carts"] }),
+  ], { title: "Suggestions", items: ["Follow up 5 leads", "Move the deadline", "Share the report"] }),
 
   // ── people ────────────────────────────────────────────────────────────────
   T("profile", "people", "A customer / user profile", "profile customer user person account", 440, [
     { type: "avatar", name: "{name}", sub: "{subtitle}", badge: "{status}" },
-    { type: "kv", pairs: [["Orders", "{value}"], ["Spent", "{amount}"]] },
-  ], { name: "Ayesha Rahman", subtitle: "Dhaka", status: "VIP", value: "18", amount: "$1,240" }),
+    { type: "kv", pairs: [["{label}", "{value}"], ["Value", "{amount}"]] },
+  ], { name: "Ayesha Rahman", subtitle: "Customer", status: "VIP", label: "Visits", value: "18", amount: "$1,240" }),
   T("team", "people", "A team list", "team members staff people", 480, [
     { type: "header", icon: "users", title: "{title}" },
-    { type: "rows", items: rows([["user", "Rahim", undefined, "Packing"], ["user", "Nila", undefined, "Support"], ["user", "Sami", undefined, "Delivery"]]) },
-  ], { title: "Team" }),
+    { type: "rows", items: "{items}", icon: "user" },
+  ], { title: "Team", items: ["Rahim · · Design", "Nila · · Support", "Sami · · Sales"] }),
   T("candidate", "people", "A job candidate", "candidate hiring job applicant", 440, [
     { type: "avatar", name: "{name}", sub: "{subtitle}", badge: "{status}", tone: "info" },
     { type: "tags", items: "{items}" },
@@ -314,7 +314,7 @@ export const CARD_TEMPLATES: CardTemplate[] = [
     { type: "stars", n: 5 },
     { type: "text", text: "{note}", size: "m" },
     { type: "avatar", name: "{name}", sub: "{subtitle}" },
-  ], { note: "“We finally see our real profit.”", name: "Shop owner", subtitle: "Dhaka" }),
+  ], { note: "“It saves our team hours every week.”", name: "Happy customer", subtitle: "Team lead" }),
 
   // ── health ────────────────────────────────────────────────────────────────
   T("appointment", "health", "A booked appointment", "appointment booking doctor visit", 440, [
@@ -421,5 +421,7 @@ export const CARD_TEMPLATES: CardTemplate[] = [
     { type: "text", text: "{subtitle}", muted: true, size: "s" },
   ], { title: "Everything connected.", subtitle: "One platform for your business" }),
 ];
+
+export const CARD_TEMPLATES: CardTemplate[] = [...CORE_TEMPLATES, ...INDUSTRY_TEMPLATES];
 
 export const CARD_BY_ID = new Map(CARD_TEMPLATES.map((t) => [t.id, t]));

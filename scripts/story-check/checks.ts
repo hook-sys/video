@@ -36,6 +36,7 @@ import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { DEPTH, LAYOUT_PRESETS, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES } from "@/components/video/flow/layouts";
 import { CAMERA_MOVES, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
+import { isIconName } from "@/components/video/icons";
 import zlib from "node:zlib";
 import path from "node:path";
 
@@ -392,7 +393,24 @@ export const SCENE_NAMES = SCENE_FIXTURES.map((f) => f.name);
 function sceneDirector(): Check[] {
   const checks: Check[] = [];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
-  add("asset library: hundreds of assets", ASSET_COUNT.cards >= 400 && LAYOUT_PRESETS.length >= 100, `${ASSET_COUNT.cards} card assets (${CARD_TEMPLATES.length} templates × ${CARD_STYLES.length} styles), ${ASSET_COUNT.devices} devices, ${ASSET_COUNT.crops} crops, ${LAYOUT_PRESETS.length} layout presets`);
+  add("asset library: hundreds of assets", ASSET_COUNT.cards >= 1000 && LAYOUT_PRESETS.length >= 100, `${ASSET_COUNT.cards} card assets (${CARD_TEMPLATES.length} templates × ${CARD_STYLES.length} styles), ${ASSET_COUNT.devices} devices, ${ASSET_COUNT.crops} crops, ${LAYOUT_PRESETS.length} layout presets`);
+  // Every kind of SaaS, not only commerce: each industry has its own cards.
+  const byCat = new Map<string, number>();
+  for (const t of CARD_TEMPLATES) byCat.set(t.category, (byCat.get(t.category) ?? 0) + 1);
+  const thin = [...byCat].filter(([, n]) => n < 2).map(([c]) => c);
+  add("asset library covers every kind of SaaS", byCat.size >= 30 && thin.length === 0, `${byCat.size} categories: ${[...byCat].map(([c, n]) => `${c} ${n}`).join(", ")}${thin.length ? `; too thin: ${thin.join(", ")}` : ""}`);
+  const badIcons: string[] = [];
+  const walkIcons = (id: string, v: unknown, key = ""): void => {
+    if (typeof v === "string" && key === "icon" && !isIconName(v)) badIcons.push(`${id}: ${v}`);
+    else if (Array.isArray(v)) v.forEach((x) => walkIcons(id, x));
+    else if (v && typeof v === "object") Object.entries(v).forEach(([k, x]) => walkIcons(id, x, k));
+  };
+  for (const t of CARD_TEMPLATES) walkIcons(t.id, t.blocks);
+  add("every card template icon exists", badIcons.length === 0, badIcons.slice(0, 5).join(", ") || `${CARD_TEMPLATES.length} templates checked`);
+  // Non-commerce fixtures never show commerce or shipping cards.
+  const COMMERCE = new Set(CARD_TEMPLATES.filter((t) => t.category === "commerce" || t.category === "logistics").map((t) => t.id));
+  const leaks = SCENE_FIXTURES.filter((f) => f.name !== "selorax").flatMap((f) => f.script.beats.flatMap((b) => (b.elements ?? []).map((e) => e.asset ?? "").filter((a) => COMMERCE.has(a.replace(/^card:/, "").split("/")[0])).map((a) => `${f.name}: ${a}`)));
+  add("industry fixtures use their own industry's cards", leaks.length === 0 && SCENE_FIXTURES.length >= 10, leaks.join(", ") || `${SCENE_FIXTURES.length - 1} non-commerce fixtures: ${SCENE_FIXTURES.filter((f) => f.name !== "selorax").map((f) => f.name).join(", ")}`);
   // Layout boxes of sharp elements never overlap (stacks and fans excepted).
   const boxHits: string[] = [];
   for (const name of LAYOUT_PRESETS) {
@@ -422,7 +440,7 @@ function sceneDirector(): Check[] {
   const pick = <T,>(xs: readonly T[]) => xs[Math.floor(rnd() * xs.length)];
   const fx = SCENE_FIXTURES[0];
   const words = fx.narration.split(/\s+/);
-  const C = { title: null, subtitle: null, value: null, label: null, status: null, name: null, amount: null, delta: null, note: null, action: null, items: null };
+  const C = { title: null, subtitle: null, value: null, label: null, status: null, name: null, amount: null, delta: null, note: null, action: null, date: null, items: null };
   const B = (b: Partial<SceneBeat>): SceneBeat => ({ cue: "", action: "place", elements: null, targets: null, to: null, layout: null, camera: null, transition: null, style: null, content: null, text: null, accent: null, text_layout: null, items: null, lottie: null, ...b });
   const hard: string[] = [];
   const soft: string[] = [];

@@ -49,6 +49,7 @@ const Content = z.object({
   delta: z.string().nullable(),
   note: z.string().nullable(),
   action: z.string().nullable(),
+  date: z.string().nullable(),
   items: z.array(z.string()).nullable(),
 });
 export type SceneContent = z.infer<typeof Content>;

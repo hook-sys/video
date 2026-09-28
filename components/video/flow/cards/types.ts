@@ -12,7 +12,7 @@ export type Block =
   | { type: "avatar"; name: string; sub?: string; badge?: string; tone?: Tone }
   | { type: "bignum"; value: string; label?: string; delta?: string; tone?: Tone }
   | { type: "chip"; text: string; tone?: Tone; icon?: string }
-  | { type: "rows"; items: Row[] | string[] | string }
+  | { type: "rows"; items: Row[] | string[] | string; icon?: string }
   | { type: "progress"; label?: string; value: number; tone?: Tone }
   | { type: "bars"; values: number[] }
   | { type: "line"; values: number[]; tone?: Tone }
@@ -20,7 +20,7 @@ export type Block =
   | { type: "button"; text: string; icon?: string; tone?: Tone }
   | { type: "bubble"; text: string; side?: "left" | "right" }
   | { type: "stars"; n: number; label?: string }
-  | { type: "steps"; items: string[]; active: number }
+  | { type: "steps"; items: string[] | string; active: number }
   | { type: "toggle"; label: string; on: boolean }
   | { type: "kv"; pairs: [string, string][] }
   | { type: "tags"; items: string[] | string }
@@ -36,7 +36,14 @@ export type Block =
   | { type: "typing" }
   | { type: "text"; text: string; muted?: boolean; size?: "s" | "m" | "l" }
   | { type: "qr" }
-  | { type: "divider" };
+  | { type: "divider" }
+  | { type: "stages"; items: string[] | string; counts?: number[]; active: number } // a pipeline: deal / hiring / order stages
+  | { type: "slots"; items: string[] | string; active: number } // bookable time slots, one picked
+  | { type: "log"; lines: string[] | string } // a terminal / deploy log
+  | { type: "signature"; name: string } // a signature being drawn
+  | { type: "meter"; value: number; label?: string } // a half-circle gauge
+  | { type: "avatars"; n: number; label?: string } // a stack of people
+  | { type: "timeline"; items: string[] | string }; // a vertical activity timeline
 
 export type BlockType = Block["type"];
 

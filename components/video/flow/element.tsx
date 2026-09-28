@@ -47,8 +47,9 @@ export function ElementView({ s, frame, theme }: { s: NodeState; frame: number; 
         {el.screen.src ? (
           <Crop src={el.screen.src} crop={el.screen.crop} w={spec.w} h={spec.h} />
         ) : inner ? (
-          <div style={{ width: spec.w, height: spec.h, display: "flex", alignItems: "center", justifyContent: "center", background: theme.soft }}>
-            <div style={{ transform: `scale(${Math.min(1, (spec.w - 40) / inner.w)})` }}>
+          // The card fills the screen's width (tall screens: from the top, like an app).
+          <div style={{ width: spec.w, height: spec.h, display: "flex", alignItems: spec.h > spec.w ? "flex-start" : "center", justifyContent: "center", paddingTop: spec.h > spec.w ? 56 : 0, boxSizing: "border-box", background: theme.soft, overflow: "hidden" }}>
+            <div style={{ transform: `scale(${Math.min(1.2, (spec.w - 24) / inner.w)})`, transformOrigin: spec.h > spec.w ? "top center" : "center" }}>
               <Card tpl={inner} content={el.screen.card!.content as CardContent} style={el.screen.card!.style as CardStyle} theme={theme} t={t} />
             </div>
           </div>

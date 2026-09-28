@@ -91,6 +91,20 @@ export function blockHeight(b: Block, w: number): number {
       return 150;
     case "divider":
       return 14;
+    case "stages":
+      return 104;
+    case "slots":
+      return Math.ceil((Array.isArray(b.items) ? b.items.length : 6) / 3) * 56;
+    case "log":
+      return (Array.isArray(b.lines) ? b.lines.length : 4) * 30 + 24;
+    case "signature":
+      return 104;
+    case "meter":
+      return 132;
+    case "avatars":
+      return 56;
+    case "timeline":
+      return (Array.isArray(b.items) ? b.items.length : 3) * 52;
   }
 }
 
@@ -154,8 +168,13 @@ function RowView({ r, ctx, k }: { r: Row; ctx: Ctx; k: number }) {
   );
 }
 
-const asRows = (items: Row[] | string[] | string): Row[] =>
-  (Array.isArray(items) ? items : items.split("|")).map((r) => (typeof r === "string" ? { icon: "circle-check", text: r } : r));
+// Rows from strings: "Text · value · status" (value and status optional).
+const asRows = (items: Row[] | string[] | string, icon = "circle-check"): Row[] =>
+  (Array.isArray(items) ? items : items.split("|")).map((r) => {
+    if (typeof r !== "string") return r;
+    const [text, value, status] = r.split(/\s*·\s*/).map((x) => x.trim());
+    return { icon, text, value: value || undefined, status: status || undefined };
+  });
 const asList = (items: string[] | string): string[] => (Array.isArray(items) ? items : items.split("|"));
 
 export function BlockView({ b, ctx }: { b: Block; ctx: Ctx }): ReactNode {
@@ -214,7 +233,7 @@ export function BlockView({ b, ctx }: { b: Block; ctx: Ctx }): ReactNode {
         </div>
       );
     case "rows":
-      return <div style={box}>{asRows(b.items).map((r, i) => <RowView key={i} r={r} ctx={ctx} k={ramp(t, 3 + i * 4, 12, "out")} />)}</div>;
+      return <div style={box}>{asRows(b.items, b.icon).map((r, i) => <RowView key={i} r={r} ctx={ctx} k={ramp(t, 3 + i * 4, 12, "out")} />)}</div>;
     case "progress": {
       const k = ramp(t, 4, 34, "inOut");
       const c = toneColor(b.tone, p, theme);
@@ -302,13 +321,14 @@ export function BlockView({ b, ctx }: { b: Block; ctx: Ctx }): ReactNode {
         </div>
       );
     case "steps": {
-      const n = b.items.length;
+      const items = asList(b.items);
+      const n = items.length;
       const k = ramp(t, 4, 30, "inOut") * (b.active / Math.max(1, n - 1));
       return (
         <div style={box}>
           <div style={{ position: "absolute", left: 12, right: 12, top: 11, height: 4, borderRadius: 2, background: p.track }} />
           <div style={{ position: "absolute", left: 12, top: 11, height: 4, borderRadius: 2, width: `calc(${k * 100}% - ${k * 24}px)`, background: p.brand }} />
-          {b.items.map((s, i) => {
+          {items.map((s, i) => {
             const on = i / Math.max(1, n - 1) <= k + 0.001;
             return (
               <div key={i} style={{ position: "absolute", left: `calc(${(i / Math.max(1, n - 1)) * 100}% - ${(i / Math.max(1, n - 1)) * 24}px)`, top: 0, width: 24, display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -485,5 +505,110 @@ export function BlockView({ b, ctx }: { b: Block; ctx: Ctx }): ReactNode {
       );
     case "divider":
       return <div style={{ ...box, display: "flex", alignItems: "center" }}><div style={{ height: 1, width: "100%", background: p.line }} /></div>;
+    case "stages": {
+      const items = asList(b.items);
+      return (
+        <div style={{ ...box, display: "flex", gap: 8 }}>
+          {items.map((s, i) => {
+            const on = i <= b.active;
+            const k = ramp(t, 3 + i * 5, 12, "out");
+            const cur = i === b.active;
+            return (
+              <div key={i} style={{ flex: 1, minWidth: 0, borderRadius: 14, padding: "12px 10px", background: cur ? `linear-gradient(145deg, ${p.brand}, ${p.brand2})` : on ? `${p.brand}22` : p.track, opacity: k, transform: `translateY(${(1 - k) * 16}px)`, boxShadow: cur ? `0 10px 24px ${p.brand}55` : "none" }}>
+                <div style={{ fontSize: 14, fontWeight: 650, color: cur ? (onAccent(p) ? p.onBrand : "#fff") : p.sub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s}</div>
+                <div style={{ fontSize: 30, fontWeight: 750, color: cur ? (onAccent(p) ? p.onBrand : "#fff") : p.ink, marginTop: 6, fontVariantNumeric: "tabular-nums" }}>{countUp(String(b.counts?.[i] ?? Math.max(1, 24 - i * 6)), ramp(t, 6 + i * 5, 20, "out"))}</div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    case "slots": {
+      const items = asList(b.items);
+      return (
+        <div style={{ ...box, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, alignContent: "start" }}>
+          {items.map((s, i) => {
+            const pick = i === b.active ? ramp(t, 22, 10, "back") : 0;
+            return (
+              <div key={i} style={{ height: 48, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: pick > 0.5 ? 700 : 550, color: pick > 0.5 ? (onAccent(p) ? p.onBrand : "#fff") : p.ink, background: pick > 0.5 ? p.brand : p.track, border: `2px solid ${pick > 0.5 ? p.brand : "transparent"}`, opacity: ramp(t, 2 + i * 2, 8), transform: `scale(${1 + pick * 0.04})` }}>{s}</div>
+            );
+          })}
+        </div>
+      );
+    }
+    case "log": {
+      const lines = asList(b.lines);
+      return (
+        <div style={{ ...box, borderRadius: 14, background: "#0F1220", padding: "12px 16px", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 16, lineHeight: "30px", overflow: "hidden" }}>
+          {lines.map((l, i) => {
+            const k = t - 4 - i * 9;
+            if (k < 0) return null;
+            const bad = /^(✗|!|error|fail)/i.test(l);
+            const done = k > 8;
+            return (
+              <div key={i} style={{ whiteSpace: "pre", color: bad ? "#FF7A85" : done ? "#E6E6F0" : "#8B90A8" }}>
+                <span style={{ color: bad ? "#FF7A85" : done ? "#5EE6A8" : "#8BE9FD" }}>{bad ? "✗ " : done ? "✓ " : "› "}</span>
+                {l.replace(/^(✗|!)\s*/, "").slice(0, Math.floor(k * 3))}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+    case "signature": {
+      const k = ramp(t, 8, 30, "inOut");
+      return (
+        <div style={{ ...box, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+          <div style={{ fontFamily: "'Brush Script MT', 'Segoe Script', cursive", fontSize: 50, color: p.ink, lineHeight: 1, clipPath: `inset(0 ${(1 - k) * 100}% 0 0)`, whiteSpace: "nowrap", paddingBottom: 8 }}>{b.name}</div>
+          <div style={{ height: 2, background: p.line }} />
+          <div style={{ fontSize: 14, color: p.sub, marginTop: 6 }}>Signed electronically</div>
+        </div>
+      );
+    }
+    case "meter": {
+      const k = ramp(t, 4, 34, "inOut");
+      const r = 84;
+      return (
+        <div style={{ ...box, display: "flex", alignItems: "flex-end", gap: 20 }}>
+          <svg width={2 * r + 20} height={r + 20} viewBox={`0 0 ${2 * r + 20} ${r + 20}`}>
+            <path d={`M10 ${r + 10} A${r} ${r} 0 0 1 ${2 * r + 10} ${r + 10}`} fill="none" stroke={p.track} strokeWidth={16} strokeLinecap="round" />
+            <path d={`M10 ${r + 10} A${r} ${r} 0 0 1 ${2 * r + 10} ${r + 10}`} fill="none" stroke={p.brand} strokeWidth={16} strokeLinecap="round" pathLength={1} strokeDasharray={`${(b.value / 100) * k} 1`} />
+            <text x={r + 10} y={r + 2} textAnchor="middle" fontSize={32} fontWeight={750} fill={p.ink}>{Math.round(b.value * k)}</text>
+          </svg>
+          {b.label && <div style={{ fontSize: 19, color: p.sub, fontWeight: 550, paddingBottom: 14 }}>{b.label}</div>}
+        </div>
+      );
+    }
+    case "avatars": {
+      const shown = Math.min(5, b.n);
+      return (
+        <div style={{ ...box, display: "flex", alignItems: "center" }}>
+          {Array.from({ length: shown }, (_, i) => (
+            <div key={i} style={{ width: 48, height: 48, borderRadius: 24, marginLeft: i ? -14 : 0, border: `3px solid ${p.bg.startsWith("rgba") || p.bg.startsWith("linear") ? "#fff" : p.bg}`, background: `linear-gradient(145deg, hsl(${(i * 67 + 190) % 360} 70% 62%), hsl(${(i * 67 + 230) % 360} 70% 52%))`, transform: `scale(${ramp(t, 3 + i * 3, 10, "back")})` }} />
+          ))}
+          {b.n > shown && <span style={{ marginLeft: 12, fontSize: 18, fontWeight: 700, color: p.ink }}>+{b.n - shown}</span>}
+          {b.label && <span style={{ marginLeft: 12, fontSize: 18, color: p.sub }}>{b.label}</span>}
+        </div>
+      );
+    }
+    case "timeline": {
+      const items = asList(b.items);
+      return (
+        <div style={box}>
+          <div style={{ position: "absolute", left: 11, top: 14, bottom: 14, width: 2, background: p.track }} />
+          {items.map((s, i) => {
+            const k = ramp(t, 4 + i * 7, 10, "out");
+            const [text, when] = s.split(/\s*·\s*/);
+            return (
+              <div key={i} style={{ height: 52, display: "flex", alignItems: "center", gap: 16, opacity: k, transform: `translateX(${(1 - k) * 18}px)` }}>
+                <div style={{ width: 24, height: 24, borderRadius: 12, background: i === items.length - 1 ? p.brand : p.bg.startsWith("#") ? p.bg : "#fff", border: `4px solid ${p.brand}`, boxSizing: "border-box", position: "relative", zIndex: 1 }} />
+                <span style={{ fontSize: 18, fontWeight: 600, color: p.ink, whiteSpace: "nowrap" }}>{text}</span>
+                {when && <span style={{ marginLeft: "auto", fontSize: 16, color: p.sub }}>{when}</span>}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
   }
 }

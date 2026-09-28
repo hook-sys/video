@@ -28,7 +28,7 @@ OUTPUT: { theme, beats[] }. Each beat is one verb that starts on its cue. Unused
 CUE: 1–6 consecutive words copied EXACTLY from NARRATION, in spoken order (each cue after the previous one). The motion lands on those words.
 
 ELEMENTS (in scene/place beats): { id, asset, content, screen, label }
-- id: a short name you choose ("order", "stock", "dash"). Reuse it to act on the element later.
+- id: a short name you choose ("lead", "report", "ticket"). Reuse it to act on the element later.
 - asset:
   • "card:<template>/<style>": a product UI card. Styles: ${CARD_STYLES.join(", ")} (glass = frosted, solid = white, tinted = soft brand tint, dark = dark card, accent = full brand colour — use accent for the ONE card that matters most in a scene).
   • "device:<model>/<light|dark>": a device mockup; screen = "shot:<n>/<crop>" (a client screenshot) or "card:<template>/<style>".
@@ -51,7 +51,7 @@ VERBS (action):
 - scene: start a scene: elements (1–${MAX_ELEMENTS_PER_SCENE}) in a layout; camera (${CAMERA_MOVES.join(", ")}); transition from the previous scene (${TRANSITIONS.join(", ")}; morph = carried elements travel into the new layout, the others leave). style = entrance (${ENTER_STYLES.join(", ")}) or null for a varied mix.
 - place: add elements to the current scene (the scene re-lays out).
 - move: targets [one id] travels next to "to" (style: ${PATH_STYLES.join(", ")}).
-- trigger: targets [one id] flies INTO "to", which reacts; content = what "to" now shows (e.g. an order hitting the inventory card → status "Updated").
+- trigger: targets [one id] flies INTO "to", which reacts; content = what "to" now shows (e.g. a form submission hitting the CRM card → status "New lead"; a commit hitting the deploy card → "Live"; a booking hitting the calendar → "Confirmed").
 - update: targets [one card]; content = its new values (a status flips, a number counts up).
 - connect: a line with a travelling packet from targets [one id] to "to".
 - merge: targets fly into "to" (assembling, "all in one").
@@ -64,10 +64,15 @@ VERBS (action):
 - statement: the narration's key phrase as kinetic type, each word appearing as spoken. text = the phrase copied from the narration (≤10 words; cue = its first words), accent = 1–3 words to highlight, text_layout: "display" (words alone on a clean frame), "panel" (full colour panel), "side"/"pill" (a caption over the scene).
 - list: 3–5 things named in a row → a rolling checklist; items ≤4 words each, from the narration, in order.
 
+INDUSTRY FIRST
+- Before choosing anything, decide what kind of product this is from the narration, product name and direction (e.g. sales CRM, helpdesk, developer tool, HR/hiring, project management, clinic/health, school/learning, real estate, restaurant/hotel, travel, legal, fitness, events, nonprofit, insurance, field service, manufacturing, IoT/energy, media/creator, community, subscription SaaS, fleet, agriculture, public services, finance, security, marketing, logistics, e-commerce).
+- Build every scene mainly from that industry's templates (the category names above), plus the neutral ones (general, analytics, operations, communication, ai, people, projects, security) where they fit.
+- Never use commerce or logistics templates (order, cart, inventory, courier, tracking…) unless the product really sells or ships goods. A dev tool shows deploys, logs and pull requests; a clinic shows patients, appointments and lab results; a CRM shows leads, deals and the pipeline.
+- Content is written in the product's own nouns and in the narration's language (names, statuses, numbers that fit that business), never generic "Order #1042".
+
 DIRECTION FIRST
-- ADVANCED_DIRECTION is the client's video direction: the brief for what the viewer sees. Follow its objects, order, transformations and mood closely, translating each idea into elements and verbs (e.g. "separate tools scattered" → a scatter scene of cards; "an order moves and triggers inventory" → trigger with update; "everything assembles into one platform" → morph into mosaic / merge; "automation erases busywork" → erase; "pull back to the connected system" → reveal). Never replace it with a generic concept.
+- ADVANCED_DIRECTION is the client's video direction: the brief for what the viewer sees. Follow its objects, order, transformations and mood closely, translating each idea into elements and verbs (e.g. "separate tools scattered" → a scatter scene of cards; "a new lead flows into the pipeline" → trigger with update; "everything assembles into one platform" → morph into mosaic / merge; "automation erases busywork" → erase; "pull back to the connected system" → reveal; "the deploy goes live" → update a deploy card to "Live"). Never replace it with a generic concept.
 - If it is empty, derive the concept from the narration: its objects, its process, its outcome — shown as the product's own UI.
-- Make it specific to this product: pick templates that name its real objects (orders, couriers, patients, invoices, lessons…), with content in its words.
 
 RHYTHM
 - ${MAX_SCENE_BEATS} beats at most; about one beat every 1–1.5 s of speech; never more than 3 s of speech without a new beat (4 s after a scene, list, arrange or reveal).
