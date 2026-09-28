@@ -23,6 +23,9 @@ export function PreviewPlayer({ format, story, ...props }: RenderProps) {
         compositionWidth={width}
         compositionHeight={height}
         controls
+        // Narration + up to 16 event sounds can be mounted at once; the default
+        // (5) makes the Player throw mid-playback and restart from 0:00.
+        numberOfSharedAudioTags={20}
         style={{ width: "100%", maxHeight: "75vh", aspectRatio: `${width} / ${height}` }}
       />
     );
