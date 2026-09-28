@@ -22,10 +22,16 @@ export type StoryboardProps = {
 
 // Props for server rendering; `format` only drives composition size.
 // `story` set → the Preview-only continuous story engine renders instead.
-export type RenderProps = StoryboardProps & { format: string; story?: { story: unknown; narration: string; assets?: Record<string, string> } | null };
+export type RenderProps = StoryboardProps & {
+  format: string;
+  story?: { story: unknown; narration: string; assets?: Record<string, string> } | null;
+  // `flow` set → the Preview-only Flow engine renders this compiled plan.
+  flow?: { plan: unknown } | null;
+};
 
 export const COMPOSITION_ID = "Storyboard";
 export const STORY_WORLD_ID = "StoryWorld"; // Preview-only continuous story engine
+export const FLOW_SCENE_ID = "FlowScene"; // Preview-only Flow engine
 
 export const FPS = 30;
 

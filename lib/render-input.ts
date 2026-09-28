@@ -6,7 +6,8 @@ import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import type { RenderScene } from "@/components/video/types";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { storyAssetsEnabled, usableStory } from "@/lib/story-engine";
+import { storyAssetsEnabled, usableFlow, usableStory } from "@/lib/story-engine";
+import { compileFlowScript } from "@/components/video/flow/compile";
 
 export type RenderProject = {
   format: string;
@@ -36,15 +37,17 @@ export async function buildRenderInput(
   // Map each scene to its manifest asset (project screenshot or completed generated asset).
   const assets = (project.assets_manifest as AssetManifest | null)?.assets ?? [];
   if (!project.assets_manifest) problems.push("Prepare visual assets first.");
-  // Preview-only story engine: the validated story, else null (→ Storyboard).
+  // Preview-only engines: the validated story or flow, else null (→ Storyboard).
   const story = usableStory(brief.data.story, brief.data.script, project.format);
+  const wordTimings = project.voice_status === "completed" ? parseWordTimings(project.voice_result?.timing?.words) : null;
+  const flow = story ? null : usableFlow(brief.data.flow, brief.data.script, project.format, wordTimings, project.duration_seconds);
   // Per scene: a full-frame background and/or a main visual.
   const bgByScene = new Map<string, string>();
   const fgByScene = new Map<string, { path: string; kind: "screenshot" | "icon" | "image" }>();
   for (const a of assets) {
     if (a.source === "generated" && a.status !== "completed") {
       // Not needed (and not generated) when StoryWorld renders the story.
-      if (!story) problems.push(`Asset ${a.id} is not generated.`);
+      if (!story && !flow) problems.push(`Asset ${a.id} is not generated.`);
       continue;
     }
     if (!a.storage_path) continue;
@@ -100,6 +103,8 @@ export async function buildRenderInput(
     problems,
     props: {
       story: story ? { story, narration: brief.data.script, assets: storyAssets } : null,
+      // Compiled on the voice's real word timestamps (no model call here).
+      flow: flow ? { plan: compileFlowScript(flow, { narration: brief.data.script, words: wordTimings, durationSeconds: project.duration_seconds }) } : null,
       scenes,
       format: project.format,
       durationSeconds: project.duration_seconds,

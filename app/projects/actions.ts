@@ -51,7 +51,9 @@ import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { generateVisualStory } from "@/lib/ai/visual-story";
 import { parseWordTimings } from "@/lib/voice-timing";
-import { needsLegacyImages, storyEngineEnabled, usableStory } from "@/lib/story-engine";
+import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableStory } from "@/lib/story-engine";
+import { generateFlowScript } from "@/lib/ai/flow-director";
+import type { FlowScript } from "@/lib/flow-script";
 import type { VisualStory } from "@/lib/visual-story";
 import { generateStoryAssets, planStoryAssets, storyAssetsEnabled } from "@/lib/story-assets";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
@@ -293,6 +295,59 @@ function creativePreferences(project: { direction?: string | null; creative_dire
 // Preview-only (VISUAL_ENGINE=story): a separate VisualStory call after the
 // brief. Stores the story only when it validates; otherwise the brief keeps
 // story = null and the existing renderer is used. Never fails the project.
+// Preview-only (VISUAL_ENGINE=flow): the Flow Director after the voice. Stores
+// the FlowScript only when it validates against the narration and its word
+// timestamps; otherwise the existing renderer is used. Never fails the project.
+async function generateFlow(projectId: string, userId: string, budgetMs: number) {
+  const admin = createAdminClient();
+  const { data: project } = await admin
+    .from("projects")
+    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction, voice_status, voice_result")
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  const brief = ProductBrief.safeParse(project?.brief);
+  if (!project || project.voice_status !== "completed" || !brief.success || brief.data.flow || project.format !== "16:9") return;
+  const words = parseWordTimings((project.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
+  console.info("flow director start:", { projectId, timing: words?.length ? "voice" : "estimated", words: words?.length ?? 0 });
+  let usage: BriefUsage | undefined;
+  const result = await generateFlowScript(
+    { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, creative_preferences: creativePreferences(project) },
+    (u) => (usage = u),
+    budgetMs,
+  );
+  console.info("flow director:", {
+    projectId,
+    outcome: result.script ? "stored" : "none",
+    timing: result.timing,
+    attempts: result.attempts,
+    ms: result.ms,
+    beats: result.script?.beats.map((b) => `${b.action}@${b.cue}`),
+    input_tokens: usage?.inputTokens,
+    output_tokens: usage?.outputTokens,
+    problems: result.errors.slice(0, 6),
+  });
+  if (result.script) {
+    // Re-read so nothing written meanwhile is lost; only `flow` changes.
+    const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
+    const current = ProductBrief.safeParse(fresh?.brief);
+    if (current.success && !current.data.flow) {
+      await admin.from("projects").update({ brief: { ...(fresh!.brief as object), flow: result.script } }).eq("id", projectId).eq("user_id", userId);
+    }
+  }
+  if (usage) {
+    await recordCost(admin, {
+      project_id: projectId,
+      user_id: userId,
+      operation: "openai_brief",
+      model: usage.model,
+      quantity: usage.inputTokens + usage.outputTokens,
+      estimated_cost_usd: openaiCost(usage.model, usage.inputTokens, usage.outputTokens),
+      metadata: { kind: "flow_director", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts: result.attempts, latency_ms: result.ms, stored: !!result.script, timing: result.timing },
+    });
+  }
+}
+
 async function generateStory(projectId: string, userId: string, budgetMs: number) {
   const admin = createAdminClient();
   const { data: project } = await admin
@@ -872,7 +927,12 @@ async function runPipeline(projectId: string, userId: string) {
     // Preview-only: the Visual Director starts only after the voice exists
     // (its words are the timeline); it runs alongside the visuals step.
     const budget = PIPELINE_BUDGET_MS - (Date.now() - pipelineStarted);
-    const story = storyEngineEnabled() && budget > 45_000 ? attempt(() => generateStory(projectId, userId, Math.min(110_000, budget - 30_000))) : null;
+    const story =
+      storyEngineEnabled() && budget > 45_000
+        ? attempt(() => generateStory(projectId, userId, Math.min(110_000, budget - 30_000)))
+        : flowEngineEnabled() && budget > 45_000
+          ? attempt(() => generateFlow(projectId, userId, Math.min(100_000, budget - 30_000)))
+          : null;
 
     // 4. Visual asset manifest, then generated assets.
     await enter("visuals");
@@ -882,12 +942,13 @@ async function runPipeline(projectId: string, userId: string) {
     p = await state();
     // With the story engine on, wait for the Visual Director first: a usable
     // story renders with StoryWorld, which never shows the legacy images.
-    let usable: VisualStory | null = null;
+    let usable: VisualStory | FlowScript | null = null;
     if (story) {
       await story;
-      const { data: row } = await admin.from("projects").select("brief, format").eq("id", projectId).single();
+      const { data: row } = await admin.from("projects").select("brief, format, duration_seconds, voice_result").eq("id", projectId).single();
       const brief = ProductBrief.safeParse(row?.brief);
-      usable = brief.success && row ? usableStory(brief.data.story, brief.data.script, row.format) : null;
+      const words = parseWordTimings((row?.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
+      usable = brief.success && row ? (usableStory(brief.data.story, brief.data.script, row.format) ?? usableFlow(brief.data.flow, brief.data.script, row.format, words, row.duration_seconds)) : null;
     }
     if (p.assets_status === "completed" && needsLegacyImages(p.assets_manifest as AssetManifest | null, usable)) {
       await attempt(() => generateVisualAssets(projectId));

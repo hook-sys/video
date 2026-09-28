@@ -23,6 +23,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import { ecommercePlan } from "@/components/video/flow/fixtures/ecommerce";
 import { paymentsHubPlan } from "@/components/video/flow/fixtures/payments-hub";
 import { validateFlowPlan } from "@/components/video/flow/validate";
+import { FLOW_SCRIPT_FIXTURES } from "@/components/video/flow/fixtures/scripts";
+import { beatFrames, compileFlowScript } from "@/components/video/flow/compile";
+import { flowScriptBlockers, repairFlowScript } from "@/lib/flow-script";
+import { flowEngineEnabled, usableFlow } from "@/lib/story-engine";
 import zlib from "node:zlib";
 import path from "node:path";
 
@@ -232,6 +236,58 @@ function flowPlans(): Check[] {
   return checks;
 }
 
+// Flow Director output → compiler: fixtures in the Director's exact shape
+// compile to valid plans, beats land on the voice's real word times, broken
+// scripts are rejected, and the engine is Preview-only.
+export const FLOW_SCRIPT_NAMES = FLOW_SCRIPT_FIXTURES.map((f) => f.name);
+function flowDirector(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  for (const fx of FLOW_SCRIPT_FIXTURES) {
+    const blockers = flowScriptBlockers(fx.script, fx.narration, null, fx.durationSeconds);
+    const plan = compileFlowScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds });
+    const errors = validateFlowPlan(plan);
+    add(`${fx.name}: script valid and compiles`, blockers.length + errors.length === 0, [...blockers, ...errors].join("; ") || `${fx.script.beats.length} beats → ${plan.nodes.length} nodes, ${plan.links.length} links, ${plan.sfx?.length ?? 0} sounds, ${plan.camera.center.length} camera keys`);
+  }
+  // Real voice timing: uneven word times (speech speeds up and pauses).
+  const fx = FLOW_SCRIPT_FIXTURES[0];
+  let clock = 0.3;
+  const words = fx.narration.split(/\s+/).map((text, i) => {
+    const start = clock;
+    clock += 0.22 + (i % 5 === 4 ? 0.35 : 0) + (i % 3) * 0.04;
+    return { text, start, end: clock - 0.03 };
+  });
+  const frames = beatFrames(fx.script, fx.narration, words, fx.durationSeconds);
+  const expected = fx.script.beats.map((b) => {
+    const first = b.cue.split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, "");
+    const w = words.find((x, i) => x.text.toLowerCase().replace(/[^a-z]/g, "") === first && fx.narration.split(/\s+/).slice(i, i + b.cue.split(/\s+/).length).join(" ").toLowerCase().replace(/[^a-z ]/g, "") === b.cue.toLowerCase().replace(/[^a-z ]/g, ""));
+    return w ? Math.round(w.start * 30) - 3 : null;
+  });
+  const off = frames.filter((f, i) => expected[i] !== null && f !== Math.max(expected[i]!, i ? frames[i - 1] + 10 : 0));
+  add("beats start on the voice's word times (3-frame lead)", off.length === 0, off.length ? `${off.length} beat(s) off: ${frames.join(",")} vs ${expected.join(",")}` : `beat frames ${frames.join(", ")}`);
+  // Broken scripts are rejected.
+  const s0 = fx.script;
+  const broken = { ...s0, beats: [s0.beats[3], { ...s0.beats[1], cue: "a sentence nobody says" }, { ...s0.beats[4], action: "orbit" as const, satellites: [] }] };
+  const errs = flowScriptBlockers(broken, fx.narration, null, fx.durationSeconds);
+  add("broken script is rejected", errs.some((e) => e.includes("not spoken")) && errs.some((e) => e.includes("must enter")) && errs.some((e) => e.includes("satellites")), errs.slice(0, 4).join("; "));
+  const repaired = repairFlowScript({ ...s0, beats: s0.beats.map((b, i) => (i === 1 ? { ...b, icon: "shopping_cart_icon" } : b)) });
+  add("unknown icons are repaired", repaired.beats[1].icon === "shopping-cart", `"shopping_cart_icon" → ${repaired.beats[1].icon}`);
+  // Preview-only gating.
+  const env = { VERCEL_ENV: process.env.VERCEL_ENV, VISUAL_ENGINE: process.env.VISUAL_ENGINE };
+  const set = (e: Record<string, string | undefined>) => Object.entries(e).forEach(([k, v]) => (v === undefined ? delete process.env[k] : (process.env[k] = v)));
+  try {
+    set({ VERCEL_ENV: "preview", VISUAL_ENGINE: "flow" });
+    const ok = flowEngineEnabled() && usableFlow(s0, fx.narration, "16:9", null, fx.durationSeconds) !== null && usableFlow(s0, fx.narration, "9:16", null, fx.durationSeconds) === null;
+    const skip = !needsLegacyImages({ assets: [{ id: "a", type: "abstract", source: "generated", role: "background", prompt: "p", scene_ids: ["scene-1"] }] }, usableFlow(s0, fx.narration, "16:9", null, fx.durationSeconds));
+    set({ VERCEL_ENV: "production", VISUAL_ENGINE: "flow" });
+    const prodOff = !flowEngineEnabled() && usableFlow(s0, fx.narration, "16:9", null, fx.durationSeconds) === null;
+    add("flow engine is Preview-only; legacy images skipped with a usable flow", ok && skip && prodOff, `preview 16:9 → flow, 9:16 → Storyboard, legacy images skipped: ${skip}, production → off: ${prodOff}`);
+  } finally {
+    set(env);
+  }
+  return checks;
+}
+
 export function runChecks(): Section[] {
   const sections: Section[] = [
     { name: "stored ProductBrief compatibility", checks: briefCompatibility() },
@@ -240,6 +296,7 @@ export function runChecks(): Section[] {
     { name: "icon library", checks: iconLibrary() },
     { name: "lottie library", checks: lottieLibrary() },
     { name: "flow engine plans", checks: flowPlans() },
+    { name: "flow director scripts", checks: flowDirector() },
   ];
   for (const f of FIXTURES) {
     const n = normalizeStory(f.story);

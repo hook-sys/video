@@ -1,5 +1,6 @@
 import { type CSSProperties, useState } from "react";
-import { AbsoluteFill, continueRender, delayRender, interpolateColors, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, continueRender, delayRender, Html5Audio, interpolateColors, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { SFX_LIBRARY } from "@/components/video/sfx";
 import { Icon } from "@/components/video/icons";
 import { isLottieName, LottieAnim } from "@/components/video/lottie";
 import { clamp01, num, ramp, step, vec } from "./eval";
@@ -9,8 +10,24 @@ import type { FlowLink, FlowNode, FlowPlan, FlowText, ThemeName, Vec } from "./t
 
 // Renders a FlowPlan: a themed world, persistent nodes under one camera,
 // links with travelling packets, kinetic text and Lottie accents.
-export const FLOW_SCENE_ID = "FlowScene";
-export type FlowSceneProps = { plan: FlowPlan; theme?: ThemeName };
+export { FLOW_SCENE_ID } from "@/components/video/types";
+export type FlowSceneProps = { plan: FlowPlan; theme?: ThemeName; audioUrl?: string | null };
+
+// Sound effects under the narration: spaced out and capped so they stay
+// subtle (and within the Player's shared audio tags).
+const SFX_VOLUME = 0.22;
+const SFX_MIN_GAP = 8;
+const SFX_MAX = 14;
+export function plannedSfx(plan: FlowPlan) {
+  const out: { frame: number; src: string }[] = [];
+  for (const s of [...(plan.sfx ?? [])].sort((a, b) => a.frame - b.frame)) {
+    const src = SFX_LIBRARY[s.kind];
+    if (!src || s.frame >= plan.duration - 6 || out.length >= SFX_MAX) continue;
+    if (out.length && s.frame - out[out.length - 1].frame < SFX_MIN_GAP) continue;
+    out.push({ frame: s.frame, src });
+  }
+  return out;
+}
 
 let fontReady = false;
 function useFlowFont() {
@@ -50,7 +67,7 @@ function computeStates(plan: FlowPlan, frame: number) {
   return states;
 }
 
-export function FlowScene({ plan, theme: themeOverride }: FlowSceneProps) {
+export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowSceneProps) {
   useFlowFont();
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
@@ -114,6 +131,12 @@ export function FlowScene({ plan, theme: themeOverride }: FlowSceneProps) {
       ))}
       {plan.texts.map((t, i) => (
         <Kinetic key={i} t={t} frame={frame} theme={theme} />
+      ))}
+      {audioUrl && <Html5Audio src={audioUrl} />}
+      {plannedSfx(plan).map((s, i) => (
+        <Sequence key={`sfx-${i}`} from={s.frame} layout="none">
+          <Html5Audio src={staticFile(s.src)} volume={SFX_VOLUME} />
+        </Sequence>
       ))}
     </AbsoluteFill>
   );
@@ -321,6 +344,8 @@ function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowT
   const accent = new Set((t.accent ?? "").split(/\s+/).map(bare).filter(Boolean));
   let li = 0;
   const words = t.text.split(" ");
+  // Letters cascade in, but the whole line lands within ~20 frames.
+  const stagger = Math.min(1.1, 20 / Math.max(1, t.text.length));
   return (
     <div style={{ position: "absolute", left: "50%", top: "50%", transform: `translate(calc(-50% + ${t.pos[0]}px), calc(-50% + ${t.pos[1]}px))`, fontSize: t.size, fontWeight: t.weight ?? 750, letterSpacing: -t.size * 0.03, color: theme.ink, whiteSpace: "nowrap", lineHeight: 1.1 }}>
       {words.map((w, wi) => {
@@ -329,7 +354,7 @@ function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowT
           <span key={wi} style={{ display: "inline-block", marginRight: wi < words.length - 1 ? "0.26em" : 0 }}>
             {[...w].map((ch, ci) => {
               const i = li++;
-              const kin = ramp(frame, t.start + i * 1.1, 14, "out");
+              const kin = ramp(frame, t.start + i * stagger, 14, "out");
               const kout = ramp(frame, t.end + i * 0.5, 10, "in");
               const k = kin * (1 - kout);
               return (

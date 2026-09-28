@@ -82,4 +82,6 @@ export type FlowPlan = {
   rings?: { center: string; radius: number; start: number; end?: number }[]; // dashed orbit paths
   // Iris: the member nodes are framed by a circle that closes onto `into`.
   iris?: { start: number; dur: number; members: string[]; into: string }[];
+  // Sound effects tied to motion (kinds from components/video/sfx.tsx).
+  sfx?: { frame: number; kind: "whoosh" | "soft_pop" | "click" | "reveal" | "success_chime" | "subtle_impact" | "digital_processing" | "typing" }[];
 };

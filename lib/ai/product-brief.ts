@@ -3,6 +3,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { checkContinuity, keepOmittedObjects } from "@/lib/ai/blueprint-check";
 import { StoryAssetRecord, VisualStory } from "@/lib/visual-story";
+import { FlowScript } from "@/lib/flow-script";
 
 // Internal scene model. `animation`, `transition` and sound effect `cue`s are
 // free-text directions chosen by the AI from the scene's meaning; the Remotion
@@ -172,6 +173,8 @@ export const ProductBrief = z.object({
   // Optional visual story for the continuous story engine. Not generated yet;
   // absent or invalid stories are null, so existing briefs are unaffected.
   story: VisualStory.nullable().default(null).catch(null),
+  // Preview-only Flow engine (VISUAL_ENGINE=flow): the Director's beats.
+  flow: FlowScript.nullable().default(null).catch(null),
   // Generated visuals for the story (Preview-only, VISUAL_ASSETS=on).
   story_assets: z.array(StoryAssetRecord).nullable().default(null).catch(null),
 });

@@ -6,6 +6,7 @@ import {
   COMPOSITION_ID,
   RESOLUTIONS,
   STORY_WORLD_ID,
+  FLOW_SCENE_ID,
   type RenderProps,
   type Resolution,
 } from "@/components/video/types";
@@ -45,11 +46,15 @@ export async function renderStoryboardMp4(
   const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE || null;
   // Preview-only story engine when a validated story came with the props.
   const inputProps = (
-    props.story ? { ...props.story, durationSeconds: props.durationSeconds, words: props.words ?? null, audioUrl: props.audioUrl } : props
+    props.flow
+      ? { plan: props.flow.plan, audioUrl: props.audioUrl }
+      : props.story
+        ? { ...props.story, durationSeconds: props.durationSeconds, words: props.words ?? null, audioUrl: props.audioUrl }
+        : props
   ) as unknown as Record<string, unknown>;
   const composition = await selectComposition({
     serveUrl,
-    id: props.story ? STORY_WORLD_ID : COMPOSITION_ID,
+    id: props.flow ? FLOW_SCENE_ID : props.story ? STORY_WORLD_ID : COMPOSITION_ID,
     inputProps,
     browserExecutable,
   });

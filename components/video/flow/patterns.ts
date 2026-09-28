@@ -11,6 +11,8 @@ export const TILT: Record<"iso" | "hero" | "flat", Vec3> = { iso: [46, 0, -22], 
 
 function animate<T>(track: Track<T>, t: number, dur: number, value: T, ease: Ease = "inOut") {
   const last = track[track.length - 1];
+  // Never start before the track's last key (keeps keys in time order).
+  t = Math.max(t, last[0]);
   if (last[0] < t) track.push([t, last[1]]);
   track.push([t + dur, value, ease]);
 }
@@ -160,6 +162,10 @@ export class Flow {
     (this.plan.rings ??= []).push({ center: hub.id, radius, start: t + 6, end: until });
     return this;
   }
+  endRings(t: number) {
+    for (const r of this.plan.rings ?? []) if (r.end === undefined || r.end > t) r.end = t;
+    return this;
+  }
   // The members are framed by a circle that closes onto `into`, which takes over.
   iris(t: number, dur: number, members: FlowNodeHandle[], into: FlowNodeHandle) {
     (this.plan.iris ??= []).push({ start: t, dur, members: members.map((m) => m.id), into: into.id });
@@ -185,6 +191,10 @@ export class Flow {
     nodes.forEach((n, i) => n.move(t + i * 2, dur, at, "in").resize(t + i * 2, dur, 0.2, "in").fade(t + i * 2 + dur - 6, 6, 0));
     this.links.forEach((l) => (l.fade = [t, t + 12]));
     into.move(t, dur, at, "inOut").pulse(t + dur);
+    return this;
+  }
+  sfx(frame: number, kind: NonNullable<FlowPlan["sfx"]>[number]["kind"]) {
+    (this.plan.sfx ??= []).push({ frame: Math.max(0, Math.round(frame)), kind });
     return this;
   }
   text(text: string, start: number, end: number, { pos = [0, 0] as Vec, size = 72, weight, accent }: { pos?: Vec; size?: number; weight?: number; accent?: string } = {}) {

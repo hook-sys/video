@@ -35,7 +35,7 @@ await build({
   external: ["remotion", "react", "react-dom", "zod"],
   logLevel: "warning",
 });
-const { runChecks, FIXTURES, LOTTIE_NAMES } = await import(pathToFileURL(bundled).href + `?t=${Date.now()}`);
+const { runChecks, FIXTURES, LOTTIE_NAMES, FLOW_SCRIPT_NAMES } = await import(pathToFileURL(bundled).href + `?t=${Date.now()}`);
 
 const icon = (c) => (c.ok ? "ok  " : c.level === "error" ? "FAIL" : "warn");
 const sec = (f) => (f / 30).toFixed(2) + "s";
@@ -148,6 +148,7 @@ if (render) {
   await pixelSection("flow · e-commerce (midnight)", "FlowScene", { theme: "midnight" });
   await pixelSection("flow · payments hub (lavender)", "FlowPaymentsHub", {});
   await pixelSection("flow · payments hub (midnight)", "FlowPaymentsHub", { theme: "midnight" });
+  for (const name of FLOW_SCRIPT_NAMES) await pixelSection(`flow director script · ${name}`, `FlowScript-${name}`, {});
 
   // Lottie micro-animations: every cell of the gallery must draw something and
   // actually move (sampled every 4th frame).
