@@ -1,4 +1,4 @@
-import type { Ease, FlowBrand, FlowLink, FlowNode, FlowPlan, FlowText, FlowUi, ThemeName, Track, UiRow, Vec, Vec3 } from "./types";
+import type { Ease, FlowBrand, FlowElement, FlowLink, FlowNode, FlowPlan, FlowText, FlowUi, ThemeName, Track, UiRow, Vec, Vec3 } from "./types";
 
 // Plane tilts (rotateX, rotateY, rotateZ): an isometric desk view, a hero
 // three-quarter view, and face-on.
@@ -11,13 +11,13 @@ export const TILT: Record<"iso" | "hero" | "flat", Vec3> = { iso: [46, 0, -22], 
 
 // Every key goes through put(): a key never lands before the track's last key,
 // so tracks stay in time order whatever order patterns are applied in.
-function put<T>(track: Track<T>, t: number, value: T, ease?: Ease) {
+export function put<T>(track: Track<T>, t: number, value: T, ease?: Ease) {
   const last = track[track.length - 1];
   const at = last ? Math.max(t, last[0]) : t;
   if (last && last[0] === at && ease === undefined) last[1] = value;
   else track.push(ease ? [at, value, ease] : [at, value]);
 }
-function animate<T>(track: Track<T>, t: number, dur: number, value: T, ease: Ease = "inOut") {
+export function animate<T>(track: Track<T>, t: number, dur: number, value: T, ease: Ease = "inOut") {
   const last = track[track.length - 1];
   // Never start before the track's last key (keeps keys in time order).
   t = Math.max(t, last[0]);
@@ -170,6 +170,13 @@ export class Flow {
   }
   ui(id: string, at: Vec, { w = 1100, h = 680, title, rows, src, tilt = TILT.iso }: { w?: number; h?: number; title: string; rows?: UiRow[]; src?: string; tilt?: Vec3 }) {
     const h2 = new FlowNodeHandle({ id, kind: "ui", size: Math.min(w, h), pos: [[0, at]], ui: { w, h, title, rows, src, tilt: [[0, tilt]] } });
+    this.nodes.push(h2);
+    return h2;
+  }
+  // A product element (card, device, screenshot, icon tile, logo): hidden until
+  // an enter pattern shows it.
+  el(id: string, at: Vec, { el, w, h, z = 0 }: { el: FlowElement; w: number; h: number; z?: number }) {
+    const h2 = new FlowNodeHandle({ id, kind: "el", size: Math.min(w, h), pos: [[0, at]], el, w, h, z, scale: [[0, 0]], opacity: [[0, 0]] });
     this.nodes.push(h2);
     return h2;
   }

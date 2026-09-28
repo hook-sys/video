@@ -1,3 +1,4 @@
+import { CURVES } from "./ease";
 import { num, ramp, vec } from "./eval";
 import type { FlowNode, FlowPlan, Vec } from "./types";
 
@@ -6,9 +7,18 @@ export type NodeState = { node: FlowNode; pos: Vec; scale: number; opacity: numb
 // Node positions at a frame; orbiting nodes circle their centre node
 // (blending in and out of their own keyed path). Pure, so the quality checks
 // see exactly what the renderer draws.
+// Position on a travel curve, if the node is travelling at this frame.
+function onPath(n: FlowNode, frame: number): Vec | null {
+  const p = n.paths?.find((q) => frame >= q.start && frame < q.end);
+  if (!p) return null;
+  const k = CURVES[p.ease ?? "inOut"]((frame - p.start) / Math.max(1, p.end - p.start));
+  const u = 1 - k;
+  return [u * u * p.from[0] + 2 * u * k * p.ctrl[0] + k * k * p.to[0], u * u * p.from[1] + 2 * u * k * p.ctrl[1] + k * k * p.to[1]];
+}
+
 export function computeStates(plan: FlowPlan, frame: number) {
   const states = new Map<string, NodeState>();
-  const base = (n: FlowNode): NodeState => ({ node: n, pos: vec(n.pos, frame), scale: num(n.scale, frame, 1), opacity: num(n.opacity, frame, 1) });
+  const base = (n: FlowNode): NodeState => ({ node: n, pos: onPath(n, frame) ?? vec(n.pos, frame), scale: num(n.scale, frame, 1), opacity: num(n.opacity, frame, 1) });
   for (const n of plan.nodes) if (!n.orbit) states.set(n.id, base(n));
   for (const n of plan.nodes) {
     if (!n.orbit) continue;

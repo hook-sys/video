@@ -110,7 +110,7 @@ export function brandStartFrame(total: number, timeline: WordTiming[]) {
 }
 
 // Short enough to read at a glance under the name, else left out.
-const ctaLine = (cta?: string | null) => {
+export const ctaLine = (cta?: string | null) => {
   const c = (cta ?? "").trim().replace(/\s+/g, " ");
   return c && c.split(" ").length <= 7 && c.length <= 48 ? c : undefined;
 };
@@ -201,7 +201,7 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
   };
   // The closing line stays to the end, or until the brand lockup takes over.
   // (it has left the frame by the time the lockup comes in).
-  const lastEnd = stageEnd < total ? stageEnd - 14 : total + 30;
+  const lastEnd = stageEnd < total ? stageEnd - 8 : total + 30;
 
   beats.forEach((b: FlowBeat, i) => {
     let t = starts[i];
@@ -423,7 +423,9 @@ export function compileFlowScript(script: FlowScript, { narration, words, durati
         const cueSec = (starts[i] + 3) / FPS;
         // Words still to be spoken when the lockup starts appear just before it.
         const wf = wordFrames(text, cueSec - 0.2, timeline).map((w) => Math.min(w, stageEnd - (stageEnd < total ? 24 : 8)));
-        const start = Math.min(t + 2, wf[0]);
+        // The line (and the dim behind a display line) arrives with its first
+        // word, never a blank moment before it.
+        const start = Math.min(wf[0], Math.max(t + 2, wf[0] - 8));
         const { hardEnd, nextStart } = nextLineAfter(i);
         const wordsEnd = wf[wf.length - 1] + 36;
         const cover = style === "display" || style === "panel";

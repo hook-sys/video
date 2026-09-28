@@ -1,5 +1,6 @@
 import { isIconName } from "@/components/video/icons";
 import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
+import { CARD_BY_ID } from "./cards/templates";
 import { THEMES } from "./themes";
 import type { FlowPlan, Track } from "./types";
 
@@ -23,6 +24,12 @@ export function validateFlowPlan(plan: FlowPlan): string[] {
     for (const [k, t] of Object.entries({ pos: n.pos, scale: n.scale, opacity: n.opacity, ring: n.ring, icon: n.icon, label: n.label })) sorted(`${n.id}.${k}`, t as Track<unknown> | undefined);
     for (const [, name] of n.icon ?? []) if (!isIconName(name)) errors.push(`${n.id}: unknown icon "${name}"`);
     if (n.kind === "ui" && !n.ui) errors.push(`${n.id}: UI node without ui spec`);
+    if (n.kind === "el") {
+      if (!n.el) errors.push(`${n.id}: element node without el spec`);
+      else if (n.el.type === "card" && !CARD_BY_ID.has(n.el.template)) errors.push(`${n.id}: unknown card template "${n.el.template}"`);
+      for (const [k, t] of Object.entries({ tilt: n.tilt, rot: n.rot, blur: n.blur })) sorted(`${n.id}.${k}`, t as Track<unknown> | undefined);
+      for (const p of n.paths ?? []) if (p.end <= p.start) errors.push(`${n.id}: path ends before it starts`);
+    }
     if (n.ui) {
       sorted(`${n.id}.tilt`, n.ui.tilt);
       for (const r of n.ui.rows ?? []) if (!isIconName(r.icon)) errors.push(`${n.id}: unknown row icon "${r.icon}"`);

@@ -7,6 +7,7 @@ import { clamp01, num, ramp, step, vec } from "./eval";
 import { FLOW_FONT, type FlowTheme, lottieColors, THEMES, withBrandColor } from "./themes";
 import { computeStates, type NodeState } from "./states";
 import { UiPlane } from "./ui-plane";
+import { ElementView } from "./element";
 import { fitSize, labelWorldSize, splitLines, TYPE } from "./typography";
 import type { FlowBrand, FlowLink, FlowList, FlowNode, FlowPanel, FlowPlan, FlowText, ThemeName, Vec } from "./types";
 
@@ -85,6 +86,12 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
           <LinkLine key={l.id} link={l} states={states} frame={frame} theme={theme} />
         ))}
       </svg>
+      {[...states.values()]
+        .filter((s) => s.node.kind === "el" && include(s.node.id))
+        .sort((a, b) => (a.node.z ?? 0) - (b.node.z ?? 0))
+        .map((s) => (
+          <ElementView key={s.node.id} s={s} frame={frame} theme={theme} />
+        ))}
       {plan.links.filter((l) => include(l.from) && include(l.to)).flatMap((l) => (l.packets ?? []).map((p, i) => <Packet key={`${l.id}-${i}`} link={l} packet={p} states={states} frame={frame} theme={theme} />))}
       {withExtras && plan.lotties.filter((l) => isLottieName(l.name) && (!l.node || include(l.node))).map((l, i) => {
         const at = (l.node && states.get(l.node)?.pos) || l.pos || [0, 0];
@@ -96,7 +103,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
           </Sequence>
         );
       })}
-      {[...states.values()].filter((s) => s.node.kind !== "ui" && include(s.node.id)).map((s) => (s.node.kind === "orb" ? <Orb key={s.node.id} s={s} frame={frame} theme={theme} zoom={zoom} /> : <Pill key={s.node.id} s={s} frame={frame} theme={theme} />))}
+      {[...states.values()].filter((s) => s.node.kind !== "ui" && s.node.kind !== "el" && include(s.node.id)).map((s) => (s.node.kind === "orb" ? <Orb key={s.node.id} s={s} frame={frame} theme={theme} zoom={zoom} /> : <Pill key={s.node.id} s={s} frame={frame} theme={theme} />))}
     </div>
   );
   return (
@@ -306,8 +313,10 @@ function curve(link: FlowLink, states: Map<string, NodeState>) {
   const [dx, dy] = [b.pos[0] - a.pos[0], b.pos[1] - a.pos[1]];
   const len = Math.hypot(dx, dy) || 1;
   const [ux, uy] = [dx / len, dy / len];
-  const ra = (a.node.size * a.scale) / 2 + 14;
-  const rb = (b.node.size * b.scale) / 2 + 14;
+  // Elements (cards) are boxes: lines stop at their edge along the direction.
+  const reach = (s: NodeState) => (s.node.kind === "el" ? Math.min(Math.abs((s.node.w ?? 0) / 2 / (ux || 1e-6)), Math.abs((s.node.h ?? 0) / 2 / (uy || 1e-6))) * s.scale + 10 : (s.node.size * s.scale) / 2 + 14);
+  const ra = reach(a);
+  const rb = reach(b);
   const p0: Vec = [a.pos[0] + ux * ra, a.pos[1] + uy * ra];
   const p2: Vec = [b.pos[0] - ux * rb, b.pos[1] - uy * rb];
   const bend = link.bend ?? 0;

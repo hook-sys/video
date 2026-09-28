@@ -4,6 +4,7 @@ import { z } from "zod";
 import { checkContinuity, keepOmittedObjects } from "@/lib/ai/blueprint-check";
 import { StoryAssetRecord, VisualStory } from "@/lib/visual-story";
 import { FlowScript } from "@/lib/flow-script";
+import { SceneScript } from "@/lib/scene-script";
 
 // Internal scene model. `animation`, `transition` and sound effect `cue`s are
 // free-text directions chosen by the AI from the scene's meaning; the Remotion
@@ -175,6 +176,8 @@ export const ProductBrief = z.object({
   story: VisualStory.nullable().default(null).catch(null),
   // Preview-only Flow engine (VISUAL_ENGINE=flow): the Director's beats.
   flow: FlowScript.nullable().default(null).catch(null),
+  // Director v2 (same flag): scenes of product elements; preferred over `flow`.
+  scene: SceneScript.nullable().default(null).catch(null),
   // Generated visuals for the story (Preview-only, VISUAL_ASSETS=on).
   story_assets: z.array(StoryAssetRecord).nullable().default(null).catch(null),
 });

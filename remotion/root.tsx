@@ -9,6 +9,9 @@ import { ecommercePlan } from "@/components/video/flow/fixtures/ecommerce";
 import { paymentsHubPlan } from "@/components/video/flow/fixtures/payments-hub";
 import { FLOW_SCRIPT_FIXTURES } from "@/components/video/flow/fixtures/scripts";
 import { compileFlowScript } from "@/components/video/flow/compile";
+import { compileSceneScript } from "@/components/video/flow/compile-scene";
+import { SCENE_FIXTURES } from "@/components/video/flow/fixtures/scenes";
+import { CARD_GALLERY_ID, CardGallery } from "@/components/video/flow/cards/gallery";
 import { GALLERY_CELL, GALLERY_COLS, LOTTIE_GALLERY_ID, LottieGallery, galleryRows } from "@/components/video/lottie/gallery";
 import {
   COMPOSITION_ID,
@@ -85,6 +88,20 @@ export function RemotionRoot() {
         defaultProps={{ plan: compileFlowScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words, brand: fx.brand, screenshots: fx.screenshots }) } as FlowSceneProps}
       />
     ))}
+    {SCENE_FIXTURES.map((fx) => (
+      <Composition
+        key={fx.name}
+        id={`SceneScript-${fx.name}`}
+        component={FlowScene}
+        fps={FPS}
+        width={1920}
+        height={1080}
+        durationInFrames={fx.durationSeconds * FPS}
+        defaultProps={{ plan: compileSceneScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words, brand: fx.brand, screenshots: fx.screenshots }) } as FlowSceneProps}
+      />
+    ))}
+    {/* QA only: every card template (one style per page) and the device mockups. */}
+    <Composition id={CARD_GALLERY_ID} component={CardGallery} fps={FPS} width={1920} height={1080} durationInFrames={90} defaultProps={{ page: 0, style: "glass" as const, theme: "teal" as const }} />
     {/* QA only: every Lottie micro-animation in one grid. */}
     <Composition
       id={LOTTIE_GALLERY_ID}

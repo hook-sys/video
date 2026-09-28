@@ -58,9 +58,11 @@ import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { generateVisualStory } from "@/lib/ai/visual-story";
 import { parseWordTimings } from "@/lib/voice-timing";
-import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableStory } from "@/lib/story-engine";
+import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { generateFlowScript } from "@/lib/ai/flow-director";
+import { generateSceneScript } from "@/lib/ai/scene-director";
 import type { FlowScript } from "@/lib/flow-script";
+import type { SceneScript } from "@/lib/scene-script";
 import type { VisualStory } from "@/lib/visual-story";
 import { generateStoryAssets, planStoryAssets, storyAssetsEnabled } from "@/lib/story-assets";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
@@ -368,39 +370,60 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     .eq("user_id", userId)
     .maybeSingle();
   const brief = ProductBrief.safeParse(project?.brief);
-  if (!project || project.voice_status !== "completed" || !brief.success || brief.data.flow || project.format !== "16:9") return;
+  if (!project || project.voice_status !== "completed" || !brief.success || brief.data.flow || brief.data.scene || project.format !== "16:9") return;
   const words = parseWordTimings((project.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
   const { count: screenshots } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
+  const input = { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project) };
   console.info("flow director start:", { projectId, timing: words?.length ? "voice" : "estimated", words: words?.length ?? 0, screenshots: screenshots ?? 0 });
+  const started = Date.now();
+  // Director v2 (scenes of product UI) first; the pattern Director is the
+  // fallback when no usable SceneScript comes back and time remains.
   let usage: BriefUsage | undefined;
-  const result = await generateFlowScript(
-    { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project) },
-    (u) => (usage = u),
-    budgetMs,
-  );
-  console.info("flow director:", {
+  const addUsage = (u: BriefUsage) => (usage = usage ? { ...u, inputTokens: usage.inputTokens + u.inputTokens, outputTokens: usage.outputTokens + u.outputTokens } : u);
+  const v2 = await generateSceneScript(input, addUsage, Math.min(budgetMs, 90_000));
+  console.info("scene director:", {
     projectId,
-    outcome: result.script ? "stored" : "none",
-    timing: result.timing,
-    attempts: result.attempts,
-    ms: result.ms,
-    beats: result.script?.beats.map((b) => `${b.action}@${b.cue}`),
-    input_tokens: usage?.inputTokens,
-    output_tokens: usage?.outputTokens,
-    problems: result.errors.slice(0, 6),
+    outcome: v2.script ? "stored" : "none",
+    timing: v2.timing,
+    attempts: v2.attempts,
+    ms: v2.ms,
+    beats: v2.script?.beats.map((b) => `${b.action}@${b.cue}`),
+    problems: v2.errors.slice(0, 6),
   });
-  if (result.script) {
-    // Re-read so nothing written meanwhile is lost; only `flow` changes.
+  const left = budgetMs - (Date.now() - started);
+  const result = v2.script ? { ...v2, script: null } : left > 40_000 ? await generateFlowScript(input, addUsage, left) : { ...v2, script: null };
+  if (!v2.script)
+    console.info("flow director:", {
+      projectId,
+      outcome: result.script ? "stored" : "none",
+      timing: result.timing,
+      attempts: result.attempts,
+      ms: result.ms,
+      beats: result.script?.beats.map((b) => `${b.action}@${b.cue}`),
+      input_tokens: usage?.inputTokens,
+      output_tokens: usage?.outputTokens,
+      problems: result.errors.slice(0, 6),
+    });
+  const stored = v2.script ? { scene: v2.script } : result.script ? { flow: result.script } : null;
+  if (stored) {
+    // Re-read so nothing written meanwhile is lost; only `scene`/`flow` change.
     const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
     const current = ProductBrief.safeParse(fresh?.brief);
-    if (current.success && !current.data.flow) {
-      await admin.from("projects").update({ brief: { ...(fresh!.brief as object), flow: result.script } }).eq("id", projectId).eq("user_id", userId);
+    if (current.success && !current.data.flow && !current.data.scene) {
+      await admin.from("projects").update({ brief: { ...(fresh!.brief as object), ...stored } }).eq("id", projectId).eq("user_id", userId);
     }
   }
   // Direction library: what the Director made of the customer's direction.
+  const script = v2.script ?? result.script;
+  const attempts = v2.attempts + (v2.script ? 0 : result.attempts);
   await admin
     .from("direction_library")
-    .update({ narration: brief.data.script, flow_script: result.script, outcome: { stored: !!result.script, attempts: result.attempts, problems: result.errors.slice(0, 6), theme: result.script?.theme ?? null }, updated_at: new Date().toISOString() })
+    .update({
+      narration: brief.data.script,
+      flow_script: script,
+      outcome: { stored: !!script, engine: v2.script ? "scene" : result.script ? "flow" : null, attempts, problems: (v2.script ? v2.errors : [...v2.errors, ...result.errors]).slice(0, 8), theme: script?.theme ?? null },
+      updated_at: new Date().toISOString(),
+    })
     .eq("project_id", projectId);
   if (usage) {
     await recordCost(admin, {
@@ -410,7 +433,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
       model: usage.model,
       quantity: usage.inputTokens + usage.outputTokens,
       estimated_cost_usd: openaiCost(usage.model, usage.inputTokens, usage.outputTokens),
-      metadata: { kind: "flow_director", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts: result.attempts, latency_ms: result.ms, stored: !!result.script, timing: result.timing },
+      metadata: { kind: "flow_director", engine: v2.script ? "scene" : "flow", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts, latency_ms: Date.now() - started, stored: !!script, timing: v2.timing },
     });
   }
 }
@@ -1009,13 +1032,13 @@ async function runPipeline(projectId: string, userId: string) {
     p = await state();
     // With the story engine on, wait for the Visual Director first: a usable
     // story renders with StoryWorld, which never shows the legacy images.
-    let usable: VisualStory | FlowScript | null = null;
+    let usable: VisualStory | FlowScript | SceneScript | null = null;
     if (story) {
       await story;
       const { data: row } = await admin.from("projects").select("brief, format, duration_seconds, voice_result").eq("id", projectId).single();
       const brief = ProductBrief.safeParse(row?.brief);
       const words = parseWordTimings((row?.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
-      usable = brief.success && row ? (usableStory(brief.data.story, brief.data.script, row.format) ?? usableFlow(brief.data.flow, brief.data.script, row.format, words, row.duration_seconds)) : null;
+      usable = brief.success && row ? (usableStory(brief.data.story, brief.data.script, row.format) ?? usableScene(brief.data.scene, brief.data.script, row.format, words, row.duration_seconds) ?? usableFlow(brief.data.flow, brief.data.script, row.format, words, row.duration_seconds)) : null;
     }
     if (p.assets_status === "completed" && needsLegacyImages(p.assets_manifest as AssetManifest | null, usable)) {
       await attempt(() => generateVisualAssets(projectId));

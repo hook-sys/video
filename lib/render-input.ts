@@ -6,8 +6,9 @@ import { LOGO_FILE_PREFIX, SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import type { RenderScene } from "@/components/video/types";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { storyAssetsEnabled, usableFlow, usableStory } from "@/lib/story-engine";
-import { compileFlowScript } from "@/components/video/flow/compile";
+import { storyAssetsEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
+import { compileFlowScript, type CompileBrand } from "@/components/video/flow/compile";
+import { compileSceneScript } from "@/components/video/flow/compile-scene";
 
 export type RenderProject = {
   id?: string;
@@ -45,14 +46,16 @@ export async function buildRenderInput(
   // Preview-only engines: the validated story or flow, else null (→ Storyboard).
   const story = usableStory(brief.data.story, brief.data.script, project.format);
   const wordTimings = project.voice_status === "completed" ? parseWordTimings(project.voice_result?.timing?.words) : null;
-  const flow = story ? null : usableFlow(brief.data.flow, brief.data.script, project.format, wordTimings, project.duration_seconds);
+  const scene = story ? null : usableScene(brief.data.scene, brief.data.script, project.format, wordTimings, project.duration_seconds);
+  const flow = story || scene ? null : usableFlow(brief.data.flow, brief.data.script, project.format, wordTimings, project.duration_seconds);
+  const flowing = !!(flow || scene);
   // Per scene: a full-frame background and/or a main visual.
   const bgByScene = new Map<string, string>();
   const fgByScene = new Map<string, { path: string; kind: "screenshot" | "icon" | "image" }>();
   for (const a of assets) {
     if (a.source === "generated" && a.status !== "completed") {
       // Not needed (and not generated) when StoryWorld renders the story.
-      if (!story && !flow) problems.push(`Asset ${a.id} is not generated.`);
+      if (!story && !flowing) problems.push(`Asset ${a.id} is not generated.`);
       continue;
     }
     if (!a.storage_path) continue;
@@ -108,7 +111,7 @@ export async function buildRenderInput(
   // (shown on the UI planes). Missing files simply leave them out.
   let logoUrl: string | undefined;
   let screenshotUrls: string[] = [];
-  if (flow && project.id && project.user_id) {
+  if (flowing && project.id && project.user_id) {
     const folder = `${project.user_id}/${project.id}`;
     const [{ data: files }, { data: shots }] = await Promise.all([
       supabase.storage.from(SCREENSHOTS_BUCKET).list(folder, { search: LOGO_FILE_PREFIX }),
@@ -122,28 +125,24 @@ export async function buildRenderInput(
     screenshotUrls = urls.filter((u): u is string => !!u);
   }
 
+  // Compiled on the voice's real word timestamps (no model call here). The
+  // customer's own brand inputs win over what the brief inferred.
+  const compilePlan = () => {
+    const brand: CompileBrand = {
+      name: project.brand_name?.trim() || brief.data.product_name,
+      logo: logoUrl,
+      cta: project.call_to_action?.trim() || brief.data.cta,
+      color: project.brand_color,
+    };
+    const opts = { narration: brief.data.script, words: wordTimings, durationSeconds: project.duration_seconds, brand, screenshots: screenshotUrls };
+    return scene ? compileSceneScript(scene, opts) : compileFlowScript(flow!, opts);
+  };
+
   return {
     problems,
     props: {
       story: story ? { story, narration: brief.data.script, assets: storyAssets } : null,
-      // Compiled on the voice's real word timestamps (no model call here).
-      flow: flow
-        ? {
-            plan: compileFlowScript(flow, {
-              narration: brief.data.script,
-              words: wordTimings,
-              durationSeconds: project.duration_seconds,
-              // The customer's own brand inputs win over what the brief inferred.
-              brand: {
-                name: project.brand_name?.trim() || brief.data.product_name,
-                logo: logoUrl,
-                cta: project.call_to_action?.trim() || brief.data.cta,
-                color: project.brand_color,
-              },
-              screenshots: screenshotUrls,
-            }),
-          }
-        : null,
+      flow: flowing ? { plan: compilePlan() } : null,
       scenes,
       format: project.format,
       durationSeconds: project.duration_seconds,

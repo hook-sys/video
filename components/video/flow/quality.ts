@@ -8,6 +8,9 @@ import { labelWorldSize, splitLines, textWidth, TYPE } from "./typography";
 export type PlanQuality = {
   deadFrames: number; // longest stretch with nothing new happening (before the final hold)
   deadAt: number; // where it starts
+  emptyFrames: number; // longest stretch with nothing at all in frame (before the brand lockup)
+  emptyAt: number;
+  minElementScale: number; // smallest on-screen scale of a sharp element (card text is legible from ~0.5)
   minLabelPx: number; // smallest node label on screen, in px at 1080p
   cameraAccel: number; // largest frame-to-frame change of camera speed (screen px/frame²)
   accelAt: number;
@@ -18,7 +21,7 @@ export type PlanQuality = {
   collision: string; // what overlapped first
 };
 
-export const QUALITY_BAR = { deadFrames: 66, minLabelPx: 34, cameraAccel: 3, zoomAccel: 0.0025, collisionFrames: 6 };
+export const QUALITY_BAR = { deadFrames: 66, emptyFrames: 12, minElementScale: 0.42, minLabelPx: 34, cameraAccel: 3, zoomAccel: 0.0025, collisionFrames: 6 };
 
 type Rect = { x0: number; y0: number; x1: number; y1: number; what: string; owner?: string; round?: boolean };
 const overlap = (a: Rect, b: Rect): boolean => {
@@ -62,6 +65,9 @@ export function planQuality(plan: FlowPlan): PlanQuality {
     n.ui?.lifts?.forEach((l) => add(l.start, l.end));
     add(...(n.ui?.cursor?.clicks ?? []));
     if (n.orbit) add(n.orbit.start, n.orbit.end);
+    for (const tr of [n.tilt, n.rot, n.blur]) tr?.forEach(([f]) => add(f));
+    add(n.appear, n.erase);
+    if (n.el?.type === "card") add(...(n.el.updates ?? []).map((u) => u.at));
   }
   for (const l of plan.links) {
     add(l.draw[0], l.draw[1], l.success);
@@ -81,6 +87,54 @@ export function planQuality(plan: FlowPlan): PlanQuality {
       deadFrames = sorted[i] - sorted[i - 1];
       deadAt = sorted[i - 1];
     }
+  }
+
+  // Something must be in frame at every moment before the lockup: an element or
+  // node inside the frame, a line of text, a list or a panel. And sharp
+  // elements must be big enough to read.
+  let emptyFrames = 0;
+  let emptyAt = 0;
+  let run = 0;
+  let minElementScale = Infinity;
+  const smallRuns = new Map<string, { last: number; n: number; max: number }>();
+  const until = plan.brand ? plan.brand.start : plan.duration;
+  for (let f = 0; f < until; f++) {
+    const zoom = num(plan.camera.zoom, f, 1);
+    const c = vec(plan.camera.center, f);
+    let seen =
+      // Text and lists stay visible for most of their 12–14 frame exit.
+      plan.texts.some((t) => f >= (t.words?.[0] ?? t.start) && f < t.end + 8) ||
+      (plan.lists ?? []).some((l) => f >= l.at[0] && f < l.end + 8) ||
+      (plan.panels ?? []).some((p) => f >= p.start && f < p.end) ||
+      (plan.iris ?? []).some((i) => f >= i.start && f < i.start + i.dur);
+    if (!seen || f % 3 === 0) {
+      for (const st of computeStates(plan, f).values()) {
+        const n = st.node;
+        if (st.opacity < 0.3 || st.scale < 0.05 || (n.erase !== undefined && f >= n.erase + 8)) continue;
+        // A UI plane fills the frame in 3D; its node box is not its size.
+        if (n.kind === "ui") {
+          seen = true;
+          continue;
+        }
+        const w = (n.kind === "el" ? (n.w ?? 400) : n.size) * st.scale * zoom;
+        const h = (n.kind === "el" ? (n.h ?? 300) : n.size) * st.scale * zoom;
+        const [x, y] = [960 + zoom * (st.pos[0] - c[0]), 540 + zoom * (st.pos[1] - c[1])];
+        const inside = Math.min(x + w / 2, 1920) - Math.max(x - w / 2, 0) > Math.min(w, 1920) * 0.6 && Math.min(y + h / 2, 1080) - Math.max(y - h / 2, 0) > Math.min(h, 1080) * 0.6;
+        if (!inside) continue;
+        seen = true;
+        const settled = n.kind === "el" && st.opacity > 0.95 && num(n.blur, f, 0) < 1 && Math.abs(num(n.scale, f, 1) - num(n.scale, f + 6, 1)) < 0.01;
+        if (settled && (n.el?.type === "card" || n.el?.type === "shot")) {
+          // Only what stays small for 0.4 s counts (the camera settling is not a problem).
+          const small = smallRuns.get(n.id);
+          const sc = st.scale * zoom;
+          const run = small && f - small.last <= 3 ? { last: f, n: small.n + 1, max: Math.max(small.max, sc) } : { last: f, n: 1, max: sc };
+          smallRuns.set(n.id, run);
+          if (run.n >= 4) minElementScale = Math.min(minElementScale, run.max);
+        }
+      }
+    }
+    run = seen ? 0 : run + 1;
+    if (run > emptyFrames) [emptyFrames, emptyAt] = [run, f - run + 1];
   }
 
   // Labels on screen: sampled every 3 frames while shown.
@@ -131,6 +185,16 @@ export function planQuality(plan: FlowPlan): PlanQuality {
     const rects: Rect[] = [];
     for (const st of computeStates(plan, f).values()) {
       const n = st.node;
+      if (n.kind === "el") {
+        // Sharp, settled elements must not sit on each other (merges and
+        // triggers overlap on purpose while moving; blurred ones are backdrop).
+        const still = Math.hypot(...([0, 1].map((k) => vec(n.pos, f + 4)[k] - vec(n.pos, f - 4)[k]) as [number, number])) < 4;
+        if (st.opacity < 0.9 || st.scale < 0.05 || num(n.blur, f, 0) > 1.5 || !still || (n.erase !== undefined && f >= n.erase)) continue;
+        const [x, y] = sx(st.pos);
+        const [hw, hh] = [((n.w ?? 400) * st.scale * zoom) / 2, ((n.h ?? 300) * st.scale * zoom) / 2];
+        rects.push({ x0: x - hw, x1: x + hw, y0: y - hh, y1: y + hh, what: `element ${n.id}`, owner: n.id });
+        continue;
+      }
       if (n.kind !== "orb" || st.opacity < 0.6 || st.scale < 0.6) continue;
       const [x, y] = sx(st.pos);
       const r = (n.size / 2) * st.scale * zoom;
@@ -150,6 +214,10 @@ export function planQuality(plan: FlowPlan): PlanQuality {
       if (hit || !a.what.startsWith("label")) continue;
       for (const b of rects) if (b.owner !== a.owner && b.what.startsWith("node") && overlap(a, b)) hit = `${a.what} over ${b.what}`;
     }
+    const els = rects.filter((r) => r.what.startsWith("element"));
+    const meant = (plan.overlaps ?? []).filter((o) => f >= o.start && f < o.end);
+    const together = (a: Rect, b: Rect) => meant.some((o) => o.ids.includes(a.owner!) && o.ids.includes(b.owner!));
+    for (let i = 0; i < els.length && !hit; i++) for (let j = i + 1; j < els.length && !hit; j++) if (!together(els[i], els[j]) && overlap(els[i], els[j])) hit = `${els[i].what} over ${els[j].what}`;
     if (hit) {
       collisionFrames += 2;
       if (collisionAt < 0) [collisionAt, collision] = [f, hit];
@@ -162,12 +230,14 @@ export function planQuality(plan: FlowPlan): PlanQuality {
     return lines.filter((l) => textWidth(l, t.size) > limit).map((l) => `"${l}" at ${t.size}px`);
   });
 
-  return { deadFrames, deadAt, minLabelPx: minLabelPx === Infinity ? 99 : Math.round(minLabelPx), cameraAccel: Math.round(cameraAccel * 100) / 100, accelAt, zoomAccel: Math.round(zoomAccel * 10000) / 10000, overflow, collisionFrames, collisionAt, collision };
+  return { deadFrames, deadAt, emptyFrames, emptyAt, minElementScale: minElementScale === Infinity ? 1 : Math.round(minElementScale * 100) / 100, minLabelPx: minLabelPx === Infinity ? 99 : Math.round(minLabelPx), cameraAccel: Math.round(cameraAccel * 100) / 100, accelAt, zoomAccel: Math.round(zoomAccel * 10000) / 10000, overflow, collisionFrames, collisionAt, collision };
 }
 
 export function qualityProblems(q: PlanQuality): string[] {
   const out: string[] = [];
   if (q.deadFrames > QUALITY_BAR.deadFrames) out.push(`${(q.deadFrames / 30).toFixed(1)} s with nothing new on screen (from ${(q.deadAt / 30).toFixed(1)} s)`);
+  if (q.emptyFrames > QUALITY_BAR.emptyFrames) out.push(`${(q.emptyFrames / 30).toFixed(1)} s with an empty frame (from ${(q.emptyAt / 30).toFixed(1)} s)`);
+  if (q.minElementScale < QUALITY_BAR.minElementScale) out.push(`a card renders at ${Math.round(q.minElementScale * 100)}% (too small to read)`);
   if (q.minLabelPx < QUALITY_BAR.minLabelPx) out.push(`a label renders at ${q.minLabelPx}px`);
   if (q.cameraAccel > QUALITY_BAR.cameraAccel) out.push(`camera jolts (${q.cameraAccel} px/frame² at frame ${q.accelAt})`);
   if (q.zoomAccel > QUALITY_BAR.zoomAccel) out.push(`zoom jolts (${q.zoomAccel})`);

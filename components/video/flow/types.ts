@@ -31,9 +31,19 @@ export type FlowUi = {
 // Circular motion around another node between start and end (blends in/out).
 export type FlowOrbit = { center: string; radius: Track<number>; angle: number; speed: number; start: number; end?: number };
 
+// A product element on the canvas: a UI card, a device mockup, a screenshot
+// crop, a glass icon tile or a logo. Cards can change content over time
+// (an inventory card updating); `erase` wipes an element away.
+export type FlowElement =
+  | { type: "card"; template: string; style: string; content?: Record<string, unknown>; updates?: { at: number; content: Record<string, unknown> }[] }
+  | { type: "device"; model: string; finish: string; screen: { src?: string; crop?: string; card?: { template: string; style: string; content?: Record<string, unknown> } } }
+  | { type: "shot"; src: string; crop: string }
+  | { type: "icon"; icon: string; label?: string }
+  | { type: "logo"; src?: string; text?: string };
+
 export type FlowNode = {
   id: string;
-  kind: "orb" | "pill" | "ui";
+  kind: "orb" | "pill" | "ui" | "el";
   variant?: "solid" | "soft";
   size: number; // orb diameter / pill height
   icon?: Track<string>; // icon swaps morph (old out, new draws on)
@@ -47,6 +57,19 @@ export type FlowNode = {
   ui?: FlowUi;
   orbit?: FlowOrbit;
   shape?: "circle" | "tile"; // tile: a rounded glass square
+  // Elements ("el"): box size, 3D tilt, z-rotation, depth blur, first frame
+  // visible (internal animations start there), and an erase sweep.
+  el?: FlowElement;
+  w?: number;
+  h?: number;
+  tilt?: Track<Vec3>;
+  rot?: Track<number>;
+  blur?: Track<number>;
+  appear?: number;
+  erase?: number;
+  z?: number; // stacking order (higher is in front)
+  // Travel along a curve (quadratic bezier) between start and end frames.
+  paths?: { start: number; end: number; from: Vec; ctrl: Vec; to: Vec; ease?: Ease }[];
 };
 
 export type FlowLink = {
@@ -106,6 +129,8 @@ export type FlowPlan = {
   brandColor?: string; // the customer's colour, applied over the theme
   lists?: FlowList[];
   panels?: FlowPanel[];
+  // Element nodes that overlap on purpose (a stack, a fan) during a window.
+  overlaps?: { ids: string[]; start: number; end: number }[];
   brand?: FlowBrand;
   // Sound effects tied to motion (kinds from components/video/sfx.tsx).
   sfx?: { frame: number; kind: "whoosh" | "soft_pop" | "click" | "reveal" | "success_chime" | "subtle_impact" | "digital_processing" | "typing" }[];
