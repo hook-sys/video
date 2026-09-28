@@ -105,6 +105,14 @@ export function blockHeight(b: Block, w: number): number {
       return 56;
     case "timeline":
       return (Array.isArray(b.items) ? b.items.length : 3) * 52;
+    case "dropdown":
+      return 74 + (Array.isArray(b.items) ? b.items.length : 3) * 44 + 8;
+    case "barcode":
+      return 120;
+    case "waveform":
+      return b.label ? 104 : 76;
+    case "typewriter":
+      return 30 * Math.max(2, Math.ceil((b.text.length * CHAR * 19) / Math.max(120, w))) + 8;
   }
 }
 
@@ -588,6 +596,71 @@ export function BlockView({ b, ctx }: { b: Block; ctx: Ctx }): ReactNode {
           ))}
           {b.n > shown && <span style={{ marginLeft: 12, fontSize: 18, fontWeight: 700, color: p.ink }}>+{b.n - shown}</span>}
           {b.label && <span style={{ marginLeft: 12, fontSize: 18, color: p.sub }}>{b.label}</span>}
+        </div>
+      );
+    }
+    case "dropdown": {
+      const items = asList(b.items);
+      const open = ramp(t, 8, 10, "out");
+      const pick = ramp(t, 24, 8, "out");
+      return (
+        <div style={box}>
+          <div style={{ fontSize: 16, color: p.sub, marginBottom: 8 }}>{b.label}</div>
+          <div style={{ height: 44, borderRadius: 12, border: `2px solid ${open > 0.5 ? p.brand : p.line}`, display: "flex", alignItems: "center", padding: "0 14px", fontSize: 19, color: p.ink, fontWeight: 600 }}>
+            <span>{pick > 0.5 ? items[b.active] ?? items[0] : "Select…"}</span>
+            <span style={{ marginLeft: "auto", display: "flex", transform: `rotate(${open * 180}deg)` }}>
+              <Icon name="chevron-down" size={20} color={p.sub} strokeWidth={2.4} />
+            </span>
+          </div>
+          <div style={{ marginTop: 8, borderRadius: 12, background: p.track, overflow: "hidden", height: items.length * 44 * open, opacity: open }}>
+            {items.map((s, i) => {
+              const on = i === b.active && t >= 18;
+              return (
+                <div key={i} style={{ height: 44, display: "flex", alignItems: "center", gap: 10, padding: "0 14px", fontSize: 18, color: on ? (onAccent(p) ? p.onBrand : "#fff") : p.ink, background: on ? p.brand : "transparent", fontWeight: on ? 650 : 500 }}>
+                  {s}
+                  {on && <span style={{ marginLeft: "auto", display: "flex" }}><Icon name="check" size={18} color={onAccent(p) ? p.onBrand : "#fff"} strokeWidth={3} /></span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+    case "barcode": {
+      const bars = Array.from({ length: 46 }, (_, i) => ((i * 7919) % 5) + 1);
+      const scan = ramp(t, 6, 26, "inOut");
+      const done = t > 34;
+      return (
+        <div style={{ ...box, display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "relative", height: 88, display: "flex", alignItems: "stretch", gap: 2 }}>
+            {bars.map((wd, i) => <div key={i} style={{ width: wd * 1.6, background: i % 2 ? "transparent" : p.ink }} />)}
+            <div style={{ position: "absolute", left: -8, right: -8, top: `${scan * 100}%`, height: 3, background: done ? toneColor("success", p, theme) : "#FF4D5E", boxShadow: `0 0 12px ${done ? toneColor("success", p, theme) : "#FF4D5E"}`, opacity: t > 4 ? 1 : 0 }} />
+          </div>
+          <div style={{ marginTop: 8, fontSize: 16, letterSpacing: "0.2em", color: done ? toneColor("success", p, theme) : p.sub, fontWeight: 650, fontFamily: "ui-monospace, Menlo, monospace" }}>{done ? "✓ SCANNED" : (b.code ?? "4 006381 333931")}</div>
+        </div>
+      );
+    }
+    case "waveform": {
+      const n = 36;
+      return (
+        <div style={box}>
+          <div style={{ height: 70, display: "flex", alignItems: "center", gap: 4 }}>
+            {Array.from({ length: n }, (_, i) => {
+              const a = Math.abs(Math.sin(i * 0.9 + t / 4) * Math.sin(i * 0.27 + t / 9)) * ramp(t, 2 + i * 0.5, 8);
+              return <div key={i} style={{ flex: 1, height: 8 + a * 60, borderRadius: 4, background: `linear-gradient(180deg, ${p.brand}, ${p.brand2})`, opacity: 0.55 + a * 0.45 }} />;
+            })}
+          </div>
+          {b.label && <div style={{ marginTop: 8, fontSize: 16, color: p.sub, display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 10, height: 10, borderRadius: 5, background: "#FF4D5E", opacity: Math.floor(t / 12) % 2 ? 0.4 : 1 }} />{b.label}</div>}
+        </div>
+      );
+    }
+    case "typewriter": {
+      const shown = b.text.slice(0, Math.max(0, Math.floor((t - 4) * 1.8)));
+      const caret = shown.length < b.text.length && Math.floor(t / 7) % 2 === 0;
+      return (
+        <div style={{ ...box, fontSize: 19, lineHeight: "30px", color: p.ink }}>
+          {shown}
+          {caret && <span style={{ display: "inline-block", width: 3, height: 22, background: p.brand, marginLeft: 2, verticalAlign: "middle" }} />}
         </div>
       );
     }

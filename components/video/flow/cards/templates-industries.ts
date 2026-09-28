@@ -647,4 +647,169 @@ export const INDUSTRY_TEMPLATES: CardTemplate[] = [
     { type: "header", icon: "package-check", title: "{title}", sub: "{subtitle}", tone: "success" },
     { type: "signature", name: "{name}" },
   ], { title: "Delivered", subtitle: "12:40 PM", name: "R. Hasan" }),
+  // ── interface: the building blocks of any product's UI ────────────────────
+  T("dropdown-menu", "interface", "A dropdown menu, one option picked", "dropdown select menu option choose", 440, [
+    { type: "dropdown", label: "{title}", items: "{items}", active: 1 },
+  ], { title: "Assign to", items: ["Unassigned", "Nadia", "Rahim"] }),
+  T("spreadsheet", "interface", "A spreadsheet of data", "spreadsheet sheet excel table rows data", 560, [
+    { type: "header", icon: "sheet", title: "{title}", sub: "{subtitle}" },
+    { type: "table", cols: ["Name", "Status", "Value"], rows: [["Acme", "Active", "$2,400"], ["Northwind", "Trial", "$1,200"], ["Brightline", "Active", "$800"]] },
+  ], { title: "Accounts.xlsx", subtitle: "Updated live" }),
+  T("pdf", "interface", "A PDF document", "pdf document file report download", 420, [
+    { type: "media", icon: "file-text", ratio: 1.6 },
+    { type: "text", text: "{title}", size: "m" },
+    { type: "kv", pairs: [["Pages", "{value}"], ["Size", "{label}"]] },
+  ], { title: "Annual report.pdf", value: "24", label: "2.1 MB" }),
+  T("landing-page", "interface", "A landing page", "landing page website hero signup marketing", 520, [
+    { type: "media", icon: "panels-top-left", ratio: 2.6 },
+    { type: "text", text: "{title}", size: "l" },
+    { type: "text", text: "{subtitle}", size: "s", muted: true },
+    { type: "button", text: "{action}" },
+  ], { title: "Grow faster", subtitle: "Everything your team needs in one place.", action: "Start free" }),
+  T("website", "interface", "A website page", "website web page site online browser", 520, [
+    { type: "header", icon: "globe", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "success" },
+    { type: "media", icon: "layout-template", ratio: 2.4 },
+    { type: "tags", items: "{items}" },
+  ], { title: "yourbrand.com", subtitle: "Home", status: "Live", items: ["Home", "Pricing", "Blog"] }),
+  T("app-screen", "interface", "A mobile app screen", "app screen mobile home tabs", 400, [
+    { type: "header", icon: "smartphone", title: "{title}", sub: "{subtitle}" },
+    { type: "rows", items: "{items}", icon: "circle-check" },
+    { type: "button", text: "{action}" },
+  ], { title: "Home", subtitle: "Good morning", items: ["Today's tasks · 4", "Messages · 2", "Reports · New"], action: "Open" }),
+  T("database", "interface", "A database table", "database table records sql data rows", 520, [
+    { type: "header", icon: "database", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "success" },
+    { type: "code", lines: ["SELECT * FROM customers", "→ 12,480 rows · 18 ms"] },
+  ], { title: "customers", subtitle: "Postgres", status: "Synced" }),
+  T("cloud-storage", "interface", "Cloud storage", "cloud storage files upload drive space", 460, [
+    { type: "header", icon: "cloud", title: "{title}", sub: "{subtitle}" },
+    { type: "progress", label: "{label}", value: 62 },
+    { type: "rows", items: "{items}", icon: "file" },
+  ], { title: "Cloud", subtitle: "All devices", label: "Storage used", items: ["Contracts · 1.2 GB", "Photos · 8.4 GB"] }),
+  T("server", "interface", "A server's load", "server cpu load hosting infrastructure", 440, [
+    { type: "header", icon: "server", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "success" },
+    { type: "meter", value: 42, label: "{label}" },
+  ], { title: "api-01", subtitle: "us-east", status: "Healthy", label: "CPU load" }),
+  T("api-connection", "interface", "Two apps connecting over an API", "api connection connect integrate webhook", 480, [
+    { type: "header", icon: "plug", title: "{title}", badge: "{status}", tone: "success" },
+    { type: "steps", items: "{items}", active: 3 },
+  ], { title: "Connecting", status: "Connected", items: ["Authorize", "Map fields", "Test", "Live"] }),
+  T("smart-search", "interface", "A search with instant results", "search smart results find query", 500, [
+    { type: "input", label: "{title}", value: "{note}", icon: "search" },
+    { type: "rows", items: "{items}", icon: "sparkles" },
+  ], { title: "Search", note: "unpaid invoices this month", items: ["Invoice #204 · $2,400", "Invoice #211 · $900", "Invoice #219 · $1,150"] }),
+  T("auto-fill", "interface", "A form filling itself in", "auto fill form autofill fields automatic", 460, [
+    { type: "input", label: "Company", value: "{title}", icon: "building-2" },
+    { type: "input", label: "Email", value: "{note}", icon: "mail" },
+    { type: "chip", text: "{status}", tone: "brand", icon: "sparkles" },
+  ], { title: "Northwind Ltd", note: "ops@northwind.com", status: "Filled by AI" }),
+
+  // ── AI (more) ─────────────────────────────────────────────────────────────
+  T("ai-agent", "ai", "An AI agent working through tasks", "ai agent autonomous tasks steps assistant", 500, [
+    { type: "avatar", name: "{name}", sub: "{subtitle}", badge: "{status}", tone: "success" },
+    { type: "timeline", items: "{items}" },
+  ], { name: "AI Agent", subtitle: "Working", status: "Live", items: ["Read 42 emails · 1s", "Updated the CRM · 2s", "Booked 3 calls · 4s"] }),
+  T("chatbot", "ai", "A chatbot answering a customer", "chatbot bot chat answer support assistant", 480, [
+    { type: "header", icon: "bot-message-square", title: "{title}", badge: "{status}", tone: "success" },
+    { type: "bubble", text: "{note}", side: "right" },
+    { type: "bubble", text: "{action}" },
+  ], { title: "Assistant", status: "Online", note: "What are your opening hours?", action: "We're open 9 to 6, Sunday to Thursday!" }),
+  T("text-gen", "ai", "AI writing text", "text generation write copy ai content", 500, [
+    { type: "header", icon: "type", title: "{title}", badge: "{status}", tone: "brand" },
+    { type: "typewriter", text: "{note}" },
+  ], { title: "AI writer", status: "Writing", note: "Meet the fastest way to run your business — every order, message and payment in one place." }),
+  T("image-gen", "ai", "AI generating an image", "image generation ai art picture create", 460, [
+    { type: "media", icon: "image", ratio: 1.5 },
+    { type: "input", label: "{label}", value: "{note}", icon: "sparkles" },
+    { type: "progress", value: 100 },
+  ], { label: "Prompt", note: "a cozy cafe at sunset, watercolor" }),
+  T("video-gen", "ai", "AI generating a video", "video generation ai create clip render", 480, [
+    { type: "media", icon: "clapperboard", ratio: 2 },
+    { type: "progress", label: "{label}", value: 78 },
+  ], { label: "Generating video" }),
+  T("voice-ai", "ai", "A voice being recorded or generated", "voice audio waveform speech microphone recording", 460, [
+    { type: "header", icon: "mic", title: "{title}", sub: "{subtitle}" },
+    { type: "waveform", label: "{label}" },
+  ], { title: "Voice", subtitle: "Natural · English", label: "Recording" }),
+  T("prediction", "ai", "An AI prediction", "prediction forecast predict ai model next", 460, [
+    { type: "header", icon: "chart-spline", title: "{title}", badge: "{status}", tone: "brand" },
+    { type: "bignum", value: "{value}", label: "{label}" },
+    { type: "line", values: [20, 24, 23, 29, 34, 41, 49] },
+  ], { title: "Prediction", status: "92% sure", value: "+34%", label: "Next month" }),
+  T("ai-processing", "ai", "AI processing data", "processing ai analyse working thinking", 460, [
+    { type: "header", icon: "brain", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "info" },
+    { type: "log", lines: "{items}" },
+  ], { title: "Analysing", subtitle: "12,480 records", status: "Running", items: ["Reading data", "Finding patterns", "Writing summary"] }),
+
+  // ── commerce & payments (more) ────────────────────────────────────────────
+  T("discount-tag", "commerce", "A discount tag", "discount tag sale offer price off", 400, [
+    { type: "chip", text: "{label}", tone: "danger", icon: "tag" },
+    { type: "bignum", value: "{value}", label: "{title}" },
+  ], { label: "Limited time", value: "30% OFF", title: "This weekend only" }),
+  T("barcode-scan", "commerce", "A barcode being scanned", "barcode scan product sku inventory pos", 440, [
+    { type: "header", icon: "scan-barcode", title: "{title}", sub: "{subtitle}" },
+    { type: "barcode" },
+  ], { title: "Scan item", subtitle: "Warehouse A" }),
+  T("mobile-payment", "finance", "Paying with a phone", "mobile payment phone tap nfc wallet pay", 420, [
+    { type: "header", icon: "smartphone-nfc", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "success" },
+    { type: "price", amount: "{amount}" },
+  ], { title: "Tap to pay", subtitle: "Mobile wallet", status: "Paid", amount: "$24.00" }),
+  T("payment-success", "finance", "A successful payment", "payment success paid confirmed done", 420, [
+    { type: "header", icon: "circle-check", title: "{title}", sub: "{subtitle}", tone: "success" },
+    { type: "bignum", value: "{amount}", label: "{label}" },
+  ], { title: "Payment successful", subtitle: "Just now", amount: "$240.00", label: "Paid" }),
+  T("payment-failed", "finance", "A failed payment", "payment failed declined error retry", 420, [
+    { type: "header", icon: "circle-x", title: "{title}", sub: "{subtitle}", tone: "danger" },
+    { type: "button", text: "{action}", icon: "refresh-cw", tone: "danger" },
+  ], { title: "Payment failed", subtitle: "Card declined", action: "Retry" }),
+  T("funding", "finance", "Funding raised", "funding raise investors round capital", 460, [
+    { type: "header", icon: "hand-coins", title: "{title}", sub: "{subtitle}" },
+    { type: "bignum", value: "{amount}", label: "{label}" },
+    { type: "avatars", n: 14, label: "investors" },
+  ], { title: "Seed round", subtitle: "Closed", amount: "$2.5M", label: "Raised" }),
+  T("loss", "finance", "A loss or a drop", "loss decline drop down negative", 420, [
+    { type: "header", icon: "trending-down", title: "{title}", tone: "danger" },
+    { type: "bignum", value: "{value}", label: "{label}", delta: "{delta}", tone: "danger" },
+    { type: "line", values: [60, 54, 57, 46, 41, 35, 28], tone: "danger" },
+  ], { title: "Before", value: "-$4,200", label: "Lost to returns", delta: "-18%" }),
+  T("ledger", "finance", "An accounting ledger", "accounting ledger books journal entries", 540, [
+    { type: "header", icon: "book-open", title: "{title}", sub: "{subtitle}", badge: "{status}", tone: "success" },
+    { type: "table", cols: ["Account", "Debit", "Credit"], rows: [["Sales", "", "$4,800"], ["Cash", "$4,800", ""], ["Fees", "$120", ""]] },
+  ], { title: "Ledger", subtitle: "September", status: "Balanced" }),
+
+  // ── marketing & social (more) ─────────────────────────────────────────────
+  T("ad-creative", "marketing", "An ad creative", "ad creative advert sponsored banner post", 460, [
+    { type: "avatar", name: "{name}", sub: "Sponsored" },
+    { type: "media", icon: "image", ratio: 1.6 },
+    { type: "text", text: "{title}", size: "m" },
+    { type: "button", text: "{action}" },
+  ], { name: "Your brand", title: "New collection is here", action: "Shop now" }),
+  T("video-ad", "marketing", "A video ad with results", "video ad reel commercial views ctr", 460, [
+    { type: "media", icon: "play", ratio: 1.8 },
+    { type: "kv", pairs: [["Views", "{value}"], ["Click rate", "{label}"]] },
+  ], { value: "128K", label: "4.8%" }),
+  T("roas", "marketing", "Return on ad spend", "roas return ad spend ads performance", 420, [
+    { type: "header", icon: "circle-dollar-sign", title: "{title}" },
+    { type: "bignum", value: "{value}", label: "{label}", delta: "{delta}" },
+    { type: "bars", values: [2.1, 2.4, 2.9, 3.1, 3.6, 4.2] },
+  ], { title: "ROAS", value: "4.2x", label: "This month", delta: "+38%" }),
+  T("engagement", "marketing", "Likes, comments and shares", "engagement likes comments shares reach", 440, [
+    { type: "header", icon: "heart", title: "{title}", sub: "{subtitle}" },
+    { type: "kv", pairs: [["Likes", "{value}"], ["Comments", "{label}"], ["Shares", "{amount}"]] },
+  ], { title: "Engagement", subtitle: "Last post", value: "2.4K", label: "318", amount: "96" }),
+  T("follow", "community", "A follow button pressed", "follow follower subscribe profile", 420, [
+    { type: "avatar", name: "{name}", sub: "{subtitle}" },
+    { type: "button", text: "{action}", icon: "user-plus" },
+  ], { name: "Your brand", subtitle: "12.4K followers", action: "Follow" }),
+  T("video-call", "communication", "A video call", "video call meeting zoom conference", 480, [
+    { type: "media", icon: "video", ratio: 2 },
+    { type: "avatars", n: 6, label: "{label}" },
+  ], { label: "in the call" }),
+  T("mention", "communication", "An @mention in a thread", "mention tag notify thread comment", 460, [
+    { type: "avatar", name: "{name}", sub: "{subtitle}" },
+    { type: "bubble", text: "{note}" },
+  ], { name: "Nadia", subtitle: "mentioned you", note: "@Rahim can you check this before Friday?" }),
+  T("inbox", "communication", "An inbox of messages", "inbox emails messages unread", 500, [
+    { type: "header", icon: "inbox", title: "{title}", badge: "{status}", tone: "info" },
+    { type: "rows", items: "{items}", icon: "mail" },
+  ], { title: "Inbox", status: "3 new", items: ["Northwind · Proposal", "Acme · Invoice paid", "Team · Weekly update"] }),
 ];

@@ -8,6 +8,7 @@ import { CROP_NAMES } from "@/components/video/flow/cards/device-data";
 import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
 import { layoutCatalogText } from "@/components/video/flow/layouts";
+import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { planQuality, qualityProblems } from "@/components/video/flow/quality";
 import { validateFlowPlan } from "@/components/video/flow/validate";
 import { CAMERA_MOVES, ENTER_STYLES, ERASE_STYLES, MAX_ELEMENTS_PER_SCENE, MAX_SCENE_BEATS, PATH_STYLES, repairSceneScript, SceneScript, SceneScriptModel, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
@@ -48,7 +49,7 @@ LAYOUTS (scene/arrange layout; pick a lettered variant for variety, e.g. "scatte
 ${layoutCatalogText()}
 
 VERBS (action):
-- scene: start a scene: elements (1–${MAX_ELEMENTS_PER_SCENE}) in a layout; camera (${CAMERA_MOVES.join(", ")}); transition from the previous scene (${TRANSITIONS.join(", ")}; morph = carried elements travel into the new layout, the others leave). style = entrance (${ENTER_STYLES.join(", ")}) or null for a varied mix.
+- scene: start a scene: elements (1–${MAX_ELEMENTS_PER_SCENE}) in a layout; camera (${CAMERA_MOVES.join(", ")}); transition from the previous scene (${TRANSITIONS.join(", ")}; morph = carried elements travel into the new layout, the others leave). style = entrance (${ENTER_STYLES.join(", ")}) or null for a varied mix. backdrop = the atmosphere behind the elements (${BACKDROPS.join(", ")}; null keeps the previous one): match the mood and vary it between scenes — data / dev → grid, perspective-grid, data-stream; AI → particles, glow, energy; money / growth → dot-field, waves, light-beams; calm / care → mesh, blobs, rings; premium → glow, grain.
 - place: add elements to the current scene (the scene re-lays out).
 - move: targets [one id] travels next to "to" (style: ${PATH_STYLES.join(", ")}).
 - trigger: targets [one id] flies INTO "to", which reacts; content = what "to" now shows (e.g. a form submission hitting the CRM card → status "New lead"; a commit hitting the deploy card → "Live"; a booking hitting the calendar → "Confirmed").
@@ -61,6 +62,13 @@ VERBS (action):
 - focus: the camera pushes in on targets [one id].
 - reveal: the camera pulls back to show the whole system.
 - celebrate: a Lottie accent at targets [one id] (lottie: ${LOTTIES}).
+- orbit: targets (1–4) circle "to" — an ecosystem, integrations, "everything around your data". One orbit per scene.
+- expand: targets [one id] grows to fill the frame (a detail view); the rest recede. collapse: it returns to its place (collapse before expanding another).
+- trace: a line draws through targets (2–6, in order) — a journey, a data path, a customer flow.
+- flow: a stream of packets from targets [one id] to "to" — syncing, data moving, money moving.
+- disconnect: the line between targets [one id] and "to" breaks — a broken, manual process.
+
+MOTION VOCABULARY (the client may ask for these): pulse → highlight · bounce / spin / pop / zoom → an entrance style · scatter / disassemble → arrange into a scatter-* layout · assemble / converge → merge, or arrange into mosaic · stack → arrange into stack-* · sort → arrange into row / column / grid · dock → move · hide → erase · show → place · transform / morph → a morph scene or update · burst / sink → an erase style. Every element floats gently on its own when idle.
 - statement: the narration's key phrase as kinetic type, each word appearing as spoken. text = the phrase copied from the narration (≤10 words; cue = its first words), accent = 1–3 words to highlight, text_layout: "display" (words alone on a clean frame), "panel" (full colour panel), "side"/"pill" (a caption over the scene).
 - list: 3–5 things named in a row → a rolling checklist; items ≤4 words each, from the narration, in order.
 

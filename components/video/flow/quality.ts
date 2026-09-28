@@ -122,7 +122,9 @@ export function planQuality(plan: FlowPlan): PlanQuality {
         const inside = Math.min(x + w / 2, 1920) - Math.max(x - w / 2, 0) > Math.min(w, 1920) * 0.6 && Math.min(y + h / 2, 1080) - Math.max(y - h / 2, 0) > Math.min(h, 1080) * 0.6;
         if (!inside) continue;
         seen = true;
-        const settled = n.kind === "el" && st.opacity > 0.95 && num(n.blur, f, 0) < 1 && Math.abs(num(n.scale, f, 1) - num(n.scale, f + 6, 1)) < 0.01;
+        // Cards circling in an orbit are moving, not read.
+        const circling = !!n.orbit && f >= n.orbit.start && f < (n.orbit.end ?? plan.duration) + 14;
+        const settled = n.kind === "el" && !circling && st.opacity > 0.95 && num(n.blur, f, 0) < 1 && Math.abs(num(n.scale, f, 1) - num(n.scale, f + 6, 1)) < 0.01;
         if (settled && (n.el?.type === "card" || n.el?.type === "shot")) {
           // Only what stays small for 0.4 s counts (the camera settling is not a problem).
           const small = smallRuns.get(n.id);

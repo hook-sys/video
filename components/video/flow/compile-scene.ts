@@ -9,7 +9,7 @@ import { brandStartFrame, type CompileBrand, ctaLine, smoothCamera, wordFrames }
 import { num, vec } from "./eval";
 import { DEPTH, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES, type Slot } from "./layouts";
 import { animate as animateAfter, Flow, type FlowNodeHandle, put as putAfter } from "./patterns";
-import type { Ease, FlowElement, FlowNode, FlowPlan, FlowText, ThemeName, Track, Vec } from "./types";
+import type { Ease, FlowElement, FlowLink, FlowNode, FlowPlan, FlowText, ThemeName, Track, Vec } from "./types";
 import { fitSize } from "./typography";
 
 // SceneScript (Director v2) → FlowPlan. Scenes are arrangements of product
@@ -40,8 +40,14 @@ const MIN_FRAMES: Record<SceneBeat["action"], number> = {
   celebrate: 10,
   statement: 34,
   list: 56,
+  orbit: 30,
+  expand: 24,
+  collapse: 18,
+  disconnect: 12,
+  trace: 26,
+  flow: 20,
 };
-const MINOR = new Set<SceneBeat["action"]>(["celebrate", "highlight"]);
+const MINOR = new Set<SceneBeat["action"]>(["celebrate", "highlight", "disconnect"]);
 
 export type SceneCompileOptions = {
   narration: string;
@@ -71,7 +77,7 @@ function put<T>(track: Track<T>, t: number, value: T, ease?: Ease) {
   putAfter(track, t, value, ease);
 }
 
-type Live = { h: FlowNodeHandle; w: number; h0: number; fit: number; pos: Vec; depth: 0 | 1 | 2 };
+type Live = { h: FlowNodeHandle; w: number; h0: number; fit: number; pos: Vec; depth: 0 | 1 | 2; home?: { pos: Vec; fit: number; z: number } };
 
 const toContent = (c: SceneContent | null | undefined): Record<string, unknown> | undefined =>
   c ? Object.fromEntries(Object.entries(c).filter(([, v]) => v !== null && v !== undefined && !(Array.isArray(v) && !v.length))) : undefined;
@@ -180,7 +186,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     spec.appear = t;
     put(op, t, 0);
     put(op, t + 10, 1, "out");
-    const from: Record<string, Vec> = { rise: [x, y + 80], "slide-left": [x + 280, y], "slide-right": [x - 280, y], drop: [x, y - 180], cascade: [x - 60, y + 60] };
+    const from: Record<string, Vec> = { rise: [x, y + 80], "slide-left": [x + 280, y], "slide-right": [x - 280, y], drop: [x, y - 180], cascade: [x - 60, y + 60], bounce: [x, y - 260] };
     if (push) {
       put(spec.pos, t, [x + push[0], y + push[1]]);
       put(spec.pos, t + 22, [x, y], "inOut");
@@ -191,10 +197,16 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     }
     if (from[style]) {
       put(spec.pos, t, from[style]);
-      put(spec.pos, t + 20, [x, y], style === "drop" ? "back" : "out");
+      if (style === "bounce") {
+        // Falls in, overshoots and settles: two hops.
+        put(spec.pos, t + 12, [x, y], "in");
+        put(spec.pos, t + 18, [x, y - 34], "out");
+        put(spec.pos, t + 24, [x, y], "in");
+      } else put(spec.pos, t + 20, [x, y], style === "drop" ? "back" : "out");
     } else put(spec.pos, t, [x, y]);
-    put(sc, t, style === "pop" ? 0 : style === "scale-up" ? n.fit * 0.6 : style === "blur" ? n.fit * 1.08 : n.fit * 0.94);
-    put(sc, t + 18, n.fit, style === "pop" ? "back" : "out");
+    put(sc, t, style === "pop" ? 0 : style === "scale-up" ? n.fit * 0.6 : style === "spin" ? n.fit * 0.3 : style === "blur" ? n.fit * 1.08 : n.fit * 0.94);
+    put(sc, t + 18, n.fit, style === "pop" || style === "spin" ? "back" : "out");
+    if (style === "spin") spec.rot = [[t, rot - 200], [t + 22, rot, "out"]];
     if (style === "blur") {
       spec.blur = [[0, 18]];
       put(spec.blur, t, 18);
@@ -203,7 +215,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     if (style === "flip") {
       spec.tilt = [[t, [0, 75, 0]], [t + 20, [0, 0, 0], "out"]];
     }
-    if (rot) spec.rot = [[0, rot]];
+    if (rot && style !== "spin") spec.rot = [[0, rot]];
     const depthBlur = DEPTH[n.depth].blur;
     if (depthBlur) {
       spec.blur ??= [[0, 0]];
@@ -221,6 +233,15 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     else if (style === "fly-out") {
       animate(spec.pos, t, 16, [n.pos[0] + 900, n.pos[1] - 120], "in");
       animate(spec.opacity!, t + 4, 12, 0, "in");
+    } else if (style === "burst") {
+      // Pops outward and dissolves.
+      animate(spec.scale!, t, 10, n.fit * 1.35, "out");
+      setBlur(n, t + 2, 16, 10);
+      animate(spec.opacity!, t + 2, 10, 0, "in");
+    } else if (style === "sink") {
+      animate(spec.pos, t, 16, [n.pos[0], n.pos[1] + 260], "in");
+      animate(spec.scale!, t, 16, n.fit * 0.85, "in");
+      animate(spec.opacity!, t + 6, 10, 0, "in");
     } else if (style === "through") {
       // The camera pushes past it: grows, blurs and fades.
       animate(spec.scale!, t, 16, n.fit * 2.4, "in");
@@ -310,7 +331,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   };
   const shoot = (t: number, span: number, move: string, focus?: Live[]) => {
     focusedOn = null;
-    const { c, zoom } = framedBox(focus ?? [...live.values()]);
+    // A running orbit counts as one element as big as its circle.
+    const { c, zoom } = framedBox(focus ?? [...live.values(), ...ghosts.filter((g) => g.end > t).map((g) => g.live)]);
     const bottom = reserveAt(t, t + span);
     const z = zoom * (bottom ? 0.86 : 1);
     const cc: Vec = [c[0], c[1] + (bottom ? bottom / 2 / z : 0)];
@@ -321,6 +343,11 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     if (span - settle > 6) f.camera(t + settle, span - settle, b, z1, "linear");
   };
   let sceneMove = "drift";
+  const links = new Map<string, FlowLink>(); // "from>to" → its line
+  const orbiting: { ids: string[]; start: number; end: number }[] = [];
+  const rings: NonNullable<FlowPlan["rings"]> = []; // dashed orbit paths
+  const ghosts: { live: Live; end: number }[] = []; // running orbits, for framing
+  const backdrops: { kind: string; start: number }[] = [];
   let focusedOn: Live | null = null; // the camera is pushed in on this element
 
   // ── text ──
@@ -370,6 +397,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         }
         for (const [id] of old) live.delete(id);
         layoutName = b.layout ?? "grid";
+        // The scene's atmosphere (kept from the previous scene when not set).
+        const kind = b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh");
+        if (backdrops[backdrops.length - 1]?.kind !== kind) backdrops.push({ kind, start: t });
         sceneMove = b.camera ?? ["push-in", "drift", "pan-right", "pull-back", "rise"][sceneIdx % 5];
         layoutName = place(b.elements ?? [], enterAt, layoutName, b.style, true, push);
         if (sceneIdx > 0) f.sfx(t, "whoosh");
@@ -430,9 +460,124 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       case "connect": {
         const [a] = tgt;
         if (!a || !to) break;
-        f.connect(a.h, to.h, t + 2, { dur: 16, packet: "sparkles", packetDur: 20, bend: 60 });
+        links.set(`${b.targets![0]}>${b.to}`, f.connect(a.h, to.h, t + 2, { dur: 16, packet: "sparkles", packetDur: 20, bend: 60 }));
         f.sfx(t + 8, "whoosh");
         framed = false;
+        break;
+      }
+      case "disconnect": {
+        const link = links.get(`${b.targets![0]}>${b.to}`) ?? links.get(`${b.to}>${b.targets![0]}`);
+        if (link) link.fade = [t + 2, t + 14];
+        const [a] = tgt;
+        // The two ends drift apart a little.
+        if (a && to) {
+          const [dx, dy] = [a.pos[0] - to.pos[0], a.pos[1] - to.pos[1]];
+          const d = Math.hypot(dx, dy) || 1;
+          travel(a, t + 2, 16, [a.pos[0] + (dx / d) * 60, a.pos[1] + (dy / d) * 60], "straight");
+        }
+        f.sfx(t + 2, "subtle_impact");
+        framed = false;
+        break;
+      }
+      case "trace": {
+        // A line draws through the targets in order, a packet running ahead.
+        tgt.slice(1).forEach((n, k) => {
+          const from = tgt[k];
+          links.set(`${b.targets![k]}>${b.targets![k + 1]}`, f.connect(from.h, n.h, t + 2 + k * 8, { dur: 12, packet: "sparkles", packetDur: 14, bend: k % 2 ? -40 : 40 }));
+          bump(n, t + 12 + k * 8);
+        });
+        f.sfx(t + 2, "whoosh");
+        break;
+      }
+      case "flow": {
+        // A stream of packets: over the existing line, or a new one.
+        const [a] = tgt;
+        if (!a || !to) break;
+        const key = `${b.targets![0]}>${b.to}`;
+        const link = links.get(key) ?? f.connect(a.h, to.h, t, { dur: 12, bend: 50 });
+        links.set(key, link);
+        link.fade = undefined;
+        const icon = "sparkles";
+        for (let k = 0; k < 3; k++) (link.packets ??= []).push({ icon, start: t + 8 + k * 9, end: t + 26 + k * 9 });
+        bump(to, t + 44);
+        f.sfx(t + 8, "whoosh");
+        framed = false;
+        break;
+      }
+      case "orbit": {
+        // The targets shrink and circle the centre until the next rearrangement.
+        if (!to || !tgt.length || tgt.some((n) => n.h.spec.orbit) || to.h.spec.orbit) break; // one orbit at a time
+        const j = beats.findIndex((x, k) => k > i && ["scene", "arrange", "merge", "place", "move", "expand", "trigger"].includes(x.action));
+        // Into a new scene the satellites keep circling while it takes over.
+        const end = j === -1 ? stageEnd : beats[j].action === "scene" ? starts[j] + 40 : starts[j];
+        const sat = Math.max(...tgt.map((n) => Math.max(n.w, n.h0) * n.fit * 0.62));
+        const r = (Math.max(to.w, to.h0) * to.fit) / 2 + sat / 2 + 40;
+        tgt.forEach((n, k) => {
+          const a0 = (Math.atan2(n.pos[1] - to.pos[1], n.pos[0] - to.pos[0]) * 180) / Math.PI;
+          n.h.spec.orbit = { center: to.h.id, radius: [[t, r]], angle: tgt.length > 1 ? -90 + (360 * k) / tgt.length : a0, speed: 1.4, start: t + 2, end: Math.max(t + 30, end - 14) };
+          animate(n.h.spec.scale!, t, 14, n.fit * 0.62, "inOut");
+          put(n.h.spec.scale!, Math.max(t + 30, end - 14), n.fit * 0.62);
+          put(n.h.spec.scale!, Math.max(t + 44, end), n.fit, "inOut");
+        });
+        rings.push({ center: to.h.id, radius: r, start: t, end });
+        orbiting.push({ ids: [to.h.id, ...tgt.map((n) => n.h.id)], start: t, end });
+        // Everything else recedes while the orbit runs.
+        for (const n of live.values()) if (n !== to && !tgt.includes(n)) {
+          setBlur(n, t, 7, 14);
+          animate(n.h.spec.opacity!, t, 14, 0.5);
+          setBlur(n, Math.max(t + 30, end - 14), DEPTH[n.depth].blur, 14);
+          animate(n.h.spec.opacity!, Math.max(t + 30, end - 14), 14, 1);
+        }
+        const ghost: Live = { h: to.h, w: (2 * r + sat) / to.fit, h0: (2 * r + sat) / to.fit, fit: to.fit, pos: to.pos, depth: 1 };
+        ghosts.push({ live: ghost, end });
+        shoot(t, span, "drift");
+        f.sfx(t + 2, "whoosh");
+        framed = false;
+        break;
+      }
+      case "expand": {
+        // A detail view: the element comes forward to fill the frame.
+        const [a] = tgt;
+        if (!a) break;
+        for (const n of live.values()) if (n.home && n !== a) {
+          travel(n, t, 16, n.home.pos, "straight");
+          animate(n.h.spec.scale!, t, 16, n.home.fit, "inOut");
+          n.fit = n.home.fit;
+          n.h.spec.z = n.home.z;
+          n.home = undefined;
+        }
+        a.home = { pos: a.pos, fit: a.fit, z: a.h.spec.z ?? 0 };
+        const { c, zoom } = framedBox([...live.values()]);
+        const big = Math.min(1500 / a.w, 820 / a.h0) / zoom;
+        a.h.spec.z = 99;
+        travel(a, t, 20, c, "straight");
+        animate(a.h.spec.scale!, t, 20, big, "inOut");
+        a.fit = big;
+        for (const n of live.values()) if (n !== a) {
+          animate(n.h.spec.opacity!, t, 14, 0.18);
+          setBlur(n, t, 8, 14);
+        }
+        // The camera settles on the detail view (wherever it was looking).
+        shoot(t, span, "static", [a]);
+        f.sfx(t, "whoosh");
+        framed = false;
+        break;
+      }
+      case "collapse": {
+        const [a] = tgt;
+        if (!a?.home) break;
+        travel(a, t, 20, a.home.pos, "straight");
+        animate(a.h.spec.scale!, t, 20, a.home.fit, "inOut");
+        a.fit = a.home.fit;
+        const z = a.home.z;
+        a.home = undefined;
+        put(a.h.spec.opacity!, t, 1);
+        a.h.spec.z = z;
+        for (const n of live.values()) if (n !== a) {
+          animate(n.h.spec.opacity!, t + 4, 14, 1);
+          setBlur(n, t + 4, DEPTH[n.depth].blur, 14);
+        }
+        f.sfx(t, "soft_pop");
         break;
       }
       case "merge": {
@@ -572,7 +717,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   }
   const plan = f.build();
   if (brand?.color) plan.brandColor = brand.color;
-  if (overlaps.length) plan.overlaps = overlaps;
+  if (overlaps.length || orbiting.length) plan.overlaps = [...overlaps, ...orbiting];
+  if (rings.length) plan.rings = [...(plan.rings ?? []), ...rings];
+  if (backdrops.some((x) => x.kind !== "mesh")) plan.backdrops = backdrops;
   // Elements that never appeared (skipped beats) are dropped.
   plan.nodes = plan.nodes.filter((n: FlowNode) => n.kind !== "el" || n.appear !== undefined);
   return smoothCamera(plan);

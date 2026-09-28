@@ -8,6 +8,8 @@ import { FLOW_FONT, type FlowTheme, lottieColors, THEMES, withBrandColor } from 
 import { computeStates, type NodeState } from "./states";
 import { UiPlane } from "./ui-plane";
 import { ElementView } from "./element";
+import { Backdrop } from "./backdrops";
+import { isBackdrop } from "./backdrop-names";
 import { fitSize, labelWorldSize, splitLines, TYPE } from "./typography";
 import type { FlowBrand, FlowLink, FlowList, FlowNode, FlowPanel, FlowPlan, FlowText, ThemeName, Vec } from "./types";
 
@@ -109,6 +111,13 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
   return (
     <AbsoluteFill style={{ fontFamily: FLOW_FONT, overflow: "hidden" }}>
       <World theme={theme} frame={frame} camera={[cx, cy]} />
+      {(plan.backdrops ?? []).map((b, i, all) => {
+        // Cross-fade 24 frames into each backdrop; it fades as the next arrives
+        // and clears for the brand lockup.
+        const next = all[i + 1];
+        const k = ramp(frame, b.start, 24, "inOut") * (next ? 1 - ramp(frame, next.start, 24, "inOut") : 1) * (plan.brand ? 1 - ramp(frame, plan.brand.start - 6, 14, "inOut") : 1);
+        return isBackdrop(b.kind) && k > 0.001 ? <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={k} /> : null;
+      })}
       {dim < 0.999 && (
         <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - dim, filter: `blur(${dim * 14}px)`, transform: `scale(${1 - 0.05 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
       )}
@@ -151,7 +160,7 @@ function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan[
 // ── world ───────────────────────────────────────────────────────────────────
 // A soft mesh of coloured light that keeps drifting (and moves a little with
 // the camera), so the frame breathes even when nothing else moves.
-function World({ theme, frame, camera }: { theme: FlowTheme; frame: number; camera: Vec }) {
+export function World({ theme, frame, camera }: { theme: FlowTheme; frame: number; camera: Vec }) {
   const par = (k: number): Vec => [-camera[0] * k, -camera[1] * k];
   const blob = (i: number, base: Vec, size: number, color: string, alpha: number) => {
     const [px, py] = par(0.1 + i * 0.04);

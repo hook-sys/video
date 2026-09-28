@@ -82,6 +82,12 @@ export function ElementView({ s, frame, theme }: { s: NodeState; frame: number; 
   }
 
   const three = rx || ry || rz;
+  // Idle float: every element drifts a few pixels on its own slow cycle, so a
+  // held scene never looks frozen.
+  let seed = 0;
+  for (const ch of node.id) seed = (seed * 31 + ch.charCodeAt(0)) % 997;
+  const ph = ((frame + seed * 7) / 150) * Math.PI * 2;
+  const [fx, fy] = [Math.cos(ph * 0.8) * 3, Math.sin(ph) * 5];
   return (
     <div style={{ position: "absolute", left: pos[0], top: pos[1], width: 0, height: 0, zIndex: node.z ?? 0, perspective: three ? 2400 : undefined }}>
       <div
@@ -89,7 +95,7 @@ export function ElementView({ s, frame, theme }: { s: NodeState; frame: number; 
           position: "absolute",
           left: 0,
           top: 0,
-          transform: `translate(-50%, -50%) scale(${scale}) rotate(${rot}deg)${three ? ` rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg)` : ""}`,
+          transform: `translate(calc(-50% + ${fx.toFixed(2)}px), calc(-50% + ${fy.toFixed(2)}px)) scale(${scale}) rotate(${rot}deg)${three ? ` rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg)` : ""}`,
           opacity: opacity * (1 - erase * 0.6),
           filter: blur + erase * 10 > 0.2 ? `blur(${blur + erase * 10}px)` : undefined,
           clipPath: erase > 0 ? `inset(0 0 0 ${erase * 100}%)` : undefined,

@@ -152,6 +152,8 @@ if (render) {
   // Director v2: scene fixtures, and every page of the card asset gallery.
   for (const name of SCENE_NAMES) await pixelSection(`scene director script · ${name}`, `SceneScript-${name}`, {});
   await pixelSection("card asset gallery (every template and device)", "CardGallery", {});
+  await pixelSection("scene backdrop gallery (light)", "BackdropGallery", {});
+  await pixelSection("scene backdrop gallery (dark)", "BackdropGallery", { theme: "midnight" });
 
   // Lottie micro-animations: every cell of the gallery must draw something and
   // actually move (sampled every 4th frame).

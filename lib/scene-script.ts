@@ -4,6 +4,7 @@ import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
 import { isCardStyle, isCardTemplate, searchCards } from "@/components/video/flow/cards/catalog";
 import { CROP_PRESETS, DEVICE_FINISHES, DEVICE_MODELS } from "@/components/video/flow/cards/device-data";
 import { isLayout } from "@/components/video/flow/layouts";
+import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { searchIcons } from "@/lib/icons";
 import { spokenCueTimes, tokenize, type WordTiming } from "@/lib/voice-timing";
 import { FLOW_THEMES, STATEMENT_LAYOUTS, estimateWords } from "@/lib/flow-script";
@@ -27,6 +28,12 @@ export const SCENE_ACTIONS = [
   "focus", // the camera pushes in on an element
   "reveal", // the camera pulls back to show everything
   "celebrate", // a Lottie accent at an element
+  "orbit", // elements circle another element (an ecosystem, integrations)
+  "expand", // an element grows to fill the frame (a detail view); the rest recede
+  "collapse", // an expanded element returns to its place
+  "disconnect", // a line between two elements breaks away
+  "trace", // a line draws through several elements in order (a journey, a data path)
+  "flow", // a stream of packets runs from one element to another (data syncing)
   "statement", // the narration's key phrase as kinetic type
   "list", // 3–5 spoken items as a rolling checklist
 ] as const;
@@ -34,9 +41,9 @@ export type SceneAction = (typeof SCENE_ACTIONS)[number];
 
 export const CAMERA_MOVES = ["push-in", "pull-back", "pan-left", "pan-right", "rise", "drift", "static"] as const;
 export const TRANSITIONS = ["cut", "dissolve", "push-left", "push-right", "push-up", "zoom-through", "panel-wipe", "morph"] as const;
-export const ENTER_STYLES = ["pop", "rise", "slide-left", "slide-right", "drop", "blur", "flip", "scale-up", "cascade"] as const;
+export const ENTER_STYLES = ["pop", "rise", "slide-left", "slide-right", "drop", "blur", "flip", "scale-up", "cascade", "bounce", "spin"] as const;
 export const PATH_STYLES = ["arc", "straight", "swoop"] as const;
-export const ERASE_STYLES = ["wipe", "fade", "shrink", "fly-out"] as const;
+export const ERASE_STYLES = ["wipe", "fade", "shrink", "fly-out", "burst", "sink"] as const;
 
 const Content = z.object({
   title: z.string().nullable(),
@@ -75,6 +82,7 @@ const Beat = z.object({
   layout: z.string().nullable(), // scene / arrange
   camera: z.enum(CAMERA_MOVES).nullable(), // scene
   transition: z.enum(TRANSITIONS).nullable(), // scene
+  backdrop: z.enum(BACKDROPS).nullable(), // scene: the atmosphere behind the elements
   style: z.string().nullable(), // enter / path / erase style
   content: Content.nullable(), // update (and trigger's reaction)
   text: z.string().nullable(), // statement
@@ -164,12 +172,16 @@ export function sceneScriptBlockers(script: SceneScript, narration: string, voic
 
   const alive = new Set<string>();
   const ever = new Set<string>();
+  const expanded = new Set<string>();
+  let orbitInScene = false;
   const need = (cond: unknown, i: number, what: string) => {
     if (!cond) errors.push(`beat ${i} (${beats[i].action}): ${what}`);
   };
   beats.forEach((b, i) => {
     const prev = beats[i - 1];
     // A camera-only beat repeated changes nothing on screen.
+    if (b.action === "scene" || b.action === "arrange") expanded.clear();
+    if (b.action === "scene") orbitInScene = false;
     if (prev && ["reveal", "focus"].includes(b.action) && prev.action === b.action && (b.action === "reveal" || prev.targets?.[0] === b.targets?.[0])) errors.push(`beat ${i} repeats beat ${i - 1} (${b.action}); make something happen instead`);
     const known = (id: string) => alive.has(id);
     switch (b.action) {
@@ -215,6 +227,29 @@ export function sceneScriptBlockers(script: SceneScript, narration: string, voic
       case "focus":
       case "celebrate":
         need(b.targets?.length && b.targets.every(known), i, "targets must be on screen");
+        break;
+      case "orbit":
+        need(!orbitInScene, i, "only one orbit per scene");
+        orbitInScene = true;
+        need(b.targets?.length && b.targets.length <= 4 && b.targets.every(known), i, "1–4 targets on screen");
+        need(b.to && known(b.to) && !b.targets?.includes(b.to), i, "needs a centre on screen that is not a target");
+        break;
+      case "expand":
+        need(b.targets?.length === 1 && known(b.targets[0]), i, "needs one target on screen");
+        need(!expanded.size, i, "collapse the expanded element first");
+        expanded.add(b.targets?.[0] ?? "");
+        break;
+      case "collapse":
+        need(b.targets?.length === 1 && expanded.has(b.targets[0]) && known(b.targets[0]), i, "needs one expanded target on screen");
+        expanded.delete(b.targets?.[0] ?? "");
+        break;
+      case "disconnect":
+      case "flow":
+        need(b.targets?.length === 1 && known(b.targets[0]), i, "needs one target on screen");
+        need(b.to && known(b.to) && b.to !== b.targets?.[0], i, "needs a different destination on screen");
+        break;
+      case "trace":
+        need(b.targets && b.targets.length >= 2 && b.targets.length <= 6 && b.targets.every(known), i, "2–6 targets on screen, in order");
         break;
       case "arrange":
         need(b.layout, i, "needs a layout");

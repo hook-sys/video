@@ -53,6 +53,8 @@ const hub: Gen = (n) => {
   const hubBox: Vec = k > 3 ? [440, 320] : [520, 420];
   return [slot(0, 0, hubBox[0], hubBox[1], 2), ...ring(k, () => 0.5).map((s) => ({ ...s, pos: [s.pos[0] * spread, s.pos[1] * spread] as Vec, box: [Math.min(k > 3 ? 320 : 360, s.box[0]), Math.min(k > 3 ? 220 : 260, s.box[1])] as Vec, depth: 1 as const }))];
 };
+// One element large; any others around it like a hub (never stacked on it).
+const single: Gen = (n, rnd) => (n === 1 ? [slot(0, 0, W * 0.7, H * 0.9, 2)] : hub(n, rnd));
 const stack: Gen = (n) => Array.from({ length: n }, (_, i) => slot((i - (n - 1) / 2) * 60, (i - (n - 1) / 2) * 46, W * 0.46, H * 0.62, (i === n - 1 ? 2 : 1) as 1 | 2, 0, 1 - (n - 1 - i) * 0.04));
 const fan: Gen = (n) => Array.from({ length: n }, (_, i) => slot((i - (n - 1) / 2) * 190, Math.abs(i - (n - 1) / 2) * 30, W * 0.34, H * 0.66, 1, (i - (n - 1) / 2) * 7));
 // The first element large on one side, the rest as a column on the other.
@@ -115,7 +117,6 @@ const scatter: Gen = (n, rnd) => {
 };
 // Depth field: a few large front elements and small blurred ones behind.
 const depthField: Gen = (n, rnd) => scatter(n, rnd).map((s, i) => ({ ...s, depth: (i % 3 === 0 ? 2 : i % 3 === 1 ? 0 : 1) as 0 | 1 | 2 }));
-const single: Gen = (n) => Array.from({ length: n }, (_, i) => slot(i * 40, i * 30, W * 0.7, H * 0.9, 2));
 const timeline: Gen = (n) => Array.from({ length: n }, (_, i) => slot((i - (n - 1) / 2) * (W / n), (i % 2 ? 1 : -1) * H * 0.24, (W / n) * 0.86, H * 0.4));
 const columns2: Gen = (n) => Array.from({ length: n }, (_, i) => slot((i % 2 ? 1 : -1) * W * 0.24, (Math.floor(i / 2) - (Math.ceil(n / 2) - 1) / 2) * (H / Math.ceil(n / 2)), W * 0.42, (H / Math.ceil(n / 2)) * 0.86));
 const cascade: Gen = (n) => Array.from({ length: n }, (_, i) => slot((i - (n - 1) / 2) * 180, (i - (n - 1) / 2) * 90, W * 0.4, H * 0.5, (i === n - 1 ? 2 : 1) as 1 | 2, -4 + i * 2));
@@ -196,7 +197,7 @@ function separate(slots: Slot[]): Slot[] {
 }
 
 // Families whose elements overlap on purpose (a stack, a hand of cards).
-export const OVERLAPPING_FAMILIES = ["single", "stack", "cascade", "fan"];
+export const OVERLAPPING_FAMILIES = ["stack", "cascade", "fan"];
 export const layoutFamily = (name: string) => {
   const fam = name.match(/^(.*?)(?:-([a-z]))?$/)![1];
   return FAMILIES[fam] ? fam : FAMILIES[name] ? name : "grid";

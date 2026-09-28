@@ -43,7 +43,11 @@ export type Block =
   | { type: "signature"; name: string } // a signature being drawn
   | { type: "meter"; value: number; label?: string } // a half-circle gauge
   | { type: "avatars"; n: number; label?: string } // a stack of people
-  | { type: "timeline"; items: string[] | string }; // a vertical activity timeline
+  | { type: "timeline"; items: string[] | string } // a vertical activity timeline
+  | { type: "dropdown"; label: string; items: string[] | string; active: number } // a select menu opening, one option picked
+  | { type: "barcode"; code?: string } // a barcode being scanned
+  | { type: "waveform"; label?: string } // a live voice / audio waveform
+  | { type: "typewriter"; text: string }; // text being written out (AI generation)
 
 export type BlockType = Block["type"];
 

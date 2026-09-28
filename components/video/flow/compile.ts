@@ -531,13 +531,23 @@ export function smoothCamera(plan: FlowPlan): FlowPlan {
   let [vx, vy, vz] = [0, 0, 0];
   const w0 = 0.35;
   const cap = (v: number, m: number) => Math.max(-m, Math.min(m, v));
+  // The spring's pull, but never faster than the camera can still brake to a
+  // stop at its goal (with the capped deceleration): a long pan arrives
+  // instead of overshooting and swinging back.
+  const accel = (p: number, v: number, goal: number, a: number) => {
+    let acc = cap(w0 * w0 * (goal - p) - 2 * w0 * v, a);
+    const d = goal - p;
+    const vmax = Math.sqrt(2 * a * Math.abs(d)) * 0.92;
+    if (Math.sign(v + acc) === Math.sign(d) && Math.abs(v + acc) > vmax) acc = cap(Math.sign(d) * vmax - v, a);
+    return acc;
+  };
   for (let i = 0; i < n; i++) {
     const [gx, gy, gz] = smooth[i];
     const z = Math.exp(lz);
     const aPos = MAX_PAN_ACCEL / z;
-    const ax = cap(w0 * w0 * (gx - x) - 2 * w0 * vx, aPos);
-    const ay = cap(w0 * w0 * (gy - y) - 2 * w0 * vy, aPos);
-    const az = cap(w0 * w0 * (gz - lz) - 2 * w0 * vz, MAX_ZOOM_ACCEL);
+    const ax = accel(x, vx, gx, aPos);
+    const ay = accel(y, vy, gy, aPos);
+    const az = accel(lz, vz, gz, MAX_ZOOM_ACCEL);
     vx += ax;
     vy += ay;
     vz += az;

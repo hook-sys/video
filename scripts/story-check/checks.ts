@@ -34,7 +34,8 @@ import { CARD_TEMPLATES } from "@/components/video/flow/cards/templates";
 import { ASSET_COUNT } from "@/components/video/flow/cards/catalog";
 import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { DEPTH, LAYOUT_PRESETS, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES } from "@/components/video/flow/layouts";
-import { CAMERA_MOVES, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
+import { BACKDROPS } from "@/components/video/flow/backdrop-names";
+import { CAMERA_MOVES, ENTER_STYLES, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { isIconName } from "@/components/video/icons";
 import zlib from "node:zlib";
@@ -280,7 +281,6 @@ function flowDirector(): Check[] {
   const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
   const pick = <T,>(xs: readonly T[]) => xs[Math.floor(rnd() * xs.length)];
   const fuzzFails: string[] = [];
-  const fuzzEmpty: string[] = [];
   let fuzzCount = 0;
   for (let n = 0; n < 400; n++) {
     const len = 4 + Math.floor(rnd() * 9);
@@ -337,15 +337,12 @@ function flowDirector(): Check[] {
     try {
       const plan = compileFlowScript(script, { narration, durationSeconds: dur, brand: rnd() < 0.5 ? { name: "Acme", cta: "Try it today" } : null });
       const errs = [...validateFlowPlan(plan), ...qualityProblems(planQuality(plan)).filter((p) => !p.includes("nothing new"))];
-      // Known v1 case: the camera anticipates a late hero_enter by ~0.5 s. Rare
-      // (≤1%), reported below; anything else fails.
-      if (errs.length && errs.every((e) => e.includes("empty frame"))) fuzzEmpty.push(`${beats.map((x) => x.action).join(">")}: ${errs[0]}`);
-      else if (errs.length) fuzzFails.push(`${beats.map((x) => x.action).join(">")}: ${errs[0]}`);
+      if (errs.length) fuzzFails.push(`${beats.map((x) => x.action).join(">")}: ${errs[0]}`);
     } catch (e) {
       fuzzFails.push(`${beats.map((x) => x.action).join(">")}: threw ${e instanceof Error ? e.message : e}`);
     }
   }
-  add("fuzz: random valid beat orders compile to valid, smooth, legible plans", fuzzFails.length === 0 && fuzzEmpty.length <= Math.ceil(fuzzCount * 0.01) && fuzzCount >= 100, fuzzFails.length ? `${fuzzFails.length}/${fuzzCount} failed, e.g. ${fuzzFails.slice(0, 2).join(" | ")}` : `${fuzzCount} random scripts compiled cleanly; ${fuzzEmpty.length} with a short empty frame${fuzzEmpty.length ? ` (${fuzzEmpty[0]})` : ""}`);
+  add("fuzz: random valid beat orders compile to valid, smooth, legible plans", fuzzFails.length === 0 && fuzzCount >= 100, fuzzFails.length ? `${fuzzFails.length}/${fuzzCount} failed, e.g. ${fuzzFails.slice(0, 2).join(" | ")}` : `${fuzzCount} random scripts compiled cleanly`);
 
   // Real voice timing: uneven word times (speech speeds up and pauses).
   const fx = FLOW_SCRIPT_FIXTURES[0];
@@ -441,7 +438,7 @@ function sceneDirector(): Check[] {
   const fx = SCENE_FIXTURES[0];
   const words = fx.narration.split(/\s+/);
   const C = { title: null, subtitle: null, value: null, label: null, status: null, name: null, amount: null, delta: null, note: null, action: null, date: null, items: null };
-  const B = (b: Partial<SceneBeat>): SceneBeat => ({ cue: "", action: "place", elements: null, targets: null, to: null, layout: null, camera: null, transition: null, style: null, content: null, text: null, accent: null, text_layout: null, items: null, lottie: null, ...b });
+  const B = (b: Partial<SceneBeat>): SceneBeat => ({ cue: "", action: "place", elements: null, targets: null, to: null, layout: null, camera: null, transition: null, backdrop: null, style: null, content: null, text: null, accent: null, text_layout: null, items: null, lottie: null, ...b });
   const hard: string[] = [];
   const soft: string[] = [];
   let count = 0;
@@ -457,7 +454,7 @@ function sceneDirector(): Check[] {
       if (i === 0 || i === Math.floor(nb / 2)) {
         const els = newEls(2 + Math.floor(rnd() * 4));
         const carry = i && alive.length ? [{ id: alive[0], asset: null, content: null, screen: null, label: null }] : [];
-        beats.push(B({ cue, action: "scene", layout: pick(LAYOUT_PRESETS), camera: pick(CAMERA_MOVES), transition: i ? pick(TRANSITIONS) : "cut", elements: [...carry, ...els] }));
+        beats.push(B({ cue, action: "scene", layout: pick(LAYOUT_PRESETS), camera: pick(CAMERA_MOVES), transition: i ? pick(TRANSITIONS) : "cut", backdrop: pick(BACKDROPS), style: pick([null, ...ENTER_STYLES]), elements: [...carry, ...els] }));
         alive = [...carry.map((c) => c.id), ...els.map((e) => e.id)];
         continue;
       }
@@ -465,7 +462,7 @@ function sceneDirector(): Check[] {
         beats.push(B({ cue, action: "statement", text: words.slice(p, p + 5).join(" "), text_layout: pick(["display", "panel", "pill", "side"] as const) }));
         continue;
       }
-      const a = pick(["update", "connect", "trigger", "move", "highlight", "focus", "reveal", "arrange", "erase", "place", "merge", "celebrate"] as const);
+      const a = pick(["update", "connect", "trigger", "move", "highlight", "focus", "reveal", "arrange", "erase", "place", "merge", "celebrate", "orbit", "expand", "trace", "flow", "disconnect"] as const);
       const [x, y] = [pick(alive), pick(alive.filter((q) => q !== alive[0]))];
       const last = beats[beats.length - 1].action;
       if (a === "arrange") beats.push(B({ cue, action: a, layout: pick(LAYOUT_PRESETS) }));
@@ -479,7 +476,20 @@ function sceneDirector(): Check[] {
         }
       } else if (a === "erase") {
         alive = alive.filter((q) => q !== x);
-        beats.push(B({ cue, action: a, targets: [x], style: pick(["wipe", "fade", "shrink", "fly-out"]) }));
+        beats.push(B({ cue, action: a, targets: [x], style: pick(["wipe", "fade", "shrink", "fly-out", "burst", "sink"]) }));
+      } else if (a === "orbit" && alive.length >= 3) {
+        beats.push(B({ cue, action: a, targets: alive.filter((q) => q !== x).slice(0, 3), to: x }));
+      } else if (a === "expand") {
+        beats.push(B({ cue, action: a, targets: [x] }));
+        if (i + 2 < nb - 1) {
+          i++;
+          const p2 = Math.floor((i * (words.length - 3)) / nb);
+          beats.push(B({ cue: words.slice(p2, p2 + 2).join(" "), action: "collapse", targets: [x] }));
+        }
+      } else if (a === "trace") {
+        beats.push(B({ cue, action: a, targets: alive.slice(0, 3) }));
+      } else if (a === "flow" || a === "disconnect") {
+        beats.push(B({ cue, action: x === y ? "highlight" : a, targets: [x], to: x === y ? null : y }));
       } else if (a === "merge") {
         const t = alive.filter((q) => q !== x).slice(0, 2);
         alive = alive.filter((q) => !t.includes(q));
@@ -501,6 +511,7 @@ function sceneDirector(): Check[] {
       const bad = [...validateFlowPlan(plan), ...q.filter((x) => /overlap|empty frame|jolt|overflow/.test(x))];
       if (bad.length) hard.push(`${tag}: ${bad[0]}`);
       if (q.some((x) => x.includes("too small"))) soft.push(tag);
+      if (process.env.SCENE_FUZZ_DEBUG && (bad.length || q.some((x) => x.includes("too small")))) console.log("FUZZ", tag, "|", [...bad, ...q.filter((x) => x.includes("too small"))].join(" ; "), bad.some((x) => x.includes("empty")) ? "JSON" + JSON.stringify(script) : "");
     } catch (e) {
       hard.push(`${tag}: threw ${e instanceof Error ? e.message : e}`);
     }

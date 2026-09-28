@@ -129,6 +129,8 @@ export type FlowPlan = {
   brandColor?: string; // the customer's colour, applied over the theme
   lists?: FlowList[];
   panels?: FlowPanel[];
+  // Scene backdrops (particles, grid …) from their start frame, cross-faded.
+  backdrops?: { kind: string; start: number }[];
   // Element nodes that overlap on purpose (a stack, a fan) during a window.
   overlaps?: { ids: string[]; start: number; end: number }[];
   brand?: FlowBrand;
