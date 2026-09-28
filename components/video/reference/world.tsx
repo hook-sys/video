@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AbsoluteFill, interpolateColors } from "remotion";
-import { ramp, sec } from "./motion-patterns";
+import { ramp, sec } from "../engine/motion-patterns";
 import { BEAT, HEIGHT, WIDTH, WS } from "./plan";
 
 // The world the camera travels through. Areas are placed in world space

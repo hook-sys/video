@@ -1,4 +1,4 @@
-import { lerp } from "./motion-patterns";
+import { lerp } from "../engine/motion-patterns";
 import { COLUMNS, LAYOUT, WS } from "./plan";
 
 // The reference demo's objects. Each is one persistent element whose shape

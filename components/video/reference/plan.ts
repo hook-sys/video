@@ -1,4 +1,4 @@
-import { accumulate, sec, type Vec } from "./motion-patterns";
+import { accumulate, sec, type Vec } from "../engine/motion-patterns";
 
 // Hard-coded visual plan for the reference script (Phase 1: renderer proof).
 // "Too many tasks. Too many tabs. Too much to manage. Bring everything together

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { AbsoluteFill, useCurrentFrame } from "remotion";
 import { BrowserTab, FONT, INDIGO, INK, TaskCard, Workspace } from "./actors";
-import { build, converge, enter, FPS, lerp, lerpVec, ramp, reveal, sec, settle, smoothPath, snap, transform, type Vec } from "./motion-patterns";
+import { build, converge, enter, FPS, lerp, lerpVec, ramp, reveal, sec, settle, smoothPath, snap, transform, type Vec } from "../engine/motion-patterns";
 import {
   BEAT,
   CAMERA,
