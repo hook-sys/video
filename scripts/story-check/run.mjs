@@ -108,7 +108,7 @@ if (render) {
     webpackOverride: (c) => ({ ...c, resolve: { ...c.resolve, alias: { ...c.resolve?.alias, "@": root } } }),
   });
   for (const f of FIXTURES) {
-    const inputProps = { story: f.story, narration: f.narration, durationSeconds: f.durationSeconds, words: f.words ?? null };
+    const inputProps = { story: f.story, narration: f.narration, durationSeconds: f.durationSeconds, words: f.words ?? null, assets: f.assets ?? null };
     const composition = await selectComposition({ serveUrl, id: "StoryWorld", inputProps, browserExecutable });
     const dir = mkdtempSync(path.join(tmpdir(), "story-check-"));
     await renderFrames({ serveUrl, composition, inputProps, outputDir: dir, imageFormat: "png", scale: 0.1, browserExecutable, onStart: () => {}, onFrameUpdate: () => {} });

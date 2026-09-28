@@ -19,17 +19,18 @@ export type StoryWorldProps = {
   words?: WordTiming[] | null;
   audioUrl?: string;
   title?: string;
+  assets?: Record<string, string> | null; // generated visuals: continuity_id → image URL
 };
 
 export { STORY_WORLD_ID } from "../types";
 const SFX_VOLUME = 0.25;
 
-export function useTimeline({ story, narration, durationSeconds, words, title }: StoryWorldProps) {
+export function useTimeline({ story, narration, durationSeconds, words, title, assets }: StoryWorldProps) {
   return useMemo(() => {
     const n = normalizeStory(story, title);
-    const tl = compileStory({ story: n.story, narration, durationSeconds, words });
+    const tl = compileStory({ story: n.story, narration, durationSeconds, words, assets });
     return { ...tl, issues: [...n.issues, ...tl.issues] };
-  }, [story, narration, durationSeconds, words, title]);
+  }, [story, narration, durationSeconds, words, title, assets]);
 }
 
 export function StoryWorld(props: StoryWorldProps) {

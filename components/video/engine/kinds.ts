@@ -13,7 +13,11 @@ export type KindSpec = {
   dockable?: boolean; // goes to a container's dock rather than its columns
 };
 
-export const KINDS: Record<ObjectKind, KindSpec> = {
+// Engine-only kinds for generated visual assets (never offered to the model as
+// object kinds): a wide 16:9 scene and a square single subject.
+export type EngineKind = ObjectKind | "asset_wide" | "asset_square";
+
+export const KINDS: Record<EngineKind, KindSpec> = {
   task_card: { loose: { w: 400, h: 156 }, organized: { w: 272, h: 88 }, role: "item", states: ["loose", "moving", "organized", "completed"] },
   generic_card: { loose: { w: 400, h: 156 }, organized: { w: 272, h: 88 }, role: "item", states: ["loose", "moving", "organized", "completed"] },
   message: { loose: { w: 440, h: 132 }, organized: { w: 272, h: 88 }, role: "item", states: ["loose", "moving", "organized", "completed"] },
@@ -25,6 +29,8 @@ export const KINDS: Record<ObjectKind, KindSpec> = {
   input_field: { loose: { w: 980, h: 120 }, role: "field", states: ["idle", "typing", "submitted"] },
   cursor: { loose: { w: 56, h: 56 }, role: "pointer", states: ["idle", "moving", "pressed"] },
   hero_mark: { loose: { w: 760, h: 240 }, role: "mark", states: ["hidden", "revealed"] },
+  asset_wide: { loose: { w: 1500, h: 844 }, role: "mark", states: ["hidden", "revealed"] },
+  asset_square: { loose: { w: 760, h: 760 }, role: "mark", states: ["hidden", "revealed"] },
 };
 
 // Workspace slot geometry (offsets from its top-left), from the reference.
@@ -36,4 +42,4 @@ export const WORKSPACE = {
   columns: ["todo", "in_progress", "done"] as SlotRole[],
 };
 
-export const isContainer = (k: ObjectKind) => KINDS[k].role === "container";
+export const isContainer = (k: EngineKind) => KINDS[k].role === "container";

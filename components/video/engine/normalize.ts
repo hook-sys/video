@@ -1,4 +1,4 @@
-import { AREA_KINDS, MOODS, OBJECT_KINDS, SHOTS, VERBS, VisualStory } from "./story";
+import { AREA_KINDS, MOODS, OBJECT_KINDS, SHOTS, StoryAsset, VERBS, VisualStory } from "./story";
 
 // Raw (AI or hand-written) story → a valid VisualStory, repairing what can be
 // repaired deterministically. The story's own objects and events are kept;
@@ -132,6 +132,7 @@ export function normalizeStory(raw: unknown, fallbackTitle = ""): { story: Visua
         events,
         camera: shot && str(cam.subject) ? { shot, subject: str(cam.subject) } : undefined,
         text: text ? { content: text, role: "support" as const } : undefined,
+        asset: StoryAsset.safeParse(o.asset).success ? StoryAsset.parse(o.asset) : undefined,
       },
     ];
   });

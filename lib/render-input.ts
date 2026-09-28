@@ -6,7 +6,7 @@ import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import type { RenderScene } from "@/components/video/types";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { usableStory } from "@/lib/story-engine";
+import { storyAssetsEnabled, usableStory } from "@/lib/story-engine";
 
 export type RenderProject = {
   format: string;
@@ -85,11 +85,20 @@ export async function buildRenderInput(
 
   // Preview-only story engine: the validated story, else null (→ Storyboard).
   const story = usableStory(brief.data.story, brief.data.script, project.format);
+  // Its generated visuals as signed private URLs (continuity_id → url); any
+  // missing one simply keeps the procedural visual for that moment.
+  const storyAssetPaths = story && storyAssetsEnabled() ? (brief.data.story_assets ?? []).filter((a) => a.status === "completed" && a.storage_path) : [];
+  const { data: storySigned } = storyAssetPaths.length
+    ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(storyAssetPaths.map((a) => a.storage_path!), expiresIn)
+    : { data: [] };
+  const storyAssets = Object.fromEntries(
+    storyAssetPaths.flatMap((a, i) => (storySigned?.[i]?.signedUrl ? [[a.continuity_id, storySigned[i].signedUrl]] : [])),
+  );
 
   return {
     problems,
     props: {
-      story: story ? { story, narration: brief.data.script } : null,
+      story: story ? { story, narration: brief.data.script, assets: storyAssets } : null,
       scenes,
       format: project.format,
       durationSeconds: project.duration_seconds,

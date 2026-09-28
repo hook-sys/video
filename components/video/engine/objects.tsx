@@ -1,3 +1,4 @@
+import { Img } from "remotion";
 import { jitter, lerp } from "./motion-patterns";
 import { KINDS, WORKSPACE } from "./kinds";
 import type { ObjectState, ObjectTrack } from "./timeline";
@@ -261,6 +262,25 @@ function HeroMark({ t }: Props) {
   );
 }
 
+// Generated visual (asset_wide / asset_square): revealed with a wipe, then
+// alive with a slow push-in and drift for as long as it's on screen.
+function AssetImage({ t, frame, lift }: Props) {
+  const { w, h } = KINDS[t.kind].loose;
+  const life = Math.max(0, frame - t.born);
+  const reveal = Math.min(1, life / 16);
+  const wipe = 1 - (1 - reveal) * (1 - reveal);
+  const push = 1.14 - 0.12 * Math.min(1, life / 240);
+  const drift = Math.sin(life / 90) * 1.2;
+  return (
+    <div style={{ width: w, height: h, borderRadius: 34, overflow: "hidden", position: "relative", boxShadow: `0 ${40 + lift * 20}px ${110 + lift * 30}px rgba(6,10,40,0.5)`, clipPath: `inset(0 ${(1 - wipe) * 100}% 0 0 round 34px)` }}>
+      {t.content.src && (
+        <Img src={t.content.src} style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${push}) translate(${drift}%, ${drift * -0.5}%)` }} />
+      )}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, transparent 60%, rgba(6,10,30,0.25))", pointerEvents: "none" }} />
+    </div>
+  );
+}
+
 export function ObjectView(p: Props) {
   switch (p.t.kind) {
     case "task_card":
@@ -285,5 +305,8 @@ export function ObjectView(p: Props) {
       return <Metric {...p} />;
     case "hero_mark":
       return <HeroMark {...p} />;
+    case "asset_wide":
+    case "asset_square":
+      return <AssetImage {...p} />;
   }
 }

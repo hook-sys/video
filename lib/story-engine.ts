@@ -5,6 +5,10 @@ import { storyBlockers, type VisualStory } from "@/lib/visual-story";
 // builds) always use the existing Storyboard renderer.
 export const storyEngineEnabled = () => process.env.VERCEL_ENV === "preview" && process.env.VISUAL_ENGINE === "story";
 
+// Generated visual assets for the story engine: Preview-only, VISUAL_ASSETS=on
+// (default off).
+export const storyAssetsEnabled = () => storyEngineEnabled() && process.env.VISUAL_ASSETS === "on";
+
 // The story engine renders 16:9 only for now.
 export const STORY_FORMATS = ["16:9"];
 

@@ -9,13 +9,64 @@ import { checkTimeline, checkTiming, type Check, type TimingRow } from "@/compon
 import { REFERENCE_NARRATION, REFERENCE_STORY } from "@/components/video/engine/fixtures/reference-story";
 import { REFERENCE_VOICE_WORDS } from "@/components/video/engine/fixtures/reference-voice-words";
 import { DEV_NARRATION, DEV_STORY } from "@/components/video/engine/fixtures/devtool-story";
+import { ECOMMERCE_NARRATION, ECOMMERCE_STORY } from "@/components/video/engine/fixtures/ecommerce-assets-story";
+import { evaluatePose } from "@/components/video/engine/timeline";
+import zlib from "node:zlib";
 
-export type Fixture = { name: string; story: unknown; narration: string; durationSeconds: number; words?: typeof REFERENCE_VOICE_WORDS };
+// Deterministic stand-in images for generated assets (a lit gradient with a
+// soft subject disc), as data URLs, so asset rendering is checked offline.
+function placeholderPng(w: number, h: number, hue: number) {
+  const rows: Buffer[] = [];
+  for (let y = 0; y < h; y++) {
+    const row = Buffer.alloc(1 + w * 3);
+    for (let x = 0; x < w; x++) {
+      const d = Math.hypot(x - w / 2, y - h / 2) / (Math.min(w, h) / 2.4);
+      const k = d < 1 ? 1 : Math.max(0.25, 1 - (d - 1) * 0.8);
+      const t = y / h;
+      const c = [Math.cos(hue) * 0.5 + 0.5, Math.cos(hue + 2.1) * 0.5 + 0.5, Math.cos(hue + 4.2) * 0.5 + 0.5];
+      c.forEach((v, i) => (row[1 + x * 3 + i] = Math.round(255 * Math.min(1, (0.25 + 0.6 * v * (1 - t * 0.4)) * k + (d < 1 ? 0.15 : 0)))));
+    }
+    rows.push(row);
+  }
+  const table = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc32 = (buf: Buffer) => { let c = 0xffffffff; for (const b of buf) c = table[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type: string, data: Buffer) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc32(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(w, 0); ihdr.writeUInt32BE(h, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.concat(rows))), chunk("IEND", Buffer.alloc(0))]);
+  return `data:image/png;base64,${png.toString("base64")}`;
+}
+export const ECOMMERCE_ASSETS = { product: placeholderPng(256, 256, 0.2), parcel: placeholderPng(256, 256, 1.4), doorstep: placeholderPng(384, 216, 3.1) };
+
+export type Fixture = { name: string; story: unknown; narration: string; durationSeconds: number; words?: typeof REFERENCE_VOICE_WORDS; assets?: Record<string, string> };
 export const FIXTURES: Fixture[] = [
   { name: "reference (estimated timing)", story: REFERENCE_STORY, narration: REFERENCE_NARRATION, durationSeconds: 15 },
   { name: "reference (real ElevenLabs v3 timestamps)", story: REFERENCE_STORY, narration: REFERENCE_NARRATION, durationSeconds: 15, words: REFERENCE_VOICE_WORDS },
   { name: "developer tool (non-workspace story)", story: DEV_STORY, narration: DEV_NARRATION, durationSeconds: 12 },
+  { name: "e-commerce with generated assets", story: ECOMMERCE_STORY, narration: ECOMMERCE_NARRATION, durationSeconds: 15, assets: ECOMMERCE_ASSETS },
 ];
+
+// Generated visuals: one persistent object per continuity_id, visible at every
+// moment that references it, and never alone on screen (not a slideshow).
+function assetChecks(tl: ReturnType<typeof compileStory>, story: VisualStory, assets: Record<string, string>): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string, level: Check["level"] = "error") => checks.push({ frame: 0, name, ok, level, detail });
+  const ids = [...new Set(story.moments.flatMap((m) => (m.asset?.required && assets[m.asset.continuity_id] ? [m.asset.continuity_id] : [])))];
+  const tracks = tl.objects.filter((o) => o.kind === "asset_wide" || o.kind === "asset_square");
+  add("one object per continuity_id", tracks.length === ids.length && ids.every((id) => tracks.some((t) => t.id === `asset_${id}`)), `${tracks.length} asset object(s) for ${ids.length} continuity id(s): ${ids.join(", ")}`);
+  story.moments.forEach((m, i) => {
+    if (!m.asset?.required || !assets[m.asset.continuity_id]) return;
+    const mark = tl.moments[i];
+    const frame = Math.min(tl.durationInFrames - 1, Math.round(mark.frame + (mark.end - mark.frame) * 0.8));
+    const t = tracks.find((x) => x.id === `asset_${m.asset!.continuity_id}`);
+    const shown = !!t && evaluatePose(t, frame).opacity > 0.9;
+    const others = tl.objects.filter((o) => !o.id.startsWith("asset_") && evaluatePose(o, frame).opacity > 0.5).length;
+    add(`asset shown · "${m.cue}" (${m.asset.continuity_id})`, shown, shown ? `visible, with ${others} procedural object(s) alongside` : "not visible at its moment");
+    add(`not a slideshow · "${m.cue}"`, others > 0, others ? "procedural objects stay on screen with the image" : "the image is alone on screen", "warn");
+  });
+  const reused = story.moments.filter((m) => m.asset?.continuity_id === "parcel").length;
+  if (reused > 1) add("continuity: reused asset is the same object", tracks.filter((t) => t.id === "asset_parcel").length === 1, `"parcel" referenced by ${reused} moments → 1 object, 1 image`);
+  return checks;
+}
 
 type Section = { name: string; checks: Check[]; rows?: TimingRow[] };
 
@@ -66,10 +117,11 @@ export function runChecks(): Section[] {
   ];
   for (const f of FIXTURES) {
     const n = normalizeStory(f.story);
-    const tl = compileStory({ story: n.story, narration: f.narration, durationSeconds: f.durationSeconds, words: f.words });
+    const tl = compileStory({ story: n.story, narration: f.narration, durationSeconds: f.durationSeconds, words: f.words, assets: f.assets });
     const frames = checkTimeline(tl);
     const timing = checkTiming(tl, f.words);
-    sections.push({ name: `timeline · ${f.name}`, checks: [...frames.checks, ...timing.checks], rows: timing.rows });
+    const assetResults = f.assets ? assetChecks(tl, n.story, f.assets) : [];
+    sections.push({ name: `timeline · ${f.name}`, checks: [...frames.checks, ...timing.checks, ...assetResults], rows: timing.rows });
   }
   return sections;
 }

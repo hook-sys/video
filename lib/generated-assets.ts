@@ -16,7 +16,7 @@ const EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
 };
 
-async function downloadImage(url: string) {
+export async function downloadImage(url: string) {
   const parsed = new URL(url);
   if (parsed.protocol !== "https:" || !(await isPublicHost(parsed.hostname))) {
     throw new Error("Image URL is not allowed.");

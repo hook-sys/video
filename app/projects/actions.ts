@@ -52,6 +52,7 @@ import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { generateVisualStory } from "@/lib/ai/visual-story";
 import { parseWordTimings } from "@/lib/voice-timing";
 import { storyEngineEnabled } from "@/lib/story-engine";
+import { generateStoryAssets, planStoryAssets, storyAssetsEnabled } from "@/lib/story-assets";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 
 export type CreateProjectState = { error?: string };
@@ -312,6 +313,7 @@ async function generateStory(projectId: string, userId: string, budgetMs: number
       duration_seconds: project.duration_seconds,
       product_name: brief.data.product_name || undefined,
       creative_preferences: creativePreferences(project),
+      assets: storyAssetsEnabled(),
     },
     (u) => (usage = u),
     budgetMs,
@@ -332,6 +334,15 @@ async function generateStory(projectId: string, userId: string, budgetMs: number
     const current = ProductBrief.safeParse(fresh?.brief);
     if (current.success && !current.data.story) {
       await admin.from("projects").update({ brief: { ...(fresh!.brief as object), story: result.story } }).eq("id", projectId).eq("user_id", userId);
+      // Visual Asset Planner: only after the story is validated and stored.
+      // Images take ~10–30 s; skipped (procedural visuals) when time is short.
+      if (storyAssetsEnabled() && planStoryAssets(result.story).length && budgetMs - result.ms > 45_000) {
+        const started = Date.now();
+        const records = await generateStoryAssets(admin, result.story, { userId, projectId, visualStyle: creativePreferences(project).visual_style });
+        console.info("story assets:", { projectId, ms: Date.now() - started, assets: records.map((r) => ({ id: r.continuity_id, type: r.type, status: r.status, ms: r.ms, error: r.error })) });
+        const { data: latest } = await admin.from("projects").select("brief").eq("id", projectId).single();
+        await admin.from("projects").update({ brief: { ...(latest!.brief as object), story_assets: records } }).eq("id", projectId).eq("user_id", userId);
+      }
     }
   }
   if (usage) {

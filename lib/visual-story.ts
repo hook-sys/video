@@ -53,6 +53,28 @@ export const Event = z.object({
   pace: z.enum(["tight", "loose"]).optional(),
 });
 
+export const ASSET_TYPES = ["product_scene", "environment", "object", "cinematic_scene", "character", "metaphor"] as const;
+export const MAX_STORY_ASSETS = 3; // distinct generated images per video
+export const StoryAsset = z.object({
+  required: z.boolean(),
+  type: z.enum(ASSET_TYPES),
+  description: z.string(),
+  continuity_id: z.string(),
+});
+export type StoryAsset = z.infer<typeof StoryAsset>;
+
+// A generated asset, stored privately (never a raw provider URL).
+export const StoryAssetRecord = z.object({
+  continuity_id: z.string(),
+  type: z.enum(ASSET_TYPES),
+  status: z.enum(["completed", "failed"]),
+  storage_path: z.string().optional(),
+  error: z.string().optional(),
+  model: z.string().optional(),
+  ms: z.number().optional(),
+});
+export type StoryAssetRecord = z.infer<typeof StoryAssetRecord>;
+
 export const Moment = z.object({
   cue: z.string(),
   intent: z.enum(INTENTS),
@@ -60,6 +82,11 @@ export const Moment = z.object({
   events: z.array(Event),
   camera: z.object({ shot: z.enum(SHOTS), subject: z.string() }).optional(),
   text: z.object({ content: z.string(), role: z.literal("support") }).optional(),
+  // Optional AI-generated visual for a complex moment (product, environment,
+  // physical object, cinematic scene, character, metaphor). Only a semantic
+  // description: the renderer decides placement and motion. The same
+  // continuity_id always reuses the same generated image.
+  asset: StoryAsset.optional(),
 });
 
 export const VisualStory = z.object({
@@ -150,6 +177,17 @@ export function validateStory(story: VisualStory, narration?: string): StoryIssu
     if (m.camera) resolve(m.camera.subject, `${where} camera`);
   });
   for (const c of story.cast) if (!targeted.has(c.id)) warnings.push(`${c.id} is never used by any event`);
+
+  // Generated visuals: few, described, with a stable continuity id.
+  const assets = story.moments.flatMap((m, i) => (m.asset?.required ? [{ a: m.asset, i }] : []));
+  for (const { a, i } of assets) {
+    if (!/^[a-z0-9_-]{1,40}$/i.test(a.continuity_id)) errors.push(`moment ${i + 1}: asset continuity_id "${a.continuity_id}" must be a short id`);
+    if (a.description.trim().length < 12) errors.push(`moment ${i + 1}: asset description is too short to generate`);
+    if (a.description.length > 400) errors.push(`moment ${i + 1}: asset description is too long (max 400 characters)`);
+  }
+  const distinct = new Set(assets.map(({ a }) => a.continuity_id));
+  if (distinct.size > MAX_STORY_ASSETS) errors.push(`${distinct.size} distinct generated assets requested (max ${MAX_STORY_ASSETS}); reuse continuity_ids or drop some`);
+  if (assets.length > story.moments.length - 1 && assets.length > 1) warnings.push("almost every moment has a generated asset (risk of a slideshow)");
 
   if (narration !== undefined) {
     const tokens = tokenize(narration);

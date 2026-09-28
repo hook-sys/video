@@ -1,6 +1,7 @@
 import { Easing } from "remotion";
 import { build, converge, enter, lerp, ramp, settle, smoothPath, snap, type Vec } from "./motion-patterns";
-import type { AreaKind, ObjectKind, Verb } from "./story";
+import type { EngineKind } from "./kinds";
+import type { AreaKind, Verb } from "./story";
 
 // RenderTimeline: what the compiler produces and the renderer plays. Plain,
 // JSON-serializable data; every value at any frame comes from `evaluate*`, so
@@ -17,9 +18,9 @@ export type StateField = "morph" | "check" | "pulse" | "build" | "value" | "type
 
 export type ObjectTrack = {
   id: string;
-  kind: ObjectKind;
+  kind: EngineKind;
   group?: string;
-  content: { title?: string; tag?: string; meta?: string };
+  content: { title?: string; tag?: string; meta?: string; src?: string }; // src: generated image (assets only)
   z: number;
   born: number; // first frame it exists
   motion: MotionKey[];
@@ -144,7 +145,7 @@ export function evaluateCamera(keys: CameraKey[], frame: number, fps: number) {
 
 // "Loose" at a frame: a free item/app that has appeared and isn't in a container yet.
 export const looseAt = (t: ObjectTrack, frame: number) =>
-  t.born <= frame && (t.attachedAt === undefined || t.attachedAt > frame) && !["workspace", "progress_panel", "metric", "input_field", "cursor", "hero_mark"].includes(t.kind);
+  t.born <= frame && (t.attachedAt === undefined || t.attachedAt > frame) && !["workspace", "progress_panel", "metric", "input_field", "cursor", "hero_mark", "asset_wide", "asset_square"].includes(t.kind);
 
 export const worldToScreen = (p: Vec, cam: { x: number; y: number; z: number }, width: number, height: number): Vec => ({
   x: width / 2 + (p.x - cam.x) * cam.z,

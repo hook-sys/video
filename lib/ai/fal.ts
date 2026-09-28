@@ -12,7 +12,9 @@ export type VoiceResult = {
   // Short sample of an unreadable timestamp payload, for diagnosis only.
   timestampsSample?: string;
 };
-export type ImageInput = { prompt: string; format: string };
+// `guardrails` replaces the default abstract-asset guardrails (story assets
+// need photographic product/scene imagery).
+export type ImageInput = { prompt: string; format: string; guardrails?: string };
 export type ImageResult = { model: string; requestId: string; imageUrl: string };
 
 const SCRIPT_MAX = 5_000;
@@ -69,13 +71,13 @@ const IMAGE_GUARDRAILS =
   "Flat vector or clean 3D abstract style, not stock photography. " +
   "No animals, no animal characters, no mascots, no people, no readable text, no letters, no numbers, no logos.";
 
-export async function generateImage({ prompt, format }: ImageInput): Promise<ImageResult> {
+export async function generateImage({ prompt, format, guardrails = IMAGE_GUARDRAILS }: ImageInput): Promise<ImageResult> {
   const model = process.env.FAL_IMAGE_MODEL;
   if (!model) throw new Error("FAL_IMAGE_MODEL is not configured.");
   const fal = falClient();
 
   const input = buildInput(process.env.FAL_IMAGE_INPUT_TEMPLATE || '{"prompt":"{{prompt}}"}', {
-    prompt: `${prompt.trim().slice(0, 1_000)} ${IMAGE_GUARDRAILS}`,
+    prompt: `${prompt.trim().slice(0, 1_000)} ${guardrails}`,
     format,
   });
   // fal-ai/nano-banana-2 takes the video's aspect ratio directly ("16:9", "9:16", "1:1").

@@ -16,6 +16,7 @@ export type CompileInput = {
   narration: string;
   durationSeconds: number;
   words?: WordTiming[] | null;
+  assets?: Record<string, string> | null; // generated visuals: continuity_id → image URL
   fps?: number;
   width?: number;
   height?: number;
@@ -105,7 +106,8 @@ export function compileStory(input: CompileInput): RenderTimeline {
     if (isContainer(kind)) containers.set(c.id, { id: c.id, cols: [[], [], []], dock: [], total: 0 });
   });
   const castIds = story.cast.map((c) => c.id);
-  const homeOf = (id: string) => story.cast.find((c) => c.id === id)!.home;
+  // Cast objects have a home; a generated visual lives where it first appeared.
+  const homeOf = (id: string) => story.cast.find((c) => c.id === id)?.home ?? status.get(id)?.area ?? story.world.areas[0].id;
   const sizeOf = (id: string, organized = false): Size => {
     const k = KINDS[tracks.get(id)!.kind];
     return organized && k.organized ? k.organized : k.loose;
@@ -140,9 +142,15 @@ export function compileStory(input: CompileInput): RenderTimeline {
     const size = sizeOf(id);
     const taken = [...status.entries()]
       .filter(([other, st]) => other !== id && st.visible && !st.container && placeOf(st.area).id === area.id && !isContainer(tracks.get(other)!.kind))
-      .map(([other, st]) => ({ x: st.rest.x, y: st.rest.y, ...sizeOf(other) }));
+      .map(([other, st]) => ({ id: other, x: st.rest.x, y: st.rest.y, ...sizeOf(other) }));
+    // Next to a generated image, step far enough to clear it.
+    const images = taken.filter((t) => t.id.startsWith("asset_"));
+    const bigW = Math.max(0, ...images.map((t) => t.w));
+    const bigH = Math.max(0, ...images.map((t) => t.h));
     for (const [sx, sy] of SPOTS) {
-      const c = { x: area.rect.x + sx * (size.w / 2 + 360), y: area.rect.y + sy * (size.h / 2 + 190) };
+      const c = images.length
+        ? { x: area.rect.x + sx * ((size.w + bigW) / 2 + 60), y: area.rect.y + sy * ((size.h + bigH) / 2 + 50) }
+        : { x: area.rect.x + sx * (size.w / 2 + 360), y: area.rect.y + sy * (size.h / 2 + 190) };
       const clear = taken.every((t) => Math.abs(t.x - c.x) > (t.w + size.w) / 2 + 40 || Math.abs(t.y - c.y) > (t.h + size.h) / 2 + 40);
       if (clear) return { ...c, rot: 0, scale: 1, opacity: 1 };
     }
@@ -224,6 +232,7 @@ export function compileStory(input: CompileInput): RenderTimeline {
   const marks: MomentMark[] = [];
   let dirCounter = 0;
   const received = new Map<string, string>(); // item → container it converged into
+  const assetOf: (string | undefined)[] = []; // moment → its generated-visual object id
   const organized = new Set<string>(); // containers whose columns are live
 
   // 4. Events → animation keys, moment by moment.
@@ -238,12 +247,13 @@ export function compileStory(input: CompileInput): RenderTimeline {
     const f = mi === 0 && starts[0] <= sec(0.6) ? 0 : Math.max(0, starts[mi] - ANTICIPATION);
     const span = Math.max(sec(0.5), ends[mi] - starts[mi]);
     const area = placeOf(m.area);
+    compileAsset(m, mi, f, area); // the moment's generated visual takes the hero spot first
     for (const ev of m.events) compileEvent(ev, m, f, span, area);
     if (m.text) text.push({ frame: starts[mi] + 2, content: m.text.content, role: "support", line: 0 });
     if (m.intent === "resolve") for (const [cid] of containers) if (visibleAt(cid)) state(cid, "calm", f, 1, sec(1.4));
     // First visible action of this moment (a new motion, state or jolt).
     const frames = [...tracks.values()].flatMap((t) => {
-      const [a, b, c] = before.get(t.id)!;
+      const [a, b, c] = before.get(t.id) ?? [0, 0, 0]; // created this moment (e.g. a generated visual)
       return [...t.motion.slice(a).filter((k) => k.pattern !== "hold").map((k) => k.frame), ...t.state.slice(b).map((k) => k.frame), ...t.impulses.slice(c).map((k) => k.frame)];
     });
     actionFrames.push(frames.length ? Math.min(...frames) : null);
@@ -275,7 +285,10 @@ export function compileStory(input: CompileInput): RenderTimeline {
             appear(id, at, panelPose(where), home.id, 0);
             attach(id, where, "panel", at);
           } else if (role === "item" || role === "app") {
-            appear(id, at, pilePose(id, intoArea ?? home), home.id, dirCounter++);
+            // Beside a generated image a single entrance takes a clear spot; piles stay piles.
+            const place = intoArea ?? home;
+            const nearImage = ev.verb === "enter" && [...status].some(([oid, st]) => oid.startsWith("asset_") && st.visible && placeOf(st.area).id === place.id);
+            appear(id, at, nearImage ? freePose(place, id) : pilePose(id, place), home.id, dirCounter++);
           } else {
             appear(id, at, isContainer(kind) ? centerPose(intoArea ?? home) : freePose(intoArea ?? home, id), home.id, 0);
           }
@@ -495,6 +508,30 @@ export function compileStory(input: CompileInput): RenderTimeline {
     }
   }
 
+  // Generated visual for a moment: one persistent object per continuity_id.
+  // First use reveals it in the moment's area; later uses bring the SAME image
+  // back (moving it to the new area, or a jolt if it's already there). Without
+  // an image (flag off, or generation failed) the moment stays procedural.
+  function compileAsset(m: Moment, mi: number, f: number, area: AreaTrack) {
+    const a = m.asset;
+    const src = a?.required ? input.assets?.[a.continuity_id] : undefined;
+    if (!a || !src) return;
+    const id = `asset_${a.continuity_id}`;
+    const wide = a.type === "environment" || a.type === "cinematic_scene";
+    if (!tracks.has(id)) {
+      tracks.set(id, { id, kind: wide ? "asset_wide" : "asset_square", content: { title: a.description, src }, z: 10, born: Number.POSITIVE_INFINITY, motion: [], state: [], impulses: [], tint: TINTS[0] });
+      appear(id, f, wide ? centerPose(area) : freePose(area, id), area.id, 0);
+      sfxAt(f + 4, "reveal", true);
+    } else if (visibleAt(id)) {
+      const s = status.get(id)!;
+      if (placeOf(s.area).id !== area.id) {
+        push(id, { frame: Math.max(f, s.busy - sec(0.2)), pose: wide ? centerPose(area) : freePose(area, id), pattern: "arrive", dur: sec(0.9), verb: "move" });
+        s.area = area.id;
+      } else emphasize(id, f);
+    }
+    assetOf[mi] = id;
+  }
+
   function attach(id: string, cid: string, as: "item" | "dock" | "panel", at: number) {
     const s = status.get(id)!;
     s.container = cid;
@@ -559,7 +596,10 @@ export function compileStory(input: CompileInput): RenderTimeline {
   // State keys chain in time order.
   for (const t of objects) t.state.sort((a, b) => a.frame - b.frame);
   const byBirth = [...objects].sort((a, b) => a.born - b.born);
-  byBirth.forEach((t, i) => (t.z = isContainer(t.kind) ? 1 : KINDS[t.kind].role === "panel" ? 5 : 10 + i));
+  // Generated images are a world layer behind the procedural objects (wide
+  // scenes furthest back), containers next.
+  // (Panels sit just above their container; a standalone panel is a normal object.)
+  byBirth.forEach((t, i) => (t.z = t.kind === "asset_wide" ? 0 : t.kind === "asset_square" ? 2 : isContainer(t.kind) ? 1 : KINDS[t.kind].role === "panel" && t.container ? 5 : 10 + i));
 
   // An area lights up when something first happens there.
   for (const a of areas) {
@@ -569,7 +609,7 @@ export function compileStory(input: CompileInput): RenderTimeline {
 
   // 5. Camera: shots frame their subject at the moment's key times; one spline.
   story.moments.forEach((m, mi) =>
-    marks.push({ frame: starts[mi], end: ends[mi], cue: m.cue, intent: m.intent, area: placeOf(m.area).id, subject: m.camera?.subject ?? "", shot: m.camera?.shot ?? "", action: actionFrames[mi], sfx: sfxFrames[mi], matched: found[mi] !== null }),
+    marks.push({ frame: starts[mi], end: ends[mi], cue: m.cue, intent: m.intent, area: placeOf(m.area).id, subject: [m.camera?.subject ?? "", assetOf[mi]].filter(Boolean).join(","), shot: m.camera?.shot ?? "", action: actionFrames[mi], sfx: sfxFrames[mi], matched: found[mi] !== null }),
   );
   const camera = planCamera();
 
@@ -621,7 +661,7 @@ export function compileStory(input: CompileInput): RenderTimeline {
     const closing = story.closing?.text?.length ? W * 0.17 : 0;
     story.moments.forEach((m, mi) => {
       const shot = m.camera?.shot ?? defaultShot(m);
-      const subject = m.camera?.subject ?? defaultSubject(m);
+      const subject = [m.camera?.subject ?? defaultSubject(m), assetOf[mi]].filter(Boolean).join(",");
       const s = starts[mi] / fps;
       const e = Math.max(s + 0.4, ends[mi] / fps);
       const span = e - s;
@@ -707,7 +747,8 @@ export function compileStory(input: CompileInput): RenderTimeline {
     lastLine = Math.max(frame, lastLine + (i ? 6 : 0));
     text.push({ frame: lastLine, content: line, role: "closing", line: i });
   });
-  const finalArea = ordered[ordered.length - 1];
+  // The ending's look comes from where the story actually ends.
+  const finalArea = story.moments.length ? placeOf(story.moments[story.moments.length - 1].area) : ordered[ordered.length - 1];
 
   return {
     fps,
