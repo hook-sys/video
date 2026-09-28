@@ -5,15 +5,34 @@
 
 export type Ease = "linear" | "out" | "in" | "inOut" | "back" | "snap";
 export type Vec = [number, number];
+export type Vec3 = [number, number, number];
 // [frame, value, ease into this key]
 export type Key<T> = [number, T, Ease?];
 export type Track<T> = Key<T>[];
 
 export type ThemeName = "lavender" | "midnight";
 
+// A product UI shown as a plane in 3D: a screenshot (src) or a procedural mock
+// (title + rows). Points on the plane are [u, v] in 0..1.
+export type UiRow = { icon: string; text: string; value?: string; status?: string };
+export type FlowUi = {
+  w: number;
+  h: number;
+  title: string;
+  rows?: UiRow[];
+  src?: string;
+  tilt: Track<Vec3>; // rotateX, rotateY, rotateZ in degrees
+  callouts?: { at: Vec; text: string; icon?: string; side: "left" | "right"; start: number }[];
+  lifts?: { row: number; start: number; end?: number }[]; // a row rises off the plane
+  cursor?: { path: Track<Vec>; clicks: number[] };
+};
+
+// Circular motion around another node between start and end (blends in/out).
+export type FlowOrbit = { center: string; radius: Track<number>; angle: number; speed: number; start: number; end?: number };
+
 export type FlowNode = {
   id: string;
-  kind: "orb" | "pill";
+  kind: "orb" | "pill" | "ui";
   variant?: "solid" | "soft";
   size: number; // orb diameter / pill height
   icon?: Track<string>; // icon swaps morph (old out, new draws on)
@@ -24,6 +43,8 @@ export type FlowNode = {
   ring?: Track<number>; // 0..1 progress ring around an orb
   check?: number; // frame a success badge pops
   pulses?: number[]; // frames a ripple fires
+  ui?: FlowUi;
+  orbit?: FlowOrbit;
 };
 
 export type FlowLink = {
@@ -58,4 +79,7 @@ export type FlowPlan = {
   links: FlowLink[];
   texts: FlowText[];
   lotties: FlowLottie[];
+  rings?: { center: string; radius: number; start: number; end?: number }[]; // dashed orbit paths
+  // Iris: the member nodes are framed by a circle that closes onto `into`.
+  iris?: { start: number; dur: number; members: string[]; into: string }[];
 };

@@ -22,6 +22,27 @@ export function validateFlowPlan(plan: FlowPlan): string[] {
     ids.add(n.id);
     for (const [k, t] of Object.entries({ pos: n.pos, scale: n.scale, opacity: n.opacity, ring: n.ring, icon: n.icon, label: n.label })) sorted(`${n.id}.${k}`, t as Track<unknown> | undefined);
     for (const [, name] of n.icon ?? []) if (!isIconName(name)) errors.push(`${n.id}: unknown icon "${name}"`);
+    if (n.kind === "ui" && !n.ui) errors.push(`${n.id}: UI node without ui spec`);
+    if (n.ui) {
+      sorted(`${n.id}.tilt`, n.ui.tilt);
+      for (const r of n.ui.rows ?? []) if (!isIconName(r.icon)) errors.push(`${n.id}: unknown row icon "${r.icon}"`);
+      for (const c of n.ui.callouts ?? []) if (c.icon && !isIconName(c.icon)) errors.push(`${n.id}: unknown callout icon "${c.icon}"`);
+      for (const l of n.ui.lifts ?? []) if (!n.ui.rows?.[l.row]) errors.push(`${n.id}: lift of missing row ${l.row}`);
+      if (n.ui.cursor) sorted(`${n.id}.cursor`, n.ui.cursor.path);
+    }
+  }
+  for (const n of plan.nodes) {
+    if (!n.orbit) continue;
+    const c = plan.nodes.find((x) => x.id === n.orbit!.center);
+    if (!c) errors.push(`${n.id}: orbit centre "${n.orbit.center}" missing`);
+    else if (c.orbit) errors.push(`${n.id}: orbit centre "${c.id}" is itself orbiting`);
+    sorted(`${n.id}.orbit.radius`, n.orbit.radius);
+  }
+  for (const r of plan.rings ?? []) if (!ids.has(r.center)) errors.push(`ring: missing centre "${r.center}"`);
+  for (const ir of plan.iris ?? []) {
+    if (!ids.has(ir.into)) errors.push(`iris: missing target "${ir.into}"`);
+    for (const m of ir.members) if (!ids.has(m)) errors.push(`iris: missing member "${m}"`);
+    if (ir.members.includes(ir.into)) errors.push("iris: target cannot be one of its members");
   }
   for (const l of plan.links) {
     if (!ids.has(l.from) || !ids.has(l.to)) errors.push(`link ${l.id}: missing node`);

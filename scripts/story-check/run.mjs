@@ -146,6 +146,8 @@ if (render) {
   // Flow engine reference (default plan), in both themes.
   await pixelSection("flow · e-commerce (lavender)", "FlowScene", {});
   await pixelSection("flow · e-commerce (midnight)", "FlowScene", { theme: "midnight" });
+  await pixelSection("flow · payments hub (lavender)", "FlowPaymentsHub", {});
+  await pixelSection("flow · payments hub (midnight)", "FlowPaymentsHub", { theme: "midnight" });
 
   // Lottie micro-animations: every cell of the gallery must draw something and
   // actually move (sampled every 4th frame).

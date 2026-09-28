@@ -6,6 +6,7 @@ import { STORY_WORLD_ID, StoryWorld, type StoryWorldProps } from "@/components/v
 import { Storyboard } from "@/components/video/storyboard";
 import { FLOW_SCENE_ID, FlowScene, type FlowSceneProps } from "@/components/video/flow/flow-scene";
 import { ecommercePlan } from "@/components/video/flow/fixtures/ecommerce";
+import { paymentsHubPlan } from "@/components/video/flow/fixtures/payments-hub";
 import { GALLERY_CELL, GALLERY_COLS, LOTTIE_GALLERY_ID, LottieGallery, galleryRows } from "@/components/video/lottie/gallery";
 import {
   COMPOSITION_ID,
@@ -57,6 +58,16 @@ export function RemotionRoot() {
       height={1080}
       durationInFrames={450}
       defaultProps={{ plan: ecommercePlan() } as FlowSceneProps}
+      calculateMetadata={({ props }) => ({ durationInFrames: props.plan.duration })}
+    />
+    <Composition
+      id="FlowPaymentsHub"
+      component={FlowScene}
+      fps={FPS}
+      width={1920}
+      height={1080}
+      durationInFrames={450}
+      defaultProps={{ plan: paymentsHubPlan() } as FlowSceneProps}
       calculateMetadata={({ props }) => ({ durationInFrames: props.plan.duration })}
     />
     {/* QA only: every Lottie micro-animation in one grid. */}

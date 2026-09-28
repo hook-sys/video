@@ -4,6 +4,7 @@ import { Icon } from "@/components/video/icons";
 import { isLottieName, LottieAnim } from "@/components/video/lottie";
 import { clamp01, num, ramp, step, vec } from "./eval";
 import { FLOW_FONT, type FlowTheme, lottieColors, THEMES } from "./themes";
+import { UiPlane } from "./ui-plane";
 import type { FlowLink, FlowNode, FlowPlan, FlowText, ThemeName, Vec } from "./types";
 
 // Renders a FlowPlan: a themed world, persistent nodes under one camera,
@@ -29,46 +30,100 @@ function useFlowFont() {
 
 type NodeState = { node: FlowNode; pos: Vec; scale: number; opacity: number };
 
+// Node positions at a frame; orbiting nodes circle their centre node
+// (blending in and out of their own keyed path).
+function computeStates(plan: FlowPlan, frame: number) {
+  const states = new Map<string, NodeState>();
+  const base = (n: FlowNode): NodeState => ({ node: n, pos: vec(n.pos, frame), scale: num(n.scale, frame, 1), opacity: num(n.opacity, frame, 1) });
+  for (const n of plan.nodes) if (!n.orbit) states.set(n.id, base(n));
+  for (const n of plan.nodes) {
+    if (!n.orbit) continue;
+    const s = base(n);
+    const o = n.orbit;
+    const c = states.get(o.center)?.pos ?? [0, 0];
+    const a = ((o.angle + o.speed * (frame - o.start)) * Math.PI) / 180;
+    const r = num(o.radius, frame, 0);
+    const w = ramp(frame, o.start, 14, "inOut") * (1 - (o.end !== undefined ? ramp(frame, o.end, 14, "inOut") : 0));
+    const orbitPos: Vec = [c[0] + Math.cos(a) * r, c[1] + Math.sin(a) * r];
+    states.set(n.id, { ...s, pos: [s.pos[0] + (orbitPos[0] - s.pos[0]) * w, s.pos[1] + (orbitPos[1] - s.pos[1]) * w] });
+  }
+  return states;
+}
+
 export function FlowScene({ plan, theme: themeOverride }: FlowSceneProps) {
   useFlowFont();
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
   const theme = THEMES[themeOverride ?? plan.theme];
-  const states = new Map<string, NodeState>(
-    plan.nodes.map((n) => [n.id, { node: n, pos: vec(n.pos, frame), scale: num(n.scale, frame, 1), opacity: num(n.opacity, frame, 1) }]),
-  );
+  const states = computeStates(plan, frame);
   // One camera: keyed framing plus a slow hand-held drift so nothing is ever static.
   const [cx, cy] = vec(plan.camera.center, frame);
   const zoom = num(plan.camera.zoom, frame, 1) * (1 + 0.006 * Math.sin(frame / 70));
   const drift: Vec = [Math.sin(frame / 83) * 7, Math.cos(frame / 97) * 5];
-  const lc = lottieColors(theme);
+  const camera = `scale(${zoom}) translate(${-cx + drift[0]}px, ${-cy + drift[1]}px)`;
+  const toScreen = (p: Vec): Vec => [width / 2 + zoom * (p[0] - cx + drift[0]), height / 2 + zoom * (p[1] - cy + drift[1])];
+  // Iris: member nodes are seen through a circle that closes onto `into`.
+  const irises = (plan.iris ?? []).map((ir) => {
+    const k = ramp(frame, ir.start, ir.dur, "inOut");
+    const into = states.get(ir.into);
+    const [tx, ty] = into ? toScreen(into.pos) : [width / 2, height / 2];
+    const r0 = Math.hypot(width, height) / 2 + 60;
+    const r1 = into ? (into.node.size / 2) * zoom : 0;
+    return { ir, k, x: width / 2 + (tx - width / 2) * k, y: height / 2 + (ty - height / 2) * k, r: r0 + (r1 - r0) * k, done: frame >= ir.start + ir.dur };
+  });
+  const member = new Set(irises.flatMap((i) => i.ir.members));
+  const content = (include: (id: string) => boolean, withExtras: boolean) => (
+    <div style={{ position: "absolute", left: width / 2, top: height / 2, transform: camera }}>
+      {[...states.values()].filter((s) => s.node.kind === "ui" && include(s.node.id)).map((s) => (
+        <div key={s.node.id} style={{ position: "absolute", left: s.pos[0], top: s.pos[1] }}>
+          <UiPlane node={s.node} frame={frame} theme={theme} scale={s.scale} opacity={s.opacity} />
+        </div>
+      ))}
+      <svg style={{ position: "absolute", left: -4000, top: -4000, width: 8000, height: 8000, overflow: "visible" }} viewBox="-4000 -4000 8000 8000">
+        {withExtras && (plan.rings ?? []).map((r, i) => <OrbitRing key={i} ring={r} states={states} frame={frame} theme={theme} />)}
+        {plan.links.filter((l) => include(l.from) && include(l.to)).map((l) => (
+          <LinkLine key={l.id} link={l} states={states} frame={frame} theme={theme} />
+        ))}
+      </svg>
+      {plan.links.filter((l) => include(l.from) && include(l.to)).flatMap((l) => (l.packets ?? []).map((p, i) => <Packet key={`${l.id}-${i}`} link={l} packet={p} states={states} frame={frame} theme={theme} />))}
+      {withExtras && plan.lotties.filter((l) => isLottieName(l.name) && (!l.node || include(l.node))).map((l, i) => {
+        const at = (l.node && states.get(l.node)?.pos) || l.pos || [0, 0];
+        return (
+          <Sequence key={i} from={l.start} layout="none">
+            <div style={{ position: "absolute", left: at[0] - l.size / 2, top: at[1] - l.size / 2, width: l.size, height: l.size, pointerEvents: "none" }}>
+              <LottieAnim name={l.name as never} colors={lottieColors(theme)} style={{ width: l.size, height: l.size }} />
+            </div>
+          </Sequence>
+        );
+      })}
+      {[...states.values()].filter((s) => s.node.kind !== "ui" && include(s.node.id)).map((s) => (s.node.kind === "orb" ? <Orb key={s.node.id} s={s} frame={frame} theme={theme} /> : <Pill key={s.node.id} s={s} frame={frame} theme={theme} />))}
+    </div>
+  );
   return (
     <AbsoluteFill style={{ fontFamily: FLOW_FONT, overflow: "hidden" }}>
       <World theme={theme} frame={frame} camera={[cx, cy]} />
-      <div style={{ position: "absolute", left: width / 2, top: height / 2, transform: `scale(${zoom}) translate(${-cx + drift[0]}px, ${-cy + drift[1]}px) rotate(${Math.sin(frame / 120) * 0.25}deg)` }}>
-        <svg style={{ position: "absolute", left: -4000, top: -4000, width: 8000, height: 8000, overflow: "visible" }} viewBox="-4000 -4000 8000 8000">
-          {plan.links.map((l) => (
-            <LinkLine key={l.id} link={l} states={states} frame={frame} theme={theme} />
-          ))}
-        </svg>
-        {plan.links.flatMap((l) => (l.packets ?? []).map((p, i) => <Packet key={`${l.id}-${i}`} link={l} packet={p} states={states} frame={frame} theme={theme} />))}
-        {plan.lotties.filter((l) => isLottieName(l.name)).map((l, i) => {
-          const at = (l.node && states.get(l.node)?.pos) || l.pos || [0, 0];
-          return (
-            <Sequence key={i} from={l.start} layout="none">
-              <div style={{ position: "absolute", left: at[0] - l.size / 2, top: at[1] - l.size / 2, width: l.size, height: l.size, pointerEvents: "none" }}>
-                <LottieAnim name={l.name as never} colors={lc} style={{ width: l.size, height: l.size }} />
-              </div>
-            </Sequence>
-          );
-        })}
-        {[...states.values()].map((s) => (s.node.kind === "orb" ? <Orb key={s.node.id} s={s} frame={frame} theme={theme} /> : <Pill key={s.node.id} s={s} frame={frame} theme={theme} />))}
-      </div>
+      {content((id) => !member.has(id), true)}
+      {irises.filter((i) => !i.done).map((i, n) => (
+        <AbsoluteFill key={n} style={{ clipPath: i.k > 0 ? `circle(${i.r}px at ${i.x}px ${i.y}px)` : undefined }}>
+          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} />}
+          {content((id) => i.ir.members.includes(id), false)}
+        </AbsoluteFill>
+      ))}
+      {irises.filter((i) => i.k > 0 && !i.done).map((i, n) => (
+        <div key={n} style={{ position: "absolute", left: i.x - i.r, top: i.y - i.r, width: i.r * 2, height: i.r * 2, borderRadius: "50%", border: `${6 + i.k * 4}px solid ${theme.dark ? "rgba(255,255,255,.85)" : "#fff"}`, boxShadow: `0 0 60px ${theme.glow}0.45), inset 0 0 40px ${theme.glow}0.25)`, opacity: Math.min(1, i.k * 6) }} />
+      ))}
       {plan.texts.map((t, i) => (
         <Kinetic key={i} t={t} frame={frame} theme={theme} />
       ))}
     </AbsoluteFill>
   );
+}
+
+function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan["rings"]>[number]; states: Map<string, NodeState>; frame: number; theme: FlowTheme }) {
+  const c = states.get(ring.center);
+  const k = ramp(frame, ring.start, 20, "out") * (1 - (ring.end !== undefined ? ramp(frame, ring.end, 14, "in") : 0));
+  if (!c || k <= 0) return null;
+  return <circle cx={c.pos[0]} cy={c.pos[1]} r={ring.radius * (0.7 + 0.3 * k)} fill="none" stroke={theme.primary} strokeOpacity={0.35 * k} strokeWidth={3} strokeDasharray="3 14" strokeLinecap="round" />;
 }
 
 // ── world ───────────────────────────────────────────────────────────────────

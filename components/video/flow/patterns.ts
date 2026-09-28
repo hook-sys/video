@@ -1,4 +1,8 @@
-import type { Ease, FlowLink, FlowNode, FlowPlan, ThemeName, Track, Vec } from "./types";
+import type { Ease, FlowLink, FlowNode, FlowPlan, FlowUi, ThemeName, Track, UiRow, Vec, Vec3 } from "./types";
+
+// Plane tilts (rotateX, rotateY, rotateZ): an isometric desk view, a hero
+// three-quarter view, and face-on.
+export const TILT: Record<"iso" | "hero" | "flat", Vec3> = { iso: [46, 0, -22], hero: [16, -22, 3], flat: [0, 0, 0] };
 
 // Motion patterns: small, reusable moves that write keyframes onto persistent
 // nodes. Because every pattern animates the SAME node objects, continuity is
@@ -77,6 +81,44 @@ export class FlowNodeHandle {
     (this.spec.pulses ??= []).push(t);
     return this;
   }
+  // ── UI plane ──
+  private get ui(): FlowUi {
+    if (!this.spec.ui) throw new Error(`${this.id} is not a UI plane`);
+    return this.spec.ui;
+  }
+  tilt(t: number, dur: number, to: Vec3, ease: Ease = "inOut") {
+    animate(this.ui.tilt, t, dur, to, ease);
+    return this;
+  }
+  // A labelled callout rises from a point on the plane ([u, v] in 0..1).
+  callout(t: number, at: Vec, text: string, { icon, side = "right" }: { icon?: string; side?: "left" | "right" } = {}) {
+    (this.ui.callouts ??= []).push({ at, text, icon, side, start: t });
+    return this;
+  }
+  // A row lifts off the plane toward the camera (and settles back at `end`).
+  lift(t: number, row: number, end?: number) {
+    (this.ui.lifts ??= []).push({ row, start: t, end });
+    return this;
+  }
+  cursorTo(t: number, dur: number, at: Vec) {
+    const c = (this.ui.cursor ??= { path: [[t, at]], clicks: [] });
+    if (c.path.length === 1 && c.path[0][0] === t) return this;
+    animate(c.path, t, dur, at, "inOut");
+    return this;
+  }
+  click(t: number) {
+    (this.ui.cursor ??= { path: [[t, [0.5, 0.5]]], clicks: [] }).clicks.push(t);
+    return this;
+  }
+  // Appear in place (no pop): used when an iris closes onto this node.
+  appear(t: number, dur = 6) {
+    set(this.scaleTrack(), t, 1);
+    const o = this.opacityTrack();
+    set(o, t, 0);
+    o.push([t + dur, 1, "out"]);
+    return this;
+  }
+
   // Ring fills, success badge pops, ripple.
   confirm(t: number, dur = 20) {
     const r = (this.spec.ring ??= [[0, 0]]);
@@ -102,6 +144,28 @@ export class Flow {
     const h = new FlowNodeHandle({ id, kind: "pill", variant, size, pos: [[0, at]], label: [[0, text]], icon: icon ? [[0, icon]] : undefined });
     this.nodes.push(h);
     return h;
+  }
+  ui(id: string, at: Vec, { w = 1100, h = 680, title, rows, src, tilt = TILT.iso }: { w?: number; h?: number; title: string; rows?: UiRow[]; src?: string; tilt?: Vec3 }) {
+    const h2 = new FlowNodeHandle({ id, kind: "ui", size: Math.min(w, h), pos: [[0, at]], ui: { w, h, title, rows, src, tilt: [[0, tilt]] } });
+    this.nodes.push(h2);
+    return h2;
+  }
+  // Satellites spiral in and circle a hub on a dashed orbit.
+  orbitAround(hub: FlowNodeHandle, satellites: FlowNodeHandle[], t: number, { radius = 330, speed = 0.35, until, stagger = 5 }: { radius?: number; speed?: number; until?: number; stagger?: number } = {}) {
+    satellites.forEach((s, i) => {
+      const start = t + i * stagger;
+      s.spec.orbit = { center: hub.id, radius: [[start, 0], [start + 26, radius, "out"]], angle: -90 + (360 / satellites.length) * i - 40, speed, start, end: until };
+      s.enter(start, { dur: 18 });
+    });
+    (this.plan.rings ??= []).push({ center: hub.id, radius, start: t + 6, end: until });
+    return this;
+  }
+  // The members are framed by a circle that closes onto `into`, which takes over.
+  iris(t: number, dur: number, members: FlowNodeHandle[], into: FlowNodeHandle) {
+    (this.plan.iris ??= []).push({ start: t, dur, members: members.map((m) => m.id), into: into.id });
+    into.appear(t + dur - 4);
+    members.forEach((m) => m.fade(t + dur, 1, 0));
+    return this;
   }
   // Camera: frame a world point at a zoom.
   camera(t: number, dur: number, center: Vec, zoom: number, ease: Ease = "inOut") {

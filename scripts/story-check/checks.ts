@@ -21,6 +21,7 @@ import { LOTTIE_LOADERS } from "@/components/video/lottie/registry";
 import { LOTTIE_PALETTE, recolorLottie } from "@/components/video/lottie/recolor";
 import { readdirSync, readFileSync } from "node:fs";
 import { ecommercePlan } from "@/components/video/flow/fixtures/ecommerce";
+import { paymentsHubPlan } from "@/components/video/flow/fixtures/payments-hub";
 import { validateFlowPlan } from "@/components/video/flow/validate";
 import zlib from "node:zlib";
 import path from "node:path";
@@ -47,7 +48,7 @@ function placeholderPng(w: number, h: number, hue: number) {
   const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(Buffer.concat(rows))), chunk("IEND", Buffer.alloc(0))]);
   return `data:image/png;base64,${png.toString("base64")}`;
 }
-export const ECOMMERCE_ASSETS = { product: placeholderPng(256, 256, 0.2), parcel: placeholderPng(256, 256, 1.4), doorstep: placeholderPng(384, 216, 3.1) };
+export const ECOMMERCE_ASSETS = { parcel: placeholderPng(256, 256, 1.4), doorstep: placeholderPng(384, 216, 3.1) };
 
 export type Fixture = { name: string; story: unknown; narration: string; durationSeconds: number; words?: typeof REFERENCE_VOICE_WORDS; assets?: Record<string, string> };
 export const FIXTURES: Fixture[] = [
@@ -214,11 +215,16 @@ function lottieLibrary(): Check[] {
 function flowPlans(): Check[] {
   const checks: Check[] = [];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
-  for (const theme of ["lavender", "midnight"] as const) {
-    const plan = ecommercePlan(theme);
-    const errors = validateFlowPlan(plan);
-    add(`e-commerce plan is valid (${theme})`, errors.length === 0, errors.length ? errors.join("; ") : `${plan.nodes.length} nodes, ${plan.links.length} links, ${plan.duration} frames`);
-  }
+  for (const [name, make] of [["e-commerce", ecommercePlan], ["payments hub (UI plane, iris, orbit)", paymentsHubPlan]] as const)
+    for (const theme of ["lavender", "midnight"] as const) {
+      const plan = make(theme);
+      const errors = validateFlowPlan(plan);
+      add(`${name} plan is valid (${theme})`, errors.length === 0, errors.length ? errors.join("; ") : `${plan.nodes.length} nodes, ${plan.links.length} links, ${plan.duration} frames`);
+    }
+  const hubPlan = paymentsHubPlan();
+  const brokenHub = { ...hubPlan, iris: [{ start: 10, dur: 10, members: ["ghost"], into: "nowhere" }], nodes: hubPlan.nodes.map((n) => (n.orbit ? { ...n, orbit: { ...n.orbit, center: "missing" } } : n)) };
+  const hubErrs = validateFlowPlan(brokenHub);
+  add("broken iris/orbit is reported", hubErrs.some((e) => e.includes("iris")) && hubErrs.some((e) => e.includes("orbit centre")), hubErrs.slice(0, 3).join("; "));
   const plan = ecommercePlan();
   const broken = { ...plan, links: [...plan.links, { id: "x", from: "order", to: "ghost", draw: [10, 5] as [number, number] }], nodes: [...plan.nodes, { ...plan.nodes[0], id: "bad", icon: [[0, "not-an-icon"]] as [number, string][] }] };
   const errs = validateFlowPlan(broken);
