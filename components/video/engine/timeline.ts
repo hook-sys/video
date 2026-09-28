@@ -46,7 +46,9 @@ export type AreaTrack = {
 export type CameraKey = { t: number; x: number; y: number; z: number; shot?: string; subject?: string };
 export type TextCue = { frame: number; content: string; role: "closing" | "support"; line: number };
 export type SfxCue = { frame: number; kind: string; src: string };
-export type MomentMark = { frame: number; end: number; cue: string; intent: string; area: string; subject: string; shot: string };
+// A compiled moment: when its cue is spoken, and when its first visible action
+// and sound start (for timing checks).
+export type MomentMark = { frame: number; end: number; cue: string; intent: string; area: string; subject: string; shot: string; action: number | null; sfx: number | null; matched: boolean };
 
 export type RenderTimeline = {
   fps: number;

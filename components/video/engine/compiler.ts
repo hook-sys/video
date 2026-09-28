@@ -59,8 +59,10 @@ export function compileStory(input: CompileInput): RenderTimeline {
   // 1. Timing: each moment's cue → absolute frame (voice-aligned or estimated).
   const { spoken, synced } = spokenWords(input.narration, input.durationSeconds, input.words);
   let from = 0;
+  const cueWord: number[] = [];
   const found = story.moments.map((m) => {
     const hit = findCue(spoken, m.cue, from);
+    cueWord.push(hit ? hit.index : from);
     if (!hit) {
       issues.push(`cue not found in narration: "${m.cue}" (placed proportionally)`);
       return null;
@@ -221,7 +223,11 @@ export function compileStory(input: CompileInput): RenderTimeline {
   const organized = new Set<string>(); // containers whose columns are live
 
   // 4. Events → animation keys, moment by moment.
+  const actionFrames: (number | null)[] = [];
+  const sfxFrames: (number | null)[] = [];
   story.moments.forEach((m, mi) => {
+    const before = new Map([...tracks.values()].map((t) => [t.id, [t.motion.length, t.state.length, t.impulses.length]]));
+    const sfxBefore = sfx.length;
     // The video never opens on an empty world: the first moment is already arriving at frame 0.
     const f = mi === 0 && starts[0] < sec(0.6) ? starts[0] - 3 - sec(0.35) : Math.max(0, starts[mi] - 3);
     const span = Math.max(sec(0.5), ends[mi] - starts[mi]);
@@ -229,6 +235,13 @@ export function compileStory(input: CompileInput): RenderTimeline {
     for (const ev of m.events) compileEvent(ev, m, f, span, area);
     if (m.text) text.push({ frame: starts[mi] + 2, content: m.text.content, role: "support", line: 0 });
     if (m.intent === "resolve") for (const [cid] of containers) if (visibleAt(cid)) state(cid, "calm", f, 1, sec(1.4));
+    // First visible action of this moment (a new motion, state or jolt).
+    const frames = [...tracks.values()].flatMap((t) => {
+      const [a, b, c] = before.get(t.id)!;
+      return [...t.motion.slice(a).filter((k) => k.pattern !== "hold").map((k) => k.frame), ...t.state.slice(b).map((k) => k.frame), ...t.impulses.slice(c).map((k) => k.frame)];
+    });
+    actionFrames.push(frames.length ? Math.min(...frames) : null);
+    sfxFrames.push(sfx.length > sfxBefore ? Math.min(...sfx.slice(sfxBefore).map((c) => c.frame)) : null);
   });
 
   function compileEvent(ev: StoryEvent, m: Moment, f: number, span: number, area: AreaTrack) {
@@ -545,7 +558,9 @@ export function compileStory(input: CompileInput): RenderTimeline {
   }
 
   // 5. Camera: shots frame their subject at the moment's key times; one spline.
-  story.moments.forEach((m, mi) => marks.push({ frame: starts[mi], end: ends[mi], cue: m.cue, intent: m.intent, area: placeOf(m.area).id, subject: m.camera?.subject ?? "", shot: m.camera?.shot ?? "" }));
+  story.moments.forEach((m, mi) =>
+    marks.push({ frame: starts[mi], end: ends[mi], cue: m.cue, intent: m.intent, area: placeOf(m.area).id, subject: m.camera?.subject ?? "", shot: m.camera?.shot ?? "", action: actionFrames[mi], sfx: sfxFrames[mi], matched: found[mi] !== null }),
+  );
   const camera = planCamera();
 
   function subjectBox(sel: string, frame: number) {
@@ -671,7 +686,17 @@ export function compileStory(input: CompileInput): RenderTimeline {
   // 7. Closing text over the resolve.
   const resolveIndex = Math.max(0, story.moments.map((m) => m.intent).lastIndexOf("resolve"));
   const resolveFrame = story.moments.length ? starts[resolveIndex === -1 ? story.moments.length - 1 : resolveIndex] : 0;
-  (story.closing?.text ?? []).slice(0, 3).forEach((line, i) => text.push({ frame: resolveFrame + sec(0.4) + i * sec(0.9), content: line, role: "closing", line: i }));
+  // Each closing line appears as it is spoken (when the narration says it),
+  // otherwise staggered after the resolve.
+  let lineFrom = story.moments.length ? cueWord[resolveIndex] : 0;
+  let lastLine = resolveFrame;
+  (story.closing?.text ?? []).slice(0, 3).forEach((line, i) => {
+    const hit = findCue(spoken, line, lineFrom);
+    if (hit) lineFrom = hit.index + 1;
+    const frame = hit ? Math.max(0, Math.round(hit.at * fps) - 3) : i === 0 ? resolveFrame + sec(0.4) : lastLine + sec(0.9);
+    lastLine = Math.max(frame, lastLine + (i ? 6 : 0));
+    text.push({ frame: lastLine, content: line, role: "closing", line: i });
+  });
   const finalArea = ordered[ordered.length - 1];
 
   return {
@@ -767,9 +792,10 @@ function layoutAreas(story: VisualStory, starts: number[], ends: number[], durat
 function planEventSfx(cues: { frame: number; kind: keyof typeof SFX_LIBRARY }[], duration: number): SfxCue[] {
   const out: SfxCue[] = [];
   const priority: Record<string, number> = { whoosh: 3, success_chime: 3, subtle_impact: 2, reveal: 2, click: 1, typing: 2, soft_pop: 0, digital_processing: 0 };
-  for (const c of [...cues].sort((a, b) => a.frame - b.frame || priority[b.kind] - priority[a.kind])) {
+  for (let c of [...cues].sort((a, b) => a.frame - b.frame || priority[b.kind] - priority[a.kind])) {
     const src = SFX_LIBRARY[c.kind];
-    if (!src || c.frame < 0 || c.frame > duration - 8) continue;
+    if (!src || c.frame > duration - 8) continue;
+    c = { ...c, frame: Math.max(0, c.frame) }; // pre-roll actions sound at the first frame
     const prev = out[out.length - 1];
     if (prev && c.frame - prev.frame < 7) {
       if ((priority[c.kind] ?? 0) > (priority[prev.kind] ?? 0)) out[out.length - 1] = { frame: c.frame, kind: c.kind, src };

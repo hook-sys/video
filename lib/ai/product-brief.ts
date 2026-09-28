@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { checkContinuity, keepOmittedObjects } from "@/lib/ai/blueprint-check";
+import { VisualStory } from "@/lib/visual-story";
 
 // Internal scene model. `animation`, `transition` and sound effect `cue`s are
 // free-text directions chosen by the AI from the scene's meaning; the Remotion
@@ -168,6 +169,9 @@ export const ProductBrief = z.object({
       }),
     ),
   ),
+  // Optional visual story for the continuous story engine. Not generated yet;
+  // absent or invalid stories are null, so existing briefs are unaffected.
+  story: VisualStory.nullable().default(null).catch(null),
 });
 export type SoundEffect = z.infer<typeof SoundEffect>;
 export type SceneAction = z.infer<typeof SceneAction>;
