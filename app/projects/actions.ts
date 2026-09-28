@@ -51,7 +51,8 @@ import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { generateVisualStory } from "@/lib/ai/visual-story";
 import { parseWordTimings } from "@/lib/voice-timing";
-import { storyEngineEnabled } from "@/lib/story-engine";
+import { needsLegacyImages, storyEngineEnabled, usableStory } from "@/lib/story-engine";
+import type { VisualStory } from "@/lib/visual-story";
 import { generateStoryAssets, planStoryAssets, storyAssetsEnabled } from "@/lib/story-assets";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 
@@ -879,14 +880,19 @@ async function runPipeline(projectId: string, userId: string) {
       await attempt(() => prepareAssets(projectId));
     }
     p = await state();
-    const needsGeneration = (p.assets_manifest as AssetManifest | null)?.assets.some(
-      (a) => a.source === "generated" && a.status !== "completed",
-    );
-    if (p.assets_status === "completed" && needsGeneration) {
+    // With the story engine on, wait for the Visual Director first: a usable
+    // story renders with StoryWorld, which never shows the legacy images.
+    let usable: VisualStory | null = null;
+    if (story) {
+      await story;
+      const { data: row } = await admin.from("projects").select("brief, format").eq("id", projectId).single();
+      const brief = ProductBrief.safeParse(row?.brief);
+      usable = brief.success && row ? usableStory(brief.data.story, brief.data.script, row.format) : null;
+    }
+    if (p.assets_status === "completed" && needsLegacyImages(p.assets_manifest as AssetManifest | null, usable)) {
       await attempt(() => generateVisualAssets(projectId));
       p = await state();
     }
-    await story;
     if (p.assets_status !== "completed") return void (await fail(p.assets_error ?? "Assets failed."));
 
     // 5–6. Validation runs first inside startRender; rendering only where supported.

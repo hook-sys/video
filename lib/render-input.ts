@@ -36,12 +36,15 @@ export async function buildRenderInput(
   // Map each scene to its manifest asset (project screenshot or completed generated asset).
   const assets = (project.assets_manifest as AssetManifest | null)?.assets ?? [];
   if (!project.assets_manifest) problems.push("Prepare visual assets first.");
+  // Preview-only story engine: the validated story, else null (→ Storyboard).
+  const story = usableStory(brief.data.story, brief.data.script, project.format);
   // Per scene: a full-frame background and/or a main visual.
   const bgByScene = new Map<string, string>();
   const fgByScene = new Map<string, { path: string; kind: "screenshot" | "icon" | "image" }>();
   for (const a of assets) {
     if (a.source === "generated" && a.status !== "completed") {
-      problems.push(`Asset ${a.id} is not generated.`);
+      // Not needed (and not generated) when StoryWorld renders the story.
+      if (!story) problems.push(`Asset ${a.id} is not generated.`);
       continue;
     }
     if (!a.storage_path) continue;
@@ -83,8 +86,6 @@ export async function buildRenderInput(
     };
   });
 
-  // Preview-only story engine: the validated story, else null (→ Storyboard).
-  const story = usableStory(brief.data.story, brief.data.script, project.format);
   // Its generated visuals as signed private URLs (continuity_id → url); any
   // missing one simply keeps the procedural visual for that moment.
   const storyAssetPaths = story && storyAssetsEnabled() ? (brief.data.story_assets ?? []).filter((a) => a.status === "completed" && a.storage_path) : [];

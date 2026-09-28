@@ -11,6 +11,8 @@ import { REFERENCE_VOICE_WORDS } from "@/components/video/engine/fixtures/refere
 import { DEV_NARRATION, DEV_STORY } from "@/components/video/engine/fixtures/devtool-story";
 import { ECOMMERCE_NARRATION, ECOMMERCE_STORY } from "@/components/video/engine/fixtures/ecommerce-assets-story";
 import { evaluatePose } from "@/components/video/engine/timeline";
+import { needsLegacyImages, usableStory } from "@/lib/story-engine";
+import type { AssetManifest } from "@/lib/asset-manifest";
 import zlib from "node:zlib";
 
 // Deterministic stand-in images for generated assets (a lit gradient with a
@@ -110,10 +112,41 @@ function storyValidation(): Check[] {
   return checks;
 }
 
+// Legacy manifest images (Fal) are skipped only when StoryWorld will render.
+function legacyImageGating(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  const manifest: AssetManifest = { assets: [
+    { id: "abstract-1", type: "abstract", source: "generated", role: "background", prompt: "p", scene_ids: ["scene-1"] },
+    { id: "icon-1", type: "icon", source: "generated", role: "foreground", prompt: "p", scene_ids: ["scene-2"] },
+  ] };
+  const env = { VERCEL_ENV: process.env.VERCEL_ENV, VISUAL_ENGINE: process.env.VISUAL_ENGINE };
+  const set = (e: Record<string, string | undefined>) => Object.entries(e).forEach(([k, v]) => (v === undefined ? delete process.env[k] : (process.env[k] = v)));
+  try {
+    set({ VERCEL_ENV: "preview", VISUAL_ENGINE: "story" });
+    const story = usableStory(VisualStory.parse(ECOMMERCE_STORY), ECOMMERCE_NARRATION, "16:9");
+    add("valid StoryWorld → legacy images skipped", story !== null && !needsLegacyImages(manifest, story), story ? "usable story, 0 legacy Fal calls" : "fixture story not usable");
+    const invalid = usableStory(VisualStory.parse(ECOMMERCE_STORY), "A completely different narration.", "16:9");
+    add("invalid story → legacy images still generated", invalid === null && needsLegacyImages(manifest, invalid), "story fails validation → Storyboard path");
+    const vertical = usableStory(VisualStory.parse(ECOMMERCE_STORY), ECOMMERCE_NARRATION, "9:16");
+    add("unsupported format → legacy images still generated", vertical === null && needsLegacyImages(manifest, vertical), "9:16 → Storyboard path");
+    add("story generation failed → legacy images still generated", needsLegacyImages(manifest, usableStory(null, ECOMMERCE_NARRATION, "16:9")), "no story stored → Storyboard path");
+    set({ VERCEL_ENV: "production", VISUAL_ENGINE: "story" });
+    const prod = usableStory(VisualStory.parse(ECOMMERCE_STORY), ECOMMERCE_NARRATION, "16:9");
+    add("no StoryWorld (engine off) → legacy images still generated", prod === null && needsLegacyImages(manifest, prod), "Production → Storyboard path, unchanged");
+    const done: AssetManifest = { assets: manifest.assets.map((a) => ({ ...a, status: "completed" as const, storage_path: "x" })) };
+    add("already generated → no repeat calls", !needsLegacyImages(done, null), "completed assets are not regenerated");
+  } finally {
+    set(env);
+  }
+  return checks;
+}
+
 export function runChecks(): Section[] {
   const sections: Section[] = [
     { name: "stored ProductBrief compatibility", checks: briefCompatibility() },
     { name: "VisualStory validation", checks: storyValidation() },
+    { name: "legacy image generation gating", checks: legacyImageGating() },
   ];
   for (const f of FIXTURES) {
     const n = normalizeStory(f.story);

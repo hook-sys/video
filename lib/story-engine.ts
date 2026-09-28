@@ -1,3 +1,4 @@
+import type { AssetManifest } from "@/lib/asset-manifest";
 import { storyBlockers, type VisualStory } from "@/lib/visual-story";
 
 // The continuous story engine is a Preview-only experiment: it runs only on a
@@ -17,4 +18,11 @@ export const STORY_FORMATS = ["16:9"];
 export function usableStory(story: VisualStory | null | undefined, narration: string, format: string) {
   if (!storyEngineEnabled() || !story || !STORY_FORMATS.includes(format)) return null;
   return storyBlockers(story, narration).length ? null : story;
+}
+
+// Legacy manifest images (Fal) are only needed by the Storyboard renderer.
+// When a usable story will be rendered, StoryWorld never shows them, so they
+// are not generated; without one, the legacy pipeline runs unchanged.
+export function needsLegacyImages(manifest: AssetManifest | null | undefined, story: VisualStory | null) {
+  return !story && !!manifest?.assets.some((a) => a.source === "generated" && a.status !== "completed");
 }
