@@ -131,3 +131,18 @@ export async function generateVoice({
   const timestampsSample = !words && raw != null ? JSON.stringify(raw).slice(0, 300) : undefined;
   return { model, requestId: result.requestId, audioUrl, words, timestampsSample };
 }
+
+// One sound effect (fal-ai/elevenlabs/sound-effects/v2), for building the
+// SFX library in public/sfx. Returns the audio file's bytes.
+export async function generateSoundEffect(text: string, durationSeconds: number): Promise<{ requestId: string; audio: ArrayBuffer }> {
+  const fal = falClient();
+  const result = await fal.subscribe("fal-ai/elevenlabs/sound-effects/v2", {
+    input: { text, duration_seconds: Math.max(0.5, durationSeconds), prompt_influence: 0.5, output_format: "mp3_44100_128" },
+    abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const url = findMediaUrl(result.data, "audio");
+  if (!url) throw new Error("Sound-effects model returned no audio URL.");
+  const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) throw new Error(`Audio download failed: ${res.status}`);
+  return { requestId: result.requestId, audio: await res.arrayBuffer() };
+}
