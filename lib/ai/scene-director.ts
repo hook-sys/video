@@ -34,6 +34,7 @@ ELEMENTS (in scene/place beats): { id, asset, content, screen, label }
   • "card:<template>/<style>": a product UI card. Styles: ${CARD_STYLES.join(", ")} (glass = frosted, solid = white, tinted = soft brand tint, dark = dark card, accent = full brand colour — use accent for the ONE card that matters most in a scene).
   • "device:<model>/<light|dark>": a device mockup; screen = "shot:<n>/<crop>" (a client screenshot) or "card:<template>/<style>".
   • "shot:<n>/<crop>": a crop of client screenshot n (1-based), floating as a card. Only when SCREENSHOTS > 0.
+  When SCREENSHOTS > 0 the client uploaded their real product screens: they are the most convincing visuals, so show several different ones (shot:1, shot:2 …) — e.g. a laptop or browser device with a screenshot on its screen as a scene's hero, and crops (top-left-half, center-detail …) of other screenshots beside the cards.
   • "icon:<lucide-name>": a glass icon tile (label = caption ≤2 words).
   • "logo": the client's logo.
   • null: an element that already exists (by id), carried into a new scene.
@@ -105,6 +106,9 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
   const model = process.env.OPENAI_MODEL || "gpt-5-mini";
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(SceneScriptModel, "scene_script") };
+  // Reasoning models: a revision only has to fix listed problems, so it runs
+  // with low effort (much faster).
+  const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
   // Blockers reject a script; quality notes (measured on the compiled plan)
   // ask for one revision but do not reject it.
   const check = (raw: unknown) => {
@@ -119,6 +123,12 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
       const invalid = validateFlowPlan(plan);
       if (invalid.length) return { script: null, problems: invalid.slice(0, 6).map((e) => `compiles to an invalid plan: ${e}`), notes };
       notes = qualityProblems(planQuality(plan));
+      // The client's own screens are the most convincing visuals: show them.
+      const shots = input.screenshots ?? 0;
+      if (shots > 0) {
+        const used = new Set(script.beats.flatMap((b) => (b.elements ?? []).flatMap((e) => [e.asset, e.screen])).filter((a): a is string => !!a && a.startsWith("shot:")).map((a) => a.split("/")[0]));
+        if (used.size < Math.min(shots, 2)) notes.push(`the client uploaded ${shots} product screenshots but only ${used.size} ${used.size === 1 ? "is" : "are"} shown: show at least ${Math.min(shots, 3)} different ones (shot:1…shot:${shots}), in a device or as crops`);
+      }
     } catch (e) {
       return { script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], notes };
     }
@@ -151,13 +161,21 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
     usage.outputTokens += first.usage?.output_tokens ?? 0;
     let result = check(first.output_parsed);
     problems = result.problems.length ? result.problems : result.notes;
+    console.info("scene director first draft:", { ms: Date.now() - started, usable: !!result.script, problems: problems.slice(0, 8) });
     const left = budgetMs - (Date.now() - started);
-    if ((!result.script || result.notes.length) && first.id && left > 25_000) {
+    if ((!result.script || result.notes.length) && first.id && left > 20_000) {
       attempts++;
-      const revised = await client.responses.parse(
-        { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your beats failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete SceneScript.`, text: format },
-        { timeout: Math.min(60_000, left) },
-      );
+      let revised;
+      try {
+        revised = await client.responses.parse(
+          { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your beats failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete SceneScript.`, text: format, ...quick },
+          { timeout: Math.min(70_000, left) },
+        );
+      } catch (e) {
+        // A failed or timed-out revision never discards a usable first draft.
+        const why = e instanceof Error ? e.message : String(e);
+        return { script: result.script, attempts, revised: false, errors: [`revision failed: ${why}`, ...problems], ms: Date.now() - started, timing };
+      }
       usage.inputTokens += revised.usage?.input_tokens ?? 0;
       usage.outputTokens += revised.usage?.output_tokens ?? 0;
       const second = check(revised.output_parsed);

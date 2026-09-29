@@ -138,10 +138,16 @@ export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (us
     const left = budgetMs - (Date.now() - started);
     if ((!result.script || result.notes.length) && first.id && left > 25_000) {
       attempts++;
-      const revised = await client.responses.parse(
-        { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your beats failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete FlowScript.`, text: format },
-        { timeout: Math.min(60_000, left) },
-      );
+      let revised;
+      try {
+        revised = await client.responses.parse(
+          { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your beats failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete FlowScript.`, text: format },
+          { timeout: Math.min(60_000, left) },
+        );
+      } catch (e) {
+        // A failed or timed-out revision never discards a usable first draft.
+        return { script: result.script, attempts, revised: false, errors: [`revision failed: ${e instanceof Error ? e.message : e}`, ...problems], ms: Date.now() - started, timing };
+      }
       usage.inputTokens += revised.usage?.input_tokens ?? 0;
       usage.outputTokens += revised.usage?.output_tokens ?? 0;
       const second = check(revised.output_parsed);

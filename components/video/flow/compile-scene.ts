@@ -408,7 +408,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         break;
       }
       case "place":
-        layoutName = place(b.elements ?? [], t, layoutName, b.style, true);
+        // A layout named here re-arranges the scene with the newcomers.
+        layoutName = place(b.elements ?? [], t, b.layout ?? layoutName, b.style, true);
         f.sfx(t, "soft_pop");
         break;
       case "move": {
@@ -706,6 +707,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         break;
       }
     }
+    // A backdrop named on any later beat changes the atmosphere from there.
+    if (b.action !== "scene" && b.backdrop && backdrops.length && backdrops[backdrops.length - 1].kind !== b.backdrop) backdrops.push({ kind: b.backdrop, start: t });
     // Before a caption arrives the camera already makes room for it.
     if (framed || (b.action !== "scene" && b.action !== "statement" && planned.some((l) => l.start > t && l.start <= t + 45))) shoot(t, span, b.action === "scene" ? sceneMove : "drift");
   });

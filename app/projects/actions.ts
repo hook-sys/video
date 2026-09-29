@@ -381,7 +381,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // fallback when no usable SceneScript comes back and time remains.
   let usage: BriefUsage | undefined;
   const addUsage = (u: BriefUsage) => (usage = usage ? { ...u, inputTokens: usage.inputTokens + u.inputTokens, outputTokens: usage.outputTokens + u.outputTokens } : u);
-  const v2 = await generateSceneScript(input, addUsage, Math.min(budgetMs, 90_000));
+  const v2 = await generateSceneScript(input, addUsage, Math.min(budgetMs, 130_000));
   console.info("scene director:", {
     projectId,
     outcome: v2.script ? "stored" : "none",
@@ -392,8 +392,10 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     problems: v2.errors.slice(0, 6),
   });
   const left = budgetMs - (Date.now() - started);
-  const result = v2.script ? { ...v2, script: null } : left > 40_000 ? await generateFlowScript(input, addUsage, left) : { ...v2, script: null };
-  if (!v2.script)
+  const fallback = !v2.script && left > 40_000;
+  const result = fallback ? await generateFlowScript(input, addUsage, left) : { ...v2, script: null };
+  if (!v2.script && !fallback) console.info("flow director: skipped (no time left)", { projectId, left });
+  if (fallback)
     console.info("flow director:", {
       projectId,
       outcome: result.script ? "stored" : "none",
@@ -1022,7 +1024,7 @@ async function runPipeline(projectId: string, userId: string) {
       storyEngineEnabled() && budget > 45_000
         ? attempt(() => generateStory(projectId, userId, Math.min(110_000, budget - 30_000)))
         : flowEngineEnabled() && budget > 45_000
-          ? attempt(() => generateFlow(projectId, userId, Math.min(100_000, budget - 30_000)))
+          ? attempt(() => generateFlow(projectId, userId, Math.min(150_000, budget - 30_000)))
           : null;
 
     // 4. Visual asset manifest, then generated assets.
