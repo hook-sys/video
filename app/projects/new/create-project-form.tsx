@@ -2,7 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { createProject } from "@/app/projects/actions";
-import { GenerationScreen } from "@/components/generation-screen";
+import type { HeroCaption } from "@/components/landing/hero-plan";
+import type { FlowPlan } from "@/components/video/flow/types";
+import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import {
   ADVANCED_DIRECTION_MAX,
   AUDIENCE_MAX,
@@ -36,7 +38,7 @@ const styleSuffix = (style: string) => `\n\nVisual style: ${style}`;
 // The video lasts as long as the voice reads this script (no duration to pick).
 const SCRIPT_MAX = VOICE_SCRIPT_MAX;
 
-export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number }) {
+export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: number; waiting: { plan: FlowPlan; captions: HeroCaption[] } }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState("");
   const [style, setStyle] = useState<string>(VISUAL_STYLES[0]);
@@ -56,7 +58,7 @@ export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number })
 
   return (
     <>
-      {pending && <GenerationScreen />}
+      {pending && <WaitingScreen plan={waiting.plan} captions={waiting.captions} />}
       <form action={action} className={`flex flex-col gap-8 ${pending ? "hidden" : ""}`}>
         <input type="hidden" name="direction" value={script.trim() ? `${script.trim()}${styleSuffix(style)}` : ""} />
 

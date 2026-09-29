@@ -41,8 +41,8 @@ export function HeroPlayer({ plan, captions }: { plan: FlowPlan; captions: HeroC
   }, [captions]);
 
   return (
-    <div className="flex w-full flex-col items-center gap-5">
-      <p key={line} className="hero-caption h-8 text-center text-xl font-semibold tracking-tight text-white/90 sm:text-2xl">
+    <div className="flex w-full flex-col items-center gap-3">
+      <p key={line} className="hero-caption h-7 text-center text-lg font-semibold tracking-tight text-white/90 sm:text-xl">
         {captions[line]?.text}
       </p>
       <div className="relative w-full overflow-hidden rounded-2xl shadow-2xl shadow-indigo-900/50 ring-1 ring-white/25">

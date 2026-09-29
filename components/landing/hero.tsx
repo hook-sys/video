@@ -42,8 +42,8 @@ export function Hero({ signedIn, plan, captions }: { signedIn: boolean; plan: Fl
       <div className="lp-floor" aria-hidden="true" />
 
       <div className="lp-depth" style={{ "--depth": 10 } as React.CSSProperties}>
-        <Sphere size={46} tone="blue" className="lp-float" style={{ left: "12%", top: "30%", "--f": "7s" } as React.CSSProperties} />
-        <Sphere size={22} tone="pink" className="lp-float" style={{ left: "78%", top: "22%", "--f": "6s" } as React.CSSProperties} />
+        <Sphere size={46} tone="blue" className="lp-float lp-hide-sm" style={{ left: "12%", top: "30%", "--f": "7s" } as React.CSSProperties} />
+        <Sphere size={22} tone="pink" className="lp-float lp-hide-sm" style={{ left: "78%", top: "22%", "--f": "6s" } as React.CSSProperties} />
       </div>
       <div className="lp-depth" style={{ "--depth": 24 } as React.CSSProperties}>
         <UiWindow w={260} h={170} variant="glass" className="lp-float lp-tilt-l lp-hide-sm" style={{ left: "4%", top: "56%", "--f": "9s" } as React.CSSProperties} />
@@ -56,11 +56,10 @@ export function Hero({ signedIn, plan, captions }: { signedIn: boolean; plan: Fl
 
       <div className="lp-hero-content">
         <h1 className="lp-h1">
-          <Words text="Your brief," />
-          <br />
-          <Words text="in motion." className="lp-glow-text" delay={220} />
+          <Words text="4K promo videos," />
+          <Words text="in minutes." className="lp-glow-text" delay={300} />
         </h1>
-        <p className="lp-sub">Turn a short brief into a motion-graphics promo video.</p>
+        <p className="lp-sub">Write a brief. MotionBrief directs, voices and renders it.</p>
         <div className="lp-ctas">
           <Link href={signedIn ? "/projects/new" : "/signup"} className="lp-btn lp-btn-primary">
             {signedIn ? "Create video" : "Start free"}

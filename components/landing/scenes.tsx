@@ -4,10 +4,10 @@ import { Sphere } from "./primitives";
 import { Reveal, Words } from "./reveal";
 
 // A · Write a brief — in the dark, a slit of light opens into a glass cube
-// holding the brief as it is typed.
+// with a glowing sphere inside.
 export function SceneBrief() {
   return (
-    <Reveal className="lp-dark lp-a" sfx={[["reveal", 150], ["typing", 1700]]}>
+    <Reveal className="lp-dark lp-a" sfx={[["reveal", 150], ["soft_pop", 1200]]}>
       <div className="a-stage" aria-hidden="true">
         <span className="a-slit" />
         <span className="a-diamond" />
@@ -20,10 +20,6 @@ export function SceneBrief() {
           </div>
         </div>
         <Sphere size={28} tone="blue" className="a-orbit" />
-        <div className="a-brief">
-          <b>Your brief</b>
-          <span className="a-typed">A 20 s promo for our booking app.</span>
-        </div>
       </div>
       <h2 className="lp-h2">
         <Words text="Write a brief." />
@@ -111,7 +107,7 @@ export function FinalCta({ signedIn }: { signedIn: boolean }) {
         <i />
       </div>
       <div className="f-lock">
-        <LogoMark size={88} animated />
+        <LogoMark size={88} animated loopMs={6000} />
         <span className="f-word">MotionBrief</span>
       </div>
       <Link href={signedIn ? "/projects/new" : "/signup"} className="lp-btn lp-btn-light">

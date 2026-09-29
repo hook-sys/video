@@ -24,27 +24,6 @@ body {
   color: var(--foreground);
 }
 
-/* Generation screen motion */
-@keyframes gen-float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(6%, -8%) scale(1.08); }
-}
-@keyframes gen-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes gen-rise {
-  0% { transform: translateY(0); opacity: 0; }
-  20% { opacity: 0.8; }
-  100% { transform: translateY(-140px); opacity: 0; }
-}
-@keyframes gen-fade {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .gen-motion, .gen-motion * { animation: none !important; }
-}
-
 /* Landing hero: each caption line rises in with the motion it describes. */
 @keyframes hero-caption-in {
   from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
@@ -53,7 +32,9 @@ body {
 .hero-caption { animation: hero-caption-in 450ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @media (prefers-reduced-motion: reduce) { .hero-caption { animation: none; } }
 
-/* MotionBrief logo intro (components/brand/logo.tsx). */
+/* MotionBrief logo intro (components/brand/logo.tsx). Hidden until it plays,
+   so the intro is never skipped by a slow first paint. */
+.mb-waiting .mb-box, .mb-waiting .mb-line, .mb-waiting .mb-play { opacity: 0; }
 .mb-animated .mb-box { transform-box: fill-box; transform-origin: center; animation: mb-pop 450ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 .mb-animated .mb-line { transform-box: fill-box; transform-origin: left center; animation: mb-type 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .mb-animated .mb-l1 { animation-delay: 300ms; }
@@ -65,4 +46,4 @@ body {
 @keyframes mb-type { from { transform: scaleX(0); } to { transform: none; } }
 @keyframes mb-arrive { 0% { opacity: 0; transform: translateX(-16px); } 60% { opacity: 1; transform: translateX(2.5px); } 100% { opacity: 1; transform: none; } }
 @keyframes mb-word { from { opacity: 0; transform: translateX(-12px); clip-path: inset(0 100% 0 0); } to { opacity: 1; transform: none; clip-path: inset(0 0 0 0); } }
-@media (prefers-reduced-motion: reduce) { .mb-animated *, .mb-word { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .mb-animated *, .mb-word { animation: none !important; } .mb-waiting * { opacity: 1 !important; } }

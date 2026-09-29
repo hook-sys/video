@@ -1,12 +1,35 @@
-import { useId } from "react";
+"use client";
+
+import { useEffect, useId, useState } from "react";
 
 // The MotionBrief mark: lines of a brief turning into a play button.
-// `animated` plays the intro once (box pops in, the lines type out, the play
-// button arrives); see the .mb-* rules in globals.css.
-export function LogoMark({ size = 32, animated = false, className = "" }: { size?: number; animated?: boolean; className?: string }) {
+// `animated` plays the intro (box pops in, the lines type out, the play button
+// arrives) once the page is ready, again on hover, and every `loopMs` if set.
+// See the .mb-* rules in globals.css; the video version is MotionBriefMark in
+// components/video/flow/motionbrief-mark.tsx.
+export function LogoMark({ size = 32, animated = false, loopMs, className = "" }: { size?: number; animated?: boolean; loopMs?: number; className?: string }) {
   const id = useId();
+  const [play, setPlay] = useState(0); // 0 = not started; each increment replays
+  useEffect(() => {
+    if (!animated) return;
+    const start = requestAnimationFrame(() => setPlay(1));
+    const loop = loopMs ? setInterval(() => setPlay((n) => n + 1), loopMs) : undefined;
+    return () => {
+      cancelAnimationFrame(start);
+      if (loop) clearInterval(loop);
+    };
+  }, [animated, loopMs]);
+  const state = !animated ? "" : play ? "mb-animated" : "mb-waiting";
   return (
-    <svg viewBox="0 0 64 64" width={size} height={size} className={`${animated ? "mb-animated" : ""} ${className}`} aria-hidden="true">
+    <svg
+      key={play}
+      viewBox="0 0 64 64"
+      width={size}
+      height={size}
+      className={`${state} ${className}`}
+      aria-hidden="true"
+      onMouseEnter={animated ? () => setPlay((n) => n + 1) : undefined}
+    >
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#6366F1" />

@@ -1,5 +1,6 @@
 import "server-only";
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
+import { MOTIONBRIEF_MARK } from "@/components/video/flow/motionbrief-mark";
 import type { FlowPlan } from "@/components/video/flow/types";
 import { FPS } from "@/components/video/types";
 import { estimateWords } from "@/lib/flow-script";
@@ -18,7 +19,7 @@ export function heroPlan() {
   const plan = compileSceneScript(repairSceneScript(HERO_SCRIPT), {
     narration: HERO_NARRATION,
     durationSeconds: HERO_SECONDS,
-    brand: { ...HERO_BRAND, logo: "/icon.svg" },
+    brand: { ...HERO_BRAND, logo: MOTIONBRIEF_MARK },
   });
   const lines = HERO_NARRATION.match(/[^.]+\./g)!.map((l) => l.trim());
   const times = spokenCueTimes(lines, estimateWords(HERO_NARRATION, HERO_SECONDS));

@@ -4,6 +4,7 @@ import { SFX_LIBRARY } from "@/components/video/sfx";
 import { Icon } from "@/components/video/icons";
 import { isLottieName, LottieAnim } from "@/components/video/lottie";
 import { clamp01, num, ramp, step, vec } from "./eval";
+import { MOTIONBRIEF_MARK, MotionBriefMark } from "./motionbrief-mark";
 import { FLOW_FONT, type FlowTheme, lottieColors, THEMES, withBrandColor } from "./themes";
 import { computeStates, type NodeState } from "./states";
 import { UiPlane } from "./ui-plane";
@@ -524,7 +525,7 @@ function RollingList({ list, frame, theme }: { list: FlowList; frame: number; th
 function useImageAspect(src?: string) {
   const [aspect, setAspect] = useState<number | null>(null);
   useState(() => {
-    if (!src || typeof Image === "undefined") return;
+    if (!src || src === MOTIONBRIEF_MARK || typeof Image === "undefined") return;
     const handle = delayRender("Loading logo");
     const img = new Image();
     img.onload = () => {
@@ -553,12 +554,14 @@ function BrandLockup({ brand, frame, theme }: { brand: FlowBrand; frame: number;
   const gapX = 40;
   // The logo is centred alone first, then the pair (logo, gap, name) is.
   const markX = slide * (mark / 2 - (mark + gapX + nameW) / 2);
-  const pop = ramp(f, 0, 22, "back");
+  // MotionBrief's own mark animates itself (box, lines, play button).
+  const ownMark = brand.logo === MOTIONBRIEF_MARK;
+  const pop = ownMark ? 1 : ramp(f, 0, 22, "back");
   const inner = ramp(f, 8, 18, "back");
   const ring = ramp(f, 4, 34, "out");
   const shine = ramp(f, 20, 20, "inOut");
   const idle = clamp01((f - 40) / 30);
-  const turn = (1 - ramp(f, 0, 22, "out")) * -16 + Math.sin(f / 26) * 2.2 * idle;
+  const turn = (ownMark ? 0 : (1 - ramp(f, 0, 22, "out")) * -16) + Math.sin(f / 26) * 2.2 * idle;
   const bob = Math.sin(f / 32) * 5 * idle;
   const sweep =
     shine > 0 && shine < 1 ? (
@@ -573,7 +576,12 @@ function BrandLockup({ brand, frame, theme }: { brand: FlowBrand; frame: number;
         {!wordmark && ring > 0 && ring < 1 && (
           <div style={{ position: "absolute", left: "50%", top: "50%", width: mark, height: mark, margin: -mark / 2, borderRadius: "50%", border: `4px solid ${theme.primary}`, boxShadow: `0 0 40px ${theme.glow}0.6)`, transform: `scale(${0.9 + ring * 1.3})`, opacity: (1 - ring) * 0.7 }} />
         )}
-        {brand.logo ? (
+        {ownMark ? (
+          <div style={{ position: "relative", width: mark, height: mark, borderRadius: mark * 0.26, boxShadow: `0 24px 60px ${theme.glow}0.3)` }}>
+            <MotionBriefMark frame={f} size={mark} />
+            {sweep}
+          </div>
+        ) : brand.logo ? (
           wordmark ? (
             <div style={{ position: "relative", borderRadius: 16 }}>
               <Img src={brand.logo} style={{ display: "block", height: Math.min(220, 860 / Math.max(1, aspect ?? 1)), width: "auto", maxWidth: 860, objectFit: "contain" }} />

@@ -14,7 +14,8 @@ import {
 } from "@/app/projects/actions";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { PipelineProgress } from "@/components/pipeline-progress";
-import { GenerationScreen } from "@/components/generation-screen";
+import { heroPlan } from "@/components/landing/hero-plan";
+import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import { BENCHMARK_CASES } from "@/lib/benchmark";
 import type { AssetManifest } from "@/lib/asset-manifest";
 import { getProjectCostSummary } from "@/lib/costs/benchmark";
@@ -126,7 +127,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </p>
       </div>
 
-      {project.pipeline_status === "running" && <GenerationScreen />}
+      {project.pipeline_status === "running" && <WaitingScreen step={project.pipeline_step} {...heroPlan()} />}
 
       {(project.pipeline_status === "completed" || project.pipeline_status === "preview_ready") && (
         <section className="flex flex-col items-center gap-6 rounded-3xl border border-foreground/10 bg-gradient-to-b from-indigo-500/[0.06] to-transparent px-6 py-10 text-center">
