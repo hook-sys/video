@@ -1,0 +1,1569 @@
+[
+ {
+  "family": "Plus Jakarta Sans",
+  "slug": "plus-jakarta-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "plus-jakarta-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Sora",
+  "slug": "sora",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "sora-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Space Grotesk",
+  "slug": "space-grotesk",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "space-grotesk-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Manrope",
+  "slug": "manrope",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "manrope-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "DM Sans",
+  "slug": "dm-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "dm-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Outfit",
+  "slug": "outfit",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "outfit-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Urbanist",
+  "slug": "urbanist",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "urbanist-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Lexend",
+  "slug": "lexend",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "lexend-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Figtree",
+  "slug": "figtree",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "figtree-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Onest",
+  "slug": "onest",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "onest-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Geist",
+  "slug": "geist",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "geist-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Poppins",
+  "slug": "poppins",
+  "category": "sans",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "poppins-latin-400-normal.woff2",
+   "poppins-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Montserrat",
+  "slug": "montserrat",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "montserrat-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Raleway",
+  "slug": "raleway",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "raleway-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Nunito",
+  "slug": "nunito",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "nunito-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Nunito Sans",
+  "slug": "nunito-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "nunito-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Work Sans",
+  "slug": "work-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "work-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Rubik",
+  "slug": "rubik",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "rubik-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Karla",
+  "slug": "karla",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "karla-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Barlow",
+  "slug": "barlow",
+  "category": "sans",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "barlow-latin-400-normal.woff2",
+   "barlow-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Barlow Condensed",
+  "slug": "barlow-condensed",
+  "category": "sans",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "barlow-condensed-latin-400-normal.woff2",
+   "barlow-condensed-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "IBM Plex Sans",
+  "slug": "ibm-plex-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "ibm-plex-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Public Sans",
+  "slug": "public-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "public-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Red Hat Display",
+  "slug": "red-hat-display",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "red-hat-display-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Red Hat Text",
+  "slug": "red-hat-text",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "red-hat-text-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Epilogue",
+  "slug": "epilogue",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "epilogue-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Archivo",
+  "slug": "archivo",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "archivo-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Archivo Black",
+  "slug": "archivo-black",
+  "category": "sans",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "archivo-black-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Be Vietnam Pro",
+  "slug": "be-vietnam-pro",
+  "category": "sans",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "be-vietnam-pro-latin-400-normal.woff2",
+   "be-vietnam-pro-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Albert Sans",
+  "slug": "albert-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "albert-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Schibsted Grotesk",
+  "slug": "schibsted-grotesk",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "schibsted-grotesk-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Bricolage Grotesque",
+  "slug": "bricolage-grotesque",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "bricolage-grotesque-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Instrument Sans",
+  "slug": "instrument-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "instrument-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Hanken Grotesk",
+  "slug": "hanken-grotesk",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "hanken-grotesk-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Kanit",
+  "slug": "kanit",
+  "category": "sans",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "kanit-latin-400-normal.woff2",
+   "kanit-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Josefin Sans",
+  "slug": "josefin-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "josefin-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Quicksand",
+  "slug": "quicksand",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "quicksand-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Comfortaa",
+  "slug": "comfortaa",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "comfortaa-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Lato",
+  "slug": "lato",
+  "category": "sans",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "lato-latin-400-normal.woff2",
+   "lato-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Open Sans",
+  "slug": "open-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "open-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Source Sans 3",
+  "slug": "source-sans-3",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "source-sans-3-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Noto Sans",
+  "slug": "noto-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "noto-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Roboto",
+  "slug": "roboto",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "roboto-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Roboto Flex",
+  "slug": "roboto-flex",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "roboto-flex-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Mulish",
+  "slug": "mulish",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "mulish-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Jost",
+  "slug": "jost",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "jost-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Cabin",
+  "slug": "cabin",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "cabin-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Heebo",
+  "slug": "heebo",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "heebo-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Assistant",
+  "slug": "assistant",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "assistant-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Fredoka",
+  "slug": "fredoka",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "fredoka-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Baloo 2",
+  "slug": "baloo-2",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "baloo-2-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Titillium Web",
+  "slug": "titillium-web",
+  "category": "sans",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "titillium-web-latin-400-normal.woff2",
+   "titillium-web-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Exo 2",
+  "slug": "exo-2",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "exo-2-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Saira",
+  "slug": "saira",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "saira-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Mona Sans",
+  "slug": "mona-sans",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "mona-sans-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Afacad",
+  "slug": "afacad",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "afacad-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Gantari",
+  "slug": "gantari",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "gantari-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Golos Text",
+  "slug": "golos-text",
+  "category": "sans",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "golos-text-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Oswald",
+  "slug": "oswald",
+  "category": "display",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "oswald-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Anton",
+  "slug": "anton",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "anton-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Bebas Neue",
+  "slug": "bebas-neue",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "bebas-neue-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Big Shoulders Display",
+  "slug": "big-shoulders-display",
+  "category": "display",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "big-shoulders-display-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Syne",
+  "slug": "syne",
+  "category": "display",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "syne-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Unbounded",
+  "slug": "unbounded",
+  "category": "display",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "unbounded-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Chakra Petch",
+  "slug": "chakra-petch",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "chakra-petch-latin-400-normal.woff2",
+   "chakra-petch-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Orbitron",
+  "slug": "orbitron",
+  "category": "display",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "orbitron-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Michroma",
+  "slug": "michroma",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "michroma-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Righteous",
+  "slug": "righteous",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "righteous-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Bungee",
+  "slug": "bungee",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "bungee-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Lilita One",
+  "slug": "lilita-one",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "lilita-one-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Dela Gothic One",
+  "slug": "dela-gothic-one",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "dela-gothic-one-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Rubik Mono One",
+  "slug": "rubik-mono-one",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "rubik-mono-one-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Krona One",
+  "slug": "krona-one",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "krona-one-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Monoton",
+  "slug": "monoton",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "monoton-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Alfa Slab One",
+  "slug": "alfa-slab-one",
+  "category": "display",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "alfa-slab-one-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Playfair Display",
+  "slug": "playfair-display",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "playfair-display-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Fraunces",
+  "slug": "fraunces",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "fraunces-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "DM Serif Display",
+  "slug": "dm-serif-display",
+  "category": "serif",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "dm-serif-display-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Instrument Serif",
+  "slug": "instrument-serif",
+  "category": "serif",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "instrument-serif-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Lora",
+  "slug": "lora",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "lora-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Merriweather",
+  "slug": "merriweather",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "merriweather-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "EB Garamond",
+  "slug": "eb-garamond",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "eb-garamond-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Cormorant Garamond",
+  "slug": "cormorant-garamond",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "cormorant-garamond-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Libre Baskerville",
+  "slug": "libre-baskerville",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "libre-baskerville-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Crimson Pro",
+  "slug": "crimson-pro",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "crimson-pro-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Source Serif 4",
+  "slug": "source-serif-4",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "source-serif-4-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Newsreader",
+  "slug": "newsreader",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "newsreader-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Young Serif",
+  "slug": "young-serif",
+  "category": "serif",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "young-serif-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Bodoni Moda",
+  "slug": "bodoni-moda",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "bodoni-moda-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Noto Serif",
+  "slug": "noto-serif",
+  "category": "serif",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "noto-serif-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Roboto Slab",
+  "slug": "roboto-slab",
+  "category": "serif",
+  "variable": true,
+  "license": "Apache-2.0",
+  "files": [
+   "roboto-slab-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Zilla Slab",
+  "slug": "zilla-slab",
+  "category": "serif",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "zilla-slab-latin-400-normal.woff2",
+   "zilla-slab-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Arvo",
+  "slug": "arvo",
+  "category": "serif",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "arvo-latin-400-normal.woff2",
+   "arvo-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Abril Fatface",
+  "slug": "abril-fatface",
+  "category": "serif",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "abril-fatface-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Prata",
+  "slug": "prata",
+  "category": "serif",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "prata-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "JetBrains Mono",
+  "slug": "jetbrains-mono",
+  "category": "mono",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "jetbrains-mono-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Fira Code",
+  "slug": "fira-code",
+  "category": "mono",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "fira-code-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "IBM Plex Mono",
+  "slug": "ibm-plex-mono",
+  "category": "mono",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "ibm-plex-mono-latin-400-normal.woff2",
+   "ibm-plex-mono-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Space Mono",
+  "slug": "space-mono",
+  "category": "mono",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "space-mono-latin-400-normal.woff2",
+   "space-mono-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Roboto Mono",
+  "slug": "roboto-mono",
+  "category": "mono",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "roboto-mono-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Source Code Pro",
+  "slug": "source-code-pro",
+  "category": "mono",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "source-code-pro-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "DM Mono",
+  "slug": "dm-mono",
+  "category": "mono",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "dm-mono-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Geist Mono",
+  "slug": "geist-mono",
+  "category": "mono",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "geist-mono-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Red Hat Mono",
+  "slug": "red-hat-mono",
+  "category": "mono",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "red-hat-mono-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Martian Mono",
+  "slug": "martian-mono",
+  "category": "mono",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "martian-mono-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Caveat",
+  "slug": "caveat",
+  "category": "script",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "caveat-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Dancing Script",
+  "slug": "dancing-script",
+  "category": "script",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "dancing-script-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Pacifico",
+  "slug": "pacifico",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "pacifico-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Great Vibes",
+  "slug": "great-vibes",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "great-vibes-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Satisfy",
+  "slug": "satisfy",
+  "category": "script",
+  "variable": false,
+  "license": "Apache-2.0",
+  "files": [
+   "satisfy-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Kalam",
+  "slug": "kalam",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "kalam-latin-400-normal.woff2",
+   "kalam-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Permanent Marker",
+  "slug": "permanent-marker",
+  "category": "script",
+  "variable": false,
+  "license": "Apache-2.0",
+  "files": [
+   "permanent-marker-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Shadows Into Light",
+  "slug": "shadows-into-light",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "shadows-into-light-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Homemade Apple",
+  "slug": "homemade-apple",
+  "category": "script",
+  "variable": false,
+  "license": "Apache-2.0",
+  "files": [
+   "homemade-apple-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Sacramento",
+  "slug": "sacramento",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "sacramento-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Allura",
+  "slug": "allura",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "allura-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Indie Flower",
+  "slug": "indie-flower",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "indie-flower-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Patrick Hand",
+  "slug": "patrick-hand",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "patrick-hand-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Gochi Hand",
+  "slug": "gochi-hand",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "gochi-hand-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Reenie Beanie",
+  "slug": "reenie-beanie",
+  "category": "script",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "reenie-beanie-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400"
+  ]
+ },
+ {
+  "family": "Hind Siliguri",
+  "slug": "hind-siliguri",
+  "category": "bangla",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "hind-siliguri-bengali-400-normal.woff2",
+   "hind-siliguri-bengali-700-normal.woff2",
+   "hind-siliguri-latin-400-normal.woff2",
+   "hind-siliguri-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700",
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Noto Sans Bengali",
+  "slug": "noto-sans-bengali",
+  "category": "bangla",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "noto-sans-bengali-bengali-wght-normal.woff2",
+   "noto-sans-bengali-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Noto Serif Bengali",
+  "slug": "noto-serif-bengali",
+  "category": "bangla",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "noto-serif-bengali-bengali-wght-normal.woff2",
+   "noto-serif-bengali-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Baloo Da 2",
+  "slug": "baloo-da-2",
+  "category": "bangla",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "baloo-da-2-bengali-wght-normal.woff2",
+   "baloo-da-2-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Anek Bangla",
+  "slug": "anek-bangla",
+  "category": "bangla",
+  "variable": true,
+  "license": "OFL-1.1",
+  "files": [
+   "anek-bangla-bengali-wght-normal.woff2",
+   "anek-bangla-latin-wght-normal.woff2"
+  ],
+  "weights": "variable"
+ },
+ {
+  "family": "Tiro Bangla",
+  "slug": "tiro-bangla",
+  "category": "bangla",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "tiro-bangla-bengali-400-normal.woff2",
+   "tiro-bangla-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "400"
+  ]
+ },
+ {
+  "family": "Mina",
+  "slug": "mina",
+  "category": "bangla",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "mina-bengali-400-normal.woff2",
+   "mina-bengali-700-normal.woff2",
+   "mina-latin-400-normal.woff2",
+   "mina-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700",
+   "400",
+   "700"
+  ]
+ },
+ {
+  "family": "Galada",
+  "slug": "galada",
+  "category": "bangla",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "galada-bengali-400-normal.woff2",
+   "galada-latin-400-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "400"
+  ]
+ },
+ {
+  "family": "Atma",
+  "slug": "atma",
+  "category": "bangla",
+  "variable": false,
+  "license": "OFL-1.1",
+  "files": [
+   "atma-bengali-400-normal.woff2",
+   "atma-bengali-700-normal.woff2",
+   "atma-latin-400-normal.woff2",
+   "atma-latin-700-normal.woff2"
+  ],
+  "weights": [
+   "400",
+   "700",
+   "400",
+   "700"
+  ]
+ }
+]
