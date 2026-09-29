@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import { Logo } from "@/components/brand/logo";
 import { heroPlan } from "@/components/landing/hero-plan";
 import { HeroPlayer } from "@/components/landing/hero-player";
 import { createClient } from "@/lib/supabase/server";
@@ -14,9 +14,8 @@ export default async function Home() {
   return (
     <div className="flex flex-1 flex-col">
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-        <Link href="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <Image src="/icon.svg" alt="" width={28} height={28} priority />
-          MotionBrief
+        <Link href="/" className="text-lg" aria-label="MotionBrief home">
+          <Logo animated />
         </Link>
         <nav className="flex items-center gap-2 text-sm font-medium">
           {user ? (
