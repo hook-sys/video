@@ -47,6 +47,7 @@ const MIN_FRAMES: Record<SceneBeat["action"], number> = {
   trace: 26,
   flow: 20,
   click: 20,
+  lift: 30,
 };
 // focus style → the part of the element to zoom into (offsets as a share of its size).
 const DETAIL: Record<string, Vec> = { center: [0, 0], top: [0, -0.25], bottom: [0, 0.25], left: [-0.25, 0], right: [0.25, 0], "top-left": [-0.25, -0.25], "top-right": [0.25, -0.25], "bottom-left": [-0.25, 0.25], "bottom-right": [0.25, 0.25] };
@@ -422,6 +423,31 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         layoutName = place(b.elements ?? [], t, b.layout ?? layoutName, b.style, true);
         f.sfx(t, "soft_pop");
         break;
+      case "lift": {
+        // Cards rise out of the screen (small, from its surface) and travel to
+        // their place in the re-laid-out scene; the screen glows as they leave.
+        const [src] = tgt;
+        if (!src) break;
+        layoutName = place(b.elements ?? [], t, b.layout ?? layoutName, "rise", true);
+        bump(src, t);
+        (b.elements ?? []).forEach((e, k) => {
+          const n = live.get(e.id);
+          if (!n) return;
+          const s = n.h.spec;
+          const at = n.pos;
+          const t0 = t + 4 + k * 6;
+          s.appear = t0;
+          s.pos = [[t0, [src.pos[0] + (k ? 40 : -40), src.pos[1]]], [t0 + 26, at, "inOut"]];
+          s.scale = [[t0, n.fit * 0.35], [t0 + 26, n.fit, "out"]];
+          s.opacity = [[t0, 0], [t0 + 6, 1, "out"]];
+          s.tilt = [[t0, [0, -18, 0]], [t0 + 30, [0, 0, 0], "inOut"]];
+          s.z = (src.h.spec.z ?? 0) + 20 + k;
+          s.blur = [[0, 0]];
+        });
+        f.sfx(t + 4, "whoosh");
+        // framed stays true: the camera re-frames the screen with its new cards.
+        break;
+      }
       case "move": {
         // It takes the layout slot next to its destination; the others shift.
         const [a] = tgt;

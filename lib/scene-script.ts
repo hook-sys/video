@@ -36,6 +36,7 @@ export const SCENE_ACTIONS = [
   "flow", // a stream of packets runs from one element to another (data syncing)
   "statement", // the narration's key phrase as kinetic type
   "list", // 3–5 spoken items as a rolling checklist
+  "lift", // new elements (1–2 cards) lift out of targets [one screen / device] and take a place beside it
   "click", // a cursor glides to targets [one id] and clicks it; content = what it shows after
 ] as const;
 export type SceneAction = (typeof SCENE_ACTIONS)[number];
@@ -190,10 +191,15 @@ export function sceneScriptBlockers(script: SceneScript, narration: string, voic
     const known = (id: string) => alive.has(id);
     switch (b.action) {
       case "scene":
-      case "place": {
+      case "place":
+      case "lift": {
         need(b.elements?.length, i, "needs elements");
+        if (b.action === "lift") {
+          need(b.targets?.length === 1 && known(b.targets[0]), i, "needs the screen it lifts out of (one target on screen)");
+          need((b.elements?.length ?? 0) <= 2 && (b.elements ?? []).every((e) => e.asset !== null), i, "lifts out 1–2 new elements");
+        }
         if (b.action === "scene") need(b.layout, i, "needs a layout");
-        const next = new Set<string>(b.action === "place" ? alive : []);
+        const next = new Set<string>(b.action === "scene" ? [] : alive);
         for (const e of b.elements ?? []) {
           if (e.asset === null) need(ever.has(e.id), i, `element "${e.id}" has no asset and does not exist yet`);
           else {

@@ -70,6 +70,7 @@ VERBS (action):
 - trace: a line draws through targets (2–6, in order) — a journey, a data path, a customer flow.
 - flow: a stream of packets from targets [one id] to "to" — syncing, data moving, money moving.
 - disconnect: the line between targets [one id] and "to" breaks — a broken, manual process.
+- lift: elements (1–2 new cards) rise out of targets [one screenshot / device / card] and take a place beside it — a detail of the screen becomes its own card ("the invoice pops out of the dashboard", "each lead card comes out of the inbox"). Great right after a screen appears.
 - click: a cursor glides to targets [one id] (a card, a screenshot, a device) and clicks it; content = what the card shows after the click (a status flips to "Sent", "Approved", "Published"…). Use it when the narration describes the user doing something ("approve in one tap", "hit publish", "create a campaign") — the reference films show the product being used, not just shown. 1–3 clicks per video.
 
 MOTION VOCABULARY (the client may ask for these): pulse → highlight · bounce / spin / pop / zoom → an entrance style · scatter / disassemble → arrange into a scatter-* layout · assemble / converge → merge, or arrange into mosaic · stack → arrange into stack-* · sort → arrange into row / column / grid · dock → move · hide → erase · show → place · transform / morph → a morph scene or update · burst / sink → an erase style. Every element floats gently on its own when idle.
