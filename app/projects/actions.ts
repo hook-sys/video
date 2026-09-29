@@ -115,10 +115,11 @@ export async function createProject(
   const logo = logoEntry instanceof File ? logoEntry : null;
   const logoError = validateLogo(logo);
   if (logoError) return { error: logoError };
-  // Browsers send an empty, unnamed File when no file is chosen.
+  // With no file chosen, browsers send an empty File — unnamed on desktop,
+  // named "blob" on mobile Chrome. Empty entries are "none chosen".
   const screenshots = formData
     .getAll("screenshots")
-    .filter((f): f is File => f instanceof File && (f.size > 0 || f.name !== ""));
+    .filter((f): f is File => f instanceof File && f.size > 0);
   // On Vercel the logo shares the request-size budget with the screenshots.
   const screenshotError = validateScreenshots(
     screenshots,

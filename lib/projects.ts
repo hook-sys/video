@@ -64,9 +64,9 @@ export const LOGO_FILE_PREFIX = "logo.";
 export const logoPath = (userId: string, projectId: string, ext: string) => `${userId}/${projectId}/${LOGO_FILE_PREFIX}${ext}`;
 
 export function validateLogo(file: File | null | undefined): string | undefined {
-  if (!file || (file.size === 0 && file.name === "")) return "Please upload your logo.";
+  // An empty entry (no file chosen; "blob" on mobile browsers) means no logo.
+  if (!file || file.size === 0) return "Please upload your logo.";
   if (!SCREENSHOT_TYPES[file.type]) return `${file.name}: the logo must be a PNG, JPG or WebP image.`;
-  if (file.size === 0) return `${file.name}: file is empty.`;
   if (file.size > LOGO_MAX_BYTES) return `${file.name}: the logo must be 2 MB or smaller.`;
 }
 
