@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/brand/logo";
 import { Sphere } from "./primitives";
+import { AutoNext } from "./auto-next";
+import { TypeText } from "./type-text";
 import { Reveal, Words } from "./reveal";
 
 // B · Add your brand — scattered UI fragments fly together into one screen.
@@ -16,24 +18,34 @@ const FRAGMENTS: { cls: string; from: string }[] = [
 ];
 export function SceneBrand() {
   return (
-    <Reveal className="lp-light lp-b" sfx={[["whoosh", 100], ["soft_pop", 1150]]}>
+    <Reveal className="lp-light lp-b" sfx={[["typing", 200], ["whoosh", 1600], ["soft_pop", 2700]]}>
       <h2 className="lp-h2 lp-h2-dark">
         <Words text="Add your brand." />
       </h2>
-      <div className="b-stage" aria-hidden="true">
-        <div className="b-frame" />
-        {FRAGMENTS.map((f, i) => (
-          <span key={f.cls} className={`b-frag ${f.cls}`} style={{ "--from": f.from, "--i": i } as React.CSSProperties}>
-            {f.cls === "b-logo" && <LogoMark size={34} />}
-          </span>
-        ))}
-        <Sphere size={54} tone="pink" className="b-ball" />
+      <div className="b-row">
+        <div className="b-brief">
+          <b>Write your brief</b>
+          <p>
+            <TypeText text="A 20 s promo for our booking app: busy clinics, one calendar, happy patients." />
+          </p>
+        </div>
+        <span className="b-arrow" aria-hidden="true" />
+        <div className="b-stage" aria-hidden="true">
+          <div className="b-frame" />
+          {FRAGMENTS.map((f, i) => (
+            <span key={f.cls} className={`b-frag ${f.cls}`} style={{ "--from": f.from, "--i": i } as React.CSSProperties}>
+              {f.cls === "b-logo" && <LogoMark size={34} />}
+            </span>
+          ))}
+          <Sphere size={54} tone="pink" className="b-ball" />
+        </div>
       </div>
+      <AutoNext afterMs={3200} />
     </Reveal>
   );
 }
 
-// C · We direct every scene — floating glass panels on an isometric plane,
+// C · Every scene directed — floating glass panels on an isometric plane,
 // wired together with light while a sphere rolls between them.
 const PANELS = [
   { id: "scenes", label: "Scenes", icon: "M4 7h16v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 7l2-3h12l2 3M9 4l-2 3M15 4l-2 3" },
@@ -66,7 +78,9 @@ export function SceneDirect() {
         </div>
       </div>
       <h2 className="lp-h2 lp-h2-dark">
-        <Words text="We direct every scene." />
+        <Words text="Every scene directed." />
+        <br />
+        <Words text="Every frame in motion." className="lp-grad-dark" delay={300} />
       </h2>
     </Reveal>
   );

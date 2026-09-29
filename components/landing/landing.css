@@ -289,8 +289,39 @@
 @media (max-width: 640px) { .g-grid { grid-template-columns: 1fr; } }
 
 /* ── B · brand: fragments assemble into one screen ────────────────────── */
-.b-stage { position: relative; width: min(720px, 92vw); aspect-ratio: 720 / 440; }
-.b-frame { position: absolute; inset: 0; border-radius: 22px; background: #fff; box-shadow: 0 40px 90px rgba(80, 60, 200, 0.28); opacity: 0; transform: scale(0.94); transition: opacity 600ms, transform 900ms var(--ease-out); transition-delay: 900ms; }
+.b-row { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 28px; width: min(1180px, 100%); }
+.b-brief {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 22px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #fff;
+  box-shadow: 0 30px 70px rgba(80, 60, 200, 0.22);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transform: translateX(-40px);
+  transition: opacity 600ms, transform 900ms var(--ease-out);
+}
+[data-in="true"] .b-brief { opacity: 1; transform: none; }
+.b-brief b { font-size: 1.05rem; color: var(--lp-ink); }
+.b-brief p { min-height: 4.8em; margin: 0; padding: 12px 14px; border-radius: 12px; border: 2px solid #7c3aed; font-size: 0.95rem; line-height: 1.6; color: #3b3860; background: #fff; }
+@media (max-width: 900px) {
+  .b-row { flex-direction: column; gap: 18px; }
+  .b-brief { flex: none; width: min(360px, 100%); }
+  .b-arrow { display: none; }
+  .b-stage { width: 100%; }
+}
+.b-caret { display: inline-block; width: 2px; height: 1.1em; margin-left: 2px; vertical-align: -0.15em; background: #7c3aed; animation: b-blink 900ms step-end infinite; }
+.b-caret.is-done { opacity: 0.6; }
+@keyframes b-blink { 50% { opacity: 0; } }
+.b-arrow { position: relative; flex: 0 0 64px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, #7c3aed, #f472b6); transform: scaleX(0); transform-origin: left; transition: transform 500ms var(--ease-out) 1500ms; }
+.b-arrow::after { content: ""; position: absolute; right: -4px; top: -7px; border-left: 12px solid #f472b6; border-top: 9px solid transparent; border-bottom: 9px solid transparent; }
+[data-in="true"] .b-arrow { transform: none; }
+.b-stage { position: relative; flex: 1 1 auto; width: min(720px, 92vw); max-width: 720px; aspect-ratio: 720 / 440; }
+.b-frame { position: absolute; inset: 0; border-radius: 22px; background: #fff; box-shadow: 0 40px 90px rgba(80, 60, 200, 0.28); opacity: 0; transform: scale(0.94); transition: opacity 600ms, transform 900ms var(--ease-out); transition-delay: 2300ms; }
 [data-in="true"] .b-frame { opacity: 1; transform: none; }
 .b-frag {
   position: absolute;
@@ -301,7 +332,7 @@
   opacity: 0;
   transform: var(--from);
   transition: transform 1200ms var(--ease-out), opacity 500ms;
-  transition-delay: calc(var(--i) * 70ms);
+  transition-delay: calc(1600ms + var(--i) * 70ms);
   box-shadow: 0 16px 40px rgba(80, 60, 200, 0.22);
 }
 [data-in="true"] .b-frag { opacity: 1; transform: none; }
@@ -315,11 +346,13 @@
 .b-shot-2 { left: 51.2%; background: linear-gradient(135deg, #fda4af, #a855f7); }
 .b-shot-3 { left: 75.5%; background: linear-gradient(135deg, #fde68a, #fb7185); }
 .b-button { left: 80%; top: 41%; width: 14%; height: 8%; border-radius: 999px; background: #fff; z-index: 2; }
-.b-ball { right: -4%; top: -8%; opacity: 0; transform: translate(80px, -60px); transition: transform 1400ms var(--ease-back) 1000ms, opacity 600ms 1000ms; }
+.b-ball { right: -4%; top: -8%; opacity: 0; transform: translate(80px, -60px); transition: transform 1400ms var(--ease-back) 2600ms, opacity 600ms 2600ms; }
 [data-in="true"] .b-ball { opacity: 1; transform: none; }
 
 /* ── C · direct: isometric plane with wired glass panels ──────────────── */
-.c-stage { position: relative; width: min(600px, 92vw); aspect-ratio: 1; }
+.c-stage { position: relative; width: min(600px, 92vw, 62svh); aspect-ratio: 1; }
+.lp-c { gap: 12px; }
+.lp-c .lp-h2 { font-size: clamp(2.2rem, 5.5vw, 4.4rem); }
 .c-plane {
   position: absolute;
   inset: 0;
@@ -384,6 +417,15 @@
 [data-in="true"] .f-word { transition: opacity 600ms, transform 800ms var(--ease-out), clip-path 800ms var(--ease-out); transition-delay: 1000ms; opacity: 1; transform: none; clip-path: inset(0 0 0 0); }
 .lp-footer { padding: 24px 16px; text-align: center; font-size: 0.8rem; color: rgba(255, 255, 255, 0.55); background: var(--lp-deep); }
 
+/* next-scene arrow (components/landing/auto-next.tsx) */
+.lp-next { position: relative; z-index: 3; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; color: var(--lp-violet); background: rgba(255, 255, 255, 0.7); box-shadow: 0 10px 30px rgba(80, 60, 200, 0.25); animation: lp-nudge 1.6s ease-in-out infinite; }
+.lp-next svg { position: absolute; inset: 4px; width: 48px; height: 48px; }
+.lp-next-track { fill: none; stroke: rgba(124, 58, 237, 0.18); stroke-width: 2.5; }
+.lp-next-ring { fill: none; stroke: #7c3aed; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 100; transform: rotate(-90deg); transform-origin: center; }
+.lp-next.is-counting .lp-next-ring { transition: stroke-dashoffset var(--wait) linear; stroke-dashoffset: 0; }
+@keyframes lp-nudge { 50% { translate: 0 6px; } }
+.lp-grad-dark { background: linear-gradient(90deg, #3b2bff, #7c3aed, #db2777); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
 /* ── small screens + reduced motion ───────────────────────────────────── */
 @media (max-width: 640px) {
   .lp-hide-sm { display: none; }
@@ -394,7 +436,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .lp *, .lp *::before, .lp *::after { animation: none !important; transition: none !important; }
-  .lp-word, .g-card, .b-frag, .b-frame, .b-ball, .c-panel, .c-ball, .lp-hero-player, .f-word { opacity: 1 !important; transform: none !important; filter: none !important; clip-path: none !important; }
+  .lp-word, .g-card, .b-brief, .b-arrow, .b-frag, .b-frame, .b-ball, .c-panel, .c-ball, .lp-hero-player, .f-word { opacity: 1 !important; transform: none !important; filter: none !important; clip-path: none !important; }
 }
 
 /* ── waiting screen (components/waiting/waiting-screen.tsx) ─────────────── */
