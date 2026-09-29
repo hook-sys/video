@@ -188,7 +188,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     spec.appear = t;
     put(op, t, 0);
     put(op, t + 10, 1, "out");
-    const from: Record<string, Vec> = { rise: [x, y + 80], "slide-left": [x + 280, y], "slide-right": [x - 280, y], drop: [x, y - 180], cascade: [x - 60, y + 60], bounce: [x, y - 260] };
+    const from: Record<string, Vec> = { tilt: [x, y + 120], rise: [x, y + 80], "slide-left": [x + 280, y], "slide-right": [x - 280, y], drop: [x, y - 180], cascade: [x - 60, y + 60], bounce: [x, y - 260] };
     if (push) {
       put(spec.pos, t, [x + push[0], y + push[1]]);
       put(spec.pos, t + 22, [x, y], "inOut");
@@ -216,6 +216,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     }
     if (style === "flip") {
       spec.tilt = [[t, [0, 75, 0]], [t + 20, [0, 0, 0], "out"]];
+    }
+    if (style === "tilt") {
+      // The hero screen rises in tilted back in 3D, then settles flat (slowly).
+      spec.tilt = [[t, [24, -16, 3]], [t + 40, [0, 0, 0], "inOut"]];
     }
     if (rot && style !== "spin") spec.rot = [[0, rot]];
     const depthBlur = DEPTH[n.depth].blur;
@@ -304,7 +308,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       const nodeId = known.has(id) ? `${id}~${uid++}` : id;
       const h = f.el(nodeId, at, { ...spec, z: s.depth * 10 + i });
       const n: Live = { h, w: spec.w, h0: spec.h, fit: fitIn(spec.w, spec.h, s), pos: at, depth: s.depth };
-      const enterStyle = style ?? (["rise", "pop", "slide-left", "blur", "drop", "scale-up", "flip"][(sceneIdx + i) % 7]);
+      // A device or screenshot as the scene's hero enters tilted, then settles.
+      const heroScreen = (i === 0 || s.depth === 2) && (spec.el.type === "device" || spec.el.type === "shot");
+      const enterStyle = style ?? (heroScreen ? "tilt" : ["rise", "pop", "slide-left", "blur", "drop", "scale-up", "flip"][(sceneIdx + i) % 7]);
       enter(n, push ? t : t + i * 4, enterStyle, s.rot, push);
       live.set(id, n);
       known.set(id, n);

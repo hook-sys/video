@@ -42,7 +42,7 @@ export type SceneAction = (typeof SCENE_ACTIONS)[number];
 
 export const CAMERA_MOVES = ["push-in", "pull-back", "pan-left", "pan-right", "rise", "drift", "static"] as const;
 export const TRANSITIONS = ["cut", "dissolve", "push-left", "push-right", "push-up", "zoom-through", "panel-wipe", "morph"] as const;
-export const ENTER_STYLES = ["pop", "rise", "slide-left", "slide-right", "drop", "blur", "flip", "scale-up", "cascade", "bounce", "spin"] as const;
+export const ENTER_STYLES = ["pop", "rise", "slide-left", "slide-right", "drop", "blur", "flip", "scale-up", "cascade", "bounce", "spin", "tilt"] as const;
 export const PATH_STYLES = ["arc", "straight", "swoop"] as const;
 export const ERASE_STYLES = ["wipe", "fade", "shrink", "fly-out", "burst", "sink"] as const;
 
