@@ -63,6 +63,7 @@ import { parseWordTimings } from "@/lib/voice-timing";
 import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { generateFlowScript } from "@/lib/ai/flow-director";
 import { generateSceneScript } from "@/lib/ai/scene-director";
+import { neverList } from "@/lib/video-rules";
 import type { FlowScript } from "@/lib/flow-script";
 import type { SceneScript } from "@/lib/scene-script";
 import type { VisualStory } from "@/lib/visual-story";
@@ -367,6 +368,23 @@ function creativePreferences(project: { direction?: string | null; creative_dire
 // Preview-only (VISUAL_ENGINE=flow): the Flow Director after the voice. Stores
 // the FlowScript only when it validates against the narration and its word
 // timestamps; otherwise the existing renderer is used. Never fails the project.
+// The Director's NEVER list: built-in rules, active `video_rules` rows, and
+// how many videos broke each rule in the last 30 days. Never blocks a video.
+async function loadNeverList(admin: ReturnType<typeof createAdminClient>) {
+  try {
+    const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const [rules, mistakes] = await Promise.all([
+      admin.from("video_rules").select("id, never").eq("active", true).limit(50),
+      admin.from("video_mistakes").select("rule_id, project_id").gte("created_at", since).limit(5000),
+    ]);
+    const videos: Record<string, Set<string>> = {};
+    for (const m of mistakes.data ?? []) (videos[m.rule_id] ??= new Set()).add(m.project_id ?? "");
+    return neverList(rules.data ?? [], Object.fromEntries(Object.entries(videos).map(([k, v]) => [k, v.size])));
+  } catch {
+    return neverList();
+  }
+}
+
 async function generateFlow(projectId: string, userId: string, budgetMs: number) {
   const admin = createAdminClient();
   const { data: project } = await admin
@@ -379,7 +397,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   if (!project || project.voice_status !== "completed" || !brief.success || brief.data.flow || brief.data.scene || project.format !== "16:9") return;
   const words = parseWordTimings((project.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
   const { count: screenshots } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
-  const input = { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project) };
+  const input = { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project), never: await loadNeverList(admin) };
   console.info("flow director start:", { projectId, timing: words?.length ? "voice" : "estimated", words: words?.length ?? 0, screenshots: screenshots ?? 0 });
   const started = Date.now();
   // Director v2 (scenes of product UI) first; the pattern Director is the
@@ -433,6 +451,11 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
       updated_at: new Date().toISOString(),
     })
     .eq("project_id", projectId);
+  // Rulebook: log what this video still breaks, so later videos are warned.
+  if (v2.script && v2.violations.length) {
+    const { error: mistakesError } = await admin.from("video_mistakes").insert(v2.violations.map((v) => ({ project_id: projectId, rule_id: v.rule, detail: v.detail.slice(0, 300) })));
+    if (mistakesError) console.warn("video mistakes not logged:", mistakesError.message);
+  }
   if (usage) {
     await recordCost(admin, {
       project_id: projectId,

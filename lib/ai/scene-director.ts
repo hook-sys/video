@@ -9,9 +9,10 @@ import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
 import { layoutCatalogText } from "@/components/video/flow/layouts";
 import { BACKDROPS } from "@/components/video/flow/backdrop-names";
-import { planQuality, qualityProblems } from "@/components/video/flow/quality";
+import { compositionCheck, violationNote, type Violation } from "@/components/video/flow/composition-check";
 import { validateFlowPlan } from "@/components/video/flow/validate";
 import { CAMERA_MOVES, ENTER_STYLES, ERASE_STYLES, MAX_ELEMENTS_PER_SCENE, MAX_SCENE_BEATS, PATH_STYLES, repairSceneScript, SceneScript, SceneScriptModel, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
+import { neverList } from "@/lib/video-rules";
 import { tokenize, type WordTiming } from "@/lib/voice-timing";
 
 // Visual Director v2: turns the finished narration (and its word timestamps)
@@ -85,7 +86,7 @@ DIRECTION FIRST
 
 RHYTHM
 - ${MAX_SCENE_BEATS} beats at most; about one beat every 1–1.5 s of speech; never more than 3 s of speech without a new beat (4 s after a scene, list, arrange or reveal).
-- 2–4 scenes, each with a different layout family and a different transition; 3–6 elements per scene is typical (one hero element, supporting ones).
+- 2–4 scenes, each with a different layout family and a different transition; one big hero element and at most 3 supporting ones on screen at a time (bring more in only after others leave). Prefer hero-* layouts; scatter layouts make every element small.
 - Inside a scene, make things HAPPEN (trigger, update, connect, move, merge, erase) — a scene where nothing reacts is a slideshow.
 - 1–2 statements (or a list) where the narration states its promise; the last beat is usually a statement on the closing phrase. The brand lockup (logo, name, call to action) is added automatically after it.
 - theme: "lavender" (friendly SaaS), "mint" (health, wellness, finance, calm), "teal" (operations, B2B, logistics, data, security) or "midnight" (dark, dramatic, premium). creative_preferences.visual_style is a hint.`;
@@ -97,8 +98,11 @@ export type SceneDirectorInput = {
   duration_seconds: number;
   product_name?: string;
   creative_preferences?: Record<string, string>;
+  // The NEVER list (lib/video-rules.ts neverList: built-in rules, rules added
+  // in `video_rules`, and how often each was broken lately).
+  never?: string;
 };
-export type SceneDirectorResult = { script: SceneScript | null; attempts: number; revised: boolean; errors: string[]; ms: number; timing: "voice" | "estimated" };
+export type SceneDirectorResult = { script: SceneScript | null; attempts: number; revised: boolean; errors: string[]; ms: number; timing: "voice" | "estimated"; violations: Violation[] };
 
 export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000): Promise<SceneDirectorResult> {
   const started = Date.now();
@@ -106,33 +110,28 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
   const model = process.env.OPENAI_MODEL || "gpt-5-mini";
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(SceneScriptModel, "scene_script") };
+  const instructions = `${INSTRUCTIONS}\n\nNEVER (mistakes found in earlier videos — every one is checked on your compiled script)\n${input.never || neverList()}`;
   // Reasoning models: a revision only has to fix listed problems, so it runs
   // with low effort (much faster).
   const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
-  // Blockers reject a script; quality notes (measured on the compiled plan)
-  // ask for one revision but do not reject it.
+  // Blockers reject a script; rule violations (measured on the compiled
+  // plan, lib/video-rules.ts) ask for one revision but do not reject it.
+  const none = { notes: [] as string[], violations: [] as Violation[] };
   const check = (raw: unknown) => {
-    if (!raw) return { script: null, problems: ["no structured output"], notes: [] as string[] };
+    if (!raw) return { script: null, problems: ["no structured output"], ...none };
     const script = repairSceneScript(SceneScript.parse(raw));
     const problems = sceneScriptBlockers(script, input.narration, input.words, input.duration_seconds);
-    if (problems.length) return { script: null, problems, notes: [] as string[] };
-    let notes: string[] = [];
+    if (problems.length) return { script: null, problems, ...none };
     try {
       // Judged as it will render: with the closing brand lockup.
       const plan = compileSceneScript(script, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, brand: { name: input.product_name ?? "", logo: "logo" } });
       const invalid = validateFlowPlan(plan);
-      if (invalid.length) return { script: null, problems: invalid.slice(0, 6).map((e) => `compiles to an invalid plan: ${e}`), notes };
-      notes = qualityProblems(planQuality(plan));
-      // The client's own screens are the most convincing visuals: show them.
-      const shots = input.screenshots ?? 0;
-      if (shots > 0) {
-        const used = new Set(script.beats.flatMap((b) => (b.elements ?? []).flatMap((e) => [e.asset, e.screen])).filter((a): a is string => !!a && a.startsWith("shot:")).map((a) => a.split("/")[0]));
-        if (used.size < Math.min(shots, 2)) notes.push(`the client uploaded ${shots} product screenshots but only ${used.size} ${used.size === 1 ? "is" : "are"} shown: show at least ${Math.min(shots, 3)} different ones (shot:1…shot:${shots}), in a device or as crops`);
-      }
+      if (invalid.length) return { script: null, problems: invalid.slice(0, 6).map((e) => `compiles to an invalid plan: ${e}`), ...none };
+      const violations = compositionCheck(script, plan, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots });
+      return { script, problems, notes: violations.map(violationNote), violations };
     } catch (e) {
-      return { script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], notes };
+      return { script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], ...none };
     }
-    return { script, problems, notes };
   };
   let attempts = 0;
   let problems: string[] = [];
@@ -143,7 +142,7 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
     const first = await client.responses.parse(
       {
         model,
-        instructions: INSTRUCTIONS,
+        instructions,
         input: JSON.stringify({
           NARRATION: input.narration,
           WORDS: input.words?.length ? input.words.filter((w) => tokenize(w.text).length).map((w) => [w.text, Math.round(w.start * 100) / 100]) : null,
@@ -171,23 +170,24 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
       let revised;
       try {
         revised = await client.responses.parse(
-          { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your beats failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete SceneScript.`, text: format, ...quick },
+          { model, instructions, previous_response_id: first.id, input: `Your beats failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete SceneScript.`, text: format, ...quick },
           { timeout: Math.min(70_000, left) },
         );
       } catch (e) {
         // A failed or timed-out revision never discards a usable first draft.
         const why = e instanceof Error ? e.message : String(e);
-        return { script: result.script, attempts, revised: false, errors: [`revision failed: ${why}`, ...problems], ms: Date.now() - started, timing };
+        return { script: result.script, attempts, revised: false, errors: [`revision failed: ${why}`, ...problems], ms: Date.now() - started, timing, violations: result.violations };
       }
       usage.inputTokens += revised.usage?.input_tokens ?? 0;
       usage.outputTokens += revised.usage?.output_tokens ?? 0;
       const second = check(revised.output_parsed);
-      if (second.script || !result.script) result = second;
+      // Keep the draft that breaks fewer rules.
+      if (!result.script || (second.script && second.violations.length <= result.violations.length)) result = second;
       problems = result.problems.length ? result.problems : result.notes;
     }
-    return { script: result.script, attempts, revised: attempts > 1, errors: problems, ms: Date.now() - started, timing };
+    return { script: result.script, attempts, revised: attempts > 1, errors: problems, ms: Date.now() - started, timing, violations: result.violations };
   } catch (e) {
-    return { script: null, attempts, revised: attempts > 1, errors: [e instanceof Error ? e.message : String(e)], ms: Date.now() - started, timing };
+    return { script: null, attempts, revised: attempts > 1, errors: [e instanceof Error ? e.message : String(e)], ms: Date.now() - started, timing, violations: [] };
   } finally {
     if (attempts) onUsage?.(usage);
   }

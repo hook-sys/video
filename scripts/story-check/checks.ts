@@ -37,6 +37,8 @@ import { DEPTH, LAYOUT_PRESETS, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES 
 import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { CAMERA_MOVES, ENTER_STYLES, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
+import { compositionCheck } from "@/components/video/flow/composition-check";
+import { neverList, VIDEO_RULES } from "@/lib/video-rules";
 import { isIconName } from "@/components/video/icons";
 import zlib from "node:zlib";
 import path from "node:path";
@@ -525,6 +527,17 @@ function sceneDirector(): Check[] {
   add("broken scene script is rejected", errs.some((e) => e.includes("first beat must be a scene")) && errs.some((e) => e.includes("not spoken")) && errs.some((e) => e.includes("on screen")), errs.slice(0, 4).join("; "));
   const repaired = repairSceneScript({ ...s0, beats: s0.beats.map((b, i) => (i === 0 ? { ...b, layout: "spiral-galaxy", elements: b.elements!.map((e, j) => (j === 0 ? { ...e, asset: "card:courier_dispatch/glass" } : e)) } : b)) });
   add("unknown card templates and layouts are repaired", repaired.beats[0].layout === "grid" && repaired.beats[0].elements![0].asset === "card:courier/glass", `layout → ${repaired.beats[0].layout}, "courier_dispatch" → ${repaired.beats[0].elements![0].asset}`);
+  // Rulebook (lib/video-rules.ts): detectors catch a crowded scene of small
+  // equal cards (the Plateful mistake); repairs and the NEVER list hold.
+  const six = s0.beats[0].elements!.concat(s0.beats[0].elements!).slice(0, 6).map((e, j) => ({ ...e, id: `${e.id}-${j}` }));
+  const crowded = { ...s0, beats: [{ ...s0.beats[0], layout: "grid", elements: six }, ...s0.beats.slice(1).filter((b) => !b.targets?.length && !b.to)] };
+  const cplan = compileSceneScript(crowded, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words, brand: fx.brand });
+  const found = compositionCheck(crowded, cplan, { narration: fx.narration, words: fx.words, durationSeconds: fx.durationSeconds, screenshots: 3 }).map((v) => v.rule);
+  add("rulebook detectors flag a crowded scene of small cards", ["crowded", "no-hero", "unused-screens"].every((r) => found.includes(r)), `found: ${found.join(", ")}`);
+  const fixedLook = repairSceneScript({ ...s0, theme: "midnight", beats: s0.beats.map((b, i) => (i === 0 ? { ...b, transition: "panel-wipe", elements: b.elements!.map((e) => ({ ...e, asset: "card:kpi/dark" })) } : b)) });
+  add("rulebook repairs: no panel-wipe, no dark cards on a dark theme", fixedLook.beats[0].transition === "dissolve" && fixedLook.beats[0].elements!.every((e) => e.asset === "card:kpi/solid"), `${fixedLook.beats[0].transition}, ${fixedLook.beats[0].elements![0].asset}`);
+  const list = neverList([{ id: "new-rule", never: "never do the new thing" }], { "new-rule": 4, crowded: 1 });
+  add("rulebook NEVER list: rules from the database, most-broken first", list.startsWith("- never do the new thing (broken in 4 recent videos") && list.split("\n").length === VIDEO_RULES.filter((r) => r.enforced.some((e) => e !== "code")).length + 1, list.split("\n")[0]);
   const env = { VERCEL_ENV: process.env.VERCEL_ENV, VISUAL_ENGINE: process.env.VISUAL_ENGINE };
   const set = (e: Record<string, string | undefined>) => Object.entries(e).forEach(([k, v]) => (v === undefined ? delete process.env[k] : (process.env[k] = v)));
   try {

@@ -132,11 +132,14 @@ export function repairSceneScript(script: SceneScript): SceneScript {
     if (kind === "shot") return "shot:1/full";
     return `card:${searchCards(asset, 1)[0] ?? "kpi"}/glass`;
   };
+  // Rulebook (lib/video-rules.ts): no panel-wipe; no dark cards on a dark theme.
+  const onDark = (asset: string | null) => (asset && script.theme === "midnight" ? asset.replace(/^(card:[^/]+)\/dark$/, "$1/solid") : asset);
   return {
     ...script,
     beats: script.beats.slice(0, MAX_SCENE_BEATS).map((b) => ({
       ...b,
-      elements: b.elements && b.elements.slice(0, MAX_ELEMENTS_PER_SCENE).map((e) => ({ ...e, asset: fixAsset(e.asset), screen: e.screen && (parseAsset(e.screen) ? e.screen : fixAsset(e.screen)) })),
+      transition: b.transition === "panel-wipe" ? "dissolve" : b.transition,
+      elements: b.elements && b.elements.slice(0, MAX_ELEMENTS_PER_SCENE).map((e) => ({ ...e, asset: onDark(fixAsset(e.asset)), screen: e.screen && (parseAsset(e.screen) ? e.screen : fixAsset(e.screen)) })),
       layout: b.layout === null ? null : isLayout(b.layout) ? b.layout : "grid",
       items: b.items && b.items.map((x) => x.trim()).filter(Boolean).slice(0, 5),
       lottie: b.lottie === null ? null : b.lottie in LOTTIE_MANIFEST ? b.lottie : "confetti-burst",
