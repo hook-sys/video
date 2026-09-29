@@ -28,6 +28,7 @@ import { Logo } from "@/components/brand/logo";
 import { buildRenderInput } from "@/lib/render-input";
 import type { RenderProps } from "@/components/video/types";
 import { PreviewPlayer } from "./preview/preview-player";
+import { BackToDashboard } from "./back-to-dashboard";
 
 // Server actions on this page (brief, voice, assets, render via after(), dev
 // benchmark) run inside this function. 300s is the Vercel Hobby maximum with
@@ -162,16 +163,14 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           <Link href="/dashboard" aria-label="MotionBrief home">
             <Logo size={28} className="text-lg" />
           </Link>
-          <Link href="/dashboard" className="ml-auto rounded-lg px-3 py-1.5 text-sm text-foreground/60 transition hover:bg-foreground/[0.05] hover:text-foreground">
-            ← Dashboard
-          </Link>
-          <Link href="/projects/new" className="hidden rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90 sm:inline-flex">
+          <Link href="/projects/new" className="ml-auto hidden rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90 sm:inline-flex">
             + New video
           </Link>
         </div>
       </header>
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
-      <AutoRefresh active={project.pipeline_status === "running" || project.render_4k_status === "processing"} />
+      <AutoRefresh active={project.pipeline_status === "running" || project.render_status === "processing" || project.render_4k_status === "processing"} />
+      <BackToDashboard />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex items-center gap-3">
@@ -218,49 +217,47 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           <aside className="flex flex-col gap-4">
             <div className="flex flex-col gap-3 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
               <h2 className="text-sm font-semibold">Download</h2>
+              {/* Each quality: download when ready, otherwise start its render. */}
               {download?.signedUrl ? (
                 <a href={download.signedUrl} className={primaryBtn}>
-                  ↓ Download MP4 · 1080p
+                  ↓ Download 1080p
                 </a>
-              ) : (
-                <span aria-disabled className={`${primaryBtn} cursor-not-allowed opacity-50`}>
-                  ↓ Download MP4
+              ) : project.render_status === "processing" ? (
+                <span className={`${primaryBtn} cursor-wait opacity-80`}>
+                  <span className="size-3 animate-spin rounded-full border-2 border-white border-t-transparent" /> Preparing 1080p…
                 </span>
+              ) : (
+                <form action={renderVideo.bind(null, id)}>
+                  <input type="hidden" name="resolution" value="1080p" />
+                  <SubmitButton pendingLabel="Starting…" className={primaryBtn}>
+                    ↓ Download 1080p
+                  </SubmitButton>
+                </form>
               )}
-              {!download?.signedUrl && <p className="text-xs text-foreground/50">The MP4 download will be available once final rendering is enabled.</p>}
-              {download?.signedUrl && (fourKOn || download4k?.signedUrl) && (
-                <>
-                  {download4k?.signedUrl ? (
-                    <a href={download4k.signedUrl} className={secondaryBtn}>
+              {project.render_status === "failed" && project.render_error && <p className="text-xs text-rose-600 dark:text-rose-400">{project.render_error}</p>}
+              {(fourKOn || download4k?.signedUrl) &&
+                (download4k?.signedUrl ? (
+                  <a href={download4k.signedUrl} className={secondaryBtn}>
+                    ↓ Download 4K
+                  </a>
+                ) : project.render_4k_status === "processing" ? (
+                  <span className={`${secondaryBtn} cursor-wait text-foreground/60`}>
+                    <span className="size-3 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" /> Preparing 4K…
+                  </span>
+                ) : (
+                  <form action={render4kVideo.bind(null, id)}>
+                    <SubmitButton pendingLabel="Starting…" className={secondaryBtn}>
                       ↓ Download 4K
-                    </a>
-                  ) : project.render_4k_status === "processing" ? (
-                    <span className={`${secondaryBtn} text-foreground/60`}>
-                      <span className="size-3 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" /> Preparing 4K…
-                    </span>
-                  ) : (
-                    <form action={render4kVideo.bind(null, id)}>
-                      <SubmitButton pendingLabel="Starting 4K…" className={secondaryBtn}>
-                        ✦ Get 4K version
-                      </SubmitButton>
-                    </form>
-                  )}
-                  <p className="text-xs text-foreground/50">
-                    {project.render_4k_status === "failed" && project.render_4k_error ? project.render_4k_error : "4K renders on request and takes a few minutes longer."}
-                  </p>
-                </>
-              )}
-              <Link href={`/projects/${id}/preview`} className="text-center text-xs text-violet-600 hover:underline dark:text-violet-300">
-                Open full-screen preview →
-              </Link>
+                    </SubmitButton>
+                  </form>
+                ))}
+              {project.render_4k_status === "failed" && project.render_4k_error && <p className="text-xs text-rose-600 dark:text-rose-400">{project.render_4k_error}</p>}
+              <p className="text-xs text-foreground/50">The file is prepared on the first tap (a few minutes; 4K takes longer), then downloads.</p>
             </div>
             <div className="flex flex-col gap-2 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
               <h2 className="text-sm font-semibold">Next</h2>
               <Link href="/projects/new" className={secondaryBtn}>
                 + Make another video
-              </Link>
-              <Link href="/dashboard" className="text-center text-xs text-foreground/55 hover:text-foreground">
-                All my videos
               </Link>
             </div>
           </aside>
