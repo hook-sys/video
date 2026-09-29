@@ -24,6 +24,10 @@ import { canUseDevTools } from "@/lib/dev-tools";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
 import { SubmitButton } from "@/components/submit-button";
+import { Logo } from "@/components/brand/logo";
+import { buildRenderInput } from "@/lib/render-input";
+import type { RenderProps } from "@/components/video/types";
+import { PreviewPlayer } from "./preview/preview-player";
 
 // Server actions on this page (brief, voice, assets, render via after(), dev
 // benchmark) run inside this function. 300s is the Vercel Hobby maximum with
@@ -126,110 +130,209 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   ];
   const canGenerateBrief = capture?.status === "completed" || !!screenshots?.length;
 
+  // Customer view: the finished MP4, or the live preview until it exists.
+  const ready = project.pipeline_status === "completed" || project.pipeline_status === "preview_ready";
+  let preview: RenderProps | null = null;
+  if (ready && !video?.signedUrl) {
+    try {
+      preview = (await buildRenderInput(supabase, project)).props ?? null;
+    } catch {
+      preview = null;
+    }
+  }
+  const direction = String(project.direction ?? "");
+  const voiceScript = direction.split(/\n\nVisual style:/)[0].trim();
+  const visualStyle = direction.match(/Visual style:\s*(.+)\s*$/m)?.[1] ?? null;
+  const look = direction.match(/^Look:\s*(.+)$/m)?.[1]?.trim() ?? "Auto";
+  const title = project.brand_name || "Your video";
+  const status =
+    project.pipeline_status === "completed" ? { label: "Ready", cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" }
+    : project.pipeline_status === "preview_ready" ? { label: "Preview ready", cls: "bg-sky-500/15 text-sky-600 dark:text-sky-300" }
+    : project.pipeline_status === "running" ? { label: "Creating", cls: "bg-violet-500/15 text-violet-600 dark:text-violet-300" }
+    : project.pipeline_status === "failed" ? { label: "Failed", cls: "bg-rose-500/15 text-rose-600 dark:text-rose-300" }
+    : project.pipeline_status === "needs_input" ? { label: "Needs your input", cls: "bg-amber-500/15 text-amber-600 dark:text-amber-300" }
+    : { label: "Draft", cls: "bg-foreground/10 text-foreground/60" };
+  const primaryBtn = "inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 px-5 py-3.5 font-semibold text-white shadow-lg shadow-violet-600/25 transition hover:brightness-110 disabled:opacity-60";
+  const secondaryBtn = "inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-foreground/15 px-5 py-3 font-semibold transition hover:bg-foreground/5";
+
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-12">
-      <Link href="/dashboard" className="text-sm text-foreground/70 underline">
-        ← Dashboard
-      </Link>
+    <div className="flex min-h-full flex-1 flex-col bg-background">
+      <header className="sticky top-0 z-20 border-b border-foreground/[0.07] bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
+          <Link href="/dashboard" aria-label="MotionBrief home">
+            <Logo size={28} className="text-lg" />
+          </Link>
+          <Link href="/dashboard" className="ml-auto rounded-lg px-3 py-1.5 text-sm text-foreground/60 transition hover:bg-foreground/[0.05] hover:text-foreground">
+            ← Dashboard
+          </Link>
+          <Link href="/projects/new" className="hidden rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90 sm:inline-flex">
+            + New video
+          </Link>
+        </div>
+      </header>
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
       <AutoRefresh active={project.pipeline_status === "running" || project.render_4k_status === "processing"} />
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-semibold tracking-tight">Your video</h1>
-        <p className="text-sm text-foreground/60">
-          {project.duration_seconds} sec · {project.format} · {project.voice_language} ·{" "}
-          {project.voice_gender === "female" ? "Female" : "Male"} voice
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <h1 className="truncate text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
+            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${status.cls}`}>{status.label}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-xs">
+            {[
+              `${project.duration_seconds} s`,
+              project.format,
+              `${project.voice_language} · ${project.voice_gender === "female" ? "Female" : "Male"}`,
+              look !== "Auto" ? look : null,
+              visualStyle,
+            ]
+              .filter(Boolean)
+              .map((c) => (
+                <span key={c} className="rounded-full border border-foreground/10 px-2.5 py-1 text-foreground/65">{c}</span>
+              ))}
+          </div>
+        </div>
       </div>
 
       {project.pipeline_status === "running" && <WaitingScreen step={project.pipeline_step} {...heroPlan()} />}
 
-      {(project.pipeline_status === "completed" || project.pipeline_status === "preview_ready") && (
-        <section className="flex flex-col items-center gap-6 rounded-3xl border border-foreground/10 bg-gradient-to-b from-indigo-500/[0.06] to-transparent px-6 py-10 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-2xl text-white shadow-lg shadow-indigo-500/30">
-            ✓
-          </div>
-          <h2 className="text-2xl font-semibold tracking-tight">
-            {project.pipeline_status === "completed"
-              ? "Your video is ready"
-              : "Your video preview is ready"}
-          </h2>
-          <div className="flex w-full flex-col justify-center gap-3 sm:w-auto sm:flex-row">
-            <a
-              href={video?.signedUrl ? "#video" : `/projects/${id}/preview`}
-              className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:brightness-110"
-            >
-              ▶ Watch Video
-            </a>
-            {download?.signedUrl ? (
-              <a
-                href={download.signedUrl}
-                className="rounded-2xl border border-foreground/15 px-6 py-3 font-semibold transition hover:bg-foreground/5"
-              >
-                ↓ Download MP4
-              </a>
-            ) : (
-              <span
-                aria-disabled
-                className="cursor-not-allowed rounded-2xl border border-foreground/10 px-6 py-3 font-semibold text-foreground/40"
-              >
-                ↓ Download MP4
-              </span>
-            )}
-          </div>
-          {!download?.signedUrl && (
-            <p className="max-w-sm text-xs text-foreground/50">
-              The MP4 download will be available once final rendering is enabled.
-            </p>
-          )}
-          {download?.signedUrl && (fourKOn || download4k?.signedUrl) && (
-            <div className="flex flex-col items-center gap-1.5">
-              {download4k?.signedUrl ? (
-                <a href={download4k.signedUrl} className="rounded-2xl border border-foreground/15 px-6 py-3 font-semibold transition hover:bg-foreground/5">
-                  ↓ Download 4K
-                </a>
-              ) : project.render_4k_status === "processing" ? (
-                <span className="rounded-2xl border border-foreground/10 px-6 py-3 font-semibold text-foreground/60">Preparing 4K…</span>
+      {ready && (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="flex min-w-0 flex-col gap-3">
+            <div id="video" className="overflow-hidden rounded-3xl border border-foreground/10 bg-black shadow-2xl shadow-violet-900/20">
+              {video?.signedUrl ? (
+                <video controls playsInline src={video.signedUrl} className="aspect-video w-full" />
+              ) : preview ? (
+                <PreviewPlayer {...preview} />
               ) : (
-                <form action={render4kVideo.bind(null, id)}>
-                  <SubmitButton pendingLabel="Starting 4K…" className="rounded-2xl border border-foreground/15 px-6 py-3 font-semibold transition hover:bg-foreground/5">Get 4K version</SubmitButton>
-                </form>
+                <div className="flex aspect-video items-center justify-center text-sm text-white/60">Preview unavailable. Open the full preview below.</div>
               )}
-              <p className="text-xs text-foreground/50">
-                {project.render_4k_status === "failed" && project.render_4k_error ? project.render_4k_error : "1080p by default. The 4K version renders on request and takes a few minutes longer."}
-              </p>
             </div>
-          )}
-          {video?.signedUrl && (
-            <video id="video" controls src={video.signedUrl} className="w-full rounded-2xl" />
-          )}
-        </section>
+            {!video?.signedUrl && (
+              <p className="text-xs text-foreground/50">
+                You&apos;re watching the live preview{preview && !preview.audioUrl ? " (no voice yet)" : ""}. The final MP4 is rendered separately.
+              </p>
+            )}
+          </section>
+
+          <aside className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
+              <h2 className="text-sm font-semibold">Download</h2>
+              {download?.signedUrl ? (
+                <a href={download.signedUrl} className={primaryBtn}>
+                  ↓ Download MP4 · 1080p
+                </a>
+              ) : (
+                <span aria-disabled className={`${primaryBtn} cursor-not-allowed opacity-50`}>
+                  ↓ Download MP4
+                </span>
+              )}
+              {!download?.signedUrl && <p className="text-xs text-foreground/50">The MP4 download will be available once final rendering is enabled.</p>}
+              {download?.signedUrl && (fourKOn || download4k?.signedUrl) && (
+                <>
+                  {download4k?.signedUrl ? (
+                    <a href={download4k.signedUrl} className={secondaryBtn}>
+                      ↓ Download 4K
+                    </a>
+                  ) : project.render_4k_status === "processing" ? (
+                    <span className={`${secondaryBtn} text-foreground/60`}>
+                      <span className="size-3 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" /> Preparing 4K…
+                    </span>
+                  ) : (
+                    <form action={render4kVideo.bind(null, id)}>
+                      <SubmitButton pendingLabel="Starting 4K…" className={secondaryBtn}>
+                        ✦ Get 4K version
+                      </SubmitButton>
+                    </form>
+                  )}
+                  <p className="text-xs text-foreground/50">
+                    {project.render_4k_status === "failed" && project.render_4k_error ? project.render_4k_error : "4K renders on request and takes a few minutes longer."}
+                  </p>
+                </>
+              )}
+              <Link href={`/projects/${id}/preview`} className="text-center text-xs text-violet-600 hover:underline dark:text-violet-300">
+                Open full-screen preview →
+              </Link>
+            </div>
+            <div className="flex flex-col gap-2 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
+              <h2 className="text-sm font-semibold">Next</h2>
+              <Link href="/projects/new" className={secondaryBtn}>
+                + Make another video
+              </Link>
+              <Link href="/dashboard" className="text-center text-xs text-foreground/55 hover:text-foreground">
+                All my videos
+              </Link>
+            </div>
+          </aside>
+        </div>
       )}
 
       {(project.pipeline_status === "failed" ||
         project.pipeline_status === "needs_input" ||
         project.pipeline_status === "idle") && (
-        <section className="flex flex-col items-center gap-4 rounded-3xl border border-foreground/10 px-6 py-10 text-center">
-          <p className="max-w-md text-foreground/80">
+        <section className="flex flex-col items-center gap-4 rounded-3xl border border-foreground/10 bg-gradient-to-b from-violet-500/[0.05] to-transparent px-6 py-14 text-center">
+          <div className={`flex size-14 items-center justify-center rounded-full text-2xl ${project.pipeline_status === "idle" ? "bg-violet-500/15 text-violet-600 dark:text-violet-300" : "bg-rose-500/15 text-rose-600 dark:text-rose-300"}`}>
+            {project.pipeline_status === "idle" ? "✦" : "!"}
+          </div>
+          <h2 className="text-xl font-semibold">
+            {project.pipeline_status === "idle" ? "Ready to generate" : project.pipeline_status === "needs_input" ? "We need a bit more to work with" : "This one didn't finish"}
+          </h2>
+          <p className="max-w-md text-sm text-foreground/65">
             {project.pipeline_status === "idle"
               ? "Your video hasn't been generated yet."
-              : "We couldn't finish your video this time. Please try again."}
+              : project.pipeline_status === "needs_input"
+                ? "Add product screenshots in a new video so we don't have to guess your features."
+                : "We couldn't finish your video this time. Please try again."}
           </p>
           {project.pipeline_status === "needs_input" ? (
-            <Link
-              href="/projects/new"
-              className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:brightness-110"
-            >
+            <Link href="/projects/new" className={`${primaryBtn} w-auto px-6`}>
               Create a new video
             </Link>
           ) : (
             <form action={retryPipeline.bind(null, id)}>
-              <SubmitButton
-                pendingLabel="Starting…"
-                className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-3 font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:brightness-110 disabled:opacity-60"
-              >
-                {project.pipeline_status === "failed" ? "Try again" : "✦ Generate Video"}
+              <SubmitButton pendingLabel="Starting…" className={`${primaryBtn} w-auto px-6`}>
+                {project.pipeline_status === "failed" ? "↻ Try again" : "✦ Generate video"}
               </SubmitButton>
             </form>
           )}
+        </section>
+      )}
+
+      {project.pipeline_status !== "running" && (
+        <section className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-2 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
+            <h2 className="text-sm font-semibold">Script</h2>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/75">{voiceScript || "—"}</p>
+          </div>
+          <div className="flex flex-col gap-2 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
+            <h2 className="text-sm font-semibold">What viewers see</h2>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/75">{project.advanced_direction || "—"}</p>
+            <dl className="mt-2 grid grid-cols-2 gap-3 border-t border-foreground/[0.07] pt-3 text-xs">
+              {[
+                ["Look", look],
+                ["Style", visualStyle ?? "—"],
+                ["Call to action", project.call_to_action || "—"],
+              ].map(([k, v]) => (
+                <div key={k}>
+                  <dt className="text-foreground/45">{k}</dt>
+                  <dd className="mt-0.5 font-medium">{v}</dd>
+                </div>
+              ))}
+              <div>
+                <dt className="text-foreground/45">Brand colour</dt>
+                <dd className="mt-0.5 flex items-center gap-1.5 font-medium">
+                  {project.brand_color ? (
+                    <>
+                      <span className="size-3.5 rounded-full border border-foreground/15" style={{ background: project.brand_color }} />
+                      {project.brand_color}
+                    </>
+                  ) : (
+                    "Auto"
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </div>
         </section>
       )}
 
@@ -557,5 +660,6 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </section>
       )}
     </main>
+    </div>
   );
 }
