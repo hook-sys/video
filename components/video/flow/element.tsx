@@ -3,6 +3,7 @@ import { Icon } from "@/components/video/icons";
 import { Card } from "./cards/card";
 import { Crop, Device, DEVICE_SPEC, type DeviceFinish, type DeviceModel } from "./cards/devices";
 import { CARD_BY_ID } from "./cards/templates";
+import { ShapeObject, TextObject, VisualObject } from "./shapes";
 import type { CardContent, CardStyle } from "./cards/types";
 import { num, ramp } from "./eval";
 import type { NodeState } from "./states";
@@ -73,6 +74,14 @@ export function ElementView({ s, frame, theme }: { s: NodeState; frame: number; 
         {el.label && <div style={{ fontSize: Math.max(22, w * 0.2), fontWeight: 600, color: theme.ink, whiteSpace: "nowrap", opacity: ramp(t, 10, 12) }}>{el.label}</div>}
       </div>
     );
+  } else if (el.type === "text") {
+    const upd = [...(el.updates ?? [])].reverse().find((u) => frame >= u.at);
+    const next = upd && String(upd.content.value ?? upd.content.title ?? upd.content.amount ?? upd.content.label ?? "");
+    body = <TextObject text={next || el.text} w={w} h={h} t={upd ? frame - upd.at : t} theme={theme} />;
+  } else if (el.type === "shape") {
+    body = <ShapeObject shape={el.shape} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} />;
+  } else if (el.type === "visual") {
+    body = <VisualObject visual={el.visual} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} />;
   } else if (el.type === "logo") {
     body = (
       <div style={{ width: w, height: h, borderRadius: Math.min(w, h) * 0.24, background: "rgba(255,255,255,.95)", boxShadow: `0 30px 70px ${theme.glow}0.25), inset 0 0 0 1.5px #fff`, display: "flex", alignItems: "center", justifyContent: "center", padding: 18, boxSizing: "border-box" }}>

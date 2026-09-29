@@ -15,6 +15,9 @@ export const BACKDROPS = [
   "blobs", // liquid colour blobs morphing
   "grain", // a fine film grain over the mesh
   "energy", // curved trails of light sweeping through the frame
+  "spotlight", // a swaying stage light from above, the rest in shade
+  "horizon", // a bright horizon line with a glow rising behind it
+  "aurora", // soft curtains of colour drifting across the top
 ] as const;
 export type BackdropName = (typeof BACKDROPS)[number];
 export const isBackdrop = (x: unknown): x is BackdropName => typeof x === "string" && (BACKDROPS as readonly string[]).includes(x);

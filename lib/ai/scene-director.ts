@@ -11,7 +11,7 @@ import { layoutCatalogText } from "@/components/video/flow/layouts";
 import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { compositionCheck, violationNote, type Violation } from "@/components/video/flow/composition-check";
 import { validateFlowPlan } from "@/components/video/flow/validate";
-import { CAMERA_MOVES, ENTER_STYLES, ERASE_STYLES, MAX_ELEMENTS_PER_SCENE, MAX_SCENE_BEATS, PATH_STYLES, repairSceneScript, SceneScript, SceneScriptModel, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
+import { CAMERA_MOVES, ENTER_STYLES, ERASE_STYLES, MAX_ELEMENTS_PER_SCENE, MAX_SCENE_BEATS, PATH_STYLES, repairSceneScript, SceneScript, SceneScriptModel, sceneScriptBlockers, SHAPES, TRANSITIONS, VISUALS } from "@/lib/scene-script";
 import { neverList } from "@/lib/video-rules";
 import { STYLE_DIRECTION } from "@/lib/ai/style-direction";
 import { tokenize, type WordTiming } from "@/lib/voice-timing";
@@ -39,6 +39,9 @@ ELEMENTS (in scene/place beats): { id, asset, content, screen, label }
   When SCREENSHOTS > 0 the client uploaded their real product screens: they are the most convincing visuals, so show several different ones (shot:1, shot:2 …) — e.g. a laptop or browser device with a screenshot on its screen as a scene's hero, and crops (top-left-half, center-detail …) of other screenshots beside the cards.
   • "icon:<lucide-name>": a glass icon tile (label = caption ≤2 words).
   • "logo": the client's logo.
+  • "text:<1–3 words>": a BIG word or number as an object in the scene ("text:4K", "text:−1h", "text:3 weeks", "text:98%"). It can move, merge, be erased, and update (content.value = the new text, e.g. "3 weeks" → "3 minutes").
+  • "shape:<name>": a form — ${SHAPES.join(", ")}. orb = a glowing sphere (the product's core, AI, a hub); ring / circle = a round frame or hub (label = 1–2 words inside); pill = a capsule with a label; arrow-right / arrow-down / arrow-curve = an arrow that draws itself (from one idea to the next; label = 1–2 words above).
+  • "visual:<name>": a literal picture of an idea — ${VISUALS.join(", ")}: waveform = a voice / audio / speaking; filmstrip = scenes / video / frames; clock = time, hours, "in minutes"; progress = rendering, loading, a percentage filling; download = download / export; play = watch / a video playing; bars = growth, results, analytics.
   • null: an element that already exists (by id), carried into a new scene.
 - content: the card's text slots (only the slots its template lists; others null). Short, UI-like, taken from or implied by the narration and direction: titles 1–3 words, statuses 1–2 words, values like "128", "৳2.4M", "12 hrs". Values are illustrative UI, never factual claims about the client.
 
@@ -89,7 +92,9 @@ DIRECTION FIRST
 
 RHYTHM
 - ${MAX_SCENE_BEATS} beats at most; about one beat every 1–1.5 s of speech; never more than 3 s of speech without a new beat (4 s after a scene, list, arrange or reveal).
-- 2–4 scenes, each with a different layout family and a different transition; one big hero element and at most 3 supporting ones on screen at a time (bring more in only after others leave). Prefer hero-* layouts; scatter layouts make every element small.
+- 2–4 scenes, each with a different layout family and a different transition; one big hero element and at most 3 supporting ones on screen at a time (bring more in only after others leave). Use hero-* layouts for at most 2 scenes; also use round compositions (hub, ring, arc) and flows (pipeline, diagonal, zigzag, split). Scatter layouts make every element small.
+- SHOW WHAT IS SAID: for every cue, pick the most literal picture of those words. Voice / audio → visual:waveform; scenes / video → visual:filmstrip; minutes / hours / time → visual:clock or text:"2 min"; download / export → visual:download; a number or quality ("4K", "3 weeks", "98%") → text:<it>; growth → visual:bars; "from A to B" / "turns into" → shape:arrow-*; the product's core / AI → shape:orb. Use UI cards and screenshots for the product doing its job — not for every word.
+- MIX, NEVER ONLY CARDS: every video uses at least 2 text: objects, 2 shape: or visual: objects, and at least one scene whose hero is not a card or device (a big number, an orb with satellites, a waveform, an arrow flow).
 - Inside a scene, make things HAPPEN (trigger, update, connect, move, merge, erase) — a scene where nothing reacts is a slideshow.
 - 1–2 statements (or a list) where the narration states its promise; the last beat is usually a statement on the closing phrase. The brand lockup (logo, name, call to action) is added automatically after it.
 - theme: "lavender" (friendly SaaS), "mint" (health, wellness, finance, calm), "teal" (operations, B2B, logistics, data, security) or "midnight" (dark, dramatic, premium). creative_preferences.visual_style is a hint.`;

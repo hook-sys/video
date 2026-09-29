@@ -50,6 +50,17 @@ export function compositionCheck(
   if (long) add("text-wall", `the statement "${long.text ?? long.cue}" has ${tokenCount(long.text ?? long.cue)} words`);
   const cuts = beats.filter((b, i) => b.action === "scene" && i > 0 && b.transition === "cut").length;
   if (cuts > 1) add("cut-spam", `${cuts} scenes start with a hard cut`);
+  const assets = beats.flatMap((b) => (b.elements ?? []).map((e) => e.asset ?? ""));
+  const nonCard = assets.filter((a) => /^(text|shape|visual):/.test(a)).length;
+  if (assets.length >= 4 && nonCard < 3) add("only-cards", `${nonCard} of ${assets.length} elements are text, shapes or visuals`);
+  const scenes = beats.filter((b) => b.action === "scene");
+  const family = (l: string | null) => (l ?? "grid").replace(/-[a-z]$/, "");
+  const heroes = scenes.filter((b) => family(b.layout).startsWith("hero")).length;
+  const fams = scenes.map((b) => family(b.layout));
+  if (heroes > 2) add("same-layouts", `${heroes} of ${scenes.length} scenes use a hero layout`);
+  else if (new Set(fams).size < fams.length) add("same-layouts", `layout families repeat: ${fams.join(", ")}`);
+  const bds = scenes.map((b) => b.backdrop).filter(Boolean);
+  if (new Set(bds).size < bds.length) add("repeat-backdrop", `backdrops repeat: ${bds.join(", ")}`);
   const celebrates = beats.filter((b) => b.action === "celebrate").length;
   if (celebrates > 1) add("decor-beats", `${celebrates} beats are only a celebrate accent`);
   if (screenshots > 0) {

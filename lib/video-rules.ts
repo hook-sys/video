@@ -39,6 +39,9 @@ export const VIDEO_RULES: VideoRule[] = [
   { id: "text-wall", never: "never put more than 8 words on screen in one statement — 2–6 words, one keyword highlighted", enforced: ["prompt", "detect"], seen: "Reference films: every caption is 2–6 words" },
   { id: "cut-spam", never: "never hard-cut between scenes more than once; flow with morph, zoom-through or a push", enforced: ["prompt", "detect"], seen: "Reference films: 6–14 hard cuts in 70–120 s, the rest continuous" },
   { id: "fake-proof", never: "never invent customer logos, testimonials, awards or real-world statistics — numbers on cards are illustrative UI values only", enforced: ["prompt"], seen: "Risk: proof beats in the reference style" },
+  { id: "only-cards", never: "never build a video only from UI cards: use text: numbers, shape: forms and visual: pictures for what the voice says (voice → waveform, 4K → text:4K)", enforced: ["prompt", "detect"], seen: "MotionBrief promo: 19 beats, every element a card or a device" },
+  { id: "same-layouts", never: "never use hero-* layouts for more than 2 scenes, or the same layout family twice: vary with round (hub, ring, arc) and flowing (pipeline, diagonal, split) compositions", enforced: ["prompt", "detect"], seen: "MotionBrief and Payroo videos: every scene hero-left/right" },
+  { id: "repeat-backdrop", never: "never use the same backdrop in two scenes", enforced: ["prompt", "code", "detect"], seen: "MotionBrief promo: glow in three scenes" },
   { id: "no-hook", never: "never open on a logo or a generic title: open on the pain or the question in 2–5 words", enforced: ["prompt"], seen: "Reference films all open on a hook" },
   { id: "camera-swing", never: "never swing the camera away from the action (long pans that overshoot)", enforced: ["code", "detect"], seen: "Fuzz: camera overshot 800 px after a focus" },
 ];

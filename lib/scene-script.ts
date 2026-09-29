@@ -108,7 +108,18 @@ export type AssetRef =
   | { kind: "device"; model: string; finish: string }
   | { kind: "shot"; index: number; crop: string }
   | { kind: "icon"; icon: string }
-  | { kind: "logo" };
+  | { kind: "logo" }
+  | { kind: "text"; text: string }
+  | { kind: "shape"; shape: ShapeName }
+  | { kind: "visual"; visual: VisualName };
+
+// Non-card elements (so a scene is not only UI cards):
+// text:<1–3 words> — a big word or number as an object ("4K", "−1h", "3 weeks");
+// shape:<name> — a round / arrow form; visual:<name> — a literal picture of an idea.
+export const SHAPES = ["circle", "ring", "orb", "pill", "arrow-right", "arrow-down", "arrow-curve", "plus", "spark"] as const;
+export type ShapeName = (typeof SHAPES)[number];
+export const VISUALS = ["waveform", "filmstrip", "clock", "progress", "download", "play", "bars"] as const;
+export type VisualName = (typeof VISUALS)[number];
 export function parseAsset(asset: string | null | undefined): AssetRef | null {
   if (!asset) return null;
   const [kind, rest = ""] = asset.split(/:([\s\S]*)/);
@@ -118,6 +129,12 @@ export function parseAsset(asset: string | null | undefined): AssetRef | null {
   if (kind === "shot" && /^\d+$/.test(a)) return { kind, index: parseInt(a, 10), crop: b && b in CROP_PRESETS ? b : "full" };
   if (kind === "icon" && isIconName(a)) return { kind, icon: resolveIcon(a)! };
   if (kind === "logo") return { kind };
+  if (kind === "text") {
+    const text = rest.trim().replace(/\s+/g, " ");
+    return text && text.length <= 14 && text.split(" ").length <= 3 ? { kind, text } : null;
+  }
+  if (kind === "shape" && (SHAPES as readonly string[]).includes(a)) return { kind, shape: a as ShapeName };
+  if (kind === "visual" && (VISUALS as readonly string[]).includes(a)) return { kind, visual: a as VisualName };
   return null;
 }
 
@@ -132,14 +149,36 @@ export function repairSceneScript(script: SceneScript): SceneScript {
     if (kind === "icon") return `icon:${resolveIcon(a) ?? searchIcons(a.replace(/[-_]/g, " "), 1)[0] ?? "sparkles"}`;
     if (kind === "device") return "device:laptop/light";
     if (kind === "shot") return "shot:1/full";
+    if (kind === "text") return `text:${rest.trim().split(/\s+/).slice(0, 2).join(" ").slice(0, 14) || "New"}`;
+    if (kind === "shape") return a.startsWith("arrow") ? "shape:arrow-right" : "shape:orb";
+    if (kind === "visual") return `icon:${searchIcons(a.replace(/[-_]/g, " "), 1)[0] ?? "sparkles"}`;
     return `card:${searchCards(asset, 1)[0] ?? "kpi"}/glass`;
   };
-  // Rulebook (lib/video-rules.ts): no panel-wipe; no dark cards on a dark theme.
+  // Rulebook (lib/video-rules.ts): no panel-wipe; no dark cards on a dark theme;
+  // no backdrop used by two scenes (a repeat gets the next unused one).
   const onDark = (asset: string | null) => (asset && script.theme === "midnight" ? asset.replace(/^(card:[^/]+)\/dark$/, "$1/solid") : asset);
+  const usedBackdrops = new Set<string>();
+  const pool = BACKDROPS.filter((x) => x !== "mesh" && x !== "grain");
+  const backdropOf = (b: SceneBeat, i: number) => {
+    if (b.action !== "scene" || !b.backdrop) return b.backdrop;
+    let pick = b.backdrop;
+    if (usedBackdrops.has(pick)) {
+      for (let k = 0; k < pool.length; k++) {
+        const cand = pool[(k + i * 5) % pool.length];
+        if (!usedBackdrops.has(cand)) {
+          pick = cand;
+          break;
+        }
+      }
+    }
+    usedBackdrops.add(pick);
+    return pick;
+  };
   return {
     ...script,
-    beats: script.beats.slice(0, MAX_SCENE_BEATS).map((b) => ({
+    beats: script.beats.slice(0, MAX_SCENE_BEATS).map((b, i) => ({
       ...b,
+      backdrop: backdropOf(b, i),
       transition: b.transition === "panel-wipe" ? "dissolve" : b.transition,
       elements: b.elements && b.elements.slice(0, MAX_ELEMENTS_PER_SCENE).map((e) => ({ ...e, asset: onDark(fixAsset(e.asset)), screen: e.screen && (parseAsset(e.screen) ? e.screen : fixAsset(e.screen)) })),
       layout: b.layout === null ? null : isLayout(b.layout) ? b.layout : "grid",

@@ -114,6 +114,39 @@ export function Backdrop({ kind, frame, theme, camera, opacity }: { kind: Backdr
       });
       break;
     }
+    case "spotlight": {
+      // A stage light from above that sways slowly; the rest falls into shade.
+      const x = W / 2 + Math.sin(frame / 70) * 260;
+      body = (
+        <>
+          <rect x={0} y={0} width={W} height={H} fill={`rgba(${theme.dark ? "0,0,0" : "30,27,75"},${theme.dark ? 0.45 : 0.08})`} />
+          <polygon points={`${x - 90},-40 ${x + 90},-40 ${x + 620},${H + 40} ${x - 620},${H + 40}`} fill="url(#bd-beam)" opacity={0.9} />
+          <ellipse cx={x} cy={H - 120} rx={560} ry={90} fill="url(#bd-glow)" opacity={0.8} />
+        </>
+      );
+      break;
+    }
+    case "horizon": {
+      // A bright horizon line with a sun-like glow rising behind it.
+      const rise = 40 * Math.sin(frame / 90);
+      body = (
+        <>
+          <circle cx={W / 2} cy={H * 0.66 - rise} r={420} fill="url(#bd-glow)" opacity={0.9} />
+          <rect x={0} y={H * 0.66} width={W} height={H * 0.34} fill={theme.dark ? "rgba(0,0,0,.35)" : "rgba(255,255,255,.35)"} />
+          <line x1={0} y1={H * 0.66} x2={W} y2={H * 0.66} stroke={c} strokeWidth={3} opacity={0.8} />
+        </>
+      );
+      break;
+    }
+    case "aurora": {
+      // Curtains of colour drifting across the top of the frame.
+      body = [0, 1, 2].map((i) => {
+        const pts: string[] = [];
+        for (let x = -40; x <= W + 40; x += 40) pts.push(`${x},${(H * (0.18 + i * 0.1) + Math.sin(x / (260 + i * 60) + frame / (40 + i * 10) + i * 2) * 90).toFixed(1)}`);
+        return <polyline key={i} points={pts.join(" ")} fill="none" stroke={i === 1 ? theme.accent : i ? c2 : c} strokeWidth={120 - i * 25} strokeLinecap="round" opacity={0.18} style={{ filter: "blur(28px)" }} />;
+      });
+      break;
+    }
     case "glow": {
       const k = 0.5 + 0.5 * Math.sin(frame / 45);
       body = (

@@ -1,5 +1,6 @@
 import { type CSSProperties, useState } from "react";
 import { AbsoluteFill, continueRender, delayRender, Html5Audio, Img, interpolateColors, Sequence, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { Audio as MediaAudio } from "@remotion/media";
 import { SFX_LIBRARY } from "@/components/video/sfx";
 import { Icon } from "@/components/video/icons";
 import { isLottieName, LottieAnim } from "@/components/video/lottie";
@@ -17,7 +18,9 @@ import { MARK_DELAY, type FlowBrand, type FlowLink, type FlowList, type FlowNode
 // Renders a FlowPlan: a themed world, persistent nodes under one camera,
 // links with travelling packets, kinetic text and Lottie accents.
 export { FLOW_SCENE_ID } from "@/components/video/types";
-export type FlowSceneProps = { plan: FlowPlan; theme?: ThemeName; audioUrl?: string | null };
+// webAudio: sound through @remotion/media, which the in-browser renderer
+// (@remotion/web-renderer) can mix into the file; Html5Audio is only heard.
+export type FlowSceneProps = { plan: FlowPlan; theme?: ThemeName; audioUrl?: string | null; webAudio?: boolean };
 
 // Sound effects under the narration: spaced out and capped so they stay
 // subtle (and within the Player's shared audio tags).
@@ -51,7 +54,8 @@ function useFlowFont() {
   });
 }
 
-export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowSceneProps) {
+export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: FlowSceneProps) {
+  const Sound = webAudio ? MediaAudio : Html5Audio;
   useFlowFont();
   const frame = useCurrentFrame();
   const { width, height } = useVideoConfig();
@@ -112,7 +116,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
   );
   return (
     <AbsoluteFill style={{ fontFamily: FLOW_FONT, overflow: "hidden" }}>
-      <World theme={theme} frame={frame} camera={[cx, cy]} />
+      <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} />
       {(plan.backdrops ?? []).map((b, i, all) => {
         // Cross-fade 24 frames into each backdrop; it fades as the next arrives
         // and clears for the brand lockup.
@@ -125,7 +129,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
       )}
       {irises.filter((i) => !i.done).map((i, n) => (
         <AbsoluteFill key={n} style={{ clipPath: i.k > 0 ? `circle(${i.r}px at ${i.x}px ${i.y}px)` : undefined }}>
-          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} />}
+          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} />}
           {content((id) => i.ir.members.includes(id), false)}
         </AbsoluteFill>
       ))}
@@ -142,10 +146,10 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
         <Kinetic key={i} t={t} frame={frame} theme={theme} />
       ))}
       {plan.brand && <BrandLockup brand={plan.brand} frame={frame} theme={theme} />}
-      {audioUrl && <Html5Audio src={audioUrl} />}
+      {audioUrl && <Sound src={audioUrl} />}
       {plannedSfx(plan).map((s, i) => (
         <Sequence key={`sfx-${i}`} from={s.frame} layout="none">
-          <Html5Audio src={staticFile(s.src)} volume={SFX_VOLUME} />
+          <Sound src={staticFile(s.src)} volume={SFX_VOLUME} />
         </Sequence>
       ))}
     </AbsoluteFill>
@@ -183,17 +187,25 @@ function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan[
 // ── world ───────────────────────────────────────────────────────────────────
 // A soft mesh of coloured light that keeps drifting (and moves a little with
 // the camera), so the frame breathes even when nothing else moves.
-export function World({ theme, frame, camera }: { theme: FlowTheme; frame: number; camera: Vec }) {
+export function World({ theme, frame, camera, seed = 0 }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number }) {
   const par = (k: number): Vec => [-camera[0] * k, -camera[1] * k];
+  // Per-video variation: the blobs sit elsewhere and the light comes from another side.
+  const sx = seed ? ((seed % 997) / 997 - 0.5) * 900 : 0;
+  const sy = seed ? (((seed >> 3) % 991) / 991 - 0.5) * 500 : 0;
+  const angle = 160 + (seed % 7) * 25;
+  const flip = seed % 2 ? -1 : 1;
   const blob = (i: number, base: Vec, size: number, color: string, alpha: number) => {
     const [px, py] = par(0.1 + i * 0.04);
-    const x = base[0] + px + Math.sin(frame / (120 + i * 26) + i * 1.7) * 170;
-    const y = base[1] + py + Math.cos(frame / (150 + i * 22) + i * 2.3) * 120;
+    const x = 960 + (base[0] - 960) * flip + sx + px + Math.sin(frame / (120 + i * 26) + i * 1.7) * 170;
+    const y = base[1] + sy + py + Math.cos(frame / (150 + i * 22) + i * 2.3) * 120;
     const s = size * (1 + 0.08 * Math.sin(frame / (90 + i * 17) + i));
-    return <div key={i} style={{ position: "absolute", left: x - s / 2, top: y - s / 2, width: s, height: s, borderRadius: "50%", background: color, opacity: alpha, filter: "blur(150px)" }} />;
+    // A soft radial falloff instead of a CSS blur: same look, and the in-browser
+    // renderer (which skips large blur filters) draws it identically.
+    const e = s + 300;
+    return <div key={i} style={{ position: "absolute", left: x - e / 2, top: y - e / 2, width: e, height: e, borderRadius: "50%", background: `radial-gradient(circle, ${color} 0%, ${color} 22%, transparent 70%)`, opacity: alpha }} />;
   };
   return (
-    <AbsoluteFill style={{ background: theme.dark ? `radial-gradient(120% 90% at 50% 40%, ${theme.bg[0]}, ${theme.bg[1]})` : `linear-gradient(160deg, ${theme.bg[0]} 20%, ${theme.bg[1]})` }}>
+    <AbsoluteFill style={{ background: theme.dark ? `radial-gradient(120% 90% at ${50 + sx / 30}% ${40 + sy / 30}%, ${theme.bg[0]}, ${theme.bg[1]})` : `linear-gradient(${angle}deg, ${theme.bg[0]} 20%, ${theme.bg[1]})` }}>
       {theme.dark
         ? [blob(0, [120, -80], 900, theme.blobs[0], 0.5), blob(1, [1800, -60], 900, theme.blobs[1], 0.45), blob(2, [960, 1250], 800, theme.blobs[2], 0.18)]
         : [

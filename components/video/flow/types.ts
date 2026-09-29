@@ -39,7 +39,12 @@ export type FlowElement =
   | { type: "device"; model: string; finish: string; screen: { src?: string; crop?: string; card?: { template: string; style: string; content?: Record<string, unknown> } } }
   | { type: "shot"; src: string; crop: string }
   | { type: "icon"; icon: string; label?: string }
-  | { type: "logo"; src?: string; text?: string };
+  | { type: "logo"; src?: string; text?: string }
+  // A big word or number as an object in the scene; updates may change it.
+  | { type: "text"; text: string; updates?: { at: number; content: Record<string, unknown> }[] }
+  // Round and arrow forms, and literal pictures of an idea (voice → waveform).
+  | { type: "shape"; shape: string; label?: string }
+  | { type: "visual"; visual: string; label?: string };
 
 export type FlowNode = {
   id: string;
@@ -137,6 +142,8 @@ export type FlowPlan = {
   // Element nodes that overlap on purpose (a stack, a fan) during a window.
   overlaps?: { ids: string[]; start: number; end: number }[];
   brand?: FlowBrand;
+  // Varies the base colour world per video (blob layout, light direction).
+  seed?: number;
   // A pointer in world space: glides along path, visible where show > 0,
   // and presses (a ripple) at each click frame.
   cursor?: { path: Track<Vec>; show: Track<number>; clicks: number[] };

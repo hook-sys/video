@@ -151,6 +151,20 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       return { el: { type: "shot", src: screenshots[(ref.index - 1) % screenshots.length], crop: ref.crop }, w: Math.round(560 * cw), h: Math.round(560 * ch) };
     }
     if (ref.kind === "icon") return { el: { type: "icon", icon: ref.icon, label: e.label ?? undefined }, w: 160, h: e.label ? 220 : 160 };
+    if (ref.kind === "text") {
+      // Sized to the word: short numbers are huge, three words stay one line.
+      const len = Math.max(2, ref.text.length);
+      const size = Math.round(Math.min(300, 1400 / len));
+      return { el: { type: "text", text: ref.text }, w: Math.round(size * len * 0.62 + 40), h: Math.round(size * 1.25) };
+    }
+    if (ref.kind === "shape") {
+      const wide = ref.shape.startsWith("arrow") || ref.shape === "pill";
+      return { el: { type: "shape", shape: ref.shape, label: e.label ?? undefined }, w: wide ? 360 : 260, h: wide ? (ref.shape === "pill" ? 120 : 160) : 260 };
+    }
+    if (ref.kind === "visual") {
+      const wide = ref.visual === "waveform" || ref.visual === "filmstrip" || ref.visual === "bars";
+      return { el: { type: "visual", visual: ref.visual, label: e.label ?? undefined }, w: wide ? 520 : 300, h: wide ? 300 : 320 };
+    }
     return { el: { type: "logo", src: brand?.logo ?? undefined, text: brand?.name ?? "Logo" }, w: 320, h: 180 };
   };
 
@@ -197,7 +211,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       put(spec.pos, t + 22, [x, y], "inOut");
       put(sc, t, n.fit);
       if (rot) spec.rot = [[0, rot]];
-      if (DEPTH[n.depth].blur) spec.blur = [[0, DEPTH[n.depth].blur]];
+      if (DEPTH[n.depth].blur && spec.el?.type !== "text") spec.blur = [[0, DEPTH[n.depth].blur]];
       return;
     }
     if (from[style]) {
@@ -225,7 +239,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       spec.tilt = [[t, [24, -16, 3]], [t + 40, [0, 0, 0], "inOut"]];
     }
     if (rot && style !== "spin") spec.rot = [[0, rot]];
-    const depthBlur = DEPTH[n.depth].blur;
+    // A big word or number must stay readable: never blurred for depth.
+    const depthBlur = spec.el?.type === "text" ? 0 : DEPTH[n.depth].blur;
     if (depthBlur) {
       spec.blur ??= [[0, 0]];
       put(spec.blur, t + 18, depthBlur, "inOut");
@@ -503,7 +518,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       case "update": {
         const [a] = tgt;
         if (!a || !b.content) break;
-        if (a.h.spec.el?.type === "card") (a.h.spec.el.updates ??= []).push({ at: t + 2, content: toContent(b.content)! });
+        if (a.h.spec.el?.type === "card" || a.h.spec.el?.type === "text") (a.h.spec.el.updates ??= []).push({ at: t + 2, content: toContent(b.content)! });
         bump(a, t + 2);
         f.sfx(t + 2, "reveal");
         framed = false;
@@ -790,6 +805,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     f.sfx(stageEnd, "reveal");
   }
   const plan = f.build();
+  // Every video gets its own base world (from its words, so it is stable).
+  plan.seed = [...narration].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_003, 7);
   // The cursor: glides in before each click (from off to the lower right when
   // it was hidden), clicks, and leaves when no click follows soon.
   if (clicks.length) {
