@@ -2,12 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
+import type { FlowPlan } from "@/components/video/flow/types";
+import type { HeroCaption } from "./hero-plan";
+import { HeroPlayer } from "./hero-player";
 import { Sphere, UiWindow } from "./primitives";
 import { Words } from "./reveal";
 
-// Full-screen hero: a deep blue stage with a perspective floor, drifting glow,
-// floating spheres and glass UI windows that follow the pointer (parallax).
-export function Hero({ signedIn }: { signedIn: boolean }) {
+// Hero: a deep blue stage with a perspective floor, drifting glow, floating
+// spheres and glass UI windows that follow the pointer (parallax), the
+// headline, and MotionBrief's own promo playing below it.
+export function Hero({ signedIn, plan, captions }: { signedIn: boolean; plan: FlowPlan; captions: HeroCaption[] }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -67,8 +71,10 @@ export function Hero({ signedIn }: { signedIn: boolean }) {
             </Link>
           )}
         </div>
+        <div className="lp-hero-player">
+          <HeroPlayer plan={plan} captions={captions} />
+        </div>
       </div>
-      <div className="lp-scroll-hint" aria-hidden="true" />
     </section>
   );
 }

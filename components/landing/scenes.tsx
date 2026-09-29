@@ -1,8 +1,5 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/brand/logo";
-import type { FlowPlan } from "@/components/video/flow/types";
-import type { HeroCaption } from "./hero-plan";
-import { HeroPlayer } from "./hero-player";
 import { Sphere } from "./primitives";
 import { Reveal, Words } from "./reveal";
 
@@ -100,23 +97,6 @@ export function SceneDirect() {
       <h2 className="lp-h2 lp-h2-dark">
         <Words text="We direct every scene." />
       </h2>
-    </Reveal>
-  );
-}
-
-// D · Your video, ready — a light tunnel opens onto the finished promo.
-export function SceneReady({ plan, captions }: { plan: FlowPlan; captions: HeroCaption[] }) {
-  return (
-    <Reveal className="lp-dark lp-d" sfx={[["whoosh", 100], ["success_chime", 1300]]}>
-      <div className="d-tunnel" aria-hidden="true">
-        <i />
-      </div>
-      <h2 className="lp-h2">
-        <Words text="Your video, ready." />
-      </h2>
-      <div className="d-player">
-        <HeroPlayer plan={plan} captions={captions} />
-      </div>
     </Reveal>
   );
 }

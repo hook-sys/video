@@ -236,7 +236,9 @@
 .lp-tilt-l { transform: perspective(800px) rotateY(28deg) rotateX(8deg) rotate(-4deg); }
 .lp-tilt-r { transform: perspective(800px) rotateY(-26deg) rotateX(10deg) rotate(3deg); }
 
-.lp-hero-content { position: relative; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 120px 16px 80px; text-align: center; }
+.lp-hero-content { position: relative; z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 22px; width: 100%; padding: 120px 16px 72px; text-align: center; }
+.lp-hero-player { width: min(960px, 100%); margin-top: 18px; animation: lp-player-in 1100ms var(--ease-out) 1100ms both; }
+@keyframes lp-player-in { from { opacity: 0; transform: translateY(40px) scale(0.94); } }
 .lp-h1 {
   font-size: clamp(3rem, 10vw, 7.5rem);
   font-weight: 800;
@@ -247,18 +249,6 @@
 .lp-sub { max-width: 34rem; font-size: 1.15rem; color: rgba(255, 255, 255, 0.78); animation: lp-fade-up 900ms var(--ease-out) 700ms both; }
 .lp-ctas { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; animation: lp-fade-up 900ms var(--ease-out) 900ms both; }
 @keyframes lp-fade-up { from { opacity: 0; transform: translateY(16px); } }
-.lp-scroll-hint {
-  position: absolute;
-  bottom: 22px;
-  left: 50%;
-  width: 22px;
-  height: 36px;
-  margin-left: -11px;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  border-radius: 12px;
-}
-.lp-scroll-hint::after { content: ""; position: absolute; left: 50%; top: 6px; width: 4px; height: 8px; margin-left: -2px; border-radius: 2px; background: #fff; animation: lp-scroll 1.6s ease-in-out infinite; }
-@keyframes lp-scroll { 60%, 100% { transform: translateY(12px); opacity: 0; } }
 
 /* ── A · brief: slit → diamond → glass cube ───────────────────────────── */
 .a-stage { position: relative; width: 320px; height: 360px; }
@@ -413,28 +403,6 @@
   100% { transform: translate3d(0, 0, 20px); }
 }
 
-/* ── D · ready: light tunnel → the finished promo ─────────────────────── */
-.d-tunnel { position: absolute; inset: 0; z-index: -1; overflow: hidden; }
-.d-tunnel i {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 240vmax;
-  height: 240vmax;
-  margin: -120vmax 0 0 -120vmax;
-  background: repeating-conic-gradient(from 0deg, rgba(120, 100, 255, 0.55) 0deg 4deg, transparent 4deg 13deg, rgba(244, 114, 182, 0.35) 13deg 15deg, transparent 15deg 24deg);
-  mask-image: radial-gradient(circle, transparent 4%, #000 30%, transparent 70%);
-  opacity: 0;
-}
-[data-in="true"] .d-tunnel i { animation: d-rush 2.6s var(--ease-out) forwards, d-turn 40s linear infinite; }
-.d-tunnel::after { content: ""; position: absolute; left: 50%; top: 50%; width: 30vmax; height: 30vmax; margin: -15vmax 0 0 -15vmax; border-radius: 50%; background: radial-gradient(circle, #fff 0%, rgba(200, 190, 255, 0.6) 30%, transparent 70%); opacity: 0; }
-[data-in="true"] .d-tunnel::after { animation: d-flash 1.8s var(--ease-out) 300ms; }
-@keyframes d-rush { from { opacity: 0; transform: scale(0.3); } to { opacity: 0.9; transform: scale(1); } }
-@keyframes d-turn { to { rotate: 360deg; } }
-@keyframes d-flash { 40% { opacity: 1; transform: scale(2.2); } 100% { opacity: 0; transform: scale(3); } }
-.d-player { position: relative; z-index: 2; width: min(960px, 100%); opacity: 0; transform: scale(0.85) translateY(30px); transition: transform 1100ms var(--ease-out) 700ms, opacity 700ms 700ms; }
-[data-in="true"] .d-player { opacity: 1; transform: none; }
-
 /* ── final: rings into the logo ────────────────────────────────────────── */
 .lp-final { background: radial-gradient(circle at 85% 10%, #f0abfc 0%, transparent 35%), linear-gradient(135deg, #5b21b6 0%, #3b2bff 45%, #2a1fd6 70%, #7c3aed 100%); }
 .f-rings i { position: absolute; left: 50%; top: 45%; width: 60vmin; height: 60vmin; margin: -30vmin 0 0 -30vmin; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.6); box-shadow: 0 0 30px rgba(255, 255, 255, 0.35), inset 0 0 30px rgba(255, 255, 255, 0.2); opacity: 0; }
@@ -458,6 +426,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .lp *, .lp *::before, .lp *::after { animation: none !important; transition: none !important; }
-  .lp-word, .a-brief, .a-cube-wrap, .b-frag, .b-frame, .b-ball, .c-panel, .c-ball, .d-player, .f-word { opacity: 1 !important; transform: none !important; filter: none !important; clip-path: none !important; }
+  .lp-word, .a-brief, .a-cube-wrap, .b-frag, .b-frame, .b-ball, .c-panel, .c-ball, .lp-hero-player, .f-word { opacity: 1 !important; transform: none !important; filter: none !important; clip-path: none !important; }
   .a-typed { width: auto; border: 0; }
 }

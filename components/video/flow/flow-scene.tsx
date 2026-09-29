@@ -516,8 +516,10 @@ function RollingList({ list, frame, theme }: { list: FlowList; frame: number; th
 }
 
 // ── brand lockup ────────────────────────────────────────────────────────────
-// The logo comes into focus alone, then slides aside as the product name
-// reveals next to it; the call to action settles in below. A wide logo (a
+// The logo tile pops in with a turn, the logo inside it pops a beat later, a
+// ring of light spreads behind it and a highlight sweeps across; it then
+// slides aside as the product name reveals next to it, and keeps a gentle
+// breathing motion. The call to action settles in below. A wide logo (a
 // wordmark) is shown on its own.
 function useImageAspect(src?: string) {
   const [aspect, setAspect] = useState<number | null>(null);
@@ -551,20 +553,44 @@ function BrandLockup({ brand, frame, theme }: { brand: FlowBrand; frame: number;
   const gapX = 40;
   // The logo is centred alone first, then the pair (logo, gap, name) is.
   const markX = slide * (mark / 2 - (mark + gapX + nameW) / 2);
+  const pop = ramp(f, 0, 22, "back");
+  const inner = ramp(f, 8, 18, "back");
+  const ring = ramp(f, 4, 34, "out");
+  const shine = ramp(f, 20, 20, "inOut");
+  const idle = clamp01((f - 40) / 30);
+  const turn = (1 - ramp(f, 0, 22, "out")) * -16 + Math.sin(f / 26) * 2.2 * idle;
+  const bob = Math.sin(f / 32) * 5 * idle;
+  const sweep =
+    shine > 0 && shine < 1 ? (
+      <div style={{ position: "absolute", inset: 0, borderRadius: "inherit", overflow: "hidden", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", inset: "-20% -60%", background: "linear-gradient(110deg, transparent 38%, rgba(255,255,255,.75) 50%, transparent 62%)", transform: `translateX(${-60 + 120 * shine}%)` }} />
+      </div>
+    ) : null;
+  const innerStyle = { transform: `scale(${0.4 + 0.6 * inner})`, opacity: clamp01(inner * 1.6) };
   return (
     <AbsoluteFill style={{ transform: `scale(${breathe})` }}>
-      <div style={{ position: "absolute", left: "50%", top: "46%", transform: `translate(calc(-50% + ${markX}px), -50%) scale(${0.7 + 0.3 * inK})`, opacity: inK, filter: inK < 0.99 ? `blur(${(1 - inK) * 16}px)` : undefined }}>
+      <div style={{ position: "absolute", left: "50%", top: "46%", transform: `translate(calc(-50% + ${markX}px), calc(-50% + ${bob}px)) scale(${0.45 + 0.55 * pop}) rotate(${turn}deg)`, opacity: inK, filter: inK < 0.99 ? `blur(${(1 - inK) * 16}px)` : undefined }}>
+        {!wordmark && ring > 0 && ring < 1 && (
+          <div style={{ position: "absolute", left: "50%", top: "50%", width: mark, height: mark, margin: -mark / 2, borderRadius: "50%", border: `4px solid ${theme.primary}`, boxShadow: `0 0 40px ${theme.glow}0.6)`, transform: `scale(${0.9 + ring * 1.3})`, opacity: (1 - ring) * 0.7 }} />
+        )}
         {brand.logo ? (
           wordmark ? (
-            <Img src={brand.logo} style={{ display: "block", height: Math.min(220, 860 / Math.max(1, aspect ?? 1)), width: "auto", maxWidth: 860, objectFit: "contain" }} />
+            <div style={{ position: "relative", borderRadius: 16 }}>
+              <Img src={brand.logo} style={{ display: "block", height: Math.min(220, 860 / Math.max(1, aspect ?? 1)), width: "auto", maxWidth: 860, objectFit: "contain" }} />
+              {sweep}
+            </div>
           ) : (
-            <div style={{ width: mark, height: mark, borderRadius: mark * 0.26, background: "rgba(255,255,255,.92)", boxShadow: `0 24px 60px ${theme.glow}0.25), inset 0 0 0 1.5px #fff`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              <Img src={brand.logo} style={{ width: mark * 0.74, height: mark * 0.74, objectFit: "contain" }} />
+            <div style={{ position: "relative", width: mark, height: mark, borderRadius: mark * 0.26, background: "rgba(255,255,255,.92)", boxShadow: `0 24px 60px ${theme.glow}0.25), inset 0 0 0 1.5px #fff`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              <Img src={brand.logo} style={{ width: mark * 0.74, height: mark * 0.74, objectFit: "contain", ...innerStyle }} />
+              {sweep}
             </div>
           )
         ) : (
-          <div style={{ width: mark, height: mark, borderRadius: mark * 0.26, background: `linear-gradient(145deg, ${theme.primary}, ${theme.primary2})`, boxShadow: `0 24px 60px ${theme.glow}0.35)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name={brand.icon ?? "sparkles"} size={mark * 0.46} color="#fff" strokeWidth={1.9} />
+          <div style={{ position: "relative", width: mark, height: mark, borderRadius: mark * 0.26, background: `linear-gradient(145deg, ${theme.primary}, ${theme.primary2})`, boxShadow: `0 24px 60px ${theme.glow}0.35)`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            <div style={innerStyle}>
+              <Icon name={brand.icon ?? "sparkles"} size={mark * 0.46} color="#fff" strokeWidth={1.9} />
+            </div>
+            {sweep}
           </div>
         )}
       </div>

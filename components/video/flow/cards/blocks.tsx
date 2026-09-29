@@ -30,6 +30,11 @@ export const toneColor = (tone: Tone | undefined, p: Palette, theme: FlowTheme) 
 
 const CHAR = 0.56; // em per character (Inter), for size estimates
 
+// An input field grows to fit its text (up to 3 lines) instead of overflowing.
+const INPUT_LINE = 26;
+const inputLines = (value: string, icon: boolean, w: number) =>
+  Math.min(3, Math.max(1, Math.ceil((String(value ?? "").length * CHAR * 19) / Math.max(80, w - 28 - (icon ? 30 : 0) - 12))));
+
 // Height of a block at card inner width `w` (px) — used for layout and camera
 // framing, and as the block's fixed height when rendered.
 export function blockHeight(b: Block, w: number): number {
@@ -72,7 +77,7 @@ export function blockHeight(b: Block, w: number): number {
     case "price":
       return 84;
     case "input":
-      return 74;
+      return 74 + (inputLines(b.value, !!b.icon, w) - 1) * INPUT_LINE;
     case "calendar":
       return 206;
     case "map":
@@ -420,10 +425,12 @@ export function BlockView({ b, ctx }: { b: Block; ctx: Ctx }): ReactNode {
       return (
         <div style={box}>
           <div style={{ fontSize: 16, color: p.sub, marginBottom: 8 }}>{b.label}</div>
-          <div style={{ height: 44, borderRadius: 12, border: `2px solid ${shown.length ? p.brand : p.line}`, display: "flex", alignItems: "center", gap: 10, padding: "0 14px", fontSize: 19, color: p.ink }}>
-            {b.icon && <Icon name={b.icon} size={20} color={p.sub} />}
-            <span>{shown}</span>
-            {caret && <span style={{ width: 2, height: 22, background: p.brand }} />}
+          <div style={{ height: 44 + (inputLines(b.value, !!b.icon, w) - 1) * INPUT_LINE, borderRadius: 12, border: `2px solid ${shown.length ? p.brand : p.line}`, display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 14px", fontSize: 19, lineHeight: `${INPUT_LINE}px`, color: p.ink, overflow: "hidden" }}>
+            {b.icon && <Icon name={b.icon} size={20} color={p.sub} style={{ flexShrink: 0, marginTop: 3 }} />}
+            <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+              {shown}
+              {caret && <span style={{ display: "inline-block", width: 2, height: 20, marginLeft: 2, verticalAlign: "-3px", background: p.brand }} />}
+            </span>
           </div>
         </div>
       );

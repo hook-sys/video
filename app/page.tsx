@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { Hero } from "@/components/landing/hero";
 import { heroPlan } from "@/components/landing/hero-plan";
-import { FinalCta, SceneBrand, SceneBrief, SceneDirect, SceneReady } from "@/components/landing/scenes";
+import { FinalCta, SceneBrand, SceneBrief, SceneDirect } from "@/components/landing/scenes";
 import { SoundProvider, SoundToggle } from "@/components/landing/sound";
 import { createClient } from "@/lib/supabase/server";
 import "@/components/landing/landing.css";
@@ -37,11 +37,10 @@ export default async function Home() {
           </nav>
         </header>
         <main>
-          <Hero signedIn={!!user} />
+          <Hero signedIn={!!user} plan={plan} captions={captions} />
           <SceneBrief />
           <SceneBrand />
           <SceneDirect />
-          <SceneReady plan={plan} captions={captions} />
           <FinalCta signedIn={!!user} />
         </main>
         <footer className="lp-footer">© MotionBrief</footer>
