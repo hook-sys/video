@@ -72,6 +72,9 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
   const [videoDirection, setVideoDirection] = useState("");
   const [useBrandColor, setUseBrandColor] = useState(false);
   const [brandColor, setBrandColor] = useState("#7C3AED");
+  // What is typed in the hex box (may be incomplete while typing).
+  const [hexText, setHexText] = useState("#7C3AED");
+  const hexValid = /^#?[0-9a-fA-F]{6}$/.test(hexText.trim());
   // The logo and screenshots share the upload budget on this server.
   const budgetError =
     maxTotalBytes && (logo?.size ?? 0) + shots.size > maxTotalBytes
@@ -80,7 +83,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
   const error = logoError ?? shotError ?? budgetError ?? state.error;
   const seconds = script.trim() ? estimateVideoSeconds(script) : 0;
   const ready = !!script.trim() && videoDirection.trim().length >= VIDEO_DIRECTION_MIN && !!logo;
-  const blocked = pending || !!logoError || !!shotError || !!budgetError;
+  const blocked = pending || !!logoError || !!shotError || !!budgetError || (useBrandColor && !hexValid);
   const accent = useBrandColor ? brandColor : "#7C3AED";
 
   const addIdea = (idea: string) =>
@@ -216,23 +219,42 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
               <Field title="Who is it for?">
                 <input name="target_audience" maxLength={AUDIENCE_MAX} placeholder="e.g. Small online shop owners" className={input} />
               </Field>
-              <Field title="Brand colour">
-                <div className="flex items-center gap-3 rounded-xl border border-foreground/12 px-3 py-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={useBrandColor} onChange={(e) => setUseBrandColor(e.target.checked)} className="accent-violet-600" />
-                    Use my colour
-                  </label>
+              <div className="flex flex-col gap-1.5">
+                <span className={label}>Brand colour</span>
+                <div className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 ${useBrandColor && !hexValid ? "border-red-500/60" : "border-foreground/12"}`}>
+                  <input type="checkbox" aria-label="Use my colour" checked={useBrandColor} onChange={(e) => setUseBrandColor(e.target.checked)} className="ml-1 accent-violet-600" />
                   <input
                     type="color"
-                    aria-label="Brand colour"
+                    aria-label="Pick brand colour"
                     value={brandColor}
-                    disabled={!useBrandColor}
-                    onChange={(e) => setBrandColor(e.target.value)}
-                    className="ml-auto h-8 w-14 cursor-pointer rounded border-0 bg-transparent disabled:opacity-30"
+                    onChange={(e) => {
+                      setBrandColor(e.target.value.toUpperCase());
+                      setHexText(e.target.value.toUpperCase());
+                      setUseBrandColor(true);
+                    }}
+                    className="h-8 w-10 shrink-0 cursor-pointer rounded border-0 bg-transparent"
+                  />
+                  <input
+                    aria-label="Brand colour code"
+                    value={hexText}
+                    maxLength={7}
+                    spellCheck={false}
+                    placeholder="#7C3AED"
+                    onChange={(e) => {
+                      const v = e.target.value.trim();
+                      setHexText(v);
+                      setUseBrandColor(true);
+                      if (/^#?[0-9a-fA-F]{6}$/.test(v)) setBrandColor(`#${v.replace("#", "").toUpperCase()}`);
+                    }}
+                    onBlur={() => hexValid && setHexText(brandColor)}
+                    className="min-w-0 flex-1 bg-transparent px-1 py-1.5 font-mono text-sm uppercase outline-none placeholder:text-foreground/35"
                   />
                   <input type="hidden" name="brand_color" value={useBrandColor ? brandColor : ""} />
                 </div>
-              </Field>
+                <span className={`text-[11px] ${useBrandColor && !hexValid ? "text-red-500" : "text-foreground/45"}`}>
+                  {useBrandColor && !hexValid ? "Enter a 6-digit code like #7C3AED" : "Pick a colour or type its code (e.g. #0E9CA6)"}
+                </span>
+              </div>
             </div>
           </Step>
 
