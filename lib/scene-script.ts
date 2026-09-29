@@ -96,7 +96,9 @@ const Beat = z.object({
 export type SceneBeat = z.infer<typeof Beat>;
 
 export const SceneScriptModel = z.object({ theme: z.enum(FLOW_THEMES), beats: z.array(Beat) });
-export const SceneScript = z.object({ version: z.literal(2).default(2), theme: z.enum(FLOW_THEMES), beats: z.array(Beat) });
+// pace: "calm" (explainer: gentle entrances, one steady backdrop, the subject
+// always in focus) or "lively" (more motion); set from the motion preference.
+export const SceneScript = z.object({ version: z.literal(2).default(2), theme: z.enum(FLOW_THEMES), beats: z.array(Beat), pace: z.enum(["calm", "lively"]).nullable().optional() });
 export type SceneScript = z.infer<typeof SceneScript>;
 
 export const MAX_SCENE_BEATS = 24;
@@ -154,31 +156,12 @@ export function repairSceneScript(script: SceneScript): SceneScript {
     if (kind === "visual") return `icon:${searchIcons(a.replace(/[-_]/g, " "), 1)[0] ?? "sparkles"}`;
     return `card:${searchCards(asset, 1)[0] ?? "kpi"}/glass`;
   };
-  // Rulebook (lib/video-rules.ts): no panel-wipe; no dark cards on a dark theme;
-  // no backdrop used by two scenes (a repeat gets the next unused one).
+  // Rulebook (lib/video-rules.ts): no panel-wipe; no dark cards on a dark theme.
   const onDark = (asset: string | null) => (asset && script.theme === "midnight" ? asset.replace(/^(card:[^/]+)\/dark$/, "$1/solid") : asset);
-  const usedBackdrops = new Set<string>();
-  const pool = BACKDROPS.filter((x) => x !== "mesh" && x !== "grain");
-  const backdropOf = (b: SceneBeat, i: number) => {
-    if (b.action !== "scene" || !b.backdrop) return b.backdrop;
-    let pick = b.backdrop;
-    if (usedBackdrops.has(pick)) {
-      for (let k = 0; k < pool.length; k++) {
-        const cand = pool[(k + i * 5) % pool.length];
-        if (!usedBackdrops.has(cand)) {
-          pick = cand;
-          break;
-        }
-      }
-    }
-    usedBackdrops.add(pick);
-    return pick;
-  };
   return {
     ...script,
-    beats: script.beats.slice(0, MAX_SCENE_BEATS).map((b, i) => ({
+    beats: script.beats.slice(0, MAX_SCENE_BEATS).map((b) => ({
       ...b,
-      backdrop: backdropOf(b, i),
       transition: b.transition === "panel-wipe" ? "dissolve" : b.transition,
       elements: b.elements && b.elements.slice(0, MAX_ELEMENTS_PER_SCENE).map((e) => ({ ...e, asset: onDark(fixAsset(e.asset)), screen: e.screen && (parseAsset(e.screen) ? e.screen : fixAsset(e.screen)) })),
       layout: b.layout === null ? null : isLayout(b.layout) ? b.layout : "grid",

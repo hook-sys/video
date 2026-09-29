@@ -19,7 +19,7 @@ function tiltAt(track: Track<Vec3> | undefined, frame: number): Vec3 {
   return [0, 1, 2].map((i) => num(track.map(([t, v, e]) => [t, v[i], e]), frame, 0)) as Vec3;
 }
 
-export function ElementView({ s, frame, theme }: { s: NodeState; frame: number; theme: FlowTheme }) {
+export function ElementView({ s, frame, theme, calm }: { s: NodeState; frame: number; theme: FlowTheme; calm?: boolean }) {
   const { node, pos, scale, opacity } = s;
   const el = node.el!;
   if (scale < 0.01 || opacity < 0.01) return null;
@@ -96,7 +96,8 @@ export function ElementView({ s, frame, theme }: { s: NodeState; frame: number; 
   let seed = 0;
   for (const ch of node.id) seed = (seed * 31 + ch.charCodeAt(0)) % 997;
   const ph = ((frame + seed * 7) / 150) * Math.PI * 2;
-  const [fx, fy] = [Math.cos(ph * 0.8) * 3, Math.sin(ph) * 5];
+  const amp = calm ? 0.4 : 1; // the hero holds still while it is read
+  const [fx, fy] = [Math.cos(ph * 0.8) * 3 * amp, Math.sin(ph) * 5 * amp];
   return (
     <div style={{ position: "absolute", left: pos[0], top: pos[1], width: 0, height: 0, zIndex: node.z ?? 0, perspective: three ? 2400 : undefined }}>
       <div

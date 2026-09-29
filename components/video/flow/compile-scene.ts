@@ -81,6 +81,9 @@ function put<T>(track: Track<T>, t: number, value: T, ease?: Ease) {
   putAfter(track, t, value, ease);
 }
 
+// Explainer pace swaps the lively entrances for soft ones.
+const CALM_ENTER: Record<string, string> = { spin: "pop", bounce: "rise", drop: "rise", flip: "scale-up", cascade: "rise", "slide-left": "rise", "slide-right": "rise" };
+
 type Live = { h: FlowNodeHandle; w: number; h0: number; fit: number; pos: Vec; depth: 0 | 1 | 2; home?: { pos: Vec; fit: number; z: number } };
 
 const toContent = (c: SceneContent | null | undefined): Record<string, unknown> | undefined =>
@@ -90,6 +93,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const total = Math.round(durationSeconds * FPS);
   const timeline = words?.length ? words : estimateWords(narration, durationSeconds);
   const stageEnd = brand?.name?.trim() || brand?.logo ? brandStartFrame(total, timeline) : total;
+  // Explainer pace (the default): soft entrances, one backdrop, sound only where
+  // something visibly lands.
+  const calm = script.pace !== "lively";
+  const stagger = calm ? 6 : 4; // ≥ 0.2 s apart, so each pop is heard
 
   // ── schedule ──
   const times = spokenCueTimes(script.beats.map((b) => b.cue), timeline);
@@ -109,6 +116,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   });
 
   const f = new Flow(theme ?? script.theme, total, { center: [0, 0], zoom: 0.9 });
+  // A travelling element whooshes only at the lively pace; calm keeps whooshes for scene changes.
+  const moveSfx = (at: number) => {
+    if (!calm) f.sfx(at, "whoosh");
+  };
   const live = new Map<string, Live>(); // elements on screen
   const clicks: { t: number; aim: Vec }[] = []; // click beats, for the cursor
   const known = new Map<string, Live>(); // every element ever made
@@ -197,7 +208,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   };
 
   // Show an element at its slot with an entrance style.
-  const enter = (n: Live, t: number, style: string, rot: number, push?: Vec) => {
+  const enter = (n: Live, t: number, want: string, rot: number, push?: Vec) => {
+    const style = calm ? (CALM_ENTER[want] ?? want) : want;
     const spec = n.h.spec;
     const [x, y] = n.pos;
     const sc = spec.scale!;
@@ -223,7 +235,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         put(spec.pos, t + 24, [x, y], "in");
       } else put(spec.pos, t + 20, [x, y], style === "drop" ? "back" : "out");
     } else put(spec.pos, t, [x, y]);
-    put(sc, t, style === "pop" ? 0 : style === "scale-up" ? n.fit * 0.6 : style === "spin" ? n.fit * 0.3 : style === "blur" ? n.fit * 1.08 : n.fit * 0.94);
+    put(sc, t, style === "pop" ? (calm ? n.fit * 0.85 : 0) : style === "scale-up" ? n.fit * 0.6 : style === "spin" ? n.fit * 0.3 : style === "blur" ? n.fit * 1.08 : n.fit * 0.94);
     put(sc, t + 18, n.fit, style === "pop" || style === "spin" ? "back" : "out");
     if (style === "spin") spec.rot = [[t, rot - 200], [t + 22, rot, "out"]];
     if (style === "blur") {
@@ -291,7 +303,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   };
 
   // Lay the given elements out in a layout (new ones enter, existing ones travel).
+  let entered: number[] = []; // when the last place() brought each newcomer in
   const place = (els: SceneElement[], t: number, layout: string, style: string | null, carry: boolean, push?: Vec) => {
+    entered = [];
     const ids = [...(carry ? [...live.keys()].filter((id) => !els.some((e) => e.id === id)) : []), ...els.map((e) => e.id)];
     const existingOf = (id: string) => live.get(id) ?? (els.find((e) => e.id === id)?.asset === null ? known.get(id) : undefined);
     const specs = new Map(els.filter((e) => e.asset !== null).map((e) => [e.id, elementSpec(e)] as const));
@@ -328,8 +342,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       const n: Live = { h, w: spec.w, h0: spec.h, fit: fitIn(spec.w, spec.h, s), pos: at, depth: s.depth };
       // A device or screenshot as the scene's hero enters tilted, then settles.
       const heroScreen = (i === 0 || s.depth === 2) && (spec.el.type === "device" || spec.el.type === "shot");
-      const enterStyle = style ?? (heroScreen ? "tilt" : ["rise", "pop", "slide-left", "blur", "drop", "scale-up", "flip"][(sceneIdx + i) % 7]);
-      enter(n, push ? t : t + i * 4, enterStyle, s.rot, push);
+      const enterStyle = style ?? (heroScreen ? "tilt" : calm ? ["rise", "pop", "scale-up", "blur"][(sceneIdx + i) % 4] : ["rise", "pop", "slide-left", "blur", "drop", "scale-up", "flip"][(sceneIdx + i) % 7]);
+      enter(n, push ? t : t + i * stagger, enterStyle, s.rot, push);
+      entered.push(push ? t : t + i * stagger);
       live.set(id, n);
       known.set(id, n);
       nodeIds.push(nodeId);
@@ -424,7 +439,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         for (const [id] of old) live.delete(id);
         layoutName = b.layout ?? "grid";
         // The scene's atmosphere (kept from the previous scene when not set).
-        const kind = b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh");
+        // Calm: the first scene's backdrop stays for the whole video.
+        const kind = calm && backdrops.length ? backdrops[0].kind : b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh");
         if (backdrops[backdrops.length - 1]?.kind !== kind) backdrops.push({ kind, start: t });
         sceneMove = b.camera ?? ["push-in", "drift", "pan-right", "pull-back", "rise"][sceneIdx % 5];
         layoutName = place(b.elements ?? [], enterAt, layoutName, b.style, true, push);
@@ -436,7 +452,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       case "place":
         // A layout named here re-arranges the scene with the newcomers.
         layoutName = place(b.elements ?? [], t, b.layout ?? layoutName, b.style, true);
-        f.sfx(t, "soft_pop");
+        // One pop per newcomer: five logos arriving are five pops.
+        for (const at of entered) f.sfx(at, "soft_pop");
         break;
       case "lift": {
         // Cards rise out of the screen (small, from its surface) and travel to
@@ -459,7 +476,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           s.z = (src.h.spec.z ?? 0) + 20 + k;
           s.blur = [[0, 0]];
         });
-        f.sfx(t + 4, "whoosh");
+        (b.elements ?? []).forEach((_, k) => f.sfx(t + 4 + k * 6, "soft_pop"));
         // framed stays true: the camera re-frames the screen with its new cards.
         break;
       }
@@ -481,14 +498,14 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           animate(n.h.spec.scale!, n === a ? t : t + 4, 22, n.fit, "inOut");
           if (n.h.spec.blur) animate(n.h.spec.blur, t, 16, DEPTH[s.depth].blur, "inOut");
         });
-        f.sfx(t, "whoosh");
+        moveSfx(t);
         break;
       }
       case "trigger": {
         const [a] = tgt;
         if (!a || !to) break;
         travel(a, t, 22, to.pos, b.style ?? "arc");
-        f.sfx(t, "whoosh");
+        moveSfx(t);
         {
           // It lands on the destination, which reacts (and updates).
           animate(a.h.spec.scale!, t + 12, 10, a.fit * 0.3, "in");
@@ -528,7 +545,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const [a] = tgt;
         if (!a || !to) break;
         links.set(`${b.targets![0]}>${b.to}`, f.connect(a.h, to.h, t + 2, { dur: 16, packet: "sparkles", packetDur: 20, bend: 60 }));
-        f.sfx(t + 8, "whoosh");
+        moveSfx(t + 8);
         framed = false;
         break;
       }
@@ -553,7 +570,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           links.set(`${b.targets![k]}>${b.targets![k + 1]}`, f.connect(from.h, n.h, t + 2 + k * 8, { dur: 12, packet: "sparkles", packetDur: 14, bend: k % 2 ? -40 : 40 }));
           bump(n, t + 12 + k * 8);
         });
-        f.sfx(t + 2, "whoosh");
+        moveSfx(t + 2);
         break;
       }
       case "flow": {
@@ -567,7 +584,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const icon = "sparkles";
         for (let k = 0; k < 3; k++) (link.packets ??= []).push({ icon, start: t + 8 + k * 9, end: t + 26 + k * 9 });
         bump(to, t + 44);
-        f.sfx(t + 8, "whoosh");
+        moveSfx(t + 8);
         framed = false;
         break;
       }
@@ -598,7 +615,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const ghost: Live = { h: to.h, w: (2 * r + sat) / to.fit, h0: (2 * r + sat) / to.fit, fit: to.fit, pos: to.pos, depth: 1 };
         ghosts.push({ live: ghost, end });
         shoot(t, span, "drift");
-        f.sfx(t + 2, "whoosh");
+        moveSfx(t + 2);
         framed = false;
         break;
       }
@@ -626,7 +643,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         }
         // The camera settles on the detail view (wherever it was looking).
         shoot(t, span, "static", [a]);
-        f.sfx(t, "whoosh");
+        moveSfx(t);
         framed = false;
         break;
       }
@@ -657,7 +674,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
         to.fit *= 1.1;
         bump(to, t + 22);
-        f.sfx(t, "whoosh").sfx(t + 22, "subtle_impact");
+        moveSfx(t);
+        f.sfx(t + 22, "subtle_impact");
         break;
       }
       case "arrange": {
@@ -677,13 +695,14 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           n.h.spec.blur ??= [[0, 0]];
           animate(n.h.spec.blur, t + k * 3, 20, DEPTH[s.depth].blur, "inOut");
         });
-        f.sfx(t, "whoosh").sfx(t + 24, "soft_pop");
+        moveSfx(t);
+        f.sfx(t + 24, "soft_pop");
         break;
       }
       case "erase": {
         tgt.forEach((n, k) => leave(n, t + k * 4, b.style ?? "wipe"));
         for (const id of b.targets ?? []) live.delete(id);
-        f.sfx(t, "whoosh");
+        moveSfx(t);
         // The next beat reframes (swinging onto what is left reads as a
         // jolt) — unless the camera was pushed in on what just went away.
         framed = !!focusedOn && tgt.includes(focusedOn) && live.size > 0;
@@ -794,7 +813,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       }
     }
     // A backdrop named on any later beat changes the atmosphere from there.
-    if (b.action !== "scene" && b.backdrop && backdrops.length && backdrops[backdrops.length - 1].kind !== b.backdrop) backdrops.push({ kind: b.backdrop, start: t });
+    if (!calm && b.action !== "scene" && b.backdrop && backdrops.length && backdrops[backdrops.length - 1].kind !== b.backdrop) backdrops.push({ kind: b.backdrop, start: t });
     // Before a caption arrives the camera already makes room for it.
     if (framed || (b.action !== "scene" && b.action !== "statement" && planned.some((l) => l.start > t && l.start <= t + 45))) shoot(t, span, b.action === "scene" ? sceneMove : "drift");
   });
@@ -806,6 +825,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   }
   const plan = f.build();
   // Every video gets its own base world (from its words, so it is stable).
+  if (calm) plan.calm = true;
   plan.seed = [...narration].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_003, 7);
   // The cursor: glides in before each click (from off to the lower right when
   // it was hidden), clicks, and leaves when no click follows soon.

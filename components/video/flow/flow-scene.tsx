@@ -22,20 +22,25 @@ export { FLOW_SCENE_ID } from "@/components/video/types";
 // (@remotion/web-renderer) can mix into the file; Html5Audio is only heard.
 export type FlowSceneProps = { plan: FlowPlan; theme?: ThemeName; audioUrl?: string | null; webAudio?: boolean };
 
-// Sound effects under the narration: spaced out and capped so they stay
-// subtle (and within the Player's shared audio tags).
+// Sound effects under the narration. A repeated event may repeat its sound
+// (five logos = five pops), but two sounds never land closer than 0.2 s.
+// When they collide or the cap is hit, the more important sound wins, so the
+// logo reveal and clicks are never the ones dropped.
 const SFX_VOLUME = 0.22;
-const SFX_MIN_GAP = 8;
-const SFX_MAX = 14;
+const SFX_MIN_GAP = 6;
+const SFX_MAX = 40;
+// Every file is under 1.5 s; unmounting after that frees the Player's shared audio tags.
+export const SFX_LENGTH = 45;
+const SFX_RANK: Record<string, number> = { reveal: 0, success_chime: 0, click: 1, subtle_impact: 1, whoosh: 2, soft_pop: 3, typing: 4, digital_processing: 4 };
 export function plannedSfx(plan: FlowPlan) {
-  const out: { frame: number; src: string }[] = [];
-  for (const s of [...(plan.sfx ?? [])].sort((a, b) => a.frame - b.frame)) {
-    const src = SFX_LIBRARY[s.kind];
-    if (!src || s.frame >= plan.duration - 6 || out.length >= SFX_MAX) continue;
-    if (out.length && s.frame - out[out.length - 1].frame < SFX_MIN_GAP) continue;
-    out.push({ frame: s.frame, src });
+  const want = (plan.sfx ?? []).filter((s) => SFX_LIBRARY[s.kind] && s.frame < plan.duration - 6);
+  want.sort((a, b) => (SFX_RANK[a.kind] ?? 5) - (SFX_RANK[b.kind] ?? 5) || a.frame - b.frame);
+  const kept: typeof want = [];
+  for (const s of want) {
+    if (kept.length >= SFX_MAX) break;
+    if (!kept.some((k) => Math.abs(k.frame - s.frame) < SFX_MIN_GAP)) kept.push(s);
   }
-  return out;
+  return kept.sort((a, b) => a.frame - b.frame).map((s) => ({ frame: s.frame, src: SFX_LIBRARY[s.kind]! }));
 }
 
 let fontReady = false;
@@ -97,7 +102,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
         .filter((s) => s.node.kind === "el" && include(s.node.id))
         .sort((a, b) => (a.node.z ?? 0) - (b.node.z ?? 0))
         .map((s) => (
-          <ElementView key={s.node.id} s={s} frame={frame} theme={theme} />
+          <ElementView key={s.node.id} s={s} frame={frame} theme={theme} calm={plan.calm} />
         ))}
       {plan.links.filter((l) => include(l.from) && include(l.to)).flatMap((l) => (l.packets ?? []).map((p, i) => <Packet key={`${l.id}-${i}`} link={l} packet={p} states={states} frame={frame} theme={theme} />))}
       {withExtras && plan.cursor && <Cursor cursor={plan.cursor} frame={frame} theme={theme} />}
@@ -122,7 +127,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
         // and clears for the brand lockup.
         const next = all[i + 1];
         const k = ramp(frame, b.start, 24, "inOut") * (next ? 1 - ramp(frame, next.start, 24, "inOut") : 1) * (plan.brand ? 1 - ramp(frame, plan.brand.start - 6, 14, "inOut") : 1);
-        return isBackdrop(b.kind) && k > 0.001 ? <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={k} /> : null;
+        return isBackdrop(b.kind) && k > 0.001 ? <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={plan.calm ? k * 0.55 : k} /> : null;
       })}
       {dim < 0.999 && (
         <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - dim, filter: `blur(${dim * 14}px)`, transform: `scale(${1 - 0.05 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
@@ -148,7 +153,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
       {plan.brand && <BrandLockup brand={plan.brand} frame={frame} theme={theme} />}
       {audioUrl && <Sound src={audioUrl} />}
       {plannedSfx(plan).map((s, i) => (
-        <Sequence key={`sfx-${i}`} from={s.frame} layout="none">
+        <Sequence key={`sfx-${i}`} from={s.frame} durationInFrames={SFX_LENGTH} layout="none">
           <Sound src={staticFile(s.src)} volume={SFX_VOLUME} />
         </Sequence>
       ))}

@@ -144,6 +144,8 @@ export type FlowPlan = {
   brand?: FlowBrand;
   // Varies the base colour world per video (blob layout, light direction).
   seed?: number;
+  // Explainer pace: a calmer backdrop and less idle float.
+  calm?: boolean;
   // A pointer in world space: glides along path, visible where show > 0,
   // and presses (a ripple) at each click frame.
   cursor?: { path: Track<Vec>; show: Track<number>; clicks: number[] };

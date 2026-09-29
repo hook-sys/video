@@ -59,8 +59,12 @@ export function compositionCheck(
   const fams = scenes.map((b) => family(b.layout));
   if (heroes > 2) add("same-layouts", `${heroes} of ${scenes.length} scenes use a hero layout`);
   else if (new Set(fams).size < fams.length) add("same-layouts", `layout families repeat: ${fams.join(", ")}`);
-  const bds = scenes.map((b) => b.backdrop).filter(Boolean);
-  if (new Set(bds).size < bds.length) add("repeat-backdrop", `backdrops repeat: ${bds.join(", ")}`);
+  const bds = new Set(scenes.map((b) => b.backdrop).filter(Boolean));
+  if (script.pace !== "lively" && bds.size > 1) add("busy-backdrop", `${bds.size} different backdrops: ${[...bds].join(", ")}`);
+  const hubs = scenes.filter((b) => family(b.layout) === "hub" || (family(b.layout) === "single" && (b.elements ?? []).length > 1)).length + beats.filter((b) => b.action === "orbit").length;
+  if (hubs > 1) add("hub-once", `${hubs} hub or orbit pictures`);
+  const kinds = new Set(scenes.slice(1).map((b) => b.transition).filter(Boolean));
+  if (kinds.size > 3) add("transition-zoo", `${kinds.size} kinds of transition: ${[...kinds].join(", ")}`);
   const celebrates = beats.filter((b) => b.action === "celebrate").length;
   if (celebrates > 1) add("decor-beats", `${celebrates} beats are only a celebrate accent`);
   if (screenshots > 0) {
@@ -89,9 +93,11 @@ export function compositionCheck(
       const [x, y] = [960 + zoom * (st.pos[0] - c[0]), 540 + zoom * (st.pos[1] - c[1])];
       return Math.min(x + w / 2, 1920) - Math.max(x - w / 2, 0) > w * 0.6 && Math.min(y + h / 2, 1080) - Math.max(y - h / 2, 0) > h * 0.6;
     });
+    // Small icons or logos in a row read as one group, so they are not counted.
     const area = (st: (typeof sharp)[number]) => ((st.node.w ?? 400) * (st.node.h ?? 300) * (st.scale * zoom) ** 2) / FRAME;
-    crowdRun = sharp.length > 4 ? crowdRun + 6 : 0;
-    if (crowdRun >= 30) add("crowded", `${sharp.length} sharp elements on screen at ${(f / 30).toFixed(1)} s`);
+    const big = sharp.filter((st) => area(st) >= 0.02).length;
+    crowdRun = big > (script.pace === "lively" ? 4 : 3) ? crowdRun + 6 : 0;
+    if (crowdRun >= 30) add("crowded", `${big} sharp elements on screen at ${(f / 30).toFixed(1)} s`);
     const biggest = Math.max(0, ...sharp.map(area));
     smallRun = sharp.length && biggest < 0.1 ? smallRun + 6 : 0;
     if (smallRun >= 60) add("no-hero", `no element above ${Math.round(biggest * 100)}% of the frame around ${(f / 30).toFixed(1)} s`);

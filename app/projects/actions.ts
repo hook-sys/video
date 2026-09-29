@@ -456,6 +456,8 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   const look = input.creative_preferences.look as Look;
   if (v2.script && LOOK_THEME[look]) v2.script.theme = LOOK_THEME[look]!;
   if (v2.script && look === "Light glass" && v2.script.theme === "midnight") v2.script.theme = "lavender";
+  // Explainer pace unless the customer asked for more motion.
+  if (v2.script) v2.script.pace = ["Dynamic", "High Energy"].includes(input.creative_preferences.motion_level) ? "lively" : "calm";
   const stored = v2.script ? { scene: v2.script } : result.script ? { flow: result.script } : null;
   if (stored) {
     // Re-read so nothing written meanwhile is lost; only `scene`/`flow` change.
