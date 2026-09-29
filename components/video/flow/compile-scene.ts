@@ -46,6 +46,7 @@ const MIN_FRAMES: Record<SceneBeat["action"], number> = {
   disconnect: 12,
   trace: 26,
   flow: 20,
+  click: 20,
 };
 const MINOR = new Set<SceneBeat["action"]>(["celebrate", "highlight", "disconnect"]);
 
@@ -106,6 +107,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
 
   const f = new Flow(theme ?? script.theme, total, { center: [0, 0], zoom: 0.9 });
   const live = new Map<string, Live>(); // elements on screen
+  const clicks: { t: number; aim: Vec }[] = []; // click beats, for the cursor
   const known = new Map<string, Live>(); // every element ever made
   const center: Vec = [0, 0]; // every scene is framed here (pushes move elements, not the camera)
   let layoutName = "grid";
@@ -449,6 +451,21 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         }
         break;
       }
+      case "click": {
+        const [a] = tgt;
+        if (!a) break;
+        // Aim a little right of and below the centre, where a button would be.
+        const aim: Vec = [a.pos[0] + a.w * a.fit * 0.16, a.pos[1] + a.h0 * a.fit * 0.14];
+        clicks.push({ t, aim });
+        // The element presses in and springs back; its new state shows.
+        const sc = a.h.spec.scale!;
+        animate(sc, t + 4, 4, a.fit * 0.95, "out");
+        put(sc, t + 14, a.fit, "back");
+        if (b.content && a.h.spec.el?.type === "card") (a.h.spec.el.updates ??= []).push({ at: t + 8, content: toContent(b.content)! });
+        f.sfx(t + 4, "click");
+        framed = false;
+        break;
+      }
       case "update": {
         const [a] = tgt;
         if (!a || !b.content) break;
@@ -728,6 +745,24 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     f.sfx(stageEnd, "reveal");
   }
   const plan = f.build();
+  // The cursor: glides in before each click (from off to the lower right when
+  // it was hidden), clicks, and leaves when no click follows soon.
+  if (clicks.length) {
+    const path: Track<Vec> = [];
+    const show: Track<number> = [[0, 0]];
+    let prevEnd = -Infinity;
+    clicks.forEach(({ t, aim }, i) => {
+      if (t - 16 > prevEnd) {
+        path.push([t - 18, [aim[0] + 320, aim[1] + 240]]);
+        show.push([t - 18, 0], [t - 8, 1, "out"]);
+      }
+      path.push([t + 2, aim, "inOut"]);
+      const next = clicks[i + 1];
+      prevEnd = t + 36;
+      if (!next || next.t - 16 > prevEnd) show.push([t + 30, 1], [t + 40, 0, "in"]);
+    });
+    plan.cursor = { path, show, clicks: clicks.map((c) => c.t + 4) };
+  }
   if (brand?.color) plan.brandColor = brand.color;
   if (overlaps.length || orbiting.length) plan.overlaps = [...overlaps, ...orbiting];
   if (rings.length) plan.rings = [...(plan.rings ?? []), ...rings];

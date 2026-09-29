@@ -137,6 +137,9 @@ export type FlowPlan = {
   // Element nodes that overlap on purpose (a stack, a fan) during a window.
   overlaps?: { ids: string[]; start: number; end: number }[];
   brand?: FlowBrand;
+  // A pointer in world space: glides along path, visible where show > 0,
+  // and presses (a ripple) at each click frame.
+  cursor?: { path: Track<Vec>; show: Track<number>; clicks: number[] };
   // Sound effects tied to motion (kinds from components/video/sfx.tsx).
   sfx?: { frame: number; kind: "whoosh" | "soft_pop" | "click" | "reveal" | "success_chime" | "subtle_impact" | "digital_processing" | "typing" }[];
 };

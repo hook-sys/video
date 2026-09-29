@@ -36,6 +36,7 @@ export const SCENE_ACTIONS = [
   "flow", // a stream of packets runs from one element to another (data syncing)
   "statement", // the narration's key phrase as kinetic type
   "list", // 3–5 spoken items as a rolling checklist
+  "click", // a cursor glides to targets [one id] and clicks it; content = what it shows after
 ] as const;
 export type SceneAction = (typeof SCENE_ACTIONS)[number];
 
@@ -221,6 +222,9 @@ export function sceneScriptBlockers(script: SceneScript, narration: string, voic
       case "update":
         need(b.targets?.length === 1 && known(b.targets[0]), i, "needs one card on screen");
         need(b.content, i, "needs content");
+        break;
+      case "click":
+        need(b.targets?.length === 1 && known(b.targets[0]), i, "needs one target on screen");
         break;
       case "erase":
         need(b.targets?.length && b.targets.every(known), i, "targets must be on screen");

@@ -96,6 +96,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
           <ElementView key={s.node.id} s={s} frame={frame} theme={theme} />
         ))}
       {plan.links.filter((l) => include(l.from) && include(l.to)).flatMap((l) => (l.packets ?? []).map((p, i) => <Packet key={`${l.id}-${i}`} link={l} packet={p} states={states} frame={frame} theme={theme} />))}
+      {withExtras && plan.cursor && <Cursor cursor={plan.cursor} frame={frame} theme={theme} />}
       {withExtras && plan.lotties.filter((l) => isLottieName(l.name) && (!l.node || include(l.node))).map((l, i) => {
         const at = (l.node && states.get(l.node)?.pos) || l.pos || [0, 0];
         return (
@@ -148,6 +149,27 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl }: FlowScenePro
         </Sequence>
       ))}
     </AbsoluteFill>
+  );
+}
+
+// ── cursor ──────────────────────────────────────────────────────────────────
+// A pointer that glides to what the narration is about and clicks it (a ripple).
+function Cursor({ cursor, frame, theme }: { cursor: NonNullable<FlowPlan["cursor"]>; frame: number; theme: FlowTheme }) {
+  const show = num(cursor.show, frame, 0);
+  if (show <= 0.001) return null;
+  const [x, y] = vec(cursor.path, frame);
+  const press = cursor.clicks.reduce((k, c) => Math.max(k, frame >= c && frame < c + 10 ? 1 - Math.abs(frame - c - 3) / 7 : 0), 0);
+  const ripples = cursor.clicks.filter((c) => frame >= c && frame < c + 22);
+  return (
+    <div style={{ position: "absolute", left: x, top: y, opacity: show, pointerEvents: "none", zIndex: 50 }}>
+      {ripples.map((c) => {
+        const k = (frame - c) / 22;
+        return <div key={c} style={{ position: "absolute", left: -60 * k - 10, top: -60 * k - 10, width: 20 + 120 * k, height: 20 + 120 * k, borderRadius: "50%", border: `3px solid ${theme.primary}`, opacity: 1 - k }} />;
+      })}
+      <svg width={44} height={44} viewBox="0 0 24 24" style={{ position: "absolute", left: -6, top: -4, transform: `scale(${1 - press * 0.14})`, transformOrigin: "6px 4px", filter: "drop-shadow(0 6px 10px rgba(0,0,0,.28))" }}>
+        <path d="M5 3l14 7.5-6.2 1.6L10 18.5z" fill={theme.dark ? "#FFFFFF" : "#111827"} stroke={theme.dark ? "#111827" : "#FFFFFF"} strokeWidth={1.6} strokeLinejoin="round" />
+      </svg>
+    </div>
   );
 }
 
