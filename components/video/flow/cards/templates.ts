@@ -384,6 +384,11 @@ const CORE_TEMPLATES: CardTemplate[] = [
   T("search", "general", "A search bar being typed", "search find query", 520, [
     { type: "input", label: "{label}", value: "{note}", icon: "search" },
   ], { label: "Search", note: "sneakers size 42" }),
+  T("action-panel", "general", "The product's main screen: a titled input and a button to press", "action generate create submit button input form", 520, [
+    { type: "header", icon: "sparkles", title: "{title}" },
+    { type: "input", label: "{label}", value: "{note}", icon: "pencil" },
+    { type: "button", text: "{action}", icon: "arrow-right" },
+  ], { title: "New video", label: "Your script", note: "Making a promo video takes weeks…", action: "Generate" }),
   T("upload", "general", "A file uploading", "upload file progress", 440, [
     { type: "header", icon: "upload", title: "{title}", sub: "{subtitle}" },
     { type: "progress", label: "{label}", value: 86 },

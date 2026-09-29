@@ -38,6 +38,8 @@ import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { CAMERA_MOVES, ENTER_STYLES, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
+import { expandShots } from "@/lib/shots";
+import { SHOT_FIXTURE, SHOT_NARRATION } from "@/components/video/flow/fixtures/shots";
 import { neverList, VIDEO_RULES } from "@/lib/video-rules";
 import { isIconName } from "@/components/video/icons";
 import zlib from "node:zlib";
@@ -552,6 +554,37 @@ function sceneDirector(): Check[] {
   return checks;
 }
 
+// Shot templates (lib/shots.ts): the fixture expands, compiles and breaks no
+// composition rule; the guards turn bad picks into safe ones.
+function shotTemplates(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  const notes: string[] = [];
+  const script = expandShots(SHOT_FIXTURE, notes);
+  const blockers = sceneScriptBlockers(script, SHOT_NARRATION, null, 30);
+  const plan = compileSceneScript(script, { narration: SHOT_NARRATION, durationSeconds: 30, brand: { name: "MotionBrief", logo: "logo", cta: "Try it free today" } });
+  const invalid = validateFlowPlan(plan);
+  add("shots: the MotionBrief fixture expands and compiles", blockers.length + invalid.length + notes.length === 0, [...blockers, ...invalid, ...notes].join("; ") || `${SHOT_FIXTURE.shots.length} shots → ${script.beats.length} beats, ${plan.nodes.length} nodes`);
+  const bad = compositionCheck(script, plan, { narration: SHOT_NARRATION, durationSeconds: 30 }).filter((v) => ["crowded", "no-hero", "tiny-screens", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "same-layouts", "cut-spam"].includes(v.rule));
+  add("shots: no composition rule broken (crowded, no hero, overlaps, backdrops …)", bad.length === 0, bad.map((v) => `${v.rule}: ${v.detail}`).join("; ") || "clean");
+  const pops = (plan.sfx ?? []).filter((x) => x.kind === "soft_pop").length;
+  add("shots: a group pops once per element", pops >= 3, `${pops} pops`);
+  // Guards: a word as a "number", a second logo reveal and an unknown icon.
+  const N = null;
+  const base = { subject: N, label: N, line: N, line_cue: N, accent: N, mark: N, card: N, title: N, input: N, button: N, action_cue: N, result: N, result_cue: N, items: N };
+  const guardNotes: string[] = [];
+  const guarded = expandShots({ version: 3, theme: "lavender", shots: [
+    { ...base, shot: "number", cue: "Your product stays the hero", subject: "text:HERO" },
+    { ...base, shot: "reveal", cue: "With MotionBrief" },
+    { ...base, shot: "reveal", cue: "MotionBrief" },
+    { ...base, shot: "group", cue: "share it anywhere", items: [{ cue: N, asset: "icon:youtube-logo-x", label: "YouTube" }] },
+  ] }, guardNotes);
+  const assets = guarded.beats.flatMap((b) => (b.elements ?? []).map((e) => e.asset));
+  const ok = !assets.includes("text:HERO") && assets.filter((a) => a === "logo").length === 1 && assets.includes("shape:pill");
+  add("shots: guards (no word as a number, one logo reveal, unknown icons → labelled pill)", ok && guardNotes.length === 2, `${assets.join(", ")} · ${guardNotes.join("; ")}`);
+  return checks;
+}
+
 export function runChecks(): Section[] {
   const sections: Section[] = [
     { name: "stored ProductBrief compatibility", checks: briefCompatibility() },
@@ -562,6 +595,7 @@ export function runChecks(): Section[] {
     { name: "flow engine plans", checks: flowPlans() },
     { name: "flow director scripts", checks: flowDirector() },
     { name: "scene director (v2) scripts", checks: sceneDirector() },
+    { name: "shot templates", checks: shotTemplates() },
   ];
   for (const f of FIXTURES) {
     const n = normalizeStory(f.story);

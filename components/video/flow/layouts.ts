@@ -6,7 +6,9 @@ import type { Vec } from "./types";
 // rotation. Families have lettered variants (seeded), so the same family looks
 // different from video to video.
 
-export type Slot = { pos: Vec; box: Vec; depth: 0 | 1 | 2; rot: number; scale: number };
+// grow: how far past its natural size an element may be enlarged to fill the
+// box (default 1.1); the shot stages let a card fill half the frame.
+export type Slot = { pos: Vec; box: Vec; depth: 0 | 1 | 2; rot: number; scale: number; grow?: number };
 type Gen = (n: number, rnd: () => number) => Slot[];
 
 const W = 1640; // usable scene width
@@ -57,6 +59,13 @@ const hub: Gen = (n) => {
 const single: Gen = (n, rnd) => (n === 1 ? [slot(0, 0, W * 0.7, H * 0.9, 2)] : hub(n, rnd));
 const stack: Gen = (n) => Array.from({ length: n }, (_, i) => slot((i - (n - 1) / 2) * 60, (i - (n - 1) / 2) * 46, W * 0.46, H * 0.62, (i === n - 1 ? 2 : 1) as 1 | 2, 0, 1 - (n - 1 - i) * 0.04));
 const fan: Gen = (n) => Array.from({ length: n }, (_, i) => slot((i - (n - 1) / 2) * 190, Math.abs(i - (n - 1) / 2) * 30, W * 0.34, H * 0.66, 1, (i - (n - 1) / 2) * 7));
+// Shot stages (lib/shots.ts): the subject big and sharp above the caption band.
+// stage: one element; stage-row: 2–6 side by side; stage-duo: a big one left,
+// its result right.
+const grown = (sl: Slot, grow: number): Slot => ({ ...sl, grow });
+const stage: Gen = (n) => (n === 1 ? [grown(slot(0, -50, W * 0.6, H * 0.6, 2), 2)] : stageRow(n, () => 0.5));
+const stageRow: Gen = (n) => Array.from({ length: n }, (_, i) => grown(slot((i - (n - 1) / 2) * (W * 0.86 / n), -50, (W * 0.86 / n) * 0.78, H * 0.5, 1), n === 1 ? 3 : n <= 3 ? 2.2 : 1.6));
+const stageDuo: Gen = (n) => (n === 1 ? stage(1, () => 0.5) : [grown(slot(-W * 0.2, -50, W * 0.48, H * 0.6, 2), 1.9), ...Array.from({ length: n - 1 }, (_, i) => grown(slot(W * 0.3, -50 + (i - (n - 2) / 2) * ((H * 0.66) / (n - 1)), W * 0.3, Math.min(H * 0.4, ((H * 0.66) / (n - 1)) * 0.86), 1), 1.4))]);
 // The first element large on one side, the rest as a column on the other.
 const heroSide = (side: 1 | -1): Gen => (n) => [
   slot(-side * W * 0.2, 0, W * 0.52, H * 0.9, 2),
@@ -144,12 +153,15 @@ const FAMILIES: Record<string, { gen: Gen; description: string; variants: number
   split: { gen: split, description: "two groups: before (left) and after (right)", variants: 1 },
   pyramid: { gen: pyramid, description: "a pyramid", variants: 1 },
   scatter: { gen: scatter, description: "spread across the frame at varied depths (controlled chaos, separate tools)", variants: 12 },
+  stage: { gen: stage, description: "one element big in the centre (shots)", variants: 1 },
+  "stage-row": { gen: stageRow, description: "2–6 elements big in a row (shots)", variants: 1 },
+  "stage-duo": { gen: stageDuo, description: "a big element left, the rest right (shots)", variants: 1 },
   depth: { gen: depthField, description: "a deep field: big front elements, small blurred ones behind", variants: 8 },
 };
 
 // Regular families get lettered variants too: the same arrangement with a
 // seeded offset, depth order and slight tilt (variant a is the clean one).
-for (const f of Object.values(FAMILIES)) if (f.variants === 1 && f.gen !== single) f.variants = 5;
+for (const f of Object.values(FAMILIES)) if (f.variants === 1 && ![single, stage, stageRow, stageDuo].includes(f.gen)) f.variants = 5;
 // Denser layouts are jittered less, so neighbours never touch.
 const jitter = (slots: Slot[], rnd: () => number, k = Math.min(1, 3 / slots.length)): Slot[] =>
   slots.map((s) => ({ ...s, pos: [s.pos[0] + (rnd() - 0.5) * 70 * k, s.pos[1] + (rnd() - 0.5) * 50 * k] as Vec, rot: s.rot + (rnd() - 0.5) * 6, depth: (s.depth === 2 ? 2 : rnd() < 0.25 ? 0 : 1) as 0 | 1 | 2 }));

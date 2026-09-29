@@ -81,6 +81,9 @@ function put<T>(track: Track<T>, t: number, value: T, ease?: Ease) {
   putAfter(track, t, value, ease);
 }
 
+// Cards whose last block is a button (the cursor clicks it).
+const BUTTON_CARDS = new Set(["action-panel", "login", "checkout", "cta"]);
+
 // Explainer pace swaps the lively entrances for soft ones.
 const CALM_ENTER: Record<string, string> = { spin: "pop", bounce: "rise", drop: "rise", flip: "scale-up", cascade: "rise", "slide-left": "rise", "slide-right": "rise" };
 
@@ -179,7 +182,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     return { el: { type: "logo", src: brand?.logo ?? undefined, text: brand?.name ?? "Logo" }, w: 320, h: 180 };
   };
 
-  const fitIn = (w: number, h: number, s: Slot) => Math.min(1.1, s.box[0] / w, s.box[1] / h) * s.scale * DEPTH[s.depth].scale;
+  const fitIn = (w: number, h: number, s: Slot) => Math.min(s.grow ?? 1.1, s.box[0] / w, s.box[1] / h) * s.scale * DEPTH[s.depth].scale;
   // The layout's slots, unless it would shrink sharp cards below readable
   // size (7 cards in a row): then the best of grid / mosaic.
   const READABLE = 0.5; // × 0.86 when a caption band is kept free ≈ the gate's 0.42
@@ -445,6 +448,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         sceneMove = b.camera ?? ["push-in", "drift", "pan-right", "pull-back", "rise"][sceneIdx % 5];
         layoutName = place(b.elements ?? [], enterAt, layoutName, b.style, true, push);
         if (sceneIdx > 0) f.sfx(t, "whoosh");
+        // A group popping in: one pop per element (five logos = five pops).
+        if (b.style === "pop" && entered.length > 1) for (const at of entered) f.sfx(at, "soft_pop");
         shoot(t, span, sceneMove);
         framed = false;
         break;
@@ -520,8 +525,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       case "click": {
         const [a] = tgt;
         if (!a) break;
-        // Aim a little right of and below the centre, where a button would be.
-        const aim: Vec = [a.pos[0] + a.w * a.fit * 0.16, a.pos[1] + a.h0 * a.fit * 0.14];
+        // Aim at the button of a card that has one (bottom), else a little
+        // right of and below the centre.
+        const tpl = a.h.spec.el?.type === "card" ? a.h.spec.el.template : "";
+        const aim: Vec = BUTTON_CARDS.has(tpl) ? [a.pos[0] + a.w * a.fit * 0.1, a.pos[1] + a.h0 * a.fit * 0.36] : [a.pos[0] + a.w * a.fit * 0.16, a.pos[1] + a.h0 * a.fit * 0.14];
         clicks.push({ t, aim });
         // The element presses in and springs back; its new state shows.
         const sc = a.h.spec.scale!;

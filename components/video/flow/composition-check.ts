@@ -56,7 +56,8 @@ export function compositionCheck(
   const scenes = beats.filter((b) => b.action === "scene");
   const family = (l: string | null) => (l ?? "grid").replace(/-[a-z]$/, "");
   const heroes = scenes.filter((b) => family(b.layout).startsWith("hero")).length;
-  const fams = scenes.map((b) => family(b.layout));
+  // Shot stages (lib/shots.ts) repeat by design: the shots themselves vary.
+  const fams = scenes.map((b) => family(b.layout)).filter((f) => !f.startsWith("stage"));
   if (heroes > 2) add("same-layouts", `${heroes} of ${scenes.length} scenes use a hero layout`);
   else if (new Set(fams).size < fams.length) add("same-layouts", `layout families repeat: ${fams.join(", ")}`);
   const bds = new Set(scenes.map((b) => b.backdrop).filter(Boolean));
@@ -98,7 +99,10 @@ export function compositionCheck(
     const big = sharp.filter((st) => area(st) >= 0.02).length;
     crowdRun = big > (script.pace === "lively" ? 4 : 3) ? crowdRun + 6 : 0;
     if (crowdRun >= 30) add("crowded", `${big} sharp elements on screen at ${(f / 30).toFixed(1)} s`);
-    const biggest = Math.max(0, ...sharp.map(area));
+    // A row of 2+ icons or pictures (steps, a group) is one subject: its
+    // combined size counts. Cards never: small cards are small.
+    const pictures = sharp.length >= 2 && sharp.every((st) => ["icon", "shape", "visual"].includes(st.node.el?.type ?? ""));
+    const biggest = Math.max(0, ...sharp.map(area), pictures ? sharp.reduce((t, st) => t + area(st), 0) * 0.6 : 0);
     smallRun = sharp.length && biggest < 0.1 ? smallRun + 6 : 0;
     if (smallRun >= 60) add("no-hero", `no element above ${Math.round(biggest * 100)}% of the frame around ${(f / 30).toFixed(1)} s`);
     const screens = sharp.filter((st) => st.node.el?.type === "shot" || st.node.el?.type === "device");

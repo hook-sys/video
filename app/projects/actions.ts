@@ -65,6 +65,7 @@ import { parseWordTimings } from "@/lib/voice-timing";
 import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { generateFlowScript } from "@/lib/ai/flow-director";
 import { generateSceneScript } from "@/lib/ai/scene-director";
+import { generateShotScript } from "@/lib/ai/shot-director";
 import { neverList } from "@/lib/video-rules";
 import type { FlowScript } from "@/lib/flow-script";
 import type { SceneScript } from "@/lib/scene-script";
@@ -426,7 +427,11 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // fallback when no usable SceneScript comes back and time remains.
   let usage: BriefUsage | undefined;
   const addUsage = (u: BriefUsage) => (usage = usage ? { ...u, inputTokens: usage.inputTokens + u.inputTokens, outputTokens: usage.outputTokens + u.outputTokens } : u);
-  const v2 = await generateSceneScript(input, addUsage, Math.min(budgetMs, 130_000));
+  // Shot templates first (lib/shots.ts): tested shots, the Director only picks
+  // and fills them. The free-form scene Director is the fallback.
+  const shot = await generateShotScript(input, addUsage, Math.min(budgetMs, 110_000));
+  console.info("shot director:", { projectId, outcome: shot.script ? "stored" : "none", attempts: shot.attempts, ms: shot.ms, shots: shot.shots?.shots.map((s) => `${s.shot}@${s.cue}`), problems: shot.errors.slice(0, 6) });
+  const v2 = shot.script || budgetMs - (Date.now() - started) < 60_000 ? shot : await generateSceneScript(input, addUsage, Math.min(budgetMs - (Date.now() - started), 130_000));
   console.info("scene director:", {
     projectId,
     outcome: v2.script ? "stored" : "none",
@@ -458,7 +463,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   if (v2.script && look === "Light glass" && v2.script.theme === "midnight") v2.script.theme = "lavender";
   // Explainer pace unless the customer asked for more motion.
   if (v2.script) v2.script.pace = ["Dynamic", "High Energy"].includes(input.creative_preferences.motion_level) ? "lively" : "calm";
-  const stored = v2.script ? { scene: v2.script } : result.script ? { flow: result.script } : null;
+  const stored = v2.script ? { scene: v2.script, ...(shot.script ? { shots: shot.shots } : {}) } : result.script ? { flow: result.script } : null;
   if (stored) {
     // Re-read so nothing written meanwhile is lost; only `scene`/`flow` change.
     const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
