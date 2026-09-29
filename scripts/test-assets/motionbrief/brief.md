@@ -4,7 +4,7 @@ Upload `motionbrief-logo.png` as the logo and the five `motionbrief-*.png`
 screens as screenshots, in order (1 landing, 2 create video, 3 dashboard,
 4 brand scene, 5 admin).
 
-## 1 · Your script (voice) — 352 characters, ≈ 27 s
+## 1 · Your script (voice) — 341 characters, ≈ 26 s
 
 Making a promo video still takes weeks, freelancers and a big budget. Not anymore. With MotionBrief, you write a short brief, add your logo and screenshots, and we direct every scene, record the voice and render your video. Every scene directed. Every frame in motion. Download in 1080p or 4K, in minutes. MotionBrief. Your brief, in motion.
 
