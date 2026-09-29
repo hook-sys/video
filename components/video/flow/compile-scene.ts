@@ -9,7 +9,7 @@ import { brandStartFrame, type CompileBrand, ctaLine, smoothCamera, wordFrames }
 import { num, vec } from "./eval";
 import { DEPTH, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES, type Slot } from "./layouts";
 import { animate as animateAfter, Flow, type FlowNodeHandle, put as putAfter } from "./patterns";
-import type { Ease, FlowElement, FlowLink, FlowNode, FlowPlan, FlowText, ThemeName, Track, Vec } from "./types";
+import { MARK_DELAY, type Ease, type FlowElement, type FlowLink, type FlowNode, type FlowPlan, type FlowText, type ThemeName, type Track, type Vec } from "./types";
 import { fitSize } from "./typography";
 
 // SceneScript (Director v2) → FlowPlan. Scenes are arrangements of product
@@ -696,7 +696,16 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           f.sfx(t, "whoosh");
         }
         const pos: Vec = style === "caption" ? [0, 350] : style === "pill" ? [0, 370] : [0, 0];
-        f.text(text, start, end, { style, pos, size: fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: wf });
+        const mark = b.style === "pill" || b.style === "strike" ? b.style : undefined;
+        f.text(text, start, end, { style, pos, size: fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: wf, mark: b.accent ? mark : undefined });
+        if (mark && b.accent) {
+          // The mark lands just after the last accent word is spoken.
+          const ws = text.split(/\s+/);
+          const acc = new Set(b.accent.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z0-9]/g, "")));
+          const isAcc = (w: string) => acc.has(w.toLowerCase().replace(/[^a-z0-9]/g, ""));
+          const j = mark === "strike" ? ws.findIndex(isAcc) : ws.reduce((k, w, x) => (isAcc(w) ? x : k), -1);
+          if (j >= 0) f.sfx((wf[j] ?? start) + MARK_DELAY, mark === "strike" ? "click" : "soft_pop");
+        }
         if (style === "display") {
           f.dimTo(start - 4, 12, 1).dimTo(Math.min(end, total) + 8, 12, 0);
           f.sfx(wf[0], "subtle_impact");

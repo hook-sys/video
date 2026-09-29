@@ -12,7 +12,7 @@ import { ElementView } from "./element";
 import { Backdrop } from "./backdrops";
 import { isBackdrop } from "./backdrop-names";
 import { fitSize, labelWorldSize, splitLines, TYPE } from "./typography";
-import type { FlowBrand, FlowLink, FlowList, FlowNode, FlowPanel, FlowPlan, FlowText, ThemeName, Vec } from "./types";
+import { MARK_DELAY, type FlowBrand, type FlowLink, type FlowList, type FlowNode, type FlowPanel, type FlowPlan, type FlowText, type ThemeName, type Vec } from "./types";
 
 // Renders a FlowPlan: a themed world, persistent nodes under one camera,
 // links with travelling packets, kinetic text and Lottie accents.
@@ -385,11 +385,19 @@ function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowT
   const lines = style === "side" ? splitLines(t.text, t.accent) : [t.text];
   const onPanel = style === "panel";
   const ink = onPanel ? "#FFFFFF" : theme.ink;
-  let wi = 0;
-  const word = (w: string, last: boolean, strong: boolean) => {
-    const i = wi++;
+  const mark = t.mark ?? "gradient";
+  // The mark (pill / strike) lands once the last accent word has been spoken.
+  const allWords = t.text.split(/\s+/).filter(Boolean);
+  const lastAccent = allWords.reduce((k, w, j) => (accent.has(bare(w)) ? j : k), -1);
+  const firstAccent = allWords.findIndex((w) => accent.has(bare(w)));
+  // A strike draws across the words as they are spoken; a pill lands after them.
+  const markK =
+    lastAccent < 0 ? 0
+    : mark === "strike" ? ramp(frame, at(firstAccent) + MARK_DELAY, Math.max(12, at(lastAccent) - at(firstAccent) + 8), "inOut")
+    : ramp(frame, at(lastAccent) + MARK_DELAY, 14, "inOut");
+  const word = (w: string, last: boolean, strong: boolean, i: number) => {
     const k = ramp(frame, at(i), 14, "out");
-    const isAccent = accent.has(bare(w));
+    const isAccent = accent.has(bare(w)) && mark === "gradient";
     return (
       <span
         key={i}
@@ -439,9 +447,66 @@ function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowT
     >
       {lines.map((line, li) => {
         const ws = line.split(/\s+/).filter(Boolean);
+        // Index of this line's first word in the whole text (its spoken time).
+        const base = lines.slice(0, li).reduce((n, l) => n + l.split(/\s+/).filter(Boolean).length, 0);
         // Side layout: a lighter lead-in line, then the strong accent line.
         const strong = !side || li === lines.length - 1 || lines.length === 1;
-        return <div key={li}>{ws.map((w, j) => word(w, j === ws.length - 1, strong))}</div>;
+        if (mark === "gradient") return <div key={li}>{ws.map((w, j) => word(w, j === ws.length - 1, strong, base + j))}</div>;
+        // Runs of accent words share one pill / one strike line; trailing
+        // punctuation stays outside the mark. Each word keeps its spoken index.
+        const runs: { words: { w: string; i: number }[]; accent: boolean; tail: string }[] = [];
+        ws.forEach((raw, j) => {
+          const a = accent.has(bare(raw));
+          const [, w, tail] = a ? (raw.match(/^(.*?)([.,!?;:…]*)$/) as RegExpMatchArray) : [raw, raw, ""];
+          if (runs.length && runs[runs.length - 1].accent === a && !runs[runs.length - 1].tail) runs[runs.length - 1].words.push({ w, i: base + j });
+          else runs.push({ words: [{ w, i: base + j }], accent: a, tail: "" });
+          if (tail) runs[runs.length - 1].tail = tail;
+        });
+        return (
+          <div key={li}>
+            {runs.map((r, ri) => {
+              const lastRun = ri === runs.length - 1;
+              const inner = r.words.map(({ w, i }, j) => word(w, j === r.words.length - 1, strong, i));
+              const gap = lastRun ? 0 : "0.26em";
+              if (!r.accent) return <span key={ri} style={{ marginRight: gap }}>{inner}</span>;
+              const tail = r.tail && <span style={{ display: "inline-block", opacity: ramp(frame, at(r.words[r.words.length - 1].i), 14, "out") }}>{r.tail}</span>;
+              return (
+                <span key={ri} style={{ whiteSpace: "nowrap", marginRight: gap }}>
+                <span style={{ position: "relative", display: "inline-block", isolation: "isolate", ...(mark === "pill" && { margin: "0 0.2em" }), ...(mark === "strike" && { opacity: 1 - markK * 0.5 }) }}>
+                  {mark === "pill" && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        inset: "-0.06em -0.2em -0.02em",
+                        borderRadius: "0.32em",
+                        background: `linear-gradient(90deg, ${theme.primary}, ${theme.accent})`,
+                        boxShadow: `0 0.3em 0.9em ${theme.glow}0.35)`,
+                        clipPath: `inset(0 ${(1 - markK) * 100}% 0 0 round 0.32em)`,
+                        zIndex: -1,
+                      }}
+                    />
+                  )}
+                  <span style={{ position: "relative" }}>
+                    {inner}
+                    {mark === "pill" && tail}
+                  </span>
+                  {mark === "pill" && (
+                    // White copy of the words, revealed exactly where the pill has swept.
+                    <span aria-hidden style={{ position: "absolute", left: 0, top: 0, color: "#FFFFFF", whiteSpace: "nowrap", clipPath: `inset(-0.2em ${(1 - markK) * 100}% -0.2em -0.2em)` }}>
+                      {r.words.map(({ w, i }, j) => word(w, j === r.words.length - 1, strong, i))}
+                      {tail}
+                    </span>
+                  )}
+                  {mark === "strike" && (
+                    <span style={{ position: "absolute", left: "-0.06em", top: "54%", height: "0.075em", width: `calc(${markK * 100}% + ${markK * 0.12}em)`, borderRadius: "0.04em", background: theme.primary }} />
+                  )}
+                </span>
+                {mark === "strike" && tail}
+                </span>
+              );
+            })}
+          </div>
+        );
       })}
     </div>
   );

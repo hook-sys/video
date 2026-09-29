@@ -97,6 +97,9 @@ export type FlowText = {
   // panel: set in white on a colour panel that sweeps over the scene.
   style?: "display" | "headline" | "side" | "pill" | "caption" | "panel";
   words?: number[]; // frame each word reveals (its spoken time); else a cascade
+  // How the accent words are marked: gradient ink (default), a brand-colour
+  // pill that sweeps in behind them, or a line striking them out ("No more ~~x~~").
+  mark?: "gradient" | "pill" | "strike";
 };
 
 // A rolling checklist: one item at a time in focus, the previous one lifting
@@ -137,3 +140,6 @@ export type FlowPlan = {
   // Sound effects tied to motion (kinds from components/video/sfx.tsx).
   sfx?: { frame: number; kind: "whoosh" | "soft_pop" | "click" | "reveal" | "success_chime" | "subtle_impact" | "digital_processing" | "typing" }[];
 };
+
+// Frames after the last accent word is spoken before its pill / strike lands.
+export const MARK_DELAY = 6;
