@@ -3,6 +3,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { userAccess } from "@/lib/admin";
+import { getSettings } from "@/lib/app-settings";
 
 function credentials(formData: FormData) {
   return {
@@ -13,14 +15,21 @@ function credentials(formData: FormData) {
 
 export async function login(formData: FormData) {
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword(
+  const { data, error } = await supabase.auth.signInWithPassword(
     credentials(formData),
   );
   if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  // Suspended from /admin/users.
+  if ((await userAccess(supabase, data.user.id)).suspended) {
+    await supabase.auth.signOut();
+    redirect(`/login?error=${encodeURIComponent("This account is suspended. Contact support.")}`);
+  }
   redirect("/dashboard");
 }
 
 export async function signup(formData: FormData) {
+  if ((await getSettings()).signups_enabled === false)
+    redirect(`/signup?error=${encodeURIComponent("Sign-ups are paused right now. Please try again later.")}`);
   const supabase = await createClient();
   const origin = (await headers()).get("origin") ?? "";
   const { data, error } = await supabase.auth.signUp({

@@ -21,6 +21,8 @@ import { BENCHMARK_CASES } from "@/lib/benchmark";
 import type { AssetManifest } from "@/lib/asset-manifest";
 import { getProjectCostSummary } from "@/lib/costs/benchmark";
 import { canUseDevTools } from "@/lib/dev-tools";
+import { userAccess } from "@/lib/admin";
+import { getSettings } from "@/lib/app-settings";
 import { SubmitButton } from "@/components/submit-button";
 
 // Server actions on this page (brief, voice, assets, render via after(), dev
@@ -39,6 +41,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
     data: { user },
   } = await supabase.auth.getUser();
   const dev = !!user && (await canUseDevTools(supabase, user.id));
+  // 4K can be switched off from /admin/settings (admins still see it).
+  const fourKOn = (await getSettings()).feature_4k !== false || (!!user && (await userAccess(supabase, user.id)).admin);
 
   const { data: screenshots } = await supabase
     .from("project_screenshots")
@@ -176,7 +180,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
               The MP4 download will be available once final rendering is enabled.
             </p>
           )}
-          {download?.signedUrl && (
+          {download?.signedUrl && (fourKOn || download4k?.signedUrl) && (
             <div className="flex flex-col items-center gap-1.5">
               {download4k?.signedUrl ? (
                 <a href={download4k.signedUrl} className="rounded-2xl border border-foreground/15 px-6 py-3 font-semibold transition hover:bg-foreground/5">

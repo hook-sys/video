@@ -69,6 +69,8 @@ import type { SceneScript } from "@/lib/scene-script";
 import type { VisualStory } from "@/lib/visual-story";
 import { generateStoryAssets, planStoryAssets, storyAssetsEnabled } from "@/lib/story-assets";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
+import { userAccess } from "@/lib/admin";
+import { getSettings } from "@/lib/app-settings";
 
 export type CreateProjectState = { error?: string };
 
@@ -138,6 +140,23 @@ export async function createProject(
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Controls from /admin: suspension, maintenance mode, daily limit (admins exempt).
+  const access = await userAccess(supabase, user.id);
+  if (access.suspended) return { error: "This account is suspended. Contact support." };
+  if (!access.admin) {
+    const settings = await getSettings();
+    if (settings.maintenance_mode === true) return { error: String(settings.maintenance_message) };
+    const perDay = Number(settings.max_videos_per_day) || 0;
+    if (perDay > 0) {
+      const { count } = await supabase
+        .from("projects")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .gte("created_at", new Date(Date.now() - 86_400_000).toISOString());
+      if ((count ?? 0) >= perDay) return { error: `You can start ${perDay} videos per day. Please try again tomorrow.` };
+    }
+  }
 
   const { data, error } = await supabase
     .from("projects")
@@ -741,6 +760,12 @@ export async function renderVideo(projectId: string, formData: FormData) {
 
 // 4K is a download option: renders a 4K copy next to the 1080p video.
 export async function render4kVideo(projectId: string) {
+  // Switched off from /admin/settings (admins can still test it).
+  if ((await getSettings()).feature_4k === false) {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    if (!data.user || !(await userAccess(supabase, data.user.id)).admin) return;
+  }
   await startRender(projectId, "4k", false, true);
 }
 

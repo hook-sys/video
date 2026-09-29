@@ -10,5 +10,5 @@ export const devToolsEnabled = () =>
 export async function canUseDevTools(supabase: SupabaseClient, userId: string) {
   if (!devToolsEnabled()) return false;
   const { data } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
-  return data?.role === "admin";
+  return data?.role === "admin" || data?.role === "super_admin";
 }
