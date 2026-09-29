@@ -29,6 +29,9 @@ import { buildRenderInput } from "@/lib/render-input";
 import type { RenderProps } from "@/components/video/types";
 import { PreviewPlayer } from "./preview/preview-player";
 import { BackToDashboard } from "./back-to-dashboard";
+import { BrowserDownload } from "./browser-download";
+import { DIMENSIONS } from "@/components/video/types";
+import type { FlowPlan } from "@/components/video/flow/types";
 
 // Server actions on this page (brief, voice, assets, render via after(), dev
 // benchmark) run inside this function. 300s is the Vercel Hobby maximum with
@@ -217,6 +220,19 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           <aside className="flex flex-col gap-4">
             <div className="flex flex-col gap-3 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
               <h2 className="text-sm font-semibold">Download</h2>
+              {/* No server render worker on Vercel yet: render in the browser (test). */}
+              {process.env.VERCEL && !download?.signedUrl && preview?.flow ? (
+                <BrowserDownload
+                  plan={preview.flow.plan as FlowPlan}
+                  audioUrl={preview.audioUrl ?? null}
+                  width={(DIMENSIONS[preview.format] ?? DIMENSIONS["16:9"]).width}
+                  height={(DIMENSIONS[preview.format] ?? DIMENSIONS["16:9"]).height}
+                  name={title}
+                  className={primaryBtn}
+                  secondaryClassName={secondaryBtn}
+                />
+              ) : (
+              <>
               {/* Each quality: download when ready, otherwise start its render. */}
               {download?.signedUrl ? (
                 <a href={download.signedUrl} className={primaryBtn}>
@@ -253,6 +269,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
                 ))}
               {project.render_4k_status === "failed" && project.render_4k_error && <p className="text-xs text-rose-600 dark:text-rose-400">{project.render_4k_error}</p>}
               <p className="text-xs text-foreground/50">The file is prepared on the first tap (a few minutes; 4K takes longer), then downloads.</p>
+              </>
+              )}
             </div>
             <div className="flex flex-col gap-2 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
               <h2 className="text-sm font-semibold">Next</h2>
