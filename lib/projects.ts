@@ -1,5 +1,20 @@
-export const DIRECTION_MAX = 500;
+// The voiceover script (what the voice says) is at most 500 characters;
+// `direction` stores it with a short "Visual style: …" suffix.
+export const VOICE_SCRIPT_MAX = 500;
+export const DIRECTION_MAX = 560;
+// Kept for benchmarks and older projects; new videos last as long as their voice.
 export const DURATIONS = [15, 30, 60] as const;
+
+// The video is exactly as long as its voice plus the closing brand lockup
+// (which starts just after the last word and needs ~2.4 s).
+export const LOCKUP_SECONDS = 2.7;
+export const MIN_VIDEO_SECONDS = 5;
+export const MAX_VIDEO_SECONDS = 90;
+const clampSeconds = (s: number) => Math.min(MAX_VIDEO_SECONDS, Math.max(MIN_VIDEO_SECONDS, Math.ceil(s)));
+// Before the voice exists: an estimate from the script (~2.5 words a second).
+export const estimateVideoSeconds = (script: string) => clampSeconds(script.trim().split(/\s+/).filter(Boolean).length / 2.5 + LOCKUP_SECONDS);
+// Once it exists: the end of the last spoken word.
+export const voiceVideoSeconds = (lastWordEnd: number) => clampSeconds(lastWordEnd + LOCKUP_SECONDS);
 
 // Sent to the AI as part of the direction text (no separate backend field).
 export const VISUAL_STYLES = ["Premium SaaS", "Minimal", "Bold", "Corporate", "Futuristic", "Cinematic"] as const;

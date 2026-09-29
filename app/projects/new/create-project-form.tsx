@@ -11,8 +11,7 @@ import {
   VIDEO_DIRECTION_MIN,
   CREATIVE_DEFAULTS,
   CREATIVE_DIRECTIONS,
-  DIRECTION_MAX,
-  DURATIONS,
+  VOICE_SCRIPT_MAX,
   FORMATS,
   LOGO_MAX_BYTES,
   MOTION_LEVELS,
@@ -34,7 +33,8 @@ const select =
 
 // The visual style travels with the script in the direction text.
 const styleSuffix = (style: string) => `\n\nVisual style: ${style}`;
-const SCRIPT_MAX = DIRECTION_MAX - Math.max(...VISUAL_STYLES.map((s) => styleSuffix(s).length));
+// The video lasts as long as the voice reads this script (no duration to pick).
+const SCRIPT_MAX = VOICE_SCRIPT_MAX;
 
 export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number }) {
   const [state, action, pending] = useActionState(createProject, {});
@@ -64,7 +64,7 @@ export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number })
           <span className={sectionLabel}>
             Voiceover script <span className="text-red-500">*</span>
           </span>
-          <span className="text-xs text-foreground/50">Exactly what the voice will say in your video.</span>
+          <span className="text-xs text-foreground/50">Exactly what the voice will say. The video lasts as long as the voice (about 15 s per 250 characters).</span>
           <textarea
             required
             rows={7}
@@ -167,7 +167,6 @@ export function CreateProjectForm({ maxTotalBytes }: { maxTotalBytes?: number })
         </div>
 
         <div className="grid gap-8 sm:grid-cols-2">
-          <Choice name="duration_seconds" title="Duration" options={DURATIONS} defaultValue={DURATIONS[0]} format={(d) => `${d} sec`} columns={3} />
           <Choice name="format" title="Format" options={FORMATS} defaultValue={FORMATS[0]} columns={3} />
         </div>
 

@@ -15,7 +15,9 @@ import {
   CREATIVE_DEFAULTS,
   CREATIVE_DIRECTIONS,
   DIRECTION_MAX,
-  DURATIONS,
+  estimateVideoSeconds,
+  VOICE_SCRIPT_MAX,
+  voiceVideoSeconds,
   FORMATS,
   MOTION_LEVELS,
   SCREENSHOT_TYPES,
@@ -34,7 +36,7 @@ import {
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
 
-import { type BriefUsage, ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
+import { type BriefUsage, ProductBrief, fitDurations, generateProductBrief } from "@/lib/ai/product-brief";
 import { type AssetManifest, buildAssetManifest } from "@/lib/asset-manifest";
 import { type ScreenshotEvidence, analyzeScreenshots, evidenceText } from "@/lib/ai/screenshot-evidence";
 import { generateAsset } from "@/lib/generated-assets";
@@ -79,7 +81,10 @@ export async function createProject(
 ): Promise<CreateProjectState> {
   const websiteUrl = String(formData.get("website_url") ?? "").trim();
   const direction = String(formData.get("direction") ?? "").trim();
-  const duration = oneOf(DURATIONS, formData.get("duration_seconds"));
+  // The voiceover script, without the "Visual style: …" suffix the form adds.
+  const voiceScript = direction.split(/\n\nVisual style:/)[0].trim();
+  // A first estimate; the voice's real length replaces it once it exists.
+  const duration = estimateVideoSeconds(voiceScript);
   const format = oneOf(FORMATS, formData.get("format"));
   const voiceLanguage = oneOf(VOICE_LANGUAGES, formData.get("voice_language"));
   const voiceStyle = oneOf(VOICE_STYLES, formData.get("voice_style"));
@@ -95,8 +100,8 @@ export async function createProject(
   const targetAudience = String(formData.get("target_audience") ?? "").trim();
 
   if (!direction) return { error: "The voiceover script is required." };
-  if (direction.length > DIRECTION_MAX)
-    return { error: `The voiceover script must be ${DIRECTION_MAX} characters or less.` };
+  if (voiceScript.length > VOICE_SCRIPT_MAX || direction.length > DIRECTION_MAX)
+    return { error: `The voiceover script must be ${VOICE_SCRIPT_MAX} characters or less.` };
   // The video direction is the visual brief: required for new projects.
   if (advancedDirection.length < VIDEO_DIRECTION_MIN)
     return { error: `Describe what the video should show (at least ${VIDEO_DIRECTION_MIN} characters).` };
@@ -570,8 +575,24 @@ export async function generateVoice(projectId: string) {
     if (previousPath && previousPath !== storagePath) {
       await admin.storage.from(AUDIO_BUCKET).remove([previousPath]);
     }
+    // The video lasts exactly as long as the voice (plus the brand lockup):
+    // the length comes from the last spoken word, and the storyboard's scene
+    // timing is rescaled to it.
+    const lastEnd = words?.length ? Math.max(...words.map((w) => w.end)) : null;
+    const seconds = lastEnd ? voiceVideoSeconds(lastEnd) : null;
+    const parsedBrief = ProductBrief.safeParse(project.brief);
+    let rescaled: ReturnType<typeof fitDurations> | null = null;
+    if (seconds && parsedBrief.success) {
+      try {
+        rescaled = fitDurations(parsedBrief.data, seconds);
+      } catch {
+        rescaled = null;
+      }
+    }
     // Only the permanent path is persisted, never the temporary provider URL.
     await voiceUpdate({
+      ...(seconds && { duration_seconds: seconds }),
+      ...(rescaled && { brief: { ...(project.brief as object), scenes: rescaled.scenes } }),
       voice_status: "completed",
       voice_error: null,
       // Word timing drives narration-synced motion; null = none available.

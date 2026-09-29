@@ -295,7 +295,7 @@ export function sceneCountRange(durationSeconds: number) {
 }
 
 // Rescale scene durations so they sum exactly to the target.
-function fitDurations(brief: ProductBrief, target: number): ProductBrief {
+export function fitDurations(brief: ProductBrief, target: number): ProductBrief {
   const total = brief.scenes.reduce((sum, s) => sum + Math.max(s.duration_seconds, 0), 0);
   if (!brief.scenes.length || total <= 0) throw new Error("AI returned no usable scenes.");
   let used = 0;
