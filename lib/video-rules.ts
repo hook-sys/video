@@ -35,6 +35,11 @@ export const VIDEO_RULES: VideoRule[] = [
   { id: "text-early", never: "never show words before the voice says them", enforced: ["code"], seen: "Early videos: the scene dimmed before the first word" },
   { id: "empty-frame", never: "never leave the frame empty (camera looking at nothing, a blank gap before the logo)", enforced: ["code", "detect"], seen: "SeloraX push transition; blank before the lockup" },
   { id: "cut-ending", never: "never let the closing line be cut: the video lasts as long as the voice", enforced: ["code"], seen: "Plateful: 15 s video, 16.4 s voice — the last line never appeared" },
+  // ── from the reference films (docs/style-reference.md) ──
+  { id: "text-wall", never: "never put more than 8 words on screen in one statement — 2–6 words, one keyword highlighted", enforced: ["prompt", "detect"], seen: "Reference films: every caption is 2–6 words" },
+  { id: "cut-spam", never: "never hard-cut between scenes more than once; flow with morph, zoom-through or a push", enforced: ["prompt", "detect"], seen: "Reference films: 6–14 hard cuts in 70–120 s, the rest continuous" },
+  { id: "fake-proof", never: "never invent customer logos, testimonials, awards or real-world statistics — numbers on cards are illustrative UI values only", enforced: ["prompt"], seen: "Risk: proof beats in the reference style" },
+  { id: "no-hook", never: "never open on a logo or a generic title: open on the pain or the question in 2–5 words", enforced: ["prompt"], seen: "Reference films all open on a hook" },
   { id: "camera-swing", never: "never swing the camera away from the action (long pans that overshoot)", enforced: ["code", "detect"], seen: "Fuzz: camera overshot 800 px after a focus" },
 ];
 

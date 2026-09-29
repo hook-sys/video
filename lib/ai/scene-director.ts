@@ -13,6 +13,7 @@ import { compositionCheck, violationNote, type Violation } from "@/components/vi
 import { validateFlowPlan } from "@/components/video/flow/validate";
 import { CAMERA_MOVES, ENTER_STYLES, ERASE_STYLES, MAX_ELEMENTS_PER_SCENE, MAX_SCENE_BEATS, PATH_STYLES, repairSceneScript, SceneScript, SceneScriptModel, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { neverList } from "@/lib/video-rules";
+import { STYLE_DIRECTION } from "@/lib/ai/style-direction";
 import { tokenize, type WordTiming } from "@/lib/voice-timing";
 
 // Visual Director v2: turns the finished narration (and its word timestamps)
@@ -71,7 +72,7 @@ VERBS (action):
 - disconnect: the line between targets [one id] and "to" breaks — a broken, manual process.
 
 MOTION VOCABULARY (the client may ask for these): pulse → highlight · bounce / spin / pop / zoom → an entrance style · scatter / disassemble → arrange into a scatter-* layout · assemble / converge → merge, or arrange into mosaic · stack → arrange into stack-* · sort → arrange into row / column / grid · dock → move · hide → erase · show → place · transform / morph → a morph scene or update · burst / sink → an erase style. Every element floats gently on its own when idle.
-- statement: the narration's key phrase as kinetic type, each word appearing as spoken. text = the phrase copied from the narration (≤10 words; cue = its first words), accent = 1–3 words to highlight, text_layout: "display" (words alone on a clean frame), "panel" (full colour panel), "side"/"pill" (a caption over the scene).
+- statement: the narration's key phrase as kinetic type, each word appearing as spoken. text = the phrase copied from the narration (2–6 words, never more than 8; cue = its first words), accent = 1–3 words to highlight, text_layout: "display" (words alone on a clean frame), "panel" (full colour panel), "side"/"pill" (a caption over the scene).
 - list: 3–5 things named in a row → a rolling checklist; items ≤4 words each, from the narration, in order.
 
 INDUSTRY FIRST
@@ -110,7 +111,7 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
   const model = process.env.OPENAI_MODEL || "gpt-5-mini";
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(SceneScriptModel, "scene_script") };
-  const instructions = `${INSTRUCTIONS}\n\nNEVER (mistakes found in earlier videos — every one is checked on your compiled script)\n${input.never || neverList()}`;
+  const instructions = `${INSTRUCTIONS}\n\n${STYLE_DIRECTION}\n\nNEVER (mistakes found in earlier videos — every one is checked on your compiled script)\n${input.never || neverList()}`;
   // Reasoning models: a revision only has to fix listed problems, so it runs
   // with low effort (much faster).
   const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};

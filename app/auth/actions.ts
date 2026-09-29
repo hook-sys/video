@@ -18,7 +18,11 @@ export async function login(formData: FormData) {
   const { data, error } = await supabase.auth.signInWithPassword(
     credentials(formData),
   );
-  if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`);
+  if (error) {
+    // Auth service down or timing out (502/504): say so plainly.
+    const message = (error.status ?? 0) >= 500 ? "Login is temporarily unavailable. Please try again in a minute." : error.message;
+    redirect(`/login?error=${encodeURIComponent(message)}`);
+  }
   // Suspended from /admin/users.
   if ((await userAccess(supabase, data.user.id)).suspended) {
     await supabase.auth.signOut();

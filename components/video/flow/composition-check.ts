@@ -14,6 +14,7 @@ import type { FlowPlan } from "./types";
 export type Violation = { rule: string; detail: string };
 
 const FRAME = 1920 * 1080;
+const tokenCount = (s: string) => s.split(/\s+/).filter(Boolean).length;
 
 export function compositionCheck(
   script: SceneScript,
@@ -45,6 +46,10 @@ export function compositionCheck(
     const end = j === -1 ? speechEnd : (times[j] ?? speechEnd);
     if (end - times[i]! > 6.5) add("long-scene", `the scene on "${b.cue}" holds for ${(end - times[i]!).toFixed(1)} s`);
   });
+  const long = beats.find((b) => b.action === "statement" && tokenCount(b.text ?? b.cue) > 8);
+  if (long) add("text-wall", `the statement "${long.text ?? long.cue}" has ${tokenCount(long.text ?? long.cue)} words`);
+  const cuts = beats.filter((b, i) => b.action === "scene" && i > 0 && b.transition === "cut").length;
+  if (cuts > 1) add("cut-spam", `${cuts} scenes start with a hard cut`);
   const celebrates = beats.filter((b) => b.action === "celebrate").length;
   if (celebrates > 1) add("decor-beats", `${celebrates} beats are only a celebrate accent`);
   if (screenshots > 0) {
