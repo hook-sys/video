@@ -1,5 +1,8 @@
 // Formatting and status helpers shared by the admin pages.
 import type { BadgeTone } from "./ui";
+import { projectTitle, videoState, type VideoState } from "@/lib/project-status";
+
+export { projectTitle, videoState, type VideoState };
 
 export const usd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: n < 1 && n > 0 ? 4 : 2 })}`;
 
@@ -35,17 +38,6 @@ export type ProjectRow = {
 export const PROJECT_COLUMNS =
   "id, user_id, created_at, updated_at, brand_name, website_url, duration_seconds, status, pipeline_status, pipeline_step, pipeline_error, render_status, render_error, render_4k_status, video_path";
 
-// One status per video, from the pipeline and render fields.
-export type VideoState = "completed" | "rendering" | "generating" | "failed" | "needs_input" | "preview_ready" | "draft";
-export function videoState(p: Pick<ProjectRow, "pipeline_status" | "render_status">): VideoState {
-  if (p.render_status === "completed") return "completed";
-  if (p.render_status === "processing") return "rendering";
-  if (p.pipeline_status === "failed" || p.render_status === "failed") return "failed";
-  if (p.pipeline_status === "running") return "generating";
-  if (p.pipeline_status === "needs_input") return "needs_input";
-  if (p.pipeline_status === "preview_ready") return "preview_ready";
-  return "draft";
-}
 export const STATE_LABEL: Record<VideoState, [string, BadgeTone]> = {
   completed: ["Completed", "green"],
   rendering: ["Rendering", "blue"],
@@ -56,8 +48,6 @@ export const STATE_LABEL: Record<VideoState, [string, BadgeTone]> = {
   draft: ["Draft", "gray"],
 };
 
-export const projectTitle = (p: Pick<ProjectRow, "brand_name" | "website_url" | "id">) =>
-  p.brand_name || (p.website_url ? p.website_url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") : `Video ${p.id.slice(0, 6)}`);
 
 export const ROLE_TONE: Record<string, BadgeTone> = { super_admin: "violet", admin: "blue", user: "gray" };
 export const ROLE_LABEL: Record<string, string> = { super_admin: "Super admin", admin: "Admin", user: "Customer" };
