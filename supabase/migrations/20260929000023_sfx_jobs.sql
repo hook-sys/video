@@ -21,3 +21,6 @@ create index sfx_jobs_status_idx on public.sfx_jobs (status, id);
 
 alter table public.sfx_jobs enable row level security;
 revoke all on public.sfx_jobs from anon, authenticated;
+
+-- The Fal file URL (for downloading picked takes) and the reviewer's pick.
+alter table public.sfx_jobs add column audio_url text, add column picked boolean not null default false;

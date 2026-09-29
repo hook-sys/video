@@ -28,8 +28,8 @@ export async function GET() {
     await Promise.all(
       (jobs ?? []).map(async (job) => {
         try {
-          const { audio } = await generateSoundEffect(job.prompt, Number(job.duration_seconds));
-          await admin.from("sfx_jobs").update({ status: "done", audio_b64: Buffer.from(audio).toString("base64"), error: null, updated_at: new Date().toISOString() }).eq("id", job.id);
+          const { audio, url } = await generateSoundEffect(job.prompt, Number(job.duration_seconds));
+          await admin.from("sfx_jobs").update({ status: "done", audio_url: url, audio_b64: Buffer.from(audio).toString("base64"), error: null, updated_at: new Date().toISOString() }).eq("id", job.id);
           counts.done++;
         } catch (e) {
           await admin.from("sfx_jobs").update({ status: "failed", error: (e instanceof Error ? e.message : String(e)).slice(0, 300), updated_at: new Date().toISOString() }).eq("id", job.id);
