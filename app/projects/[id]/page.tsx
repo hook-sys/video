@@ -9,6 +9,7 @@ import {
   generateVoice,
   prepareAssets,
   renderVideo,
+  render4kVideo,
   retryPipeline,
   runBenchmark,
 } from "@/app/projects/actions";
@@ -91,6 +92,14 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           .createSignedUrl(project.video_path, 3600, { download: "video.mp4" })
       : { data: null };
 
+  // 4K is a download option rendered on request next to the 1080p video.
+  const { data: download4k } =
+    project.render_4k_status === "completed" && project.video_4k_path
+      ? await supabase.storage
+          .from(VIDEOS_BUCKET)
+          .createSignedUrl(project.video_4k_path, 3600, { download: "video-4k.mp4" })
+      : { data: null };
+
   const costs = dev ? await getProjectCostSummary(supabase, id, project.duration_seconds) : null;
   const usd = (n: number) => `$${n.toFixed(4)}`;
   const { data: benchmarkRuns } = dev
@@ -118,7 +127,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       <Link href="/dashboard" className="text-sm text-foreground/70 underline">
         ← Dashboard
       </Link>
-      <AutoRefresh active={project.pipeline_status === "running"} />
+      <AutoRefresh active={project.pipeline_status === "running" || project.render_4k_status === "processing"} />
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl font-semibold tracking-tight">Your video</h1>
         <p className="text-sm text-foreground/60">
@@ -166,6 +175,24 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             <p className="max-w-sm text-xs text-foreground/50">
               The MP4 download will be available once final rendering is enabled.
             </p>
+          )}
+          {download?.signedUrl && (
+            <div className="flex flex-col items-center gap-1.5">
+              {download4k?.signedUrl ? (
+                <a href={download4k.signedUrl} className="rounded-2xl border border-foreground/15 px-6 py-3 font-semibold transition hover:bg-foreground/5">
+                  ↓ Download 4K
+                </a>
+              ) : project.render_4k_status === "processing" ? (
+                <span className="rounded-2xl border border-foreground/10 px-6 py-3 font-semibold text-foreground/60">Preparing 4K…</span>
+              ) : (
+                <form action={render4kVideo.bind(null, id)}>
+                  <SubmitButton pendingLabel="Starting 4K…" className="rounded-2xl border border-foreground/15 px-6 py-3 font-semibold transition hover:bg-foreground/5">Get 4K version</SubmitButton>
+                </form>
+              )}
+              <p className="text-xs text-foreground/50">
+                {project.render_4k_status === "failed" && project.render_4k_error ? project.render_4k_error : "1080p by default. The 4K version renders on request and takes a few minutes longer."}
+              </p>
+            </div>
           )}
           {video?.signedUrl && (
             <video id="video" controls src={video.signedUrl} className="w-full rounded-2xl" />

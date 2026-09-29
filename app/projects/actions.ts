@@ -739,9 +739,18 @@ export async function renderVideo(projectId: string, formData: FormData) {
   await startRender(projectId, String(formData.get("resolution") ?? ""), false);
 }
 
+// 4K is a download option: renders a 4K copy next to the 1080p video.
+export async function render4kVideo(projectId: string) {
+  await startRender(projectId, "4k", false, true);
+}
+
 // Shared by the Render button (background) and the dev benchmark (awaited).
-// Not exported, so clients can't trigger a blocking render.
-async function startRender(projectId: string, requested: string, wait: boolean) {
+// Not exported, so clients can't trigger a blocking render. `fourK` renders
+// the 4K download copy into its own fields, leaving the main video alone.
+async function startRender(projectId: string, requested: string, wait: boolean, fourK = false) {
+  const F = fourK
+    ? ({ status: "render_4k_status", error: "render_4k_error", path: "video_4k_path", file: "final-4k.mp4" } as const)
+    : ({ status: "render_status", error: "render_error", path: "video_path", file: "final.mp4" } as const);
   const supabase = await createClient();
   const {
     data: { user },
@@ -788,9 +797,9 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
   });
   if (!input.props || problems.length) {
     await renderUpdate({
-      render_status: "failed",
-      render_error: `Validation failed: ${problems.join(" ")}`.slice(0, 500),
-    }).neq("render_status", "processing");
+      [F.status]: "failed",
+      [F.error]: `Validation failed: ${problems.join(" ")}`.slice(0, 500),
+    }).neq(F.status, "processing");
     revalidatePath(`/projects/${projectId}`);
     return;
   }
@@ -800,21 +809,16 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
   // attempting (or faking) a render. Rendering runs on a dedicated worker later.
   if (process.env.VERCEL) {
     await renderUpdate({
-      render_status: "failed",
-      render_error: RENDER_WORKER_MESSAGE,
-    }).neq("render_status", "processing");
+      [F.status]: "failed",
+      [F.error]: RENDER_WORKER_MESSAGE,
+    }).neq(F.status, "processing");
     revalidatePath(`/projects/${projectId}`);
     return;
   }
 
   const staleBefore = new Date(Date.now() - STALE_RENDER_MS).toISOString();
-  const { data: claimed } = await renderUpdate({
-    render_status: "processing",
-    render_error: null,
-    status: "processing",
-    resolution,
-  })
-    .or(`render_status.neq.processing,updated_at.lt.${staleBefore}`)
+  const { data: claimed } = await renderUpdate(fourK ? { [F.status]: "processing", [F.error]: null } : { render_status: "processing", render_error: null, status: "processing", resolution })
+    .or(`${F.status}.neq.processing,updated_at.lt.${staleBefore}`)
     .select("id");
   if (!claimed?.length) return;
 
@@ -825,7 +829,7 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
       const started = Date.now();
       const mp4 = await renderStoryboardMp4(props, resolution);
       const renderMs = Date.now() - started;
-      const videoPath = `${user.id}/${projectId}/final.mp4`;
+      const videoPath = `${user.id}/${projectId}/${F.file}`;
       const { error } = await admin.storage
         .from(VIDEOS_BUCKET)
         .upload(videoPath, mp4, { contentType: "video/mp4", upsert: true });
@@ -850,17 +854,17 @@ async function startRender(projectId: string, requested: string, wait: boolean) 
         metadata: { kind: "video", unit: "bytes" },
       });
       await renderUpdate({
-        render_status: "completed",
-        render_error: null,
-        video_path: videoPath,
-        status: "completed",
+        [F.status]: "completed",
+        [F.error]: null,
+        [F.path]: videoPath,
+        ...(fourK ? {} : { status: "completed" }),
       });
     } catch (e) {
       const message = e instanceof Error ? e.message.split("\n")[0] : "Render failed.";
       await renderUpdate({
-        render_status: "failed",
-        render_error: message.slice(0, 500),
-        status: "failed",
+        [F.status]: "failed",
+        [F.error]: message.slice(0, 500),
+        ...(fourK ? {} : { status: "failed" }),
       });
     }
   };

@@ -252,48 +252,59 @@
 .lp-ctas { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; animation: lp-fade-up 900ms var(--ease-out) 900ms both; }
 @keyframes lp-fade-up { from { opacity: 0; transform: translateY(16px); } }
 
-/* ── A · brief: slit → diamond → glass cube ───────────────────────────── */
-.a-stage { position: relative; width: 320px; height: 320px; }
-.a-slit, .a-diamond, .a-cube-wrap, .a-orbit { position: absolute; left: 50%; top: 50%; }
-.a-slit {
-  width: 3px;
-  height: 260px;
-  margin: -130px 0 0 -1.5px;
-  background: #fff;
-  box-shadow: 0 0 24px 6px rgba(160, 150, 255, 0.9), 0 0 80px 20px rgba(90, 60, 255, 0.6);
-  transform: scaleY(0);
+/* ── gallery: four demo promos (components/landing/gallery.tsx) ───────── */
+.g-grid { position: relative; z-index: 2; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; width: min(1100px, 100%); }
+.g-card {
+  margin: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 30px 70px rgba(5, 3, 40, 0.5);
   opacity: 0;
+  transform: translateY(40px) scale(0.96);
+  transition: opacity 700ms, transform 1000ms var(--ease-out), box-shadow 300ms;
+  transition-delay: calc(200ms + var(--i) * 120ms);
 }
-.a-diamond {
-  width: 170px;
-  height: 170px;
-  margin: -85px 0 0 -85px;
-  background: radial-gradient(circle at 60% 50%, rgba(255, 255, 255, 0.95), rgba(170, 160, 255, 0.4) 55%, transparent 72%);
-  box-shadow: 0 0 80px 20px rgba(120, 100, 255, 0.55);
-  transform: rotate(45deg) scale(0);
+[data-in="true"] .g-card { opacity: 1; transform: none; }
+.g-card:hover { box-shadow: 0 30px 80px rgba(124, 58, 237, 0.45); }
+.g-card video, .g-soon { display: block; width: 100%; aspect-ratio: 16 / 9; background: #0b0748; }
+.g-soon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  background: linear-gradient(120deg, #2a1fd6, #7c3aed, #db2777, #2a1fd6);
+  background-size: 300% 100%;
+  animation: lp-shift 9s ease-in-out infinite;
+}
+.g-play { position: relative; width: 64px; height: 64px; border-radius: 50%; background: rgba(255, 255, 255, 0.18); border: 1px solid rgba(255, 255, 255, 0.45); backdrop-filter: blur(8px); }
+.g-play::after { content: ""; position: absolute; left: 26px; top: 20px; border-left: 18px solid #fff; border-top: 12px solid transparent; border-bottom: 12px solid transparent; }
+.g-card figcaption { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; font-size: 0.9rem; }
+.g-card figcaption span { color: rgba(255, 255, 255, 0.6); font-size: 0.8rem; }
+@media (max-width: 640px) { .g-grid { grid-template-columns: 1fr; } }
+
+/* ── B · brand: fragments assemble into one screen ────────────────────── */
+.b-stage { position: relative; width: min(720px, 92vw); aspect-ratio: 720 / 440; }
+.b-frame { position: absolute; inset: 0; border-radius: 22px; background: #fff; box-shadow: 0 40px 90px rgba(80, 60, 200, 0.28); opacity: 0; transform: scale(0.94); transition: opacity 600ms, transform 900ms var(--ease-out); transition-delay: 900ms; }
+[data-in="true"] .b-frame { opacity: 1; transform: none; }
+.b-frag {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
   opacity: 0;
+  transform: var(--from);
+  transition: transform 1200ms var(--ease-out), opacity 500ms;
+  transition-delay: calc(var(--i) * 70ms);
+  box-shadow: 0 16px 40px rgba(80, 60, 200, 0.22);
 }
-/* Opacity lives on the wrapper: on a preserve-3d element it would flatten the cube. */
-.a-cube-wrap { width: 180px; height: 180px; margin: -90px 0 0 -90px; perspective: 900px; opacity: 0; }
-.a-cube { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transform: rotateX(-22deg) rotateY(35deg); }
-.a-core { left: 42px; top: 42px; box-shadow: 0 0 60px 10px rgba(160, 120, 255, 0.55), inset -10px -14px 28px rgba(15, 0, 70, 0.45); }
-.a-face { position: absolute; inset: 0; border: 1.5px solid rgba(255, 255, 255, 0.7); border-radius: 6px; background: linear-gradient(140deg, rgba(255, 255, 255, 0.26), rgba(120, 110, 255, 0.06)); box-shadow: inset 0 0 30px rgba(190, 180, 255, 0.45), 0 0 18px rgba(140, 120, 255, 0.35); }
-.a-front { transform: translateZ(90px); }
-.a-back { transform: rotateY(180deg) translateZ(90px); }
-.a-left { transform: rotateY(-90deg) translateZ(90px); }
-.a-right { transform: rotateY(90deg) translateZ(90px); }
-.a-top { transform: rotateX(90deg) translateZ(90px); }
-.a-bottom { transform: rotateX(-90deg) translateZ(90px); }
-.a-orbit { margin: -14px 0 0 -14px; opacity: 0; }
-[data-in="true"] .a-slit { animation: a-slit 900ms var(--ease-out) forwards; }
-[data-in="true"] .a-diamond { animation: a-diamond 1500ms var(--ease-out) 550ms forwards; }
-[data-in="true"] .a-cube-wrap { animation: a-cube-in 800ms var(--ease-out) 1100ms forwards; }
-[data-in="true"] .a-cube { animation: a-spin 16s linear infinite; }
-/* The sphere turns against the cube so it always faces the viewer. */
-.a-core { transform: rotateY(-35deg) rotateX(22deg); }
-[data-in="true"] .a-core { animation: a-counter 16s linear infinite; }
-@keyframes a-counter { from { transform: rotateY(-35deg) rotateX(22deg); } to { transform: rotateY(-395deg) rotateX(22deg); } }
-[data-in="true"] [data-in="true"] .b-frag { opacity: 1; transform: none; }
+[data-in="true"] .b-frag { opacity: 1; transform: none; }
 .b-bar { left: 0; top: 0; width: 100%; height: 11%; border-radius: 22px 22px 0 0; background: linear-gradient(90deg, #efeaff, #fbe7f2); box-shadow: none; }
 .b-side { left: 3%; top: 17%; width: 20%; height: 76%; background: linear-gradient(180deg, #3b2bff, #7c3aed); }
 .b-heroblock { left: 27%; top: 17%; width: 70%; height: 36%; background: linear-gradient(120deg, #3b2bff 0%, #8b5cf6 55%, #f472b6 100%); }
@@ -376,7 +387,6 @@
 /* ── small screens + reduced motion ───────────────────────────────────── */
 @media (max-width: 640px) {
   .lp-hide-sm { display: none; }
-  .a-stage { transform: scale(0.8); }
   .c-stage { width: 100vw; }
   .c-plane { transform: rotateX(56deg) rotateZ(-40deg) scale(0.66); }
   .c-panel { width: 100px; height: 88px; margin: -44px 0 0 -50px; font-size: 0.75rem; }
@@ -384,8 +394,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .lp *, .lp *::before, .lp *::after { animation: none !important; transition: none !important; }
-  .lp-word, .a-cube-wrap, .b-frag, .b-frame, .b-ball, .c-panel, .c-ball, .lp-hero-player, .f-word { opacity: 1 !important; transform: none !important; filter: none !important; clip-path: none !important; }
-  }
+  .lp-word, .g-card, .b-frag, .b-frame, .b-ball, .c-panel, .c-ball, .lp-hero-player, .f-word { opacity: 1 !important; transform: none !important; filter: none !important; clip-path: none !important; }
+}
 
 /* ── waiting screen (components/waiting/waiting-screen.tsx) ─────────────── */
 .lp-wait { align-items: flex-start; }

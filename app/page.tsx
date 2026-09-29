@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { Hero } from "@/components/landing/hero";
 import { heroPlan } from "@/components/landing/hero-plan";
-import { FinalCta, SceneBrand, SceneBrief, SceneDirect } from "@/components/landing/scenes";
+import { Gallery } from "@/components/landing/gallery";
+import { FinalCta, SceneBrand, SceneDirect } from "@/components/landing/scenes";
 import { SoundProvider, SoundToggle } from "@/components/landing/sound";
 import { createClient } from "@/lib/supabase/server";
 import "@/components/landing/landing.css";
@@ -38,7 +39,7 @@ export default async function Home() {
         </header>
         <main>
           <Hero signedIn={!!user} plan={plan} captions={captions} />
-          <SceneBrief />
+          <Gallery />
           <SceneBrand />
           <SceneDirect />
           <FinalCta signedIn={!!user} />

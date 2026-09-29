@@ -3,31 +3,6 @@ import { LogoMark } from "@/components/brand/logo";
 import { Sphere } from "./primitives";
 import { Reveal, Words } from "./reveal";
 
-// A · Write a brief — in the dark, a slit of light opens into a glass cube
-// with a glowing sphere inside.
-export function SceneBrief() {
-  return (
-    <Reveal className="lp-dark lp-a" sfx={[["reveal", 150], ["soft_pop", 1200]]}>
-      <div className="a-stage" aria-hidden="true">
-        <span className="a-slit" />
-        <span className="a-diamond" />
-        <div className="a-cube-wrap">
-          <div className="a-cube">
-            {["front", "back", "left", "right", "top", "bottom"].map((f) => (
-              <i key={f} className={`a-face a-${f}`} />
-            ))}
-            <Sphere size={96} tone="violet" className="a-core" />
-          </div>
-        </div>
-        <Sphere size={28} tone="blue" className="a-orbit" />
-      </div>
-      <h2 className="lp-h2">
-        <Words text="Write a brief." />
-      </h2>
-    </Reveal>
-  );
-}
-
 // B · Add your brand — scattered UI fragments fly together into one screen.
 const FRAGMENTS: { cls: string; from: string }[] = [
   { cls: "b-bar", from: "translate(-420px,-260px) rotate(-24deg)" },
