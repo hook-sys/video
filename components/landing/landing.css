@@ -443,15 +443,3 @@
 .lp-wait { align-items: flex-start; }
 .lp-wait-content { padding-top: 110px; gap: 18px; }
 .lp-wait-mark { filter: drop-shadow(0 0 30px rgba(140, 110, 255, 0.7)); animation: lp-float 4s ease-in-out infinite alternate; }
-.lp-wait-line { font-size: clamp(2.2rem, 6.5vw, 4.8rem); }
-.lp-wait-progress { display: flex; flex-direction: column; gap: 14px; width: min(760px, 100%); animation: lp-fade-up 900ms var(--ease-out) 500ms both; }
-.lp-wait-bar { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
-.lp-wait-bar i { position: relative; display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--lp-blue), var(--lp-violet), var(--lp-pink)); box-shadow: 0 0 20px rgba(244, 114, 182, 0.6); transition: width 1200ms var(--ease-out); overflow: hidden; }
-.lp-wait-bar i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent); transform: translateX(-100%); animation: lp-bar 1.8s ease-in-out infinite; }
-@keyframes lp-bar { to { transform: translateX(100%); } }
-.lp-wait-steps { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; font-size: 0.8rem; font-weight: 600; }
-.lp-wait-steps li { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.5); }
-.lp-wait-steps li span:empty { display: none; }
-.lp-wait-steps li[data-state="done"] { color: #fff; background: rgba(255, 255, 255, 0.12); }
-.lp-wait-steps li[data-state="active"] { color: #fff; border-color: rgba(244, 114, 182, 0.8); background: rgba(124, 58, 237, 0.35); box-shadow: 0 0 24px rgba(124, 58, 237, 0.55); animation: lp-pulse 1.6s ease-in-out infinite; }
-@keyframes lp-pulse { 50% { box-shadow: 0 0 36px rgba(244, 114, 182, 0.7); } }

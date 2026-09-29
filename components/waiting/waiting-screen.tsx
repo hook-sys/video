@@ -1,42 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { Logo, LogoMark } from "@/components/brand/logo";
 import { HeroPlayer } from "@/components/landing/hero-player";
 import type { HeroCaption } from "@/components/landing/hero-plan";
 import { Sphere } from "@/components/landing/primitives";
-import { Words } from "@/components/landing/reveal";
 import { SoundProvider, SoundToggle } from "@/components/landing/sound";
 import type { FlowPlan } from "@/components/video/flow/types";
-import { PIPELINE_STEPS } from "@/lib/pipeline";
 import "@/components/landing/landing.css";
 
-// Bold line per pipeline step (lib/pipeline.ts), shown while that step runs.
-const LINES: Record<string, string> = {
-  analyzing: "Reading your product.",
-  writing: "Writing your script.",
-  voice: "Recording the voice.",
-  visuals: "Directing every scene.",
-  validating: "Checking every detail.",
-  rendering: "Rendering your video.",
-};
-
 // Shown while a video is being made: the landing page's stage (glow, floor,
-// spheres), the looping logo, a bold line for the step that is running, the
-// real progress, and MotionBrief's own promo to watch meanwhile. It covers the
-// page. Without a known step (while the create form submits) the steps
-// advance on a timer and stop before the last one.
-export function WaitingScreen({ step, plan, captions }: { step?: string | null; plan: FlowPlan; captions: HeroCaption[] }) {
-  const [ticked, setTicked] = useState(0);
-  useEffect(() => {
-    if (step !== undefined) return;
-    const id = setInterval(() => setTicked((n) => Math.min(n + 1, PIPELINE_STEPS.length - 2)), 14000);
-    return () => clearInterval(id);
-  }, [step]);
-  const current = step === undefined ? ticked : Math.max(0, PIPELINE_STEPS.findIndex((s) => s.key === step));
-  const line = LINES[PIPELINE_STEPS[current].key] ?? "Making your video.";
-  const pct = Math.round(((current + 0.5) / PIPELINE_STEPS.length) * 100);
+// spheres), the looping logo as the loading sign, and MotionBrief's own promo
+// right below it to watch meanwhile. It covers the page. `step` is the running
+// pipeline step (not shown; kept for callers).
+export function WaitingScreen({ plan, captions }: { step?: string | null; plan: FlowPlan; captions: HeroCaption[] }) {
   return (
     <SoundProvider>
       <div className="lp fixed inset-0 z-50 overflow-y-auto">
@@ -59,24 +36,8 @@ export function WaitingScreen({ step, plan, captions }: { step?: string | null; 
           </header>
 
           <div className="lp-hero-content lp-wait-content">
-            <LogoMark size={76} animated loopMs={4200} className="lp-wait-mark" />
-            <h1 key={line} className="lp-h2 lp-wait-line">
-              <Words text={line} />
-            </h1>
-            <p className="lp-sub">Your video is being made. You can stay here or come back later.</p>
-
-            <div className="lp-wait-progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Progress">
-              <div className="lp-wait-bar">
-                <i style={{ width: `${pct}%` }} />
-              </div>
-              <ol className="lp-wait-steps">
-                {PIPELINE_STEPS.map((s, i) => (
-                  <li key={s.key} data-state={i < current ? "done" : i === current ? "active" : "todo"}>
-                    <span aria-hidden="true">{i < current ? "✓" : ""}</span>
-                    {s.label}
-                  </li>
-                ))}
-              </ol>
+            <div role="status" aria-label="Your video is being made">
+              <LogoMark size={76} animated loopMs={4200} className="lp-wait-mark" />
             </div>
 
             <div className="lp-hero-player">
