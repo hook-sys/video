@@ -62,7 +62,7 @@ VERBS (action):
 - arrange: the current elements reorganise into a new layout (chaos → order).
 - erase: targets are wiped away (style: ${ERASE_STYLES.join(", ")}) — busywork, problems, manual steps disappearing.
 - highlight: targets [one id] pulses, the rest dim briefly.
-- focus: the camera pushes in on targets [one id].
+- focus: the camera pushes in on targets [one id]. style = a part of it to zoom into so it reads ("top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right") — e.g. the chart on a dashboard screenshot, the button on a form; null frames the whole element.
 - reveal: the camera pulls back to show the whole system.
 - celebrate: a Lottie accent at targets [one id] (lottie: ${LOTTIES}).
 - orbit: targets (1–4) circle "to" — an ecosystem, integrations, "everything around your data". One orbit per scene.

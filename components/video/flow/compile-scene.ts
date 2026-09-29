@@ -48,6 +48,8 @@ const MIN_FRAMES: Record<SceneBeat["action"], number> = {
   flow: 20,
   click: 20,
 };
+// focus style → the part of the element to zoom into (offsets as a share of its size).
+const DETAIL: Record<string, Vec> = { center: [0, 0], top: [0, -0.25], bottom: [0, 0.25], left: [-0.25, 0], right: [0.25, 0], "top-left": [-0.25, -0.25], "top-right": [0.25, -0.25], "bottom-left": [-0.25, 0.25], "bottom-right": [0.25, 0.25] };
 const MINOR = new Set<SceneBeat["action"]>(["celebrate", "highlight", "disconnect"]);
 
 export type SceneCompileOptions = {
@@ -664,8 +666,19 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const [a] = tgt;
         if (!a) break;
         for (const n of live.values()) if (n !== a) setBlur(n, t, 8, 14);
-        shoot(t, span, "push-in", [a]);
-        focusedOn = a;
+        const region = b.style ? DETAIL[b.style] : undefined;
+        if (region) {
+          // Zoom into one part of the element (a button, a chart, a field) so it reads.
+          const [w, h] = [a.w * a.fit, a.h0 * a.fit];
+          const c: Vec = [a.pos[0] + region[0] * w, a.pos[1] + region[1] * h];
+          const z = Math.min(2.4, 1680 / (w * 0.55), 900 / (h * 0.55));
+          f.camera(t, Math.min(24, span), c, z * 0.94);
+          if (span > 30) f.camera(t + 24, span - 24, c, z, "linear");
+          focusedOn = null;
+        } else {
+          shoot(t, span, "push-in", [a]);
+          focusedOn = a;
+        }
         framed = false;
         break;
       }
