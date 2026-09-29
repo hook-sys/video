@@ -65,6 +65,19 @@ export function tokenize(text: string): string[] {
 export const sameWord = (a: string, b: string) =>
   a === b || (Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a)));
 
+// How many voice tokens from `i` spell the word `w`: voices sometimes split a
+// word, a brand name above all ("Plateful" → "Pl" + "ateful"), so 1–3
+// adjacent tokens may join into it. 0 when they don't.
+export function tokensForWord(stream: { t: string }[], i: number, w: string): number {
+  let joined = "";
+  for (let k = 0; k < 3 && i + k < stream.length; k++) {
+    joined += stream[i + k].t;
+    if (k === 0 ? sameWord(joined, w) : joined === w) return k + 1;
+    if (!w.startsWith(joined)) return 0;
+  }
+  return 0;
+}
+
 // Where each cue phrase is actually spoken: the start time of its first word in
 // the voice's word stream, matched in order (each cue after the previous one).
 // null when the phrase isn't spoken (in that order).
@@ -75,7 +88,13 @@ export function spokenCueTimes(cues: string[], words: WordTiming[]): (number | n
     const want = tokenize(cue);
     if (!want.length) return null;
     for (let i = from; i < stream.length; i++) {
-      if (want.every((w, j) => stream[i + j] && sameWord(stream[i + j].t, w))) {
+      let at = i;
+      const ok = want.every((w) => {
+        const n = tokensForWord(stream, at, w);
+        at += n;
+        return n > 0;
+      });
+      if (ok) {
         from = i + 1;
         return stream[i].start;
       }

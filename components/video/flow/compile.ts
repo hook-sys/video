@@ -1,5 +1,5 @@
 import { estimateWords, type FlowAction, type FlowBeat, type FlowScript } from "@/lib/flow-script";
-import { sameWord, spokenCueTimes, tokenize, type WordTiming } from "@/lib/voice-timing";
+import { spokenCueTimes, tokenize, tokensForWord, type WordTiming } from "@/lib/voice-timing";
 import { num, vec } from "./eval";
 import { Flow, type FlowNodeHandle, TILT } from "./patterns";
 import type { FlowPlan, FlowText, ThemeName, Vec } from "./types";
@@ -80,11 +80,19 @@ export function wordFrames(text: string, fromSec: number, timeline: WordTiming[]
   for (const w of text.split(/\s+/).filter(Boolean)) {
     const tok = tokenize(w)[0];
     let hit = -1;
-    if (tok) for (let k = j; k < Math.min(stream.length, j + 30); k++) if (sameWord(stream[k].t, tok)) { hit = k; break; }
+    let used = 1;
+    if (tok)
+      for (let k = j; k < Math.min(stream.length, j + 30); k++) {
+        const n = tokensForWord(stream, k, tok);
+        if (n) {
+          [hit, used] = [k, n];
+          break;
+        }
+      }
     const prev = out[out.length - 1];
     if (hit >= 0) {
       out.push(Math.max(prev === undefined ? 0 : prev + 2, Math.round(stream[hit].start * FPS) - 2));
-      j = hit + 1;
+      j = hit + used;
     } else out.push(prev === undefined ? Math.round(fromSec * FPS) : prev + 4);
   }
   return out;

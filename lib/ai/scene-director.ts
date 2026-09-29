@@ -154,8 +154,11 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
           creative_preferences: input.creative_preferences ? { ...input.creative_preferences, advanced_direction: undefined } : null,
         }),
         text: format,
+        // A long narration (30 s and up) needs many beats: low effort keeps
+        // the first draft inside the pipeline's time budget.
+        ...(tokenize(input.narration).length > 55 ? quick : {}),
       },
-      { timeout: Math.min(80_000, budgetMs) },
+      { timeout: Math.min(110_000, budgetMs - 8_000) },
     );
     usage.inputTokens += first.usage?.input_tokens ?? 0;
     usage.outputTokens += first.usage?.output_tokens ?? 0;
