@@ -18,6 +18,12 @@ export const voiceVideoSeconds = (lastWordEnd: number) => clampSeconds(lastWordE
 
 // Sent to the AI as part of the direction text (no separate backend field).
 export const VISUAL_STYLES = ["Premium SaaS", "Minimal", "Bold", "Corporate", "Futuristic", "Cinematic"] as const;
+// The look (docs/style-reference.md families). Travels with the script as a
+// "Look:" line, like the visual style; Auto lets the Director choose.
+export const LOOKS = ["Auto", "Light glass", "Dark glow", "Warm brand"] as const;
+export type Look = (typeof LOOKS)[number];
+// The theme a look forces on the video (null = the Director's choice).
+export const LOOK_THEME: Record<Look, "lavender" | "midnight" | null> = { Auto: null, "Light glass": null, "Dark glow": "midnight", "Warm brand": null };
 // Creative preferences: guidance for the AI director only (never facts).
 export const CREATIVE_DIRECTIONS = ["Auto", "Story Ad", "Product Demo", "Fast Promo", "Cinematic Brand", "Explainer"] as const;
 export const MOTION_LEVELS = ["Subtle", "Balanced", "Dynamic", "High Energy"] as const;

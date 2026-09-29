@@ -16,6 +16,8 @@ import {
   CREATIVE_DIRECTIONS,
   DIRECTION_MAX,
   estimateVideoSeconds,
+  LOOK_THEME,
+  type Look,
   VOICE_SCRIPT_MAX,
   voiceVideoSeconds,
   FORMATS,
@@ -372,6 +374,7 @@ export async function generateBrief(projectId: string) {
 function creativePreferences(project: { direction?: string | null; creative_direction?: string | null; motion_level?: string | null; visual_density?: string | null; advanced_direction?: string | null; target_audience?: string | null; brand_name?: string | null }) {
   return {
     visual_style: project.direction?.match(/Visual style:\s*(.+)\s*$/m)?.[1] ?? VISUAL_STYLES[0],
+    look: project.direction?.match(/^Look:\s*(.+)$/m)?.[1]?.trim() ?? "Auto",
     creative_direction: project.creative_direction ?? CREATIVE_DEFAULTS.creative_direction,
     motion_level: project.motion_level ?? CREATIVE_DEFAULTS.motion_level,
     visual_density: project.visual_density ?? CREATIVE_DEFAULTS.visual_density,
@@ -449,6 +452,10 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
       output_tokens: usage?.outputTokens,
       problems: result.errors.slice(0, 6),
     });
+  // The chosen look fixes the palette: dark → midnight; light → never midnight.
+  const look = input.creative_preferences.look as Look;
+  if (v2.script && LOOK_THEME[look]) v2.script.theme = LOOK_THEME[look]!;
+  if (v2.script && look === "Light glass" && v2.script.theme === "midnight") v2.script.theme = "lavender";
   const stored = v2.script ? { scene: v2.script } : result.script ? { flow: result.script } : null;
   if (stored) {
     // Re-read so nothing written meanwhile is lost; only `scene`/`flow` change.

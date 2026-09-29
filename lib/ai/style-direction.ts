@@ -11,4 +11,5 @@ export const STYLE_DIRECTION = `HOUSE STYLE (from the reference films the client
 - Kinetic type: statements of 2–6 words (never more than 8), one keyword as accent; before/after contrasts ("No more manual reports") make great statements.
 - Numbers are heroes: turn claims into a kpi / metric card whose value updates (counts up) on the spoken number ("−1h", "12 → 11", "5X", "98%").
 - Show integrations as icons or logos orbiting (or connected to) the product card.
-- Calm, premium palette: the theme plus the brand colour on the one card that matters; no rainbow of accent cards.`;
+- Calm, premium palette: the theme plus the brand colour on the one card that matters; no rainbow of accent cards.
+- creative_preferences.look (when not "Auto"): "Light glass" = a bright theme (lavender, mint or teal), frosted glass and solid cards, airy; "Dark glow" = midnight theme, glowing accents, glow / particles / light-beams backdrops; "Warm brand" = the brand colour carries the film: accent cards and pill marks in the brand colour, warm soft backdrops (mesh, blobs, glow).`;
