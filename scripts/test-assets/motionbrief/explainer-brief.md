@@ -2,7 +2,7 @@
 
 Upload only `motionbrief-logo.png` as the logo. Leave screenshots empty.
 
-## 1 · Your script (voice) — 437 characters
+## 1 · Your script (voice) — 425 characters
 
 Making a promo video usually takes weeks. You hire a studio, write a brief, record a voice, and wait. With MotionBrief, you just write your script. We record the voice, direct every scene and animate it for you. Your product stays the hero, with clean text and calm motion. In a few minutes, your video is ready. Download it in 1080p or 4K and share it anywhere. MotionBrief. Your script, a finished video. Try it free today.
 
