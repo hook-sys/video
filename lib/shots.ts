@@ -13,7 +13,7 @@ export const SHOT_KINDS = ["problem", "steps", "group", "reveal", "ui", "outputs
 export type ShotKind = (typeof SHOT_KINDS)[number];
 
 export const SHOT_CATALOG: Record<ShotKind, string> = {
-  problem: "a pain or a question: subject (object:, icon: or visual:) big in the centre with its label; then line (2–6 words) appears under it on line_cue; mark 'strike' crosses out the accent word (e.g. 'Takes weeks', strike 'weeks')",
+  problem: "a pain or a question (items[0] = { asset: 'text:<word>' } flips the accent word to that word when the voice says it, e.g. weeks → minutes): subject (object:, icon: or visual:) big in the centre with its label; then line (2–6 words) appears under it on line_cue; mark 'strike' crosses out the accent word (e.g. 'Takes weeks', strike 'weeks')",
   steps: "2–4 things that come one after another (steps, tools, chores): items[] each { cue, asset (icon: or visual:), label }; each appears on its own cue in a row",
   group: "3–6 things named together (apps, channels, platforms, features): items[] { asset, label } appear together on cue with a pop each",
   reveal: "the product's logo arrives big (use once, where the voice names the product the first time; never for the closing line)",
@@ -107,8 +107,13 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
     beats.push(beat({ cue, action: "scene", elements, layout, style, camera: "static", transition: scenes === 0 ? "cut" : transition ?? (beats[beats.length - 1]?.action === "statement" ? "dissolve" : "push-left"), backdrop: scenes === 0 ? "mesh" : null }));
     scenes++;
   };
-  const caption = (cue: string, text: string, accent: string | null, mark: "strike" | "pill" | null) =>
-    beats.push(beat({ cue, action: "statement", text, accent: accent && text.toLowerCase().includes(accent.toLowerCase()) ? accent : null, style: mark, text_layout: "side" }));
+  // swap: a word the accent flips to when the voice says it ("weeks" → "minutes").
+  const swapOf = (s: Shot) => {
+    const w = s.items?.[0]?.asset?.startsWith("text:") ? words(s.items[0].asset.slice(5), 2) : null;
+    return w ? [w] : null;
+  };
+  const caption = (cue: string, text: string, accent: string | null, mark: "strike" | "pill" | null, swap: string[] | null = null) =>
+    beats.push(beat({ cue, action: "statement", text, accent: accent && text.toLowerCase().includes(accent.toLowerCase()) ? accent : null, style: mark, text_layout: "side", items: swap }));
 
   for (const s of script.shots) {
     const items = (s.items ?? []).filter((i) => i.asset);
@@ -120,7 +125,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
         scene(s.cue, [el(id("subject"), p.asset, p.label)], line0 ? "stage-right" : "stage", "rise");
         const line = spoken(words(s.line, 6), narration);
         const at = s.line_cue ?? lastWord(s.cue);
-        if (line && at) caption(at, line, s.accent, s.mark === "strike" ? "strike" : null);
+        if (line && at) caption(at, line, s.accent, s.mark === "strike" ? "strike" : null, swapOf(s));
         lastUi = null;
         break;
       }
@@ -220,7 +225,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
         // A line with a 3D object: the words big on the left, the object on the right.
         if (line && parseAsset(s.subject)?.kind === "object") {
           scene(s.cue, [el(id("obj"), s.subject!)], "stage-right", "pop");
-          beats.push(beat({ cue: s.cue, action: "statement", text: line, accent: s.accent, style: s.mark === "pill" ? "pill" : null, text_layout: "side" }));
+          beats.push(beat({ cue: s.cue, action: "statement", text: line, accent: s.accent, style: s.mark === "pill" ? "pill" : null, text_layout: "side", items: swapOf(s) }));
           lastUi = null;
           break;
         }
@@ -231,7 +236,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
           notes.push(`line "${line}" repeats the next line: dropped`);
           break;
         }
-        if (line) beats.push(beat({ cue: s.cue, action: "statement", text: line, accent: s.accent, style: s.mark === "pill" ? "pill" : null, text_layout: "display" }));
+        if (line) beats.push(beat({ cue: s.cue, action: "statement", text: line, accent: s.accent, style: s.mark === "pill" ? "pill" : null, text_layout: "display", items: swapOf(s) }));
         break;
       }
     }

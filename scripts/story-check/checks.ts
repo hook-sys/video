@@ -580,6 +580,16 @@ function shotTemplates(): Check[] {
   add("shots: no people, faces, hands or animals ever resolve (icons, search)", living.length === 0 && found.length === 0, living.length || found.length ? `still living: ${[...living, ...found].join(", ")}` : `users → ${resolveIconName("users")}, smile → ${resolveIconName("smile")}, cat → ${resolveIconName("cat")}`);
   const objs = OBJECTS.filter((o) => parseAsset(`object:${o}`)?.kind !== "object");
   add("shots: all 3D objects parse as assets", objs.length === 0, objs.join(", ") || `${OBJECTS.length} objects`);
+  // A word swap: the accent flips to the new word as the voice says it.
+  const swapNarr = "Planning a launch takes weeks, not minutes. With Acme it is easy.";
+  const z = null;
+  const b0 = { subject: z, label: z, line: z, line_cue: z, accent: z, mark: z, card: z, title: z, input: z, button: z, action_cue: z, result: z, result_cue: z, items: z };
+  const swapPlan = compileSceneScript(expandShots({ version: 3, theme: "lavender", shots: [
+    { ...b0, shot: "problem", cue: "Planning a launch", subject: "object:question", line: "Takes weeks", line_cue: "takes weeks,", accent: "weeks", mark: "strike", items: [{ cue: z, asset: "text:minutes", label: z }] },
+    { ...b0, shot: "reveal", cue: "With Acme" },
+  ] }, [], swapNarr), { narration: swapNarr, durationSeconds: 6, brand: { name: "Acme", logo: "logo" } });
+  const sw = swapPlan.texts.find((x) => x.swap);
+  add("shots: a word swap lands when the voice says the new word (weeks → minutes)", !!sw && sw.swap!.word === "minutes" && sw.swap!.at > sw.start, sw ? `"${sw.text}" → ${sw.swap!.word} at frame ${sw.swap!.at}` : "no swap");
   // Every real video made so far must still render cleanly (regressions).
   const BAD = ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "tiny-screens"];
   for (const v of REAL_SHOT_VIDEOS) {

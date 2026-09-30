@@ -9,9 +9,20 @@ import type { FlowTheme } from "./themes";
 const ink = (theme: FlowTheme) => (theme.dark ? "#FFFFFF" : theme.ink);
 const grad = (theme: FlowTheme) => `linear-gradient(120deg, ${theme.primary}, ${theme.accent})`;
 
+// A number counts up as it arrives (0 → 1080p); a new value flips in from
+// below (the text key changes).
+function counted(text: string, k: number) {
+  const m = text.match(/^(\D*)(\d+(?:\.\d+)?)(.*)$/);
+  if (!m || k >= 1) return text;
+  const n = parseFloat(m[2]);
+  const dec = m[2].includes(".") ? m[2].split(".")[1].length : 0;
+  return `${m[1]}${(n * k).toFixed(dec)}${m[3]}`;
+}
+
 export function TextObject({ text, w, h, t, theme }: { text: string; w: number; h: number; t: number; theme: FlowTheme }) {
   const size = Math.round(h / 1.25);
   const k = ramp(t, 0, 16, "out");
+  const shown = counted(text, ramp(t, 14, 26, "out")); // counts once it has slid into place
   return (
     <div style={{ width: w, height: h, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <span
@@ -20,6 +31,7 @@ export function TextObject({ text, w, h, t, theme }: { text: string; w: number; 
           fontSize: size,
           fontWeight: 800,
           letterSpacing: "-0.05em",
+          fontVariantNumeric: "tabular-nums",
           lineHeight: 1,
           whiteSpace: "nowrap",
           backgroundImage: grad(theme),
@@ -31,7 +43,7 @@ export function TextObject({ text, w, h, t, theme }: { text: string; w: number; 
           opacity: k,
         }}
       >
-        {text}
+        {shown}
       </span>
     </div>
   );

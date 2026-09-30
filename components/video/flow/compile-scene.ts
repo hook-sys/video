@@ -881,7 +881,11 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         // Explainer: a line never waits word by word on a slow voice (no lone
         // "Your" on screen); it settles in whole, 0.1 s per word.
         const shown = explainer ? wf.map((_, i) => wf[0] + i * 3) : wf;
-        f.text(text, start, end, { style, pos, size: fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: shown, mark: b.accent ? mark : undefined, markAt: explainer && j >= 0 ? wf[j] : undefined });
+        // A word swap: the accent word flips to the new one as the voice says it.
+        const swapWord = b.action === "statement" && b.items?.[0] && b.accent ? b.items[0] : null;
+        const swapAt = swapWord ? wordFrames(swapWord, (start + LEAD) / FPS, timeline)[0] : null;
+        const swap = swapWord && swapAt !== null && swapAt !== undefined && swapAt > start && swapAt < end ? { at: swapAt, word: swapWord } : undefined;
+        f.text(text, start, end, { swap, style, pos, size: fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: shown, mark: b.accent ? mark : undefined, markAt: explainer && j >= 0 ? wf[j] : undefined });
         if (mark && b.accent && j >= 0) f.sfx((wf[j] ?? start) + MARK_DELAY, mark === "strike" ? "click" : "soft_pop");
         if (style === "display" && explainer) {
           // Explainer: a big line owns the frame; the scene before it leaves
@@ -924,12 +928,19 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     const path: Track<Vec> = [];
     const show: Track<number> = [[0, 0]];
     let prevEnd = -Infinity;
+    let from: Vec = [0, 0];
     clicks.forEach(({ t, aim }, i) => {
       if (t - 16 > prevEnd) {
-        path.push([t - 18, [aim[0] + 320, aim[1] + 240]]);
+        from = [aim[0] + 320, aim[1] + 240];
+        path.push([t - 18, from]);
         show.push([t - 18, 0], [t - 8, 1, "out"]);
       }
-      path.push([t + 2, aim, "inOut"]);
+      // A hand's move: it glides a touch past the button, then settles on it.
+      const [dx, dy] = [aim[0] - from[0], aim[1] - from[1]];
+      const len = Math.hypot(dx, dy) || 1;
+      path.push([t - 3, [aim[0] + (dx / len) * 16, aim[1] + (dy / len) * 16], "out"]);
+      path.push([t + 3, aim, "inOut"]);
+      from = aim;
       const next = clicks[i + 1];
       prevEnd = t + 36;
       if (!next || next.t - 16 > prevEnd) show.push([t + 30, 1], [t + 40, 0, "in"]);

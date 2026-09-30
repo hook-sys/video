@@ -47,7 +47,10 @@ export function ElementView({ s, frame, theme, calm, explainer }: { s: NodeState
     if (tpl) {
       const upd = [...(el.updates ?? [])].reverse().find((u) => frame >= u.at);
       const content = { ...(el.content ?? {}), ...(upd?.content ?? {}) } as CardContent;
-      body = <Card tpl={tpl} content={content} style={el.style as CardStyle} theme={theme} t={upd ? frame - upd.at + 12 : t} />;
+      // An update restarts the card's own animations (a new value pops) —
+      // unless it only changes a button: the typed input must not retype.
+      const retype = upd && Object.keys(upd.content).some((k) => k !== "action" && (upd.content as Record<string, unknown>)[k] !== (el.content as Record<string, unknown> | undefined)?.[k]);
+      body = <Card tpl={tpl} content={content} style={el.style as CardStyle} theme={theme} t={retype ? frame - upd!.at + 12 : t} />;
     }
   } else if (el.type === "device") {
     const spec = DEVICE_SPEC[el.model as DeviceModel] ?? DEVICE_SPEC.laptop;

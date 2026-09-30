@@ -495,13 +495,16 @@ function Kinetic({ t, frame, theme, explainer }: { t: FlowText; frame: number; t
   const firstAccent = allWords.findIndex((w) => accent.has(bare(w)));
   // A strike draws across the words as they are spoken; a pill lands after them.
   const markK =
-    lastAccent < 0 ? 0
+    lastAccent < 0 || (t.swap && mark === "strike" && frame >= t.swap.at) ? 0
     : t.markAt !== undefined ? ramp(frame, t.markAt + MARK_DELAY, 14, "inOut")
     : mark === "strike" ? ramp(frame, at(firstAccent) + MARK_DELAY, Math.max(12, at(lastAccent) - at(firstAccent) + 8), "inOut")
     : ramp(frame, at(lastAccent) + MARK_DELAY, 14, "inOut");
-  const word = (w: string, last: boolean, strong: boolean, i: number) => {
-    const k = ramp(frame, at(i), 14, "out");
-    const isAccent = accent.has(bare(w)) && mark === "gradient";
+  const word = (w0: string, last: boolean, strong: boolean, i: number) => {
+    // A swapped accent word flips up into its new word.
+    const swapped = t.swap && accent.has(bare(w0)) && frame >= t.swap.at;
+    const w = swapped ? t.swap!.word + (w0.match(/[.,!?;:…]+$/)?.[0] ?? "") : w0;
+    const k = swapped ? ramp(frame, t.swap!.at, 12, "out") : ramp(frame, at(i), 14, "out");
+    const isAccent = (swapped || accent.has(bare(w))) && mark === "gradient";
     return (
       <span
         key={i}

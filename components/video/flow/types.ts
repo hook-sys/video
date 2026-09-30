@@ -111,6 +111,8 @@ export type FlowText = {
   // Explainer: the whole line settles in together (words 0.1 s apart) and
   // the mark still lands on the accent word's spoken frame.
   markAt?: number;
+  // A word swap: at `at` the accent word flips to `word` ("weeks" → "minutes").
+  swap?: { at: number; word: string };
 };
 
 // A rolling checklist: one item at a time in focus, the previous one lifting
