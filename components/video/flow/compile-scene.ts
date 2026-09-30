@@ -392,8 +392,15 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     // Explainer: the shot stages are laid out for the frame itself, so the
     // camera holds still (a subject placed right stays right; nothing drifts
     // up to make room).
+    // It still breathes: each shot is one slow, continuous move (in, then out
+    // on the next, drifting sideways) so the frame never stands still.
     if (explainer) {
-      f.camera(t, 12, [0, 0], 1.12);
+      if (move !== "scene") return;
+      const next = beats.findIndex((x, k) => starts[k] > t && x.action === "scene");
+      const len = (next >= 0 ? starts[next] : stageEnd) - t;
+      const k = sceneIdx % 2 ? -1 : 1;
+      if (sceneIdx === 0) f.camera(t, 1, [-30 * k, 0], 1.07);
+      f.camera(t, Math.max(12, len), [30 * k, -10 * k], k > 0 ? 1.17 : 1.07, "linear");
       return;
     }
     // A running orbit counts as one element as big as its circle.
@@ -485,7 +492,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         if (sceneIdx > 0) f.sfx(t, "whoosh");
         // A group popping in: one pop per element (five logos = five pops).
         if (b.style === "pop" && entered.length > 1) for (const at of entered) f.sfx(at, "soft_pop");
-        shoot(t, span, sceneMove);
+        shoot(t, span, explainer ? "scene" : sceneMove);
         framed = false;
         break;
       }
@@ -854,7 +861,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const text = b.text ?? "";
         const wf = wordFrames(text, ((paired.has(b) ? t - 6 : t) + LEAD) / FPS - 0.2, timeline).map((w) => Math.min(w, stageEnd - (stageEnd < total ? 24 : 8)));
         // The line (and the dim behind a display line) arrives with its first word.
-        const start = Math.min(wf[0], Math.max(t + 2, wf[0] - 8));
+        // (Explainer: words that share their shot's cue wait for the push to
+        // clear the last shot, never over its leaving icons.)
+        const start = Math.max(Math.min(wf[0], Math.max(t + 2, wf[0] - 8)), explainer && paired.has(b) ? t + 16 : 0);
         let style: NonNullable<FlowText["style"]> = b.text_layout === "panel" ? "panel" : b.text_layout === "display" ? "display" : b.text_layout === "pill" ? "pill" : live.size ? "caption" : "display";
         if (b.text_layout === "side") style = live.size ? "caption" : "display";
         // Explainer: beside a subject on the right, the words sit big on the left.
@@ -880,7 +889,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const j = mark === "strike" ? ws.findIndex(isAcc) : ws.reduce((k, w, x) => (isAcc(w) ? x : k), -1);
         // Explainer: a line never waits word by word on a slow voice (no lone
         // "Your" on screen); it settles in whole, 0.1 s per word.
-        const shown = explainer ? wf.map((_, i) => wf[0] + i * 3) : wf;
+        const shown = explainer ? wf.map((_, i) => Math.max(wf[0], start) + i * 3) : wf;
         // A word swap: the accent word flips to the new one as the voice says it.
         const swapWord = b.action === "statement" && b.items?.[0] && b.accent ? b.items[0] : null;
         const swapAt = swapWord ? wordFrames(swapWord, (start + LEAD) / FPS, timeline)[0] : null;

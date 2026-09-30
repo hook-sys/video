@@ -247,16 +247,22 @@ function FlatWorld({ theme, frame, camera, seed, flashes }: { theme: FlowTheme; 
   // The brand-colour moment: a circle of brand colour grows from the centre and
   // fills the canvas, then fades back.
   const flash = Math.max(0, ...(flashes ?? []).map(([s, e]) => ramp(frame, s - 4, 14, "out") * (1 - ramp(frame, e - 8, 12, "inOut"))));
-  const px = -camera[0] * 0.06;
-  const py = -camera[1] * 0.06;
+  // The decor drifts on its own slow cycles (and a little against the camera),
+  // so the canvas is never a still picture.
+  const px = -camera[0] * 0.5 + Math.sin(frame / 70) * 10;
+  const py = -camera[1] * 0.5 + Math.cos(frame / 90) * 8;
   const flip = seed % 2 ? -1 : 1;
   const dots = (x: number, y: number, cols: number, rows: number, color: string) => (
     <svg style={{ position: "absolute", left: x + px, top: y + py, overflow: "visible" }} width={cols * 18} height={rows * 18}>
-      {Array.from({ length: cols * rows }, (_, i) => <circle key={i} cx={(i % cols) * 18 + 3} cy={Math.floor(i / cols) * 18 + 3} r={3} fill={color} />)}
+      {Array.from({ length: cols * rows }, (_, i) => {
+        // a soft twinkle travels across the patch
+        const tw = 0.55 + 0.45 * Math.sin(frame / 14 - (i % cols) * 0.6 - Math.floor(i / cols) * 0.9);
+        return <circle key={i} cx={(i % cols) * 18 + 3} cy={Math.floor(i / cols) * 18 + 3} r={2.2 + tw} fill={color} opacity={tw} />;
+      })}
     </svg>
   );
   const bg = theme.dark ? theme.bg[1] : tint(theme.primary, 0.07);
-  const arcSpin = frame * 0.03;
+  const arcSpin = frame * 0.25;
   return (
     <AbsoluteFill style={{ background: bg, overflow: "hidden" }}>
       <div style={{ position: "absolute", inset: 0, transform: flip < 0 ? "scaleX(-1)" : undefined }}>
@@ -266,7 +272,7 @@ function FlatWorld({ theme, frame, camera, seed, flashes }: { theme: FlowTheme; 
         </svg>
         {/* a thin dashed curve (top left) */}
         <svg style={{ position: "absolute", left: 40 + px, top: -40 + py, overflow: "visible" }} width={10} height={10}>
-          <path d="M0 40 C 180 60, 260 180, 240 360" fill="none" stroke={theme.sub} strokeOpacity={0.45} strokeWidth={2.5} strokeDasharray="6 10" />
+          <path d="M0 40 C 180 60, 260 180, 240 360" fill="none" stroke={theme.sub} strokeOpacity={0.45} strokeWidth={2.5} strokeDasharray="6 10" strokeDashoffset={-frame * 0.6} />
         </svg>
         {dots(1560, 40, 9, 2, tint(theme.primary, 0.45))}
         {dots(90, 930, 7, 5, tint(theme.accent, 0.55))}
@@ -274,8 +280,11 @@ function FlatWorld({ theme, frame, camera, seed, flashes }: { theme: FlowTheme; 
       {flash > 0.001 && (
         <div style={{ position: "absolute", left: "50%", top: "50%", width: 2400 * Math.min(1, flash * 1.2), height: 2400 * Math.min(1, flash * 1.2), transform: "translate(-50%, -50%)", borderRadius: "50%", background: `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`, opacity: Math.min(1, flash * 1.4) }}>
           <svg style={{ position: "absolute", left: "50%", top: "50%", overflow: "visible" }} width={10} height={10}>
-            <circle cx={0} cy={0} r={420} fill="none" stroke="#FFFFFF" strokeOpacity={0.12} strokeWidth={60} />
-            <circle cx={0} cy={0} r={620} fill="none" stroke="#FFFFFF" strokeOpacity={0.07} strokeWidth={40} />
+            {/* rings ripple outward from the centre while the colour holds */}
+            {[0, 1, 2].map((k) => {
+              const ph = ((frame / 75 + k / 3) % 1 + 1) % 1;
+              return <circle key={k} cx={0} cy={0} r={260 + ph * 900} fill="none" stroke="#FFFFFF" strokeOpacity={0.16 * (1 - ph)} strokeWidth={50 - ph * 30} />;
+            })}
           </svg>
         </div>
       )}
@@ -449,7 +458,7 @@ function LinkLine({ link, states, frame, theme }: { link: FlowLink; states: Map<
   return (
     <g opacity={fade * c.visible}>
       <path d={d} fill="none" stroke={color} strokeOpacity={0.18} strokeWidth={14} strokeLinecap="round" />
-      <path d={d} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round" strokeDasharray={link.style === "dashed" ? "2 16" : undefined} />
+      <path d={d} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round" strokeDasharray={link.style === "dashed" ? "2 16" : undefined} strokeDashoffset={link.style === "dashed" && link.arrow && t >= 1 ? -(frame - link.draw[1]) * 0.9 : undefined} />
       {link.arrow && t > 0.9 && (() => {
         const a = Math.atan2(end[1] - q1[1], end[0] - q1[0]);
         const h = (k: number): string => `${end[0] - 22 * Math.cos(a + k)},${end[1] - 22 * Math.sin(a + k)}`;

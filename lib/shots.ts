@@ -103,8 +103,15 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
   const id = (k: string) => `${k}${++n}`;
   // Calm transitions: a push between most shots, a dissolve into type-free
   // pictures; the first shot cuts in.
+  // (A shot in the same layout as the last never dissolves: its subject would
+  // fade in on top of the old one, "90%" over "4K" — it pushes the old away.
+  // After a full-frame line nothing is left to push, so it dissolves.)
+  let lastLayout: string | null = null;
   const scene = (cue: string, elements: SceneElement[], layout: string, style: string | null = null, transition?: "dissolve") => {
-    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: "static", transition: scenes === 0 ? "cut" : transition ?? (beats[beats.length - 1]?.action === "statement" ? "dissolve" : "push-left"), backdrop: scenes === 0 ? "mesh" : null }));
+    const prev = beats[beats.length - 1];
+    const dissolve = (layout !== lastLayout || prev?.text_layout === "display") && (transition ?? (prev?.action === "statement" ? "dissolve" : null));
+    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: "static", transition: scenes === 0 ? "cut" : dissolve ? "dissolve" : "push-left", backdrop: scenes === 0 ? "mesh" : null }));
+    lastLayout = layout;
     scenes++;
   };
   // swap: a word the accent flips to when the voice says it ("weeks" → "minutes").

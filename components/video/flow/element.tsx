@@ -80,7 +80,7 @@ export function ElementView({ s, frame, theme, calm, explainer }: { s: NodeState
   } else if (el.type === "icon") {
     body = (
       <div style={{ width: w, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-        <div style={{ position: "relative", width: w, height: w, borderRadius: w * 0.26, background: theme.dark ? "linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03))" : "linear-gradient(160deg, rgba(255,255,255,.96), rgba(255,255,255,.72))", boxShadow: `0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.18), inset 0 0 0 1.5px rgba(255,255,255,.9)`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        <div style={{ position: "relative", width: w, height: w, borderRadius: w * 0.26, background: theme.dark ? "linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03))" : "linear-gradient(160deg, rgba(255,255,255,.96), rgba(255,255,255,.72))", boxShadow: `0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.18), inset 0 0 0 1.5px rgba(255,255,255,.9)${lit > 0.5 ? `, 0 0 0 ${(8 + 6 * Math.sin(frame / 9)) * lit}px ${theme.glow}${(0.16 * lit).toFixed(3)})` : ""}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
           {/* Explainer: the step being talked about fills with the brand colour. */}
           {lit > 0.01 && <div style={{ position: "absolute", inset: 0, background: `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`, opacity: lit }} />}
           {explainer && lit < 0.99 && <div style={{ position: "absolute", width: w * 0.66, height: w * 0.66, borderRadius: "50%", background: theme.soft, opacity: 1 - lit }} />}
@@ -115,7 +115,7 @@ export function ElementView({ s, frame, theme, calm, explainer }: { s: NodeState
   let seed = 0;
   for (const ch of node.id) seed = (seed * 31 + ch.charCodeAt(0)) % 997;
   const ph = ((frame + seed * 7) / 150) * Math.PI * 2;
-  const amp = calm ? 0.4 : 1; // the hero holds still while it is read
+  const amp = explainer ? 1.6 : calm ? 0.4 : 1; // the hero holds still while it is read (explainer: it breathes)
   const [fx, fy] = [Math.cos(ph * 0.8) * 3 * amp, Math.sin(ph) * 5 * amp];
   return (
     <div style={{ position: "absolute", left: pos[0], top: pos[1], width: 0, height: 0, zIndex: node.z ?? 0, perspective: three ? 2400 : undefined }}>
