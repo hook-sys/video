@@ -15,6 +15,11 @@ export const TYPE: Record<TextStyle, { size: number; weight: number; track: numb
   panel: { size: 116, weight: 640, track: -0.03, lineHeight: 1.06 },
 };
 
+// The explainer's three sizes (on a 1080p frame): a headline, a caption, and
+// labels (element.tsx, 40 px). Long lines fit the frame by going smaller,
+// never bigger.
+export const EXPLAINER_TYPE: Record<TextStyle, number> = { display: 112, headline: 112, side: 112, panel: 112, pill: 64, caption: 64 };
+
 // Node labels live in the world (they move with their node) but are sized
 // against the camera zoom so they never read smaller than ~36 px on screen.
 export const LABEL_MIN_SCREEN_PX = 38;

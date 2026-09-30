@@ -10,7 +10,7 @@ import { num, vec } from "./eval";
 import { DEPTH, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES, type Slot } from "./layouts";
 import { animate as animateAfter, Flow, type FlowNodeHandle, put as putAfter } from "./patterns";
 import { MARK_DELAY, type Ease, type FlowElement, type FlowLink, type FlowNode, type FlowPlan, type FlowText, type ThemeName, type Track, type Vec } from "./types";
-import { fitSize } from "./typography";
+import { EXPLAINER_TYPE, fitSize } from "./typography";
 
 // SceneScript (Director v2) → FlowPlan. Scenes are arrangements of product
 // elements on one continuous canvas; beats are motion verbs on spoken words.
@@ -885,7 +885,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const swapWord = b.action === "statement" && b.items?.[0] && b.accent ? b.items[0] : null;
         const swapAt = swapWord ? wordFrames(swapWord, (start + LEAD) / FPS, timeline)[0] : null;
         const swap = swapWord && swapAt !== null && swapAt !== undefined && swapAt > start && swapAt < end ? { at: swapAt, word: swapWord } : undefined;
-        f.text(text, start, end, { swap, style, pos, size: fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: shown, mark: b.accent ? mark : undefined, markAt: explainer && j >= 0 ? wf[j] : undefined });
+        f.text(text, start, end, { swap, style, pos, size: explainer ? Math.min(fitSize(text, style, b.accent ?? undefined), EXPLAINER_TYPE[style]) : fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: shown, mark: b.accent ? mark : undefined, markAt: explainer && j >= 0 ? wf[j] : undefined });
         if (mark && b.accent && j >= 0) f.sfx((wf[j] ?? start) + MARK_DELAY, mark === "strike" ? "click" : "soft_pop");
         if (style === "display" && explainer) {
           // Explainer: a big line owns the frame; the scene before it leaves
