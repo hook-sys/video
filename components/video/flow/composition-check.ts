@@ -82,6 +82,7 @@ export function compositionCheck(
   let crowdRun = 0;
   let smallRun = 0;
   let tinyRun = 0;
+  let lonelyRun = 0;
   for (let f = 0; f < until; f += 6) {
     if (num(plan.dim, f, 0) > 0.5) {
       [crowdRun, smallRun, tinyRun] = [0, 0, 0];
@@ -89,7 +90,9 @@ export function compositionCheck(
     }
     const zoom = num(plan.camera.zoom, f, 1);
     const c = vec(plan.camera.center, f);
-    const sharp = [...computeStates(plan, f).values()].filter((st) => {
+    const states = [...computeStates(plan, f).values()];
+    const onScreen = (st: (typeof states)[number]) => st.node.kind === "el" && st.opacity >= 0.3 && st.scale >= 0.05 && !(st.node.erase !== undefined && f >= st.node.erase);
+    const sharp = states.filter((st) => {
       const n = st.node;
       if (n.kind !== "el" || st.opacity < 0.9 || st.scale < 0.05 || num(n.blur, f, 0) > 1.5 || (n.erase !== undefined && f >= n.erase)) return false;
       const w = (n.w ?? 400) * st.scale * zoom;
@@ -104,8 +107,14 @@ export function compositionCheck(
     if (crowdRun >= 30) add("crowded", `${big} sharp elements on screen at ${(f / 30).toFixed(1)} s`);
     // A row of 2+ icons or pictures (steps, a group) is one subject: its
     // combined size counts. Cards never: small cards are small.
-    const pictures = sharp.length >= 2 && sharp.every((st) => ["icon", "shape", "visual"].includes(st.node.el?.type ?? ""));
-    const biggest = Math.max(0, ...sharp.map(area), pictures ? sharp.reduce((t, st) => t + area(st), 0) * 0.6 : 0);
+    // (Faint steps waiting their turn belong to the row.)
+    const row = states.filter(onScreen);
+    const pictures = row.length >= 2 && row.every((st) => ["icon", "shape", "visual", "object"].includes(st.node.el?.type ?? ""));
+    const biggest = Math.max(0, ...sharp.map(area), pictures ? row.reduce((t, st) => t + area(st), 0) * 0.6 : 0);
+    // Explainer: one small thing alone, with no words beside it, reads as an empty frame.
+    const words = plan.texts.some((x) => f >= x.start && f <= x.end);
+    lonelyRun = script.style === "explainer" && row.length === 1 && !words && area(row[0]) < 0.08 && row[0].node.el?.type !== "logo" ? lonelyRun + 6 : 0;
+    if (lonelyRun >= 30) add("lonely-icon", `one small element alone for 1 s at ${(f / 30).toFixed(1)} s`);
     smallRun = sharp.length && biggest < 0.1 ? smallRun + 6 : 0;
     if (smallRun >= 60) add("no-hero", `no element above ${Math.round(biggest * 100)}% of the frame around ${(f / 30).toFixed(1)} s`);
     const screens = sharp.filter((st) => st.node.el?.type === "shot" || st.node.el?.type === "device");

@@ -38,7 +38,8 @@ import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
-import { expandShots } from "@/lib/shots";
+import { expandShots, ShotScript } from "@/lib/shots";
+import { REAL_SHOT_VIDEOS } from "@/components/video/flow/fixtures/real-shots";
 import { OBJECTS } from "@/components/video/flow/object-names";
 import { SHOT_FIXTURE, SHOT_NARRATION } from "@/components/video/flow/fixtures/shots";
 import { neverList, VIDEO_RULES } from "@/lib/video-rules";
@@ -579,6 +580,19 @@ function shotTemplates(): Check[] {
   add("shots: no people, faces, hands or animals ever resolve (icons, search)", living.length === 0 && found.length === 0, living.length || found.length ? `still living: ${[...living, ...found].join(", ")}` : `users → ${resolveIconName("users")}, smile → ${resolveIconName("smile")}, cat → ${resolveIconName("cat")}`);
   const objs = OBJECTS.filter((o) => parseAsset(`object:${o}`)?.kind !== "object");
   add("shots: all 3D objects parse as assets", objs.length === 0, objs.join(", ") || `${OBJECTS.length} objects`);
+  // Every real video made so far must still render cleanly (regressions).
+  const BAD = ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "tiny-screens"];
+  for (const v of REAL_SHOT_VIDEOS) {
+    const W = v.words.split(" ").map((x) => x.split("@"));
+    const vw = W.map(([text, st], i) => ({ text, start: +st, end: W[i + 1] ? +W[i + 1][1] : +st + 0.5 }));
+    const narr = W.map(([x]) => x).join(" ");
+    const vn: string[] = [];
+    const vs = expandShots(ShotScript.parse(v.shots), vn, narr);
+    const vp = compileSceneScript(vs, { narration: narr, words: vw, durationSeconds: v.duration, brand: { name: "MotionBrief", logo: "logo", cta: "Try it free today" } });
+    const block = sceneScriptBlockers(vs, narr, vw, v.duration);
+    const broken = compositionCheck(vs, vp, { narration: narr, words: vw, durationSeconds: v.duration }).filter((x) => BAD.includes(x.rule));
+    add(`real video ${v.name}: renders cleanly`, block.length + broken.length + validateFlowPlan(vp).length === 0, [...block, ...broken.map((x) => `${x.rule}: ${x.detail}`)].join("; ") || `${vs.beats.length} beats, no rule broken`);
+  }
   const pops = (plan.sfx ?? []).filter((x) => x.kind === "soft_pop").length;
   add("shots: a group pops once per element", pops >= 3, `${pops} pops`);
   // Guards: a word as a "number", a second logo reveal and an unknown icon.
