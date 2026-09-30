@@ -1,6 +1,6 @@
 "use server";
 
-import { seedFrom } from "@/lib/shot-search";
+import { LOOK_FEATURES, seedFrom, type Taste } from "@/lib/shot-search";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -409,6 +409,25 @@ async function loadNeverList(admin: ReturnType<typeof createAdminClient>) {
   }
 }
 
+// The taste: which looks customers downloaded (brief.taste on their projects),
+// counted per look feature. The first of the four videos follows it.
+async function loadTaste(admin: ReturnType<typeof createAdminClient>): Promise<Taste | null> {
+  try {
+    const { data } = await admin.from("projects").select("brief->taste").not("brief->taste", "is", null).order("updated_at", { ascending: false }).limit(500);
+    const taste: Taste = {};
+    for (const row of data ?? []) {
+      const downloads = ((row as { taste?: { downloads?: { look?: Record<string, unknown> | null }[] } }).taste?.downloads ?? []);
+      for (const d of downloads) for (const f of LOOK_FEATURES) {
+        const v = d.look?.[f];
+        if (typeof v === "string") (taste[f] ??= {})[v] = (taste[f][v] ?? 0) + 1;
+      }
+    }
+    return Object.keys(taste).length ? taste : null;
+  } catch {
+    return null;
+  }
+}
+
 async function generateFlow(projectId: string, userId: string, budgetMs: number) {
   const admin = createAdminClient();
   const { data: project } = await admin
@@ -421,7 +440,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   if (!project || project.voice_status !== "completed" || !brief.success || brief.data.flow || brief.data.scene || project.format !== "16:9") return;
   const words = parseWordTimings((project.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
   const { count: screenshots } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
-  const input = { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project), never: await loadNeverList(admin), seed: seedFrom(projectId) };
+  const input = { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project), never: await loadNeverList(admin), seed: seedFrom(projectId), taste: await loadTaste(admin) };
   console.info("flow director start:", { projectId, timing: words?.length ? "voice" : "estimated", words: words?.length ?? 0, screenshots: screenshots ?? 0 });
   const started = Date.now();
   // Director v2 (scenes of product UI) first; the pattern Director is the
@@ -464,7 +483,9 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   if (v2.script && look === "Light glass" && v2.script.theme === "midnight") v2.script.theme = "lavender";
   // Explainer pace unless the customer asked for more motion.
   if (v2.script) v2.script.pace = ["Dynamic", "High Energy"].includes(input.creative_preferences.motion_level) ? "lively" : "calm";
-  const stored = v2.script ? { scene: v2.script, ...(shot.script ? { shots: shot.shots } : {}) } : result.script ? { flow: result.script } : null;
+  // The four videos (same shots, different looks) the customer chooses between.
+  const variants = shot.script && v2 === shot ? shot.variants.map((v) => ({ ...v, scene: { ...v.scene, theme: v2.script!.theme, pace: v2.script!.pace } })) : [];
+  const stored = v2.script ? { scene: v2.script, ...(shot.script ? { shots: shot.shots } : {}), ...(variants.length > 1 ? { variants } : {}) } : result.script ? { flow: result.script } : null;
   if (stored) {
     // Re-read so nothing written meanwhile is lost; only `scene`/`flow` change.
     const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
@@ -1187,4 +1208,26 @@ export async function retryPipeline(projectId: string) {
   }
   if (await claimPipeline(projectId, user.id)) after(() => runPipeline(projectId, user.id));
   revalidatePath(`/projects/${projectId}`);
+}
+
+// A video the customer downloaded (of the ones offered): kept on the project
+// as the taste the next videos learn from (loadTaste). Never fails the download.
+export async function recordVariantDownload(projectId: string, seed: number) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+    const admin = createAdminClient();
+    const { data: project } = await admin.from("projects").select("brief").eq("id", projectId).eq("user_id", user.id).maybeSingle();
+    const brief = ProductBrief.safeParse(project?.brief);
+    if (!project || !brief.success) return;
+    const variant = brief.data.variants?.find((v) => v.seed === seed);
+    if (!variant) return;
+    const downloads = [...(brief.data.taste?.downloads ?? []), { seed, look: variant.scene.look ?? null, at: new Date().toISOString() }];
+    await admin.from("projects").update({ brief: { ...(project.brief as object), taste: { downloads } } }).eq("id", projectId).eq("user_id", user.id);
+  } catch (e) {
+    console.warn("variant download not recorded:", e instanceof Error ? e.message : e);
+  }
 }

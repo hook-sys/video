@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isIconName } from "@/components/video/icons";
 import { FLOW_THEMES } from "@/lib/flow-script";
-import { DECORS, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
+import { CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
 
 // Shot templates: tested building blocks a video is made of. The Director
 // only picks a shot per sentence and fills its words; every size, place,
@@ -108,10 +108,16 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
   // (the seed is mixed first: neighbouring seeds give unrelated videos)
   const pick = variant ? rng(Math.imul(variant.seed ^ 0x9e3779b9, 0x85ebca6b)) : null;
   const choose = <T,>(fallback: T, options: readonly T[]) => (pick ? options[Math.floor(pick() * options.length)] : fallback);
-  const look = variant ? { decor: choose("dots", DECORS), tone: choose("tint", TONES), seed: variant.seed } : null;
-  const push = choose("push-left" as const, ["push-left", "push-left", "push-up"] as const);
+  const decor = choose("dots", DECORS);
+  const tone = choose("tint", TONES);
+  const icons = choose("tile", ICON_STYLES);
+  // How shots hand over: slide (push left), rise (push up), soft (dissolves)
+  // or zoom (through the old shot into the new).
+  const cut = choose("slide", CUTS);
+  const push = ({ slide: "push-left", rise: "push-up", soft: "push-left", zoom: "zoom-through" } as const)[cut];
   // Which side a subject with words beside it stands on (the words take the other).
   const beside = choose("stage-right", ["stage-right", "stage-left"]);
+  const look = variant ? { decor, tone, icons, cut, side: beside === "stage-left" ? ("left" as const) : ("right" as const), seed: variant.seed } : null;
   // A number with its picture: the number first (left) or the picture first.
   const duo = choose("stage-duo", ["stage-duo", "stage-duo-flip"]);
   // How each kind of subject arrives (all calm entrances).
@@ -136,7 +142,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
   let lastLayout: string | null = null;
   const scene = (cue: string, elements: SceneElement[], layout: string, style: string | null = null, transition?: "dissolve") => {
     const prev = beats[beats.length - 1];
-    const dissolve = (layout !== lastLayout || prev?.text_layout === "display") && (transition ?? (prev?.action === "statement" ? "dissolve" : null));
+    const dissolve = (layout !== lastLayout || prev?.text_layout === "display") && (transition ?? (prev?.action === "statement" || cut === "soft" ? "dissolve" : null));
     beats.push(beat({ cue, action: "scene", elements, layout, style, camera: "static", transition: scenes === 0 ? "cut" : dissolve ? "dissolve" : push, backdrop: scenes === 0 ? "mesh" : null }));
     lastLayout = layout;
     scenes++;

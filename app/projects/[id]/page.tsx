@@ -30,6 +30,7 @@ import type { RenderProps } from "@/components/video/types";
 import { PreviewPlayer } from "./preview/preview-player";
 import { BackToDashboard } from "./back-to-dashboard";
 import { BrowserDownload } from "./browser-download";
+import { VariantStudio, type StudioVariant } from "./variant-studio";
 import { DIMENSIONS } from "@/components/video/types";
 import type { FlowPlan } from "@/components/video/flow/types";
 
@@ -137,9 +138,12 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   // Customer view: the finished MP4, or the live preview until it exists.
   const ready = project.pipeline_status === "completed" || project.pipeline_status === "preview_ready";
   let preview: RenderProps | null = null;
+  let variants: StudioVariant[] = [];
   if (ready && !video?.signedUrl) {
     try {
-      preview = (await buildRenderInput(supabase, project)).props ?? null;
+      const input = await buildRenderInput(supabase, project);
+      preview = input.props ?? null;
+      variants = input.variants ?? [];
     } catch {
       preview = null;
     }
@@ -198,7 +202,21 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {project.pipeline_status === "running" && <WaitingScreen step={project.pipeline_step} {...heroPlan()} />}
 
-      {ready && (
+      {/* Several looks of the same video: watch each, download one or all. */}
+      {ready && variants.length > 1 && preview && (
+        <VariantStudio
+          projectId={id}
+          variants={variants}
+          audioUrl={preview.audioUrl ?? null}
+          width={(DIMENSIONS[preview.format] ?? DIMENSIONS["16:9"]).width}
+          height={(DIMENSIONS[preview.format] ?? DIMENSIONS["16:9"]).height}
+          name={title}
+          className={primaryBtn}
+          secondaryClassName={secondaryBtn}
+        />
+      )}
+
+      {ready && !(variants.length > 1 && preview) && (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section className="flex min-w-0 flex-col gap-3">
             <div id="video" className="overflow-hidden rounded-3xl border border-foreground/10 bg-black shadow-2xl shadow-violet-900/20">

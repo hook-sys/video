@@ -4,7 +4,7 @@ import { z } from "zod";
 import { checkContinuity, keepOmittedObjects } from "@/lib/ai/blueprint-check";
 import { StoryAssetRecord, VisualStory } from "@/lib/visual-story";
 import { FlowScript } from "@/lib/flow-script";
-import { SceneScript } from "@/lib/scene-script";
+import { Look, SceneScript } from "@/lib/scene-script";
 
 // Internal scene model. `animation`, `transition` and sound effect `cue`s are
 // free-text directions chosen by the AI from the scene's meaning; the Remotion
@@ -180,6 +180,11 @@ export const ProductBrief = z.object({
   scene: SceneScript.nullable().default(null).catch(null),
   // Generated visuals for the story (Preview-only, VISUAL_ASSETS=on).
   story_assets: z.array(StoryAssetRecord).nullable().default(null).catch(null),
+  // The videos offered to choose from: the same shots in different looks
+  // (lib/shot-search.ts); the first is `scene`.
+  variants: z.array(z.object({ seed: z.number(), score: z.number().optional(), scene: SceneScript })).nullable().default(null).catch(null),
+  // What the customer downloaded (the taste the next videos learn from).
+  taste: z.object({ downloads: z.array(z.object({ seed: z.number(), look: Look.nullable(), at: z.string() })) }).nullable().default(null).catch(null),
 });
 export type SoundEffect = z.infer<typeof SoundEffect>;
 export type SceneAction = z.infer<typeof SceneAction>;

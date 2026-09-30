@@ -26,7 +26,7 @@ function tiltAt(track: Track<Vec3> | undefined, frame: number): Vec3 {
 // (a label scaled with a 2× icon was 70 px, next to a 20 px one).
 const LABEL_PX = 40;
 
-export function ElementView({ s, frame, theme, calm, explainer }: { s: NodeState; frame: number; theme: FlowTheme; calm?: boolean; explainer?: boolean }) {
+export function ElementView({ s, frame, theme, calm, explainer, iconStyle = "tile" }: { s: NodeState; frame: number; theme: FlowTheme; calm?: boolean; explainer?: boolean; iconStyle?: string }) {
   const { node, pos, scale, opacity } = s;
   const el = node.el!;
   if (scale < 0.01 || opacity < 0.01) return null;
@@ -78,14 +78,33 @@ export function ElementView({ s, frame, theme, calm, explainer }: { s: NodeState
       </div>
     );
   } else if (el.type === "icon") {
+    // Explainer icon styles (a look picks one for the whole video): tile (a
+    // white tile), solid (a brand-colour tile), soft (a tinted disc, no tile)
+    // or outline (a thin brand ring).
+    const style = explainer ? iconStyle : "tile";
+    const pulse = lit > 0.5 ? `0 0 0 ${(8 + 6 * Math.sin(frame / 9)) * lit}px ${theme.glow}${(0.16 * lit).toFixed(3)})` : "";
+    const brand = `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`;
+    const holder: React.CSSProperties =
+      style === "solid"
+        ? { borderRadius: w * 0.26, background: brand, boxShadow: [`0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.3)`, pulse].filter(Boolean).join(", ") }
+        : style === "soft"
+          ? { borderRadius: "50%", background: tint(theme.primary, theme.dark ? 0.3 : 0.26), boxShadow: pulse || undefined }
+          : style === "outline"
+            ? { borderRadius: "50%", background: "transparent", boxShadow: [`inset 0 0 0 ${Math.max(3, w * 0.025)}px ${theme.primary}`, pulse].filter(Boolean).join(", ") }
+            : {
+                borderRadius: w * 0.26,
+                background: theme.dark ? "linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03))" : "linear-gradient(160deg, rgba(255,255,255,.96), rgba(255,255,255,.72))",
+                boxShadow: `0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.18), inset 0 0 0 1.5px rgba(255,255,255,.9)${pulse ? `, ${pulse}` : ""}`,
+              };
+    const white = style === "solid" || lit > 0.5;
     body = (
       <div style={{ width: w, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-        <div style={{ position: "relative", width: w, height: w, borderRadius: w * 0.26, background: theme.dark ? "linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03))" : "linear-gradient(160deg, rgba(255,255,255,.96), rgba(255,255,255,.72))", boxShadow: `0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.18), inset 0 0 0 1.5px rgba(255,255,255,.9)${lit > 0.5 ? `, 0 0 0 ${(8 + 6 * Math.sin(frame / 9)) * lit}px ${theme.glow}${(0.16 * lit).toFixed(3)})` : ""}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        <div style={{ position: "relative", width: w, height: w, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", ...holder }}>
           {/* Explainer: the step being talked about fills with the brand colour. */}
-          {lit > 0.01 && <div style={{ position: "absolute", inset: 0, background: `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`, opacity: lit }} />}
-          {explainer && lit < 0.99 && <div style={{ position: "absolute", width: w * 0.66, height: w * 0.66, borderRadius: "50%", background: theme.soft, opacity: 1 - lit }} />}
+          {lit > 0.01 && style !== "solid" && <div style={{ position: "absolute", inset: 0, background: brand, opacity: lit }} />}
+          {explainer && style === "tile" && lit < 0.99 && <div style={{ position: "absolute", width: w * 0.66, height: w * 0.66, borderRadius: "50%", background: theme.soft, opacity: 1 - lit }} />}
           <div style={{ position: "relative" }}>
-            <Icon name={el.icon} size={w * 0.44} color={lit > 0.5 ? "#FFFFFF" : theme.primary} strokeWidth={2} draw={ramp(t, 2, 16, "inOut")} fill={explainer ? (lit > 0.5 ? "rgba(255,255,255,.28)" : tint(theme.accent, 0.55)) : undefined} />
+            <Icon name={el.icon} size={w * 0.44} color={white ? "#FFFFFF" : theme.primary} strokeWidth={2} draw={ramp(t, 2, 16, "inOut")} fill={explainer ? (white ? "rgba(255,255,255,.28)" : tint(theme.accent, 0.55)) : undefined} />
           </div>
         </div>
         {el.label && <div style={{ fontSize: labelPx ?? Math.max(22, w * 0.2), fontWeight: 600, color: theme.ink, whiteSpace: "nowrap", opacity: ramp(t, 10, 12) }}>{el.label}</div>}

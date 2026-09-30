@@ -113,6 +113,8 @@ export type SceneDirectorInput = {
   never?: string;
   // Variant seed (the project's id): the same script looks different per project.
   seed?: number;
+  // What customers kept so far (lib/shot-search.ts Taste): the first video follows it.
+  taste?: import("@/lib/shot-search").Taste | null;
 };
 export type SceneDirectorResult = { script: SceneScript | null; attempts: number; revised: boolean; errors: string[]; ms: number; timing: "voice" | "estimated"; violations: Violation[] };
 

@@ -9,6 +9,38 @@ import type { FlowPlan } from "@/components/video/flow/types";
 // 1080p is the composition size; 4K renders it at 2×.
 type Quality = "1080p" | "4k";
 
+// Renders a plan to an MP4 in this tab and saves it as `file`.
+export async function renderPlanToFile({ plan, audioUrl, width, height, scale = 1, file, signal, onProgress }: { plan: FlowPlan; audioUrl: string | null; width: number; height: number; scale?: number; file: string; signal: AbortSignal; onProgress: (p: number) => void }) {
+  const { renderMediaOnWeb, canRenderMediaOnWeb, getEncodableVideoCodecs } = await import("@remotion/web-renderer");
+  // H.264 plays everywhere; browsers without its encoder fall back to VP9 / AV1.
+  const codecs = await getEncodableVideoCodecs("mp4");
+  const videoCodec = (["h264", "vp9", "av1"] as const).find((c) => codecs.includes(c));
+  if (!videoCodec) throw new Error("This browser can't encode MP4 video. Try Chrome on a computer.");
+  const check = await canRenderMediaOnWeb({ width: width * scale, height: height * scale, container: "mp4", videoCodec });
+  if (!check.canRender) throw new Error(check.issues.map((i) => i.message).join(" ") || "This browser can't render video.");
+  const inputProps: FlowSceneProps = { plan, audioUrl, webAudio: true };
+  const { getBlob } = await renderMediaOnWeb({
+    composition: { component: FlowScene, id: "FlowScene", width, height, fps: 30, durationInFrames: Math.max(1, plan.duration), defaultProps: inputProps },
+    inputProps,
+    scale,
+    container: "mp4",
+    videoCodec,
+    videoBitrate: "high",
+    licenseKey: "free-license",
+    signal,
+    onProgress: (p) => onProgress(p.progress),
+  });
+  const blob = await getBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export function BrowserDownload({ plan, audioUrl, width, height, name, className, secondaryClassName }: { plan: FlowPlan; audioUrl: string | null; width: number; height: number; name: string; className: string; secondaryClassName: string }) {
   const [busy, setBusy] = useState<Quality | null>(null);
   const [progress, setProgress] = useState(0);
@@ -22,35 +54,7 @@ export function BrowserDownload({ plan, audioUrl, width, height, name, className
     const controller = new AbortController();
     abort.current = controller;
     try {
-      const { renderMediaOnWeb, canRenderMediaOnWeb, getEncodableVideoCodecs } = await import("@remotion/web-renderer");
-      const scale = quality === "4k" ? 2 : 1;
-      // H.264 plays everywhere; browsers without its encoder fall back to VP9 / AV1.
-      const codecs = await getEncodableVideoCodecs("mp4");
-      const videoCodec = (["h264", "vp9", "av1"] as const).find((c) => codecs.includes(c));
-      if (!videoCodec) throw new Error("This browser can't encode MP4 video. Try Chrome on a computer.");
-      const check = await canRenderMediaOnWeb({ width: width * scale, height: height * scale, container: "mp4", videoCodec });
-      if (!check.canRender) throw new Error(check.issues.map((i) => i.message).join(" ") || "This browser can't render video.");
-      const inputProps: FlowSceneProps = { plan, audioUrl, webAudio: true };
-      const { getBlob } = await renderMediaOnWeb({
-        composition: { component: FlowScene, id: "FlowScene", width, height, fps: 30, durationInFrames: Math.max(1, plan.duration), defaultProps: inputProps },
-        inputProps,
-        scale,
-        container: "mp4",
-        videoCodec,
-        videoBitrate: "high",
-        licenseKey: "free-license",
-        signal: controller.signal,
-        onProgress: (p) => setProgress(p.progress),
-      });
-      const blob = await getBlob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "video"}-${quality}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      await renderPlanToFile({ plan, audioUrl, width, height, scale: quality === "4k" ? 2 : 1, file: `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "video"}-${quality}.mp4`, signal: controller.signal, onProgress: setProgress });
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
     } finally {

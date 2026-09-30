@@ -166,6 +166,8 @@ export type FlowPlan = {
   decor?: string;
   // Explainer canvas tone: tint (default), white or deep.
   tone?: string;
+  // Explainer icon style: tile (default), solid, soft or outline.
+  iconStyle?: string;
   // What the resolve pass changed, and what it could not (resolve.ts).
   resolved?: { fixed: string[]; left: string[] };
   // A pointer in world space: glides along path, visible where show > 0,

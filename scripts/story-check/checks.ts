@@ -1,7 +1,7 @@
 // Deterministic StoryWorld checks that need no rendering: story validation,
 // stored-brief compatibility, compiled-timeline frame checks and voice timing.
 // Bundled and run by scripts/story-check/run.mjs.
-import { searchShots, seedFrom } from "@/lib/shot-search";
+import { LOOK_FEATURES, searchVariants, seedFrom } from "@/lib/shot-search";
 import { ProductBrief } from "@/lib/ai/product-brief";
 import { validateStory, VisualStory } from "@/lib/visual-story";
 import { compileStory } from "@/components/video/engine/compiler";
@@ -606,12 +606,18 @@ function shotTemplates(): Check[] {
     // The resolve pass enforces its rules on every real video, leaving nothing.
     const left = vp.resolved?.left ?? ["not resolved"];
     add(`real video ${v.name}: resolve pass leaves nothing`, left.length === 0, left.join("; ") || `${vp.resolved!.fixed.length} fix(es): ${vp.resolved!.fixed.slice(0, 3).join("; ") || "none needed"}`);
-    // Variant search: three projects with these very shots each get a clean
-    // video, and they do not all look the same.
-    const looks = ["project-a", "project-b", "project-c"].map((id) => searchShots(ShotScript.parse(v.shots), { narration: narr, words: vw, durationSeconds: v.duration, brand: { name: "MotionBrief", logo: "logo" } }, seedFrom(`${v.name}-${id}`)).best);
-    const clean = looks.every((b) => b && b.score === 0);
-    const kinds = new Set(looks.map((b) => (b ? `${b.script.look?.decor}/${b.script.look?.tone}/${b.script.beats.find((x) => x.layout === "stage-left") ? "L" : "R"}` : "none")));
-    add(`real video ${v.name}: every project gets a clean variant, looks differ`, clean && kinds.size >= 2, `${looks.map((b) => (b ? `score ${b.score}${b.score ? ` (${b.violations.filter((x) => x.rule !== "idle" && x.rule !== "long-scene").map((x) => `${x.rule}: ${x.detail}`).join("; ")})` : ""}` : "none")).join(", ")}; looks: ${[...kinds].join(", ")}`);
+    // Variant search: the four videos offered for these shots are all clean
+    // and look unlike each other (background, icons, hand-over, side).
+    const found = searchVariants(ShotScript.parse(v.shots), { narration: narr, words: vw, durationSeconds: v.duration, brand: { name: "MotionBrief", logo: "logo" } }, seedFrom(v.name));
+    const picks = found.picks;
+    const key = (c: (typeof picks)[number]) => LOOK_FEATURES.map((f) => c.script.look?.[f]).join("/");
+    const differ = picks.every((a, i) => picks.every((b, j) => i >= j || LOOK_FEATURES.filter((f) => a.script.look?.[f] !== b.script.look?.[f]).length >= 2));
+    // The taste: when customers kept "waves" and outline icons, the first video follows.
+    const liked = searchVariants(ShotScript.parse(v.shots), { narration: narr, words: vw, durationSeconds: v.duration, brand: { name: "MotionBrief", logo: "logo" } }, seedFrom(v.name), { taste: { decor: { waves: 9, dots: 1 }, icons: { outline: 9, tile: 1 } } });
+    const top = liked.picks[0]?.script.look;
+    const couldFollow = liked.picks.some((c) => c.script.look?.decor === "waves" || c.script.look?.icons === "outline");
+    add(`real video ${v.name}: the first video follows the taste`, !couldFollow || top?.decor === "waves" || top?.icons === "outline", `first: ${top?.decor}/${top?.icons}`);
+    add(`real video ${v.name}: four clean videos that look different`, picks.length === 4 && picks.every((c) => c.score === 0) && differ, `${picks.map((c) => `${key(c)} (score ${c.score})`).join(", ")} from ${found.tried.length} tried`);
   }
   const pops = (plan.sfx ?? []).filter((x) => x.kind === "soft_pop").length;
   add("shots: a group pops once per element", pops >= 3, `${pops} pops`);

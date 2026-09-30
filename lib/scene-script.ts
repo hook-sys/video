@@ -103,7 +103,11 @@ export const SceneScriptModel = z.object({ theme: z.enum(FLOW_THEMES), beats: z.
 // Explainer looks the variant search picks between (lib/shot-search.ts).
 export const DECORS = ["dots", "ribbons", "waves", "glow"] as const;
 export const TONES = ["tint", "white", "deep"] as const;
-const Look = z.object({ decor: z.enum(DECORS), tone: z.enum(TONES).nullable().optional(), seed: z.number().int() });
+// How icons are drawn, and how shots hand over (a look is all of these together).
+export const ICON_STYLES = ["tile", "solid", "soft", "outline"] as const;
+export const CUTS = ["slide", "rise", "soft", "zoom"] as const;
+export const Look = z.object({ decor: z.enum(DECORS), tone: z.enum(TONES).nullable().optional(), icons: z.enum(ICON_STYLES).nullable().optional(), cut: z.enum(CUTS).nullable().optional(), side: z.enum(["right", "left"]).nullable().optional(), seed: z.number().int() });
+export type Look = z.infer<typeof Look>;
 export const SceneScript = z.object({ version: z.literal(2).default(2), theme: z.enum(FLOW_THEMES), beats: z.array(Beat), pace: z.enum(["calm", "lively"]).nullable().optional(), style: z.enum(["explainer"]).nullable().optional(), look: Look.nullable().optional() });
 export type SceneScript = z.infer<typeof SceneScript>;
 

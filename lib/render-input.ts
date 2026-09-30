@@ -1,4 +1,6 @@
 import "server-only";
+import { sceneScriptBlockers } from "@/lib/scene-script";
+import { validateFlowPlan } from "@/components/video/flow/validate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ProductBrief } from "@/lib/ai/product-brief";
 import { type AssetManifest, sceneId } from "@/lib/asset-manifest";
@@ -138,8 +140,24 @@ export async function buildRenderInput(
     return scene ? compileSceneScript(scene, opts) : compileFlowScript(flow!, opts);
   };
 
+  // The other videos to choose from (same voice and brand, other looks).
+  const variants = scene && (brief.data.variants?.length ?? 0) > 1
+    ? brief.data.variants!.flatMap((v) => {
+        const usable = { ...v.scene, theme: scene.theme, pace: scene.pace };
+        if (sceneScriptBlockers(usable, brief.data.script, wordTimings, project.duration_seconds).length) return [];
+        try {
+          const brand: CompileBrand = { name: project.brand_name?.trim() || brief.data.product_name, logo: logoUrl, cta: project.call_to_action?.trim() || brief.data.cta, color: project.brand_color };
+          const plan = compileSceneScript(usable, { narration: brief.data.script, words: wordTimings, durationSeconds: project.duration_seconds, brand, screenshots: screenshotUrls });
+          return validateFlowPlan(plan).length ? [] : [{ seed: v.seed, look: usable.look ?? null, plan }];
+        } catch {
+          return [];
+        }
+      })
+    : [];
+
   return {
     problems,
+    variants,
     props: {
       story: story ? { story, narration: brief.data.script, assets: storyAssets } : null,
       flow: flowing ? { plan: compilePlan() } : null,

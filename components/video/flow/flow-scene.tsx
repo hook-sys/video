@@ -104,7 +104,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
         .filter((s) => s.node.kind === "el" && include(s.node.id))
         .sort((a, b) => (a.node.z ?? 0) - (b.node.z ?? 0))
         .map((s) => (
-          <ElementView key={s.node.id} s={s} frame={frame} theme={theme} calm={plan.calm} explainer={plan.explainer} />
+          <ElementView key={s.node.id} s={s} frame={frame} theme={theme} calm={plan.calm} explainer={plan.explainer} iconStyle={plan.iconStyle} />
         ))}
       {plan.links.filter((l) => include(l.from) && include(l.to)).flatMap((l) => (l.packets ?? []).map((p, i) => <Packet key={`${l.id}-${i}`} link={l} packet={p} states={states} frame={frame} theme={theme} />))}
       {withExtras && plan.cursor && <Cursor cursor={plan.cursor} frame={frame} theme={theme} explainer={plan.explainer} />}

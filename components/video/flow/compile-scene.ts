@@ -939,7 +939,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   if (explainer) plan.explainer = true;
   if (flashes.length) plan.flashes = flashes;
   plan.seed = script.look?.seed ?? [...narration].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_003, 7);
-  if (explainer && script.look) [plan.decor, plan.tone] = [script.look.decor, script.look.tone ?? undefined];
+  if (explainer && script.look) [plan.decor, plan.tone, plan.iconStyle] = [script.look.decor, script.look.tone ?? undefined, script.look.icons ?? undefined];
   // The cursor: glides in before each click (from off to the lower right when
   // it was hidden), clicks, and leaves when no click follows soon.
   if (clicks.length) {

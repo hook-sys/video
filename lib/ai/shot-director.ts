@@ -4,7 +4,8 @@ import { zodTextFormat } from "openai/helpers/zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import type { SceneDirectorInput, SceneDirectorResult } from "@/lib/ai/scene-director";
 import { compositionCheck, violationNote } from "@/components/video/flow/composition-check";
-import { searchShots, seedFrom } from "@/lib/shot-search";
+import { searchVariants, seedFrom } from "@/lib/shot-search";
+import type { SceneScript } from "@/lib/scene-script";
 import { expandShots, shotCatalogText, ShotScript, ShotScriptModel } from "@/lib/shots";
 import { tokenize } from "@/lib/voice-timing";
 
@@ -36,7 +37,9 @@ RULES
 - Captions (line on problem and number shots) use only words the voice says; otherwise leave them null. The ui shot card must have a button: action-panel (default), login, checkout or cta.
 - theme: "lavender" (friendly SaaS), "mint" (health, wellness, finance, calm), "teal" (operations, B2B, data, security) or "midnight" (dark, premium). creative_preferences.visual_style is a hint.`;
 
-export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null };
+// The videos offered to the customer: the same shots in different looks (the first is `script`).
+export type ShotVariantOut = { seed: number; score: number; scene: SceneScript };
+export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null; variants: ShotVariantOut[] };
 
 export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000): Promise<ShotDirectorResult> {
   const started = Date.now();
@@ -45,7 +48,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(ShotScriptModel, "shot_script") };
   const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
-  const none = { violations: [] as ReturnType<typeof compositionCheck>, notes: [] as string[] };
+  const none = { violations: [] as ReturnType<typeof compositionCheck>, notes: [] as string[], variants: [] as ShotVariantOut[] };
   // Each draft is built several ways and the cleanest variant is kept
   // (lib/shot-search.ts); the seed comes from the project.
   const seed = input.seed ?? seedFrom(input.narration);
@@ -55,12 +58,13 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
     const expandNotes: string[] = [];
     expandShots(shots, expandNotes, input.narration);
     try {
-      const found = searchShots(shots, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots, brand: { name: input.product_name ?? "", logo: "logo" } }, seed);
+      const found = searchVariants(shots, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots, brand: { name: input.product_name ?? "", logo: "logo" } }, seed, { taste: input.taste });
       if (found.blockers.length) return { shots, script: null, problems: found.blockers, ...none };
       if (!found.best) return { shots, script: null, problems: ["no variant compiles to a valid plan"], ...none };
       const { script, violations, plan } = found.best;
-      console.info("shot variants:", { tried: found.tried, kept: found.best.seed, resolved: plan.resolved });
-      return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote)] };
+      console.info("shot variants:", { tried: found.tried, picks: found.picks.map((p) => ({ seed: p.seed, score: p.score, look: p.script.look })), resolved: plan.resolved });
+      const variants = found.picks.map((p) => ({ seed: p.seed, score: p.score, scene: p.script }));
+      return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote)], variants };
     } catch (e) {
       return { shots, script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], ...none };
     }
@@ -110,9 +114,9 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
         problems = [`revision failed: ${e instanceof Error ? e.message : String(e)}`, ...problems];
       }
     }
-    return { script: result.script, shots: result.script ? result.shots : null, attempts, revised: attempts > 1, errors: problems, ms: Date.now() - started, timing, violations: result.violations };
+    return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: problems, ms: Date.now() - started, timing, violations: result.violations };
   } catch (e) {
-    return { script: null, shots: null, attempts, revised: attempts > 1, errors: [e instanceof Error ? e.message : String(e)], ms: Date.now() - started, timing, violations: [] };
+    return { script: null, shots: null, variants: [], attempts, revised: attempts > 1, errors: [e instanceof Error ? e.message : String(e)], ms: Date.now() - started, timing, violations: [] };
   } finally {
     if (attempts) onUsage?.(usage);
   }
