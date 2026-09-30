@@ -94,7 +94,7 @@ export function ElementView({ s, frame, theme, calm, explainer }: { s: NodeState
   } else if (el.type === "text") {
     const upd = [...(el.updates ?? [])].reverse().find((u) => frame >= u.at);
     const next = upd && String(upd.content.value ?? upd.content.title ?? upd.content.amount ?? upd.content.label ?? "");
-    body = <TextObject text={next || el.text} w={w} h={h} t={upd ? frame - upd.at : t} theme={theme} />;
+    body = <TextObject text={next || el.text} w={w} h={h} t={upd ? frame - upd.at : t} theme={theme} count={!upd} />;
   } else if (el.type === "shape") {
     body = <ShapeObject shape={el.shape} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} labelPx={labelPx} />;
   } else if (el.type === "visual") {
