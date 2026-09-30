@@ -1,6 +1,7 @@
 // Deterministic StoryWorld checks that need no rendering: story validation,
 // stored-brief compatibility, compiled-timeline frame checks and voice timing.
 // Bundled and run by scripts/story-check/run.mjs.
+import { searchShots, seedFrom } from "@/lib/shot-search";
 import { ProductBrief } from "@/lib/ai/product-brief";
 import { validateStory, VisualStory } from "@/lib/visual-story";
 import { compileStory } from "@/components/video/engine/compiler";
@@ -605,6 +606,12 @@ function shotTemplates(): Check[] {
     // The resolve pass enforces its rules on every real video, leaving nothing.
     const left = vp.resolved?.left ?? ["not resolved"];
     add(`real video ${v.name}: resolve pass leaves nothing`, left.length === 0, left.join("; ") || `${vp.resolved!.fixed.length} fix(es): ${vp.resolved!.fixed.slice(0, 3).join("; ") || "none needed"}`);
+    // Variant search: three projects with these very shots each get a clean
+    // video, and they do not all look the same.
+    const looks = ["project-a", "project-b", "project-c"].map((id) => searchShots(ShotScript.parse(v.shots), { narration: narr, words: vw, durationSeconds: v.duration, brand: { name: "MotionBrief", logo: "logo" } }, seedFrom(`${v.name}-${id}`)).best);
+    const clean = looks.every((b) => b && b.score === 0);
+    const kinds = new Set(looks.map((b) => (b ? `${b.script.look?.decor}/${b.script.look?.tone}/${b.script.beats.find((x) => x.layout === "stage-left") ? "L" : "R"}` : "none")));
+    add(`real video ${v.name}: every project gets a clean variant, looks differ`, clean && kinds.size >= 2, `${looks.map((b) => (b ? `score ${b.score}${b.score ? ` (${b.violations.filter((x) => x.rule !== "idle" && x.rule !== "long-scene").map((x) => `${x.rule}: ${x.detail}`).join("; ")})` : ""}` : "none")).join(", ")}; looks: ${[...kinds].join(", ")}`);
   }
   const pops = (plan.sfx ?? []).filter((x) => x.kind === "soft_pop").length;
   add("shots: a group pops once per element", pops >= 3, `${pops} pops`);

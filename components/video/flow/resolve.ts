@@ -87,7 +87,9 @@ function clearText(plan: FlowPlan, t: FlowText, report: ResolveReport) {
       const [first, last] = [frames[0], frames[frames.length - 1]];
       const gone = goneAt(n, last, last + 45);
       const wasThere = num(n.opacity, shown(t) - 2, 1) >= 0.3;
-      if (wasThere && gone !== null) {
+      // (Only a shot that is leaving anyway, around when the words land:
+      // never the subject the words stand beside.)
+      if (wasThere && gone !== null && gone <= shown(t) + 30) {
         // A leaving element: gone just before the words land — and with it
         // everything leaving in the same exit (a row goes together).
         const group = plan.nodes.filter((m) => m.kind === "el" && (m === n || (num(m.opacity, shown(t) - 2, 1) >= 0.3 && Math.abs((goneAt(m, shown(t) - 2, gone + 6) ?? -99) - gone) <= 2)));

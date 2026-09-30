@@ -111,6 +111,8 @@ export type SceneDirectorInput = {
   // The NEVER list (lib/video-rules.ts neverList: built-in rules, rules added
   // in `video_rules`, and how often each was broken lately).
   never?: string;
+  // Variant seed (the project's id): the same script looks different per project.
+  seed?: number;
 };
 export type SceneDirectorResult = { script: SceneScript | null; attempts: number; revised: boolean; errors: string[]; ms: number; timing: "voice" | "estimated"; violations: Violation[] };
 

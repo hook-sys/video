@@ -113,6 +113,8 @@ export type FlowText = {
   markAt?: number;
   // A word swap: at `at` the accent word flips to `word` ("weeks" → "minutes").
   swap?: { at: number; word: string };
+  // Side text anchored by its right edge at pos (words right of a subject on the left).
+  align?: "right";
 };
 
 // A rolling checklist: one item at a time in focus, the previous one lifting
@@ -160,6 +162,10 @@ export type FlowPlan = {
   // Explainer: frame spans where the whole canvas turns brand colour (the
   // product reveal, Keka's full-colour moment).
   flashes?: [number, number][];
+  // Explainer canvas decor (a variant the search picks): dots, ribbons, waves, glow.
+  decor?: string;
+  // Explainer canvas tone: tint (default), white or deep.
+  tone?: string;
   // What the resolve pass changed, and what it could not (resolve.ts).
   resolved?: { fixed: string[]; left: string[] };
   // A pointer in world space: glides along path, visible where show > 0,

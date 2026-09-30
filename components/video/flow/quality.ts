@@ -49,7 +49,7 @@ export function textRect(t: FlowText): Rect {
   const h = lines.length * t.size * TYPE[style].lineHeight;
   const padX = style === "pill" ? t.size * 0.7 : 0;
   const padY = style === "pill" ? t.size * 0.36 : 0;
-  const cx = style === "side" ? 960 + t.pos[0] + w / 2 : 960;
+  const cx = style === "side" ? 960 + t.pos[0] + (t.align === "right" ? -w / 2 : w / 2) : 960;
   const cy = 540 + t.pos[1];
   return { x0: cx - w / 2 - padX, x1: cx + w / 2 + padX, y0: cy - h / 2 - padY, y1: cy + h / 2 + padY, what: `text "${t.text}"` };
 }
@@ -232,7 +232,10 @@ export function planQuality(plan: FlowPlan): PlanQuality {
   const overflow = plan.texts.flatMap((t) => {
     const lines = t.style === "side" ? splitLines(t.text, t.accent) : [t.text];
     const limit = t.style === "side" ? 1000 : t.style === "pill" ? 1500 : t.style === "panel" ? 1640 : 1800;
-    return lines.filter((l) => textWidth(l, t.size) > limit).map((l) => `"${l}" at ${t.size}px`);
+    // Wherever it is placed, every line stays inside the frame.
+    const r = textRect(t);
+    const out = r.x0 < 20 || r.x1 > 1900 || r.y0 < 10 || r.y1 > 1070 ? [`"${t.text}" leaves the frame (x ${Math.round(r.x0)}…${Math.round(r.x1)})`] : [];
+    return [...lines.filter((l) => textWidth(l, t.size) > limit).map((l) => `"${l}" at ${t.size}px`), ...out];
   });
 
   return { deadFrames, deadAt, emptyFrames, emptyAt, minElementScale: minElementScale === Infinity ? 1 : Math.round(minElementScale * 100) / 100, minLabelPx: minLabelPx === Infinity ? 99 : Math.round(minLabelPx), cameraAccel: Math.round(cameraAccel * 100) / 100, accelAt, zoomAccel: Math.round(zoomAccel * 10000) / 10000, overflow, collisionFrames, collisionAt, collision };

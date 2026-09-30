@@ -3,10 +3,8 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import type { SceneDirectorInput, SceneDirectorResult } from "@/lib/ai/scene-director";
-import { compileSceneScript } from "@/components/video/flow/compile-scene";
 import { compositionCheck, violationNote } from "@/components/video/flow/composition-check";
-import { validateFlowPlan } from "@/components/video/flow/validate";
-import { sceneScriptBlockers } from "@/lib/scene-script";
+import { searchShots, seedFrom } from "@/lib/shot-search";
 import { expandShots, shotCatalogText, ShotScript, ShotScriptModel } from "@/lib/shots";
 import { tokenize } from "@/lib/voice-timing";
 
@@ -48,19 +46,21 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   const format = { format: zodTextFormat(ShotScriptModel, "shot_script") };
   const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
   const none = { violations: [] as ReturnType<typeof compositionCheck>, notes: [] as string[] };
+  // Each draft is built several ways and the cleanest variant is kept
+  // (lib/shot-search.ts); the seed comes from the project.
+  const seed = input.seed ?? seedFrom(input.narration);
   const check = (raw: unknown) => {
     if (!raw) return { shots: null, script: null, problems: ["no structured output"], ...none };
     const shots = ShotScript.parse(raw);
     const expandNotes: string[] = [];
-    const script = expandShots(shots, expandNotes, input.narration);
-    const problems = sceneScriptBlockers(script, input.narration, input.words, input.duration_seconds);
-    if (problems.length) return { shots, script: null, problems, ...none };
+    expandShots(shots, expandNotes, input.narration);
     try {
-      const plan = compileSceneScript(script, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, brand: { name: input.product_name ?? "", logo: "logo" } });
-      const invalid = validateFlowPlan(plan);
-      if (invalid.length) return { shots, script: null, problems: invalid.slice(0, 6).map((e) => `compiles to an invalid plan: ${e}`), ...none };
-      const violations = compositionCheck(script, plan, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots });
-      return { shots, script, problems, violations, notes: [...expandNotes, ...violations.map(violationNote)] };
+      const found = searchShots(shots, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots, brand: { name: input.product_name ?? "", logo: "logo" } }, seed);
+      if (found.blockers.length) return { shots, script: null, problems: found.blockers, ...none };
+      if (!found.best) return { shots, script: null, problems: ["no variant compiles to a valid plan"], ...none };
+      const { script, violations, plan } = found.best;
+      console.info("shot variants:", { tried: found.tried, kept: found.best.seed, resolved: plan.resolved });
+      return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote)] };
     } catch (e) {
       return { shots, script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], ...none };
     }

@@ -380,7 +380,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   // Captions and pills sit at the bottom of the frame: the camera keeps that
   // band free from the beat before they arrive (known before they compile).
   // (Explainer words beside a subject on the right sit left, not at the bottom.)
-  const besideLeft = (i: number) => explainer && beats.slice(0, i).reverse().find((x) => x.action === "scene")?.layout === "stage-right";
+  const besideLeft = (i: number) => explainer && ["stage-right", "stage-left"].includes(beats.slice(0, i).reverse().find((x) => x.action === "scene")?.layout ?? "");
   const planned = beats.flatMap((b, i) =>
     b.action === "statement" && b.text_layout !== "display" && b.text_layout !== "panel" && !besideLeft(i) ? [{ start: starts[i], end: (starts[i + 1] ?? stageEnd) + 30, style: (b.text_layout === "pill" ? "pill" : "caption") as NonNullable<FlowText["style"]> }] : [],
   );
@@ -399,8 +399,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       if (move !== "scene") return;
       const next = beats.findIndex((x, k) => starts[k] > t && x.action === "scene");
       const len = (next >= 0 ? starts[next] : stageEnd) - t;
-      const k = sceneIdx % 2 ? -1 : 1;
-      if (sceneIdx === 0) f.camera(t, 1, [-30 * k, 0], 1.07);
+      // (The look's seed decides whether the first shot pushes in or out.)
+      const k = (sceneIdx + (script.look?.seed ?? 0)) % 2 ? -1 : 1;
+      if (sceneIdx === 0) f.camera(t, 1, [-30 * k, 0], k > 0 ? 1.07 : 1.17);
       f.camera(t, Math.max(12, len), [30 * k, -10 * k], k > 0 ? 1.17 : 1.07, "linear");
       return;
     }
@@ -449,7 +450,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         if (SCENE_STEP[tr]) {
           // (Explainer: a strip one frame wide, so the old shot is still
           // leaving as the new one comes in — never a blank frame mid-push.)
-          const [sx, sy] = explainer ? [SCENE_STEP[tr][0] * 0.8, SCENE_STEP[tr][1]] : SCENE_STEP[tr];
+          const [sx, sy] = explainer ? [SCENE_STEP[tr][0] * 0.8, SCENE_STEP[tr][1] * 0.8] : SCENE_STEP[tr];
           const wordsWith = explainer && beats[i + 1] && paired.has(beats[i + 1]);
           push = [sx, sy];
           for (const [, n] of old) {
@@ -873,7 +874,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         let style: NonNullable<FlowText["style"]> = b.text_layout === "panel" ? "panel" : b.text_layout === "display" ? "display" : b.text_layout === "pill" ? "pill" : live.size ? "caption" : "display";
         if (b.text_layout === "side") style = live.size ? "caption" : "display";
         // Explainer: beside a subject on the right, the words sit big on the left.
-        const besideRight = explainer && b.text_layout === "side" && live.size > 0 && layoutFamily(layoutName) === "stage-right";
+        const besideRight = explainer && b.text_layout === "side" && live.size > 0 && ["stage-right", "stage-left"].includes(layoutFamily(layoutName));
+        const mirrored = besideRight && layoutFamily(layoutName) === "stage-left";
         if (besideRight) style = "side";
         const cover = style === "display" || style === "panel";
         const end0 = lastLine ? lastEnd : Math.min(hardEnd, cover ? Math.max(wf[wf.length - 1] + 36, nextStart - 10) : Math.max(wf[wf.length - 1] + 36, nextStart + 20));
@@ -886,7 +888,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           f.panel(t, end, first ? first.pos : center);
           f.sfx(t, "whoosh");
         }
-        const pos: Vec = besideRight ? [-760, -10] : style === "caption" ? [0, 350] : style === "pill" ? [0, 370] : [0, 0];
+        const pos: Vec = mirrored ? [760, -10] : besideRight ? [-760, -10] : style === "caption" ? [0, 350] : style === "pill" ? [0, 370] : [0, 0];
         const mark = b.style === "pill" || b.style === "strike" ? b.style : undefined;
         // The mark lands just after the (last, or for a strike the first) accent word is spoken.
         const ws = text.split(/\s+/);
@@ -900,7 +902,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const swapWord = b.action === "statement" && b.items?.[0] && b.accent ? b.items[0] : null;
         const swapAt = swapWord ? wordFrames(swapWord, (start + LEAD) / FPS, timeline)[0] : null;
         const swap = swapWord && swapAt !== null && swapAt !== undefined && swapAt > start && swapAt < end ? { at: swapAt, word: swapWord } : undefined;
-        f.text(text, start, end, { swap, style, pos, size: explainer ? Math.min(fitSize(text, style, b.accent ?? undefined), EXPLAINER_TYPE[style]) : fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: shown, mark: b.accent ? mark : undefined, markAt: explainer && j >= 0 ? wf[j] : undefined });
+        f.text(text, start, end, { swap, style, pos, size: explainer ? Math.min(fitSize(text, style, b.accent ?? undefined), EXPLAINER_TYPE[style]) : fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: shown, mark: b.accent ? mark : undefined, markAt: explainer && j >= 0 ? wf[j] : undefined, ...(mirrored && { align: "right" as const }) });
         if (mark && b.accent && j >= 0) f.sfx((wf[j] ?? start) + MARK_DELAY, mark === "strike" ? "click" : "soft_pop");
         if (style === "display" && explainer) {
           // Explainer: a big line owns the frame; the scene before it leaves
@@ -936,7 +938,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   if (calm) plan.calm = true;
   if (explainer) plan.explainer = true;
   if (flashes.length) plan.flashes = flashes;
-  plan.seed = [...narration].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_003, 7);
+  plan.seed = script.look?.seed ?? [...narration].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_003, 7);
+  if (explainer && script.look) [plan.decor, plan.tone] = [script.look.decor, script.look.tone ?? undefined];
   // The cursor: glides in before each click (from off to the lower right when
   // it was hidden), clicks, and leaves when no click follows soon.
   if (clicks.length) {

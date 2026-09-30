@@ -123,7 +123,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
   );
   return (
     <AbsoluteFill style={{ fontFamily: plan.explainer ? EXPLAINER_FONT : FLOW_FONT, overflow: "hidden" }}>
-      <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} />
+      <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} decor={plan.decor} tone={plan.tone} />
       {(plan.backdrops ?? []).map((b, i, all) => {
         // Cross-fade 24 frames into each backdrop; it fades as the next arrives
         // and clears for the brand lockup.
@@ -136,7 +136,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
       )}
       {irises.filter((i) => !i.done).map((i, n) => (
         <AbsoluteFill key={n} style={{ clipPath: i.k > 0 ? `circle(${i.r}px at ${i.x}px ${i.y}px)` : undefined }}>
-          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} />}
+          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} decor={plan.decor} tone={plan.tone} />}
           {content((id) => i.ir.members.includes(id), false)}
         </AbsoluteFill>
       ))}
@@ -207,8 +207,8 @@ function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan[
 // ── world ───────────────────────────────────────────────────────────────────
 // A soft mesh of coloured light that keeps drifting (and moves a little with
 // the camera), so the frame breathes even when nothing else moves.
-export function World({ theme, frame, camera, seed = 0, explainer, flashes }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number; explainer?: boolean; flashes?: [number, number][] }) {
-  if (explainer) return <FlatWorld theme={theme} frame={frame} camera={camera} seed={seed} flashes={flashes} />;
+export function World({ theme, frame, camera, seed = 0, explainer, flashes, decor, tone }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number; explainer?: boolean; flashes?: [number, number][]; decor?: string; tone?: string }) {
+  if (explainer) return <FlatWorld theme={theme} frame={frame} camera={camera} seed={seed} flashes={flashes} decor={decor} tone={tone} />;
   const par = (k: number): Vec => [-camera[0] * k, -camera[1] * k];
   // Per-video variation: the blobs sit elsewhere and the light comes from another side.
   const sx = seed ? ((seed % 997) / 997 - 0.5) * 900 : 0;
@@ -243,7 +243,14 @@ export function World({ theme, frame, camera, seed = 0, explainer, flashes }: { 
 // The explainer canvas (Keka): one flat, light, cool colour and quiet decor
 // only at the edges — dot patches, a dashed curve, one thick accent arc half
 // out of frame. Nothing sits behind the subject in the centre.
-function FlatWorld({ theme, frame, camera, seed, flashes }: { theme: FlowTheme; frame: number; camera: Vec; seed: number; flashes?: [number, number][] }) {
+// A soft sine path across the frame (the waves decor).
+const wavePath = (y: number, amp: number, len: number, phase: number) =>
+  Array.from({ length: 56 }, (_, i) => {
+    const x = -120 + i * 40;
+    return `${i ? "L" : "M"}${x} ${(y + amp * Math.sin((x / len) * Math.PI * 2 + phase)).toFixed(1)}`;
+  }).join(" ");
+
+function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone }: { theme: FlowTheme; frame: number; camera: Vec; seed: number; flashes?: [number, number][]; decor?: string; tone?: string }) {
   // The brand-colour moment: a circle of brand colour grows from the centre and
   // fills the canvas, then fades back.
   const flash = Math.max(0, ...(flashes ?? []).map(([s, e]) => ramp(frame, s - 4, 14, "out") * (1 - ramp(frame, e - 8, 12, "inOut"))));
@@ -261,11 +268,43 @@ function FlatWorld({ theme, frame, camera, seed, flashes }: { theme: FlowTheme; 
       })}
     </svg>
   );
-  const bg = theme.dark ? theme.bg[1] : tint(theme.primary, 0.07);
+  const bg = theme.dark ? theme.bg[1] : tint(theme.primary, tone === "white" ? 0.025 : tone === "deep" ? 0.13 : 0.07);
   const arcSpin = frame * 0.25;
   return (
     <AbsoluteFill style={{ background: bg, overflow: "hidden" }}>
       <div style={{ position: "absolute", inset: 0, transform: flip < 0 ? "scaleX(-1)" : undefined }}>
+        {decor === "ribbons" && (
+          // Flowing colour ribbons along the bottom edge (Flike), never behind the subject.
+          <svg style={{ position: "absolute", left: px, top: py, overflow: "visible" }} width={1920} height={1080}>
+            {[theme.primary, theme.accent, theme.primary2].map((c, k) => {
+              const w = Math.sin(frame / (48 + k * 9) + k * 2) * 40;
+              return <path key={k} d={`M-120 ${1010 + k * 26} C 420 ${900 + w + k * 30}, 980 ${1120 - w}, 2040 ${930 + k * 36 + w / 2}`} fill="none" stroke={c} strokeWidth={30 - k * 7} strokeLinecap="round" opacity={0.3 - k * 0.05} />;
+            })}
+            <path d={`M1480 -40 C 1640 ${60 + Math.sin(frame / 55) * 30}, 1820 ${40 - Math.sin(frame / 55) * 20}, 1990 150`} fill="none" stroke={theme.accent} strokeWidth={22} strokeLinecap="round" opacity={0.28} />
+          </svg>
+        )}
+        {decor === "waves" && (
+          // One quiet wave line with rings riding it (Desklog), plus outlined circles.
+          <svg style={{ position: "absolute", left: px, top: py, overflow: "visible" }} width={1920} height={1080}>
+            <path d={wavePath(960, 34, 900, frame / 40)} fill="none" stroke={theme.primary} strokeOpacity={0.3} strokeWidth={3} />
+            {[0, 1, 2].map((k) => {
+              const x = ((frame * 2.2 + k * 700) % 2200) - 140;
+              const y = 960 + 34 * Math.sin((x / 900) * Math.PI * 2 + frame / 40);
+              return <circle key={k} cx={x} cy={y} r={9} fill={bg} stroke={theme.accent} strokeWidth={4} />;
+            })}
+            <circle cx={150} cy={140} r={70} fill="none" stroke={theme.primary} strokeOpacity={0.22} strokeWidth={3} />
+            <circle cx={250 + Math.sin(frame / 60) * 12} cy={250} r={26} fill="none" stroke={theme.accent} strokeOpacity={0.5} strokeWidth={3} />
+          </svg>
+        )}
+        {decor === "glow" && (
+          // Soft light pooling at the corners, drifting (Flike's blue air).
+          <>
+            <div style={{ position: "absolute", left: -380 + px * 2 + Math.sin(frame / 90) * 40, top: -420 + py * 2, width: 1100, height: 1100, borderRadius: "50%", background: `radial-gradient(circle, ${tint(theme.primary, 0.35)} 0%, transparent 65%)`, opacity: 0.55 }} />
+            <div style={{ position: "absolute", left: 1300 + px * 2, top: 560 + py * 2 + Math.cos(frame / 80) * 40, width: 1000, height: 1000, borderRadius: "50%", background: `radial-gradient(circle, ${tint(theme.accent, 0.4)} 0%, transparent 65%)`, opacity: 0.45 }} />
+            {dots(1640, 60, 6, 3, tint(theme.primary, 0.45))}
+          </>
+        )}
+        {decor === "dots" && (<>
         {/* one thick accent arc, half out of frame (bottom right) */}
         <svg style={{ position: "absolute", left: 1990 + px * 2, top: 1150 + py * 2, overflow: "visible" }} width={10} height={10}>
           <circle cx={0} cy={0} r={300} fill="none" stroke={theme.accent} strokeWidth={52} strokeLinecap="round" strokeDasharray="520 2400" transform={`rotate(${178 + arcSpin})`} opacity={0.85} />
@@ -276,6 +315,7 @@ function FlatWorld({ theme, frame, camera, seed, flashes }: { theme: FlowTheme; 
         </svg>
         {dots(1560, 40, 9, 2, tint(theme.primary, 0.45))}
         {dots(90, 930, 7, 5, tint(theme.accent, 0.55))}
+        </>)}
       </div>
       {flash > 0.001 && (
         <div style={{ position: "absolute", left: "50%", top: "50%", width: 2400 * Math.min(1, flash * 1.2), height: 2400 * Math.min(1, flash * 1.2), transform: "translate(-50%, -50%)", borderRadius: "50%", background: `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`, opacity: Math.min(1, flash * 1.4) }}>
@@ -545,7 +585,7 @@ function Kinetic({ t, frame, theme, explainer }: { t: FlowText; frame: number; t
         position: "absolute",
         left: side ? `calc(50% + ${t.pos[0]}px)` : "50%",
         top: "50%",
-        transform: `translate(${side ? "0" : "-50%"}, calc(-50% + ${t.pos[1] - exit * 36}px)) scale(${pillK})`,
+        transform: `translate(${side ? (t.align === "right" ? "-100%" : "0") : "-50%"}, calc(-50% + ${t.pos[1] - exit * 36}px)) scale(${pillK})`,
         opacity: 1 - exit,
         filter: exit > 0.01 ? `blur(${exit * 10}px)` : undefined,
         fontSize: size,
@@ -553,7 +593,7 @@ function Kinetic({ t, frame, theme, explainer }: { t: FlowText; frame: number; t
         letterSpacing: `${type.track}em`,
         lineHeight: type.lineHeight,
         color: ink,
-        textAlign: side ? "left" : "center",
+        textAlign: side ? (t.align === "right" ? "right" : "left") : "center",
         whiteSpace: "nowrap",
         ...(style === "pill" && {
           padding: `${size * 0.36}px ${size * 0.7}px`,

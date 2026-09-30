@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isIconName } from "@/components/video/icons";
 import { FLOW_THEMES } from "@/lib/flow-script";
-import { parseAsset, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
+import { DECORS, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
 
 // Shot templates: tested building blocks a video is made of. The Director
 // only picks a shot per sentence and fills its words; every size, place,
@@ -94,7 +94,34 @@ const spoken = (line: string | null, narration?: string) => {
 // Cards whose last block is a button (a click needs one to press).
 const BUTTON_CARDS = ["action-panel", "login", "checkout", "cta"];
 
-export function expandShots(script: ShotScript, notes: ExpandNotes = [], narration?: string): SceneScript {
+// A variant of the same shots: the look, how shots hand over and how
+// subjects enter, drawn from a seed. Without one the default look is kept.
+export type ShotVariant = { seed: number };
+const rng = (seed: number) => () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+export function expandShots(script: ShotScript, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant): SceneScript {
+  // (the seed is mixed first: neighbouring seeds give unrelated videos)
+  const pick = variant ? rng(Math.imul(variant.seed ^ 0x9e3779b9, 0x85ebca6b)) : null;
+  const choose = <T,>(fallback: T, options: readonly T[]) => (pick ? options[Math.floor(pick() * options.length)] : fallback);
+  const look = variant ? { decor: choose("dots", DECORS), tone: choose("tint", TONES), seed: variant.seed } : null;
+  const push = choose("push-left" as const, ["push-left", "push-left", "push-up"] as const);
+  // Which side a subject with words beside it stands on (the words take the other).
+  const beside = choose("stage-right", ["stage-right", "stage-left"]);
+  // A number with its picture: the number first (left) or the picture first.
+  const duo = choose("stage-duo", ["stage-duo", "stage-duo-flip"]);
+  // How each kind of subject arrives (all calm entrances).
+  const enter = {
+    problem: choose("rise", ["rise", "scale-up", "pop"]),
+    ui: choose("rise", ["rise", "scale-up"]),
+    number: choose("pop", ["pop", "scale-up"]),
+    object: choose("pop", ["pop", "rise"]),
+    reveal: choose("scale-up", ["scale-up", "pop"]),
+  };
   const beats: SceneBeat[] = [];
   let scenes = 0;
   let revealed = false;
@@ -110,7 +137,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
   const scene = (cue: string, elements: SceneElement[], layout: string, style: string | null = null, transition?: "dissolve") => {
     const prev = beats[beats.length - 1];
     const dissolve = (layout !== lastLayout || prev?.text_layout === "display") && (transition ?? (prev?.action === "statement" ? "dissolve" : null));
-    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: "static", transition: scenes === 0 ? "cut" : dissolve ? "dissolve" : "push-left", backdrop: scenes === 0 ? "mesh" : null }));
+    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: "static", transition: scenes === 0 ? "cut" : dissolve ? "dissolve" : push, backdrop: scenes === 0 ? "mesh" : null }));
     lastLayout = layout;
     scenes++;
   };
@@ -129,7 +156,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
         const p = picture(s.subject ?? "visual:clock", words(s.label, 3));
         const line0 = spoken(words(s.line, 6), narration);
         // With words, the subject goes right and the words sit big on the left.
-        scene(s.cue, [el(id("subject"), p.asset, p.label)], line0 ? "stage-right" : "stage", "rise");
+        scene(s.cue, [el(id("subject"), p.asset, p.label)], line0 ? beside : "stage", enter.problem);
         const line = spoken(words(s.line, 6), narration);
         const at = s.line_cue ?? lastWord(s.cue);
         if (line && at) caption(at, line, s.accent, s.mark === "strike" ? "strike" : null, swapOf(s));
@@ -183,7 +210,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
           break;
         }
         revealed = true;
-        scene(s.cue, [el(id("logo"), "logo")], "stage", "scale-up");
+        scene(s.cue, [el(id("logo"), "logo")], "stage", enter.reveal);
         lastUi = null;
         break;
       }
@@ -193,7 +220,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
         const tpl = s.action_cue && !BUTTON_CARDS.includes(asked) ? "action-panel" : asked;
         const ui = id("ui");
         const button = words(s.button, 3) ?? "Continue";
-        scene(s.cue, [el(ui, `card:${tpl}/glass`, null, content({ title: words(s.title, 4), note: words(s.input, 8), label: null, action: button }))], "stage", "rise");
+        scene(s.cue, [el(ui, `card:${tpl}/glass`, null, content({ title: words(s.title, 4), note: words(s.input, 8), label: null, action: button }))], "stage", enter.ui);
         if (s.action_cue) beats.push(beat({ cue: s.action_cue, action: "click", targets: [ui], content: content({ title: words(s.title, 4), note: words(s.input, 8), action: pressed(button) }) }));
         const result = words(s.result, 4);
         // The success card only when no outputs follow (card + result + 2
@@ -216,7 +243,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
         // A number never stands alone: the picture of what it measures sits beside it.
         const about = `${s.cue} ${s.line ?? ""}`.toLowerCase();
         const companion = /download|export|save/.test(about) ? "visual:download" : /minute|hour|second|time|fast|day/.test(about) ? "visual:clock" : /%|grow|more|sales|revenue|x\b/.test(about) ? "visual:bars" : /\d+(p|k)\b|video|hd/.test(about) ? "visual:play" : null;
-        scene(s.cue, companion ? [el(num, `text:${first}`), el(id("pic"), companion)] : [el(num, `text:${first}`)], companion ? "stage-duo" : "stage", "pop");
+        scene(s.cue, companion ? [el(num, `text:${first}`), el(id("pic"), companion)] : [el(num, `text:${first}`)], companion ? duo : "stage", enter.number);
         const line = spoken(words(s.line, 5), narration);
         const at = s.line_cue ?? lastWord(s.cue);
         if (line && at) caption(at, line, null, null);
@@ -231,7 +258,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
         const line = words(s.line, 6);
         // A line with a 3D object: the words big on the left, the object on the right.
         if (line && parseAsset(s.subject)?.kind === "object") {
-          scene(s.cue, [el(id("obj"), s.subject!)], "stage-right", "pop");
+          scene(s.cue, [el(id("obj"), s.subject!)], beside, enter.object);
           beats.push(beat({ cue: s.cue, action: "statement", text: line, accent: s.accent, style: s.mark === "pill" ? "pill" : null, text_layout: "side", items: swapOf(s) }));
           lastUi = null;
           break;
@@ -248,7 +275,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
       }
     }
   }
-  return SceneScript.parse({ version: 2, theme: script.theme, pace: "calm", style: "explainer", beats });
+  return SceneScript.parse({ version: 2, theme: script.theme, pace: "calm", style: "explainer", beats, look });
 }
 
 // "Generate" → "Generating…"; other buttons show a tick.
