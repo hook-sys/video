@@ -64,6 +64,9 @@ const fan: Gen = (n) => Array.from({ length: n }, (_, i) => slot((i - (n - 1) / 
 // its result right.
 const grown = (sl: Slot, grow: number): Slot => ({ ...sl, grow });
 const stage: Gen = (n) => (n === 1 ? [grown(slot(0, -50, W * 0.6, H * 0.6, 2), 2)] : stageRow(n, () => 0.5));
+// stage-right: the subject on the right, the words big on the left (Keka's
+// "are you working / Remotely" beside the person).
+const stageRight: Gen = (n) => [grown(slot(W * 0.29, 0, W * 0.34, H * 0.6, 2), 2.4), ...stageRow(n - 1, () => 0.5).map((sl) => ({ ...sl, pos: [sl.pos[0] * 0.4 + W * 0.25, sl.pos[1] + 300] as Vec }))];
 const stageRow: Gen = (n) => Array.from({ length: n }, (_, i) => grown(slot((i - (n - 1) / 2) * (W * 0.86 / n), -50, (W * 0.86 / n) * 0.78, H * 0.5, 1), n === 1 ? 3 : n <= 3 ? 2.2 : 1.6));
 const stageDuo: Gen = (n) => (n === 1 ? stage(1, () => 0.5) : [grown(slot(-W * 0.2, -50, W * 0.48, H * 0.6, 2), 1.9), ...Array.from({ length: n - 1 }, (_, i) => grown(slot(W * 0.3, -50 + (i - (n - 2) / 2) * ((H * 0.66) / (n - 1)), W * 0.3, Math.min(H * 0.4, ((H * 0.66) / (n - 1)) * 0.86), 1), 1.4))]);
 // The first element large on one side, the rest as a column on the other.
@@ -155,13 +158,14 @@ const FAMILIES: Record<string, { gen: Gen; description: string; variants: number
   scatter: { gen: scatter, description: "spread across the frame at varied depths (controlled chaos, separate tools)", variants: 12 },
   stage: { gen: stage, description: "one element big in the centre (shots)", variants: 1 },
   "stage-row": { gen: stageRow, description: "2–6 elements big in a row (shots)", variants: 1 },
+  "stage-right": { gen: stageRight, description: "one element on the right, words on the left (shots)", variants: 1 },
   "stage-duo": { gen: stageDuo, description: "a big element left, the rest right (shots)", variants: 1 },
   depth: { gen: depthField, description: "a deep field: big front elements, small blurred ones behind", variants: 8 },
 };
 
 // Regular families get lettered variants too: the same arrangement with a
 // seeded offset, depth order and slight tilt (variant a is the clean one).
-for (const f of Object.values(FAMILIES)) if (f.variants === 1 && ![single, stage, stageRow, stageDuo].includes(f.gen)) f.variants = 5;
+for (const f of Object.values(FAMILIES)) if (f.variants === 1 && ![single, stage, stageRow, stageDuo, stageRight].includes(f.gen)) f.variants = 5;
 // Denser layouts are jittered less, so neighbours never touch.
 const jitter = (slots: Slot[], rnd: () => number, k = Math.min(1, 3 / slots.length)): Slot[] =>
   slots.map((s) => ({ ...s, pos: [s.pos[0] + (rnd() - 0.5) * 70 * k, s.pos[1] + (rnd() - 0.5) * 50 * k] as Vec, rot: s.rot + (rnd() - 0.5) * 6, depth: (s.depth === 2 ? 2 : rnd() < 0.25 ? 0 : 1) as 0 | 1 | 2 }));

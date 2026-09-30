@@ -73,6 +73,8 @@ export const VIDEO_RULES: VideoRule[] = [
   { id: "ghost-text", never: "never let a line arrive over a fading scene or leave one word waiting alone on a slow voice", enforced: ["code"], seen: "8091c79a: 'It' over a fading logo; 'Your' alone for 1 s" },
   { id: "invented-caption", never: "never write a caption the voice does not say (every word of 4+ letters is spoken)", enforced: ["prompt", "code"], seen: "8091c79a: 'Download quality'" },
   { id: "small-cta", never: "never end on a small grey call to action; it is a brand-colour button", enforced: ["code"], seen: "8091c79a: 'Try it free today' in small grey type" },
+  { id: "lonely-icon", never: "never leave one icon alone in an empty frame: steps show all at once (faint) and light up in turn; a number has its picture beside it", enforced: ["code"], seen: "2044a3b9: 'Studio', 'Website', '4K' alone in the frame" },
+  { id: "text-overrun", never: "never let a line run on over the next shot's card", enforced: ["code"], seen: "2044a3b9: 'It takes minutes' over the script card" },
   { id: "camera-swing", never: "never swing the camera away from the action (long pans that overshoot)", enforced: ["code", "detect"], seen: "Fuzz: camera overshot 800 px after a focus" },
 ];
 

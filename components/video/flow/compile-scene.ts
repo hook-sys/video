@@ -48,6 +48,7 @@ const MIN_FRAMES: Record<SceneBeat["action"], number> = {
   flow: 20,
   click: 20,
   lift: 30,
+  activate: 12,
 };
 // focus style → the part of the element to zoom into (offsets as a share of its size).
 const DETAIL: Record<string, Vec> = { center: [0, 0], top: [0, -0.25], bottom: [0, 0.25], left: [-0.25, 0], right: [0.25, 0], "top-left": [-0.25, -0.25], "top-right": [0.25, -0.25], "bottom-left": [-0.25, 0.25], "bottom-right": [0.25, 0.25] };
@@ -367,8 +368,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   };
   // Captions and pills sit at the bottom of the frame: the camera keeps that
   // band free from the beat before they arrive (known before they compile).
+  // (Explainer words beside a subject on the right sit left, not at the bottom.)
+  const besideLeft = (i: number) => explainer && beats.slice(0, i).reverse().find((x) => x.action === "scene")?.layout === "stage-right";
   const planned = beats.flatMap((b, i) =>
-    b.action === "statement" && b.text_layout !== "display" && b.text_layout !== "panel" ? [{ start: starts[i], end: (starts[i + 1] ?? stageEnd) + 30, style: (b.text_layout === "pill" ? "pill" : "caption") as NonNullable<FlowText["style"]> }] : [],
+    b.action === "statement" && b.text_layout !== "display" && b.text_layout !== "panel" && !besideLeft(i) ? [{ start: starts[i], end: (starts[i + 1] ?? stageEnd) + 30, style: (b.text_layout === "pill" ? "pill" : "caption") as NonNullable<FlowText["style"]> }] : [],
   );
   const reserveAt = (t0: number, t1: number) => {
     const on = [...lines, ...planned].filter((l) => l.start - 30 < t1 && l.end > t0);
@@ -376,6 +379,13 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   };
   const shoot = (t: number, span: number, move: string, focus?: Live[]) => {
     focusedOn = null;
+    // Explainer: the shot stages are laid out for the frame itself, so the
+    // camera holds still (a subject placed right stays right; nothing drifts
+    // up to make room).
+    if (explainer) {
+      f.camera(t, 12, [0, 0], 1.12);
+      return;
+    }
     // A running orbit counts as one element as big as its circle.
     const { c, zoom } = framedBox(focus ?? [...live.values(), ...ghosts.filter((g) => g.end > t).map((g) => g.live)]);
     const bottom = reserveAt(t, t + span);
@@ -447,7 +457,18 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const kind = calm && backdrops.length ? backdrops[0].kind : b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh");
         if (backdrops[backdrops.length - 1]?.kind !== kind) backdrops.push({ kind, start: t });
         sceneMove = b.camera ?? ["push-in", "drift", "pan-right", "pull-back", "rise"][sceneIdx % 5];
-        layoutName = place(b.elements ?? [], enterAt, layoutName, b.style, true, push);
+        // A "steps" scene: every step is there from the start, faint, so no
+        // icon stands alone in an empty frame; the first is lit, the others
+        // light up on their words (activate).
+        const steps = b.style === "steps";
+        layoutName = place(b.elements ?? [], enterAt, layoutName, steps ? "rise" : b.style, true, push);
+        if (steps)
+          (b.elements ?? []).forEach((e, k) => {
+            const n = live.get(e.id);
+            if (!n) return;
+            if (k === 0) n.h.spec.lit = [[0, 1]];
+            else put(n.h.spec.opacity!, enterAt + 14 + k * stagger, 0.35, "inOut");
+          });
         if (sceneIdx > 0) f.sfx(t, "whoosh");
         // A group popping in: one pop per element (five logos = five pops).
         if (b.style === "pop" && entered.length > 1) for (const at of entered) f.sfx(at, "soft_pop");
@@ -456,6 +477,13 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         break;
       }
       case "place":
+        // targets on a place: they make way (fade out) for the newcomers.
+        for (const id of b.targets ?? []) {
+          const n = live.get(id);
+          if (!n || id === b.to) continue;
+          leave(n, t, "fade");
+          live.delete(id);
+        }
         // A layout named here re-arranges the scene with the newcomers.
         layoutName = place(b.elements ?? [], t, b.layout ?? layoutName, b.style, true);
         // One pop per newcomer: five logos arriving are five pops.
@@ -533,6 +561,19 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           if (b.content && to.h.spec.el?.type === "card") (to.h.spec.el.updates ??= []).push({ at: t + 22, content: toContent(b.content)! });
           f.sfx(t + 22, "success_chime");
         }
+        break;
+      }
+      case "activate": {
+        const [a] = tgt;
+        if (!a) break;
+        animate(a.h.spec.opacity!, t, 10, 1, "out");
+        a.h.spec.lit = [[0, 0], [t + 2, 0], [t + 12, 1, "inOut"]];
+        bump(a, t);
+        if (to) {
+          animate((to.h.spec.lit ??= [[0, 1]]), t, 10, 0, "inOut");
+          f.connect(to.h, a.h, t, { dur: 12, dashed: true, bend: -40 }).arrow = true;
+        }
+        f.sfx(t, "soft_pop");
         break;
       }
       case "click": {
@@ -803,15 +844,20 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const start = Math.min(wf[0], Math.max(t + 2, wf[0] - 8));
         let style: NonNullable<FlowText["style"]> = b.text_layout === "panel" ? "panel" : b.text_layout === "display" ? "display" : b.text_layout === "pill" ? "pill" : live.size ? "caption" : "display";
         if (b.text_layout === "side") style = live.size ? "caption" : "display";
+        // Explainer: beside a subject on the right, the words sit big on the left.
+        const besideRight = explainer && b.text_layout === "side" && live.size > 0 && layoutFamily(layoutName) === "stage-right";
+        if (besideRight) style = "side";
         const cover = style === "display" || style === "panel";
-        const end = lastLine ? lastEnd : Math.min(hardEnd, cover ? Math.max(wf[wf.length - 1] + 36, nextStart - 10) : Math.max(wf[wf.length - 1] + 36, nextStart + 20));
+        const end0 = lastLine ? lastEnd : Math.min(hardEnd, cover ? Math.max(wf[wf.length - 1] + 36, nextStart - 10) : Math.max(wf[wf.length - 1] + 36, nextStart + 20));
+        // Explainer: a line is gone before the next shot arrives (never over its card).
+        const end = explainer && !lastLine ? Math.max(wf[wf.length - 1] + 10, Math.min(end0, nextStart - 4)) : end0;
         lines.push({ start, end, style });
         if (style === "panel") {
           const first = [...live.values()][0];
           f.panel(t, end, first ? first.pos : center);
           f.sfx(t, "whoosh");
         }
-        const pos: Vec = style === "caption" ? [0, 350] : style === "pill" ? [0, 370] : [0, 0];
+        const pos: Vec = besideRight ? [-760, -10] : style === "caption" ? [0, 350] : style === "pill" ? [0, 370] : [0, 0];
         const mark = b.style === "pill" || b.style === "strike" ? b.style : undefined;
         // The mark lands just after the (last, or for a strike the first) accent word is spoken.
         const ws = text.split(/\s+/);

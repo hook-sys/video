@@ -115,7 +115,9 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
     switch (s.shot) {
       case "problem": {
         const p = picture(s.subject ?? "visual:clock", words(s.label, 3));
-        scene(s.cue, [el(id("subject"), p.asset, p.label)], "stage", "rise");
+        const line0 = spoken(words(s.line, 6), narration);
+        // With words, the subject goes right and the words sit big on the left.
+        scene(s.cue, [el(id("subject"), p.asset, p.label)], line0 ? "stage-right" : "stage", "rise");
         const line = spoken(words(s.line, 6), narration);
         const at = s.line_cue ?? lastWord(s.cue);
         if (line && at) caption(at, line, s.accent, s.mark === "strike" ? "strike" : null);
@@ -127,23 +129,29 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
         if (s.shot === "outputs" && lastUi && items.length) {
           // The first result(s) lift out on the cue; any with a later cue of
           // their own join the row then.
-          const outs = items.slice(0, 3).map((i, k) => ({ ...picture(i.asset, words(i.label, 2)), cue: k > 0 ? i.cue : null }));
-          const now = outs.filter((o) => !o.cue);
-          beats.push(beat({ cue: s.cue, action: "lift", targets: [lastUi], layout: "stage-duo", style: "rise", elements: now.map((o) => el(id("out"), o.asset, o.label)) }));
+          // Two results beside the card at most (a third would shrink them all);
+          // a later one's words make the card pulse instead, so something
+          // still happens on them.
+          const outs = items.slice(0, 2).map((i, k) => ({ ...picture(i.asset, words(i.label, 2)), cue: k > 0 ? i.cue : null }));
+          beats.push(beat({ cue: s.cue, action: "lift", targets: [lastUi], layout: "stage-duo", style: "rise", elements: outs.filter((o) => !o.cue).map((o) => el(id("out"), o.asset, o.label)) }));
           for (const o of outs.filter((x) => x.cue)) beats.push(beat({ cue: o.cue!, action: "place", layout: "stage-duo", style: "rise", elements: [el(id("out"), o.asset, o.label)] }));
+          const extra = items[2]?.cue;
+          if (extra) beats.push(beat({ cue: extra, action: "highlight", targets: [lastUi] }));
           lastUi = null;
           break;
         }
         const list = items.slice(0, 4);
         if (!list.length) break;
-        let prevStep: string | null = null;
-        list.forEach((i, k) => {
+        // Every step is on screen from the start (faint), so one icon never
+        // stands alone in the frame; each lights up on its words with an
+        // arrow from the one before (Keka).
+        const els = list.map((i) => {
           const p = picture(i.asset, words(i.label, 2));
-          const e = el(id("step"), p.asset, p.label);
-          if (k === 0) scene(i.cue ?? s.cue, [e], "stage-row", "rise");
-          // Each next step: a dashed arrow from the one before, and it lights up.
-          else beats.push(beat({ cue: i.cue ?? s.cue, action: "place", elements: [e], layout: "stage-row", style: "rise", to: prevStep }));
-          prevStep = e.id;
+          return el(id("step"), p.asset, p.label);
+        });
+        scene(list[0].cue ?? s.cue, els, "stage-row", "steps");
+        list.slice(1).forEach((i, k) => {
+          if (i.cue) beats.push(beat({ cue: i.cue, action: "activate", targets: [els[k + 1].id], to: els[k].id }));
         });
         lastUi = null;
         break;
@@ -176,7 +184,10 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
         scene(s.cue, [el(ui, `card:${tpl}/glass`, null, content({ title: words(s.title, 4), note: words(s.input, 8), label: null, action: button }))], "stage", "rise");
         if (s.action_cue) beats.push(beat({ cue: s.action_cue, action: "click", targets: [ui], content: content({ title: words(s.title, 4), note: words(s.input, 8), action: pressed(button) }) }));
         const result = words(s.result, 4);
-        if (result && s.result_cue) beats.push(beat({ cue: s.result_cue, action: "place", layout: "stage-duo", style: "pop", elements: [el(id("done"), "card:success-toast/solid", null, content({ title: result, subtitle: null }))] }));
+        // The success card only when no outputs follow (card + result + 2
+        // outputs would crowd the frame).
+        const outputsNext = script.shots[script.shots.indexOf(s) + 1]?.shot === "outputs";
+        if (result && s.result_cue && !outputsNext) beats.push(beat({ cue: s.result_cue, action: "place", layout: "stage-duo", style: "pop", elements: [el(id("done"), "card:success-toast/solid", null, content({ title: result, subtitle: null }))] }));
         lastUi = ui;
         break;
       }
@@ -190,7 +201,10 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
           break;
         }
         const num = id("num");
-        scene(s.cue, [el(num, `text:${first}`)], "stage", "pop");
+        // A number never stands alone: the picture of what it measures sits beside it.
+        const about = `${s.cue} ${s.line ?? ""}`.toLowerCase();
+        const companion = /download|export|save/.test(about) ? "visual:download" : /minute|hour|second|time|fast|day/.test(about) ? "visual:clock" : /%|grow|more|sales|revenue|x\b/.test(about) ? "visual:bars" : /\d+(p|k)\b|video|hd/.test(about) ? "visual:play" : null;
+        scene(s.cue, companion ? [el(num, `text:${first}`), el(id("pic"), companion)] : [el(num, `text:${first}`)], companion ? "stage-duo" : "stage", "pop");
         const line = spoken(words(s.line, 5), narration);
         const at = s.line_cue ?? lastWord(s.cue);
         if (line && at) caption(at, line, null, null);
@@ -203,6 +217,13 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
       }
       case "line": {
         const line = words(s.line, 6);
+        // Two lines in a row saying the same words: only the second is shown.
+        const next = script.shots[script.shots.indexOf(s) + 1];
+        const shared = next?.shot === "line" && line && next.line ? line.toLowerCase().split(/\W+/).filter((w) => w.length > 2 && next.line!.toLowerCase().includes(w)).length : 0;
+        if (shared >= 2) {
+          notes.push(`line "${line}" repeats the next line: dropped`);
+          break;
+        }
         if (line) beats.push(beat({ cue: s.cue, action: "statement", text: line, accent: s.accent, style: s.mark === "pill" ? "pill" : null, text_layout: "display" }));
         break;
       }

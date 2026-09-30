@@ -38,6 +38,7 @@ export const SCENE_ACTIONS = [
   "list", // 3–5 spoken items as a rolling checklist
   "lift", // new elements (1–2 cards) lift out of targets [one screen / device] and take a place beside it
   "click", // a cursor glides to targets [one id] and clicks it; content = what it shows after
+  "activate", // (shot templates) targets [one id], waiting faint in a "steps" scene, lights up; to = the step before (an arrow from it)
 ] as const;
 export type SceneAction = (typeof SCENE_ACTIONS)[number];
 
