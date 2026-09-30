@@ -4,10 +4,13 @@ import { Card } from "./cards/card";
 import { Crop, Device, DEVICE_SPEC, type DeviceFinish, type DeviceModel } from "./cards/devices";
 import { CARD_BY_ID } from "./cards/templates";
 import { ShapeObject, TextObject, VisualObject } from "./shapes";
+import { ObjectView } from "./objects";
+import type { ObjectName } from "./object-names";
 import type { CardContent, CardStyle } from "./cards/types";
 import { num, ramp } from "./eval";
 import type { NodeState } from "./states";
 import type { FlowTheme } from "./themes";
+import { tint } from "./themes";
 import type { Track, Vec3 } from "./types";
 
 // Renders an element node ("el"): a card, device, screenshot crop, glass icon
@@ -79,7 +82,7 @@ export function ElementView({ s, frame, theme, calm, explainer }: { s: NodeState
           {lit > 0.01 && <div style={{ position: "absolute", inset: 0, background: `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`, opacity: lit }} />}
           {explainer && lit < 0.99 && <div style={{ position: "absolute", width: w * 0.66, height: w * 0.66, borderRadius: "50%", background: theme.soft, opacity: 1 - lit }} />}
           <div style={{ position: "relative" }}>
-            <Icon name={el.icon} size={w * 0.44} color={lit > 0.5 ? "#FFFFFF" : theme.primary} strokeWidth={2} draw={ramp(t, 2, 16, "inOut")} />
+            <Icon name={el.icon} size={w * 0.44} color={lit > 0.5 ? "#FFFFFF" : theme.primary} strokeWidth={2} draw={ramp(t, 2, 16, "inOut")} fill={explainer ? (lit > 0.5 ? "rgba(255,255,255,.28)" : tint(theme.accent, 0.55)) : undefined} />
           </div>
         </div>
         {el.label && <div style={{ fontSize: labelPx ?? Math.max(22, w * 0.2), fontWeight: 600, color: theme.ink, whiteSpace: "nowrap", opacity: ramp(t, 10, 12) }}>{el.label}</div>}
@@ -93,6 +96,8 @@ export function ElementView({ s, frame, theme, calm, explainer }: { s: NodeState
     body = <ShapeObject shape={el.shape} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} labelPx={labelPx} />;
   } else if (el.type === "visual") {
     body = <VisualObject visual={el.visual} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} labelPx={labelPx} />;
+  } else if (el.type === "object") {
+    body = <ObjectView name={el.object as ObjectName} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} labelPx={labelPx} />;
   } else if (el.type === "logo") {
     body = (
       <div style={{ width: w, height: h, borderRadius: Math.min(w, h) * 0.24, background: "rgba(255,255,255,.95)", boxShadow: `0 30px 70px ${theme.glow}0.25), inset 0 0 0 1.5px #fff`, display: "flex", alignItems: "center", justifyContent: "center", padding: 18, boxSizing: "border-box" }}>

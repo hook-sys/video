@@ -104,11 +104,20 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const stagger = calm ? 6 : 4; // ≥ 0.2 s apart, so each pop is heard
 
   // ── schedule ──
-  const times = spokenCueTimes(script.beats.map((b) => b.cue), timeline);
+  // Explainer: a line set beside a shot's subject shares the shot's cue (the
+  // words are spoken as it appears); it arrives a moment after the subject.
+  const paired = new Set<SceneBeat>(explainer ? script.beats.filter((b, i) => b.action === "statement" && script.beats[i - 1]?.action === "scene" && script.beats[i - 1].cue === b.cue) : []);
+  const times = spokenCueTimes(script.beats.map((b) => (paired.has(b) ? "" : b.cue)), timeline);
   const beats: SceneBeat[] = [];
   const starts: number[] = [];
   let last = -MIN_GAP;
   script.beats.forEach((b, i) => {
+    if (paired.has(b) && beats[beats.length - 1] === script.beats[i - 1]) {
+      beats.push(b);
+      starts.push(starts[starts.length - 1] + 6);
+      last = starts[starts.length - 1];
+      return;
+    }
     const cue = times[i] === null ? last + MIN_GAP : Math.round(times[i]! * FPS) - LEAD;
     const prev = beats[beats.length - 1];
     const earliest = prev ? starts[starts.length - 1] + MIN_FRAMES[prev.action] : 0;
@@ -177,6 +186,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       const wide = ref.shape.startsWith("arrow") || ref.shape === "pill";
       return { el: { type: "shape", shape: ref.shape, label: e.label ?? undefined }, w: wide ? 360 : 260, h: wide ? (ref.shape === "pill" ? 120 : 160) : 260 };
     }
+    if (ref.kind === "object") return { el: { type: "object", object: ref.object, label: e.label ?? undefined }, w: 320, h: e.label ? 390 : 320 };
     if (ref.kind === "visual") {
       const wide = ref.visual === "waveform" || ref.visual === "filmstrip" || ref.visual === "bars";
       return { el: { type: "visual", visual: ref.visual, label: e.label ?? undefined }, w: wide ? 520 : 300, h: wide ? 300 : 320 };
@@ -839,7 +849,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           break;
         }
         const text = b.text ?? "";
-        const wf = wordFrames(text, (t + LEAD) / FPS - 0.2, timeline).map((w) => Math.min(w, stageEnd - (stageEnd < total ? 24 : 8)));
+        const wf = wordFrames(text, ((paired.has(b) ? t - 6 : t) + LEAD) / FPS - 0.2, timeline).map((w) => Math.min(w, stageEnd - (stageEnd < total ? 24 : 8)));
         // The line (and the dim behind a display line) arrives with its first word.
         const start = Math.min(wf[0], Math.max(t + 2, wf[0] - 8));
         let style: NonNullable<FlowText["style"]> = b.text_layout === "panel" ? "panel" : b.text_layout === "display" ? "display" : b.text_layout === "pill" ? "pill" : live.size ? "caption" : "display";

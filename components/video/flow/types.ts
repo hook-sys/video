@@ -44,7 +44,8 @@ export type FlowElement =
   | { type: "text"; text: string; updates?: { at: number; content: Record<string, unknown> }[] }
   // Round and arrow forms, and literal pictures of an idea (voice → waveform).
   | { type: "shape"; shape: string; label?: string }
-  | { type: "visual"; visual: string; label?: string };
+  | { type: "visual"; visual: string; label?: string }
+  | { type: "object"; object: string; label?: string };
 
 export type FlowNode = {
   id: string;

@@ -1,5 +1,5 @@
 import { ramp } from "./eval";
-import { FLOW_FONT, type FlowTheme } from "./themes";
+import type { FlowTheme } from "./themes";
 
 // Non-card elements: a big word or number, round / arrow forms, and literal
 // pictures of an idea (voice → waveform, scenes → film strip, time → clock).
@@ -169,7 +169,7 @@ export function VisualObject({ visual, label, w, h, t, frame, theme, labelPx }: 
       <svg width={ph * 0.72} height={ph * 0.72} viewBox="-50 -50 100 100">
         <circle r={r} fill="none" stroke={theme.primary} strokeOpacity={0.15} strokeWidth={9} />
         <circle r={r} fill="none" stroke={theme.primary} strokeWidth={9} strokeLinecap="round" strokeDasharray={`${c * p} ${c}`} transform="rotate(-90)" />
-        <text y={9} textAnchor="middle" fontSize={24} fontWeight={800} fontFamily={FLOW_FONT} fill={ink(theme)}>{`${Math.round(p * 100)}%`}</text>
+        <text y={9} textAnchor="middle" fontSize={24} fontWeight={800} fontFamily="inherit" fill={ink(theme)}>{`${Math.round(p * 100)}%`}</text>
       </svg>
     );
   } else if (visual === "download" || visual === "play") {

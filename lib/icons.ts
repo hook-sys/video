@@ -1,4 +1,5 @@
 import CATALOG from "@/components/video/icons/catalog.json";
+import { livingStandIn } from "@/components/video/icons/living";
 
 // Icon lookup for the Visual Director (server side): categories and keyword
 // search over the motion-graphics icon library. Geometry is not loaded here.
@@ -42,8 +43,9 @@ export function searchIcons(query: string, limit = 5): string[] {
   const q = words(query);
   if (!q.length) return [];
   const concept = CONCEPT_ICONS[q.join("-")] ?? (q.length > 1 ? undefined : CONCEPT_ICONS[q[0].replace(/s$/, "")]);
-  if (concept) return [concept, ...searchKeywords(q, limit).filter((n) => n !== concept)].slice(0, limit);
-  return searchKeywords(q, limit);
+  // Never a person, face, hand or animal (see livingStandIn).
+  const found = (concept ? [concept, ...searchKeywords(q, limit + 4).filter((n) => n !== concept)] : searchKeywords(q, limit + 4)).filter((n) => !livingStandIn(n));
+  return found.slice(0, limit);
 }
 
 function searchKeywords(q: string[], limit: number): string[] {

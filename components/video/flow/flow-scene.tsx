@@ -6,7 +6,7 @@ import { Icon } from "@/components/video/icons";
 import { isLottieName, LottieAnim } from "@/components/video/lottie";
 import { clamp01, num, ramp, step, vec } from "./eval";
 import { MOTIONBRIEF_MARK, MotionBriefMark } from "./motionbrief-mark";
-import { FLOW_FONT, type FlowTheme, lottieColors, THEMES, withBrandColor } from "./themes";
+import { EXPLAINER_FONT, FLOW_FONT, type FlowTheme, lottieColors, THEMES, tint, withBrandColor } from "./themes";
 import { computeStates, type NodeState } from "./states";
 import { UiPlane } from "./ui-plane";
 import { ElementView } from "./element";
@@ -48,11 +48,13 @@ function useFlowFont() {
   useState(() => {
     if (fontReady || typeof document === "undefined") return;
     const handle = delayRender("Loading Inter");
-    const face = new FontFace("InterFlow", `url(${staticFile("fonts/inter-latin-wght.woff2")}) format("woff2")`, { weight: "100 900" });
-    face
-      .load()
-      .then(() => {
-        document.fonts.add(face);
+    const faces = [
+      new FontFace("InterFlow", `url(${staticFile("fonts/inter-latin-wght.woff2")}) format("woff2")`, { weight: "100 900" }),
+      new FontFace("NunitoFlow", `url(${staticFile("fonts/nunito-latin-wght.woff2")}) format("woff2")`, { weight: "200 1000" }),
+    ];
+    Promise.all(faces.map((f) => f.load()))
+      .then((loaded) => {
+        for (const f of loaded) document.fonts.add(f);
         fontReady = true;
       })
       .finally(() => continueRender(handle));
@@ -120,7 +122,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
     </div>
   );
   return (
-    <AbsoluteFill style={{ fontFamily: FLOW_FONT, overflow: "hidden" }}>
+    <AbsoluteFill style={{ fontFamily: plan.explainer ? EXPLAINER_FONT : FLOW_FONT, overflow: "hidden" }}>
       <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} />
       {(plan.backdrops ?? []).map((b, i, all) => {
         // Cross-fade 24 frames into each backdrop; it fades as the next arrives
@@ -241,11 +243,6 @@ export function World({ theme, frame, camera, seed = 0, explainer }: { theme: Fl
 // The explainer canvas (Keka): one flat, light, cool colour and quiet decor
 // only at the edges — dot patches, a dashed curve, one thick accent arc half
 // out of frame. Nothing sits behind the subject in the centre.
-export const tint = (hex: string, k: number) => {
-  const n = parseInt(hex.slice(1, 7), 16);
-  const c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => Math.round(v + (255 - v) * (1 - k)));
-  return `rgb(${c.join(",")})`;
-};
 function FlatWorld({ theme, frame, camera, seed }: { theme: FlowTheme; frame: number; camera: Vec; seed: number }) {
   const px = -camera[0] * 0.06;
   const py = -camera[1] * 0.06;

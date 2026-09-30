@@ -35,13 +35,14 @@ import { ASSET_COUNT } from "@/components/video/flow/cards/catalog";
 import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { DEPTH, LAYOUT_PRESETS, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES } from "@/components/video/flow/layouts";
 import { BACKDROPS } from "@/components/video/flow/backdrop-names";
-import { CAMERA_MOVES, ENTER_STYLES, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
+import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
 import { expandShots } from "@/lib/shots";
+import { OBJECTS } from "@/components/video/flow/object-names";
 import { SHOT_FIXTURE, SHOT_NARRATION } from "@/components/video/flow/fixtures/shots";
 import { neverList, VIDEO_RULES } from "@/lib/video-rules";
-import { isIconName } from "@/components/video/icons";
+import { isIconName, resolveIcon as resolveIconName } from "@/components/video/icons";
 import zlib from "node:zlib";
 import path from "node:path";
 
@@ -572,6 +573,12 @@ function shotTemplates(): Check[] {
   add("shots: steps are joined by dashed arrows and the spoken step lights up (explainer look)", !!plan.explainer && arrows >= 2 && lit >= 2, `${arrows} arrows, ${lit} lit tiles, explainer ${!!plan.explainer}`);
   const ghosts = compileSceneScript(expandShots(SHOT_FIXTURE, [], "Making a promo video usually takes weeks."), { narration: SHOT_NARRATION, durationSeconds: 30 });
   add("shots: a caption the voice does not say is dropped", !ghosts.texts.some((x) => x.text === "Your video is ready"), ghosts.texts.map((x) => x.text).join(" | "));
+  // The owner's rule: never people or animals, wherever an icon is asked for.
+  const living = ["users", "user", "user-round", "baby", "smile", "face-grinning", "hand-heart", "handshake", "cat", "dog", "bird", "fish", "paw-print"].filter((n) => { const r = resolveIconName(n); return r === n; });
+  const found = searchIcons("team people customer", 8).filter((n) => resolveIconName(n) !== n);
+  add("shots: no people, faces, hands or animals ever resolve (icons, search)", living.length === 0 && found.length === 0, living.length || found.length ? `still living: ${[...living, ...found].join(", ")}` : `users → ${resolveIconName("users")}, smile → ${resolveIconName("smile")}, cat → ${resolveIconName("cat")}`);
+  const objs = OBJECTS.filter((o) => parseAsset(`object:${o}`)?.kind !== "object");
+  add("shots: all 3D objects parse as assets", objs.length === 0, objs.join(", ") || `${OBJECTS.length} objects`);
   const pops = (plan.sfx ?? []).filter((x) => x.kind === "soft_pop").length;
   add("shots: a group pops once per element", pops >= 3, `${pops} pops`);
   // Guards: a word as a "number", a second logo reveal and an unknown icon.

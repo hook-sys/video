@@ -13,14 +13,14 @@ export const SHOT_KINDS = ["problem", "steps", "group", "reveal", "ui", "outputs
 export type ShotKind = (typeof SHOT_KINDS)[number];
 
 export const SHOT_CATALOG: Record<ShotKind, string> = {
-  problem: "a pain or a question: subject (icon: or visual:) big in the centre with its label; then line (2–6 words) appears under it on line_cue; mark 'strike' crosses out the accent word (e.g. 'Takes weeks', strike 'weeks')",
+  problem: "a pain or a question: subject (object:, icon: or visual:) big in the centre with its label; then line (2–6 words) appears under it on line_cue; mark 'strike' crosses out the accent word (e.g. 'Takes weeks', strike 'weeks')",
   steps: "2–4 things that come one after another (steps, tools, chores): items[] each { cue, asset (icon: or visual:), label }; each appears on its own cue in a row",
   group: "3–6 things named together (apps, channels, platforms, features): items[] { asset, label } appear together on cue with a pop each",
   reveal: "the product's logo arrives big (use once, where the voice names the product the first time; never for the closing line)",
   ui: "the product doing its job: a UI card big in the centre (card = one template id; title, input, button); a cursor clicks the button on action_cue (button text becomes 'pressed'); a success card with result pops beside it on result_cue",
   outputs: "right after a ui shot: 2–3 results come out of that card one after another: items[] { cue, asset (visual: or icon:), label }",
   number: "a number or measure as the hero: subject 'text:<value with a digit>' (e.g. text:4K, text:3 min, text:98%); items[] { cue, asset: 'text:<next value>' } swap it on their cues; line = a short caption under it",
-  line: "a promise or closing line as big kinetic type: line (2–6 words), accent = 1 word in brand colour, mark 'pill' puts the accent on a pill",
+  line: "a promise or closing line as big kinetic type: line (2–6 words), accent = 1 word in brand colour, mark 'pill' puts the accent on a pill; add subject 'object:<name>' to set a 3D object beside the words (the words go left)",
 };
 
 // Cards the ui shot may use (readable as a big hero).
@@ -70,7 +70,7 @@ const words = (s: string | null | undefined, max: number) => (s ?? "").trim().sp
 // random stand-in icon.
 function picture(asset: string | null | undefined, label: string | null): { asset: string; label: string | null } {
   const ref = parseAsset(asset);
-  if (ref?.kind === "visual" || ref?.kind === "shape") return { asset: asset!, label };
+  if (ref?.kind === "visual" || ref?.kind === "shape" || ref?.kind === "object") return { asset: asset!, label };
   if (ref?.kind === "icon" || (asset?.startsWith("icon:") && isIconName(asset.slice(5)))) return { asset: asset!, label };
   const name = label ?? asset?.split(":").pop() ?? "";
   return { asset: "shape:pill", label: words(name, 2) };
@@ -217,6 +217,13 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
       }
       case "line": {
         const line = words(s.line, 6);
+        // A line with a 3D object: the words big on the left, the object on the right.
+        if (line && parseAsset(s.subject)?.kind === "object") {
+          scene(s.cue, [el(id("obj"), s.subject!)], "stage-right", "pop");
+          beats.push(beat({ cue: s.cue, action: "statement", text: line, accent: s.accent, style: s.mark === "pill" ? "pill" : null, text_layout: "side" }));
+          lastUi = null;
+          break;
+        }
         // Two lines in a row saying the same words: only the second is shown.
         const next = script.shots[script.shots.indexOf(s) + 1];
         const shared = next?.shot === "line" && line && next.line ? line.toLowerCase().split(/\W+/).filter((w) => w.length > 2 && next.line!.toLowerCase().includes(w)).length : 0;

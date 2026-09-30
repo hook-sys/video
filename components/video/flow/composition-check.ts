@@ -27,7 +27,10 @@ export function compositionCheck(
   };
   const beats = script.beats;
   const timeline = words?.length ? words : estimateWords(narration, durationSeconds);
-  const times = spokenCueTimes(beats.map((b) => b.cue), timeline);
+  // A line sharing its shot's cue (explainer) is spoken with the shot.
+  const pairedAt = (i: number) => script.style === "explainer" && i > 0 && beats[i].action === "statement" && beats[i - 1].action === "scene" && beats[i - 1].cue === beats[i].cue;
+  const times0 = spokenCueTimes(beats.map((b, i) => (pairedAt(i) ? "" : b.cue)), timeline);
+  const times = times0.map((x, i) => (pairedAt(i) ? times0[i - 1] : x));
   const speechEnd = timeline[timeline.length - 1]?.end ?? durationSeconds;
 
   // Rhythm: a gap with nothing new (text on screen is something new).

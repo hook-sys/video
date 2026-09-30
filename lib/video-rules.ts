@@ -75,6 +75,8 @@ export const VIDEO_RULES: VideoRule[] = [
   { id: "small-cta", never: "never end on a small grey call to action; it is a brand-colour button", enforced: ["code"], seen: "8091c79a: 'Try it free today' in small grey type" },
   { id: "lonely-icon", never: "never leave one icon alone in an empty frame: steps show all at once (faint) and light up in turn; a number has its picture beside it", enforced: ["code"], seen: "2044a3b9: 'Studio', 'Website', '4K' alone in the frame" },
   { id: "text-overrun", never: "never let a line run on over the next shot's card", enforced: ["code"], seen: "2044a3b9: 'It takes minutes' over the script card" },
+  { id: "no-living", never: "never show people or animals: no persons, faces, hands or animals in icons, objects or pictures", enforced: ["prompt", "code"], seen: "Owner's rule" },
+  { id: "no-music", never: "never add music: only the voice and short sound effects", enforced: ["prompt", "code"], seen: "Owner's rule" },
   { id: "camera-swing", never: "never swing the camera away from the action (long pans that overshoot)", enforced: ["code", "detect"], seen: "Fuzz: camera overshot 800 px after a focus" },
 ];
 

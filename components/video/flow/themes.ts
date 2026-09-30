@@ -117,3 +117,12 @@ export const lottieColors = (t: FlowTheme): LottieColors => ({
 });
 
 export const FLOW_FONT = "InterFlow, Inter, system-ui, sans-serif";
+// The explainer look: a rounded, friendly face (Nunito, SIL OFL; public/fonts).
+export const EXPLAINER_FONT = "NunitoFlow, InterFlow, system-ui, sans-serif";
+
+// A colour mixed toward white: k = 1 is the colour, 0 is white.
+export const tint = (hex: string, k: number) => {
+  const n = parseInt(hex.slice(1, 7), 16);
+  const c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => Math.round(v + (255 - v) * (1 - k)));
+  return `rgb(${c.join(",")})`;
+};

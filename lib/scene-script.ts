@@ -4,6 +4,7 @@ import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
 import { isCardStyle, isCardTemplate, searchCards } from "@/components/video/flow/cards/catalog";
 import { CROP_PRESETS, DEVICE_FINISHES, DEVICE_MODELS } from "@/components/video/flow/cards/device-data";
 import { isLayout } from "@/components/video/flow/layouts";
+import { OBJECTS, type ObjectName } from "@/components/video/flow/object-names";
 import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { searchIcons } from "@/lib/icons";
 import { spokenCueTimes, tokenize, type WordTiming } from "@/lib/voice-timing";
@@ -114,7 +115,8 @@ export type AssetRef =
   | { kind: "logo" }
   | { kind: "text"; text: string }
   | { kind: "shape"; shape: ShapeName }
-  | { kind: "visual"; visual: VisualName };
+  | { kind: "visual"; visual: VisualName }
+  | { kind: "object"; object: ObjectName };
 
 // Non-card elements (so a scene is not only UI cards):
 // text:<1–3 words> — a big word or number as an object ("4K", "−1h", "3 weeks");
@@ -138,6 +140,7 @@ export function parseAsset(asset: string | null | undefined): AssetRef | null {
   }
   if (kind === "shape" && (SHAPES as readonly string[]).includes(a)) return { kind, shape: a as ShapeName };
   if (kind === "visual" && (VISUALS as readonly string[]).includes(a)) return { kind, visual: a as VisualName };
+  if (kind === "object" && (OBJECTS as readonly string[]).includes(a)) return { kind, object: a as ObjectName };
   return null;
 }
 
@@ -181,7 +184,10 @@ export function sceneScriptBlockers(script: SceneScript, narration: string, voic
   if (beats.length < 4) errors.push(`only ${beats.length} beats; direct at least 4`);
   if (beats[0]?.action !== "scene") errors.push("the first beat must be a scene");
   const timeline = voiceWords?.length ? voiceWords : estimateWords(narration, durationSeconds);
-  const times = spokenCueTimes(beats.map((b) => b.cue), timeline);
+  // A line sharing its shot's cue (shot templates) is spoken with the shot.
+  const pairedAt = (i: number) => script.style === "explainer" && i > 0 && beats[i].action === "statement" && beats[i - 1].action === "scene" && beats[i - 1].cue === beats[i].cue;
+  const times0 = spokenCueTimes(beats.map((b, i) => (pairedAt(i) ? "" : b.cue)), timeline);
+  const times = times0.map((x, i) => (pairedAt(i) ? times0[i - 1] : x));
   times.forEach((t, i) => {
     if (t === null) errors.push(`beat ${i} cue "${beats[i].cue}" is not spoken in order (copy words exactly from the narration)`);
   });
