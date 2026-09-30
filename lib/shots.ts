@@ -104,7 +104,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = [], narrati
   // Calm transitions: a push between most shots, a dissolve into type-free
   // pictures; the first shot cuts in.
   const scene = (cue: string, elements: SceneElement[], layout: string, style: string | null = null, transition?: "dissolve") => {
-    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: "static", transition: scenes === 0 ? "cut" : transition ?? (scenes % 2 ? "push-left" : "dissolve"), backdrop: scenes === 0 ? "mesh" : null }));
+    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: "static", transition: scenes === 0 ? "cut" : transition ?? (beats[beats.length - 1]?.action === "statement" ? "dissolve" : "push-left"), backdrop: scenes === 0 ? "mesh" : null }));
     scenes++;
   };
   const caption = (cue: string, text: string, accent: string | null, mark: "strike" | "pill" | null) =>

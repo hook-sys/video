@@ -414,6 +414,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const ghosts: { live: Live; end: number }[] = []; // running orbits, for framing
   const backdrops: { kind: string; start: number }[] = [];
   let focusedOn: Live | null = null; // the camera is pushed in on this element
+  const flashes: [number, number][] = [];
 
   // ── text ──
   const nextLineStart = (i: number) => {
@@ -472,6 +473,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         // light up on their words (activate).
         const steps = b.style === "steps";
         layoutName = place(b.elements ?? [], enterAt, layoutName, steps ? "rise" : b.style, true, push);
+        // Explainer: the product's reveal turns the whole canvas brand colour.
+        if (explainer && (b.elements ?? []).some((e) => e.asset === "logo")) flashes.push([enterAt, starts[i + 1] ?? stageEnd]);
         if (steps)
           (b.elements ?? []).forEach((e, k) => {
             const n = live.get(e.id);
@@ -860,7 +863,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const cover = style === "display" || style === "panel";
         const end0 = lastLine ? lastEnd : Math.min(hardEnd, cover ? Math.max(wf[wf.length - 1] + 36, nextStart - 10) : Math.max(wf[wf.length - 1] + 36, nextStart + 20));
         // Explainer: a line is gone before the next shot arrives (never over its card).
-        const end = explainer && !lastLine ? Math.max(wf[wf.length - 1] + 10, Math.min(end0, nextStart - 4)) : end0;
+        // (the words' 12-frame exit is over before the next shot comes in)
+        const end = explainer && !lastLine ? Math.max(wf[wf.length - 1] + 6, Math.min(end0, nextStart - 10)) : end0;
         lines.push({ start, end, style });
         if (style === "panel") {
           const first = [...live.values()][0];
@@ -912,6 +916,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   // Every video gets its own base world (from its words, so it is stable).
   if (calm) plan.calm = true;
   if (explainer) plan.explainer = true;
+  if (flashes.length) plan.flashes = flashes;
   plan.seed = [...narration].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_003, 7);
   // The cursor: glides in before each click (from off to the lower right when
   // it was hidden), clicks, and leaves when no click follows soon.

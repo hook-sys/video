@@ -155,6 +155,9 @@ export type FlowPlan = {
   // The explainer look (shot templates): a flat light canvas with edge decor,
   // one text scale, lit step tiles, a brand-colour cursor.
   explainer?: boolean;
+  // Explainer: frame spans where the whole canvas turns brand colour (the
+  // product reveal, Keka's full-colour moment).
+  flashes?: [number, number][];
   // A pointer in world space: glides along path, visible where show > 0,
   // and presses (a ripple) at each click frame.
   cursor?: { path: Track<Vec>; show: Track<number>; clicks: number[] };

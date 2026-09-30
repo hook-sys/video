@@ -123,7 +123,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
   );
   return (
     <AbsoluteFill style={{ fontFamily: plan.explainer ? EXPLAINER_FONT : FLOW_FONT, overflow: "hidden" }}>
-      <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} />
+      <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} />
       {(plan.backdrops ?? []).map((b, i, all) => {
         // Cross-fade 24 frames into each backdrop; it fades as the next arrives
         // and clears for the brand lockup.
@@ -136,7 +136,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
       )}
       {irises.filter((i) => !i.done).map((i, n) => (
         <AbsoluteFill key={n} style={{ clipPath: i.k > 0 ? `circle(${i.r}px at ${i.x}px ${i.y}px)` : undefined }}>
-          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} />}
+          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} />}
           {content((id) => i.ir.members.includes(id), false)}
         </AbsoluteFill>
       ))}
@@ -207,8 +207,8 @@ function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan[
 // ── world ───────────────────────────────────────────────────────────────────
 // A soft mesh of coloured light that keeps drifting (and moves a little with
 // the camera), so the frame breathes even when nothing else moves.
-export function World({ theme, frame, camera, seed = 0, explainer }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number; explainer?: boolean }) {
-  if (explainer) return <FlatWorld theme={theme} frame={frame} camera={camera} seed={seed} />;
+export function World({ theme, frame, camera, seed = 0, explainer, flashes }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number; explainer?: boolean; flashes?: [number, number][] }) {
+  if (explainer) return <FlatWorld theme={theme} frame={frame} camera={camera} seed={seed} flashes={flashes} />;
   const par = (k: number): Vec => [-camera[0] * k, -camera[1] * k];
   // Per-video variation: the blobs sit elsewhere and the light comes from another side.
   const sx = seed ? ((seed % 997) / 997 - 0.5) * 900 : 0;
@@ -243,7 +243,10 @@ export function World({ theme, frame, camera, seed = 0, explainer }: { theme: Fl
 // The explainer canvas (Keka): one flat, light, cool colour and quiet decor
 // only at the edges — dot patches, a dashed curve, one thick accent arc half
 // out of frame. Nothing sits behind the subject in the centre.
-function FlatWorld({ theme, frame, camera, seed }: { theme: FlowTheme; frame: number; camera: Vec; seed: number }) {
+function FlatWorld({ theme, frame, camera, seed, flashes }: { theme: FlowTheme; frame: number; camera: Vec; seed: number; flashes?: [number, number][] }) {
+  // The brand-colour moment: a circle of brand colour grows from the centre and
+  // fills the canvas, then fades back.
+  const flash = Math.max(0, ...(flashes ?? []).map(([s, e]) => ramp(frame, s - 4, 14, "out") * (1 - ramp(frame, e - 8, 12, "inOut"))));
   const px = -camera[0] * 0.06;
   const py = -camera[1] * 0.06;
   const flip = seed % 2 ? -1 : 1;
@@ -268,6 +271,14 @@ function FlatWorld({ theme, frame, camera, seed }: { theme: FlowTheme; frame: nu
         {dots(1560, 40, 9, 2, tint(theme.primary, 0.45))}
         {dots(90, 930, 7, 5, tint(theme.accent, 0.55))}
       </div>
+      {flash > 0.001 && (
+        <div style={{ position: "absolute", left: "50%", top: "50%", width: 2400 * Math.min(1, flash * 1.2), height: 2400 * Math.min(1, flash * 1.2), transform: "translate(-50%, -50%)", borderRadius: "50%", background: `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`, opacity: Math.min(1, flash * 1.4) }}>
+          <svg style={{ position: "absolute", left: "50%", top: "50%", overflow: "visible" }} width={10} height={10}>
+            <circle cx={0} cy={0} r={420} fill="none" stroke="#FFFFFF" strokeOpacity={0.12} strokeWidth={60} />
+            <circle cx={0} cy={0} r={620} fill="none" stroke="#FFFFFF" strokeOpacity={0.07} strokeWidth={40} />
+          </svg>
+        </div>
+      )}
     </AbsoluteFill>
   );
 }
