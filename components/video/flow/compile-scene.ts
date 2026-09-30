@@ -5,6 +5,7 @@ import { cardSize } from "./cards/card";
 import { deviceSize } from "./cards/device-data";
 import { CARD_BY_ID } from "./cards/templates";
 import type { CardContent } from "./cards/types";
+import { resolvePlan } from "./resolve";
 import { brandStartFrame, type CompileBrand, ctaLine, smoothCamera, wordFrames } from "./compile";
 import { num, vec } from "./eval";
 import { DEPTH, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES, type Slot } from "./layouts";
@@ -446,7 +447,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         let enterAt = t;
         let push: Vec | undefined;
         if (SCENE_STEP[tr]) {
-          const [sx, sy] = SCENE_STEP[tr];
+          // (Explainer: a strip one frame wide, so the old shot is still
+          // leaving as the new one comes in — never a blank frame mid-push.)
+          const [sx, sy] = explainer ? [SCENE_STEP[tr][0] * 0.8, SCENE_STEP[tr][1]] : SCENE_STEP[tr];
           const wordsWith = explainer && beats[i + 1] && paired.has(beats[i + 1]);
           push = [sx, sy];
           for (const [, n] of old) {
@@ -965,5 +968,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   if (backdrops.some((x) => x.kind !== "mesh")) plan.backdrops = backdrops;
   // Elements that never appeared (skipped beats) are dropped.
   plan.nodes = plan.nodes.filter((n: FlowNode) => n.kind !== "el" || n.appear !== undefined);
-  return smoothCamera(plan);
+  const out = smoothCamera(plan);
+  // Explainer: the rules are enforced on the finished plan, not only reported.
+  if (explainer) resolvePlan(out);
+  return out;
 }

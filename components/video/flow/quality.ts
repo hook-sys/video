@@ -23,8 +23,8 @@ export type PlanQuality = {
 
 export const QUALITY_BAR = { deadFrames: 66, emptyFrames: 12, minElementScale: 0.42, minLabelPx: 34, cameraAccel: 3, zoomAccel: 0.0025, collisionFrames: 6 };
 
-type Rect = { x0: number; y0: number; x1: number; y1: number; what: string; owner?: string; round?: boolean; moving?: boolean };
-const overlap = (a: Rect, b: Rect): boolean => {
+export type Rect = { x0: number; y0: number; x1: number; y1: number; what: string; owner?: string; round?: boolean; moving?: boolean };
+export const overlap = (a: Rect, b: Rect): boolean => {
   // A round node overlaps a box only if the box reaches into the circle.
   if (b.round || a.round) {
     const [c, r] = b.round ? [b, a] : [a, b];
@@ -42,7 +42,7 @@ const overlap = (a: Rect, b: Rect): boolean => {
 };
 
 // Screen rectangle of a line of text at a frame (1920×1080, origin top-left).
-function textRect(t: FlowText): Rect {
+export function textRect(t: FlowText): Rect {
   const style = t.style ?? "headline";
   const lines = style === "side" ? splitLines(t.text, t.accent) : [t.text];
   const w = Math.max(...lines.map((l) => textWidth(l, t.size)));

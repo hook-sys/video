@@ -102,7 +102,10 @@ export function compositionCheck(
     });
     // Small icons or logos in a row read as one group, so they are not counted.
     const area = (st: (typeof sharp)[number]) => ((st.node.w ?? 400) * (st.node.h ?? 300) * (st.scale * zoom) ** 2) / FRAME;
-    const big = sharp.filter((st) => area(st) >= 0.02).length;
+    // (Explainer: a row of pictures — steps, a group — is one subject.)
+    const bigs = sharp.filter((st) => area(st) >= 0.02);
+    const pics = bigs.filter((st) => ["icon", "shape", "visual", "object"].includes(st.node.el?.type ?? "")).length;
+    const big = script.style === "explainer" && pics >= 2 ? bigs.length - pics + 1 : bigs.length;
     crowdRun = big > (script.pace === "lively" ? 4 : 3) ? crowdRun + 6 : 0;
     if (crowdRun >= 30) add("crowded", `${big} sharp elements on screen at ${(f / 30).toFixed(1)} s`);
     // A row of 2+ icons or pictures (steps, a group) is one subject: its

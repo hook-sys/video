@@ -602,6 +602,9 @@ function shotTemplates(): Check[] {
     const block = sceneScriptBlockers(vs, narr, vw, v.duration);
     const broken = compositionCheck(vs, vp, { narration: narr, words: vw, durationSeconds: v.duration }).filter((x) => BAD.includes(x.rule));
     add(`real video ${v.name}: renders cleanly`, block.length + broken.length + validateFlowPlan(vp).length === 0, [...block, ...broken.map((x) => `${x.rule}: ${x.detail}`)].join("; ") || `${vs.beats.length} beats, no rule broken`);
+    // The resolve pass enforces its rules on every real video, leaving nothing.
+    const left = vp.resolved?.left ?? ["not resolved"];
+    add(`real video ${v.name}: resolve pass leaves nothing`, left.length === 0, left.join("; ") || `${vp.resolved!.fixed.length} fix(es): ${vp.resolved!.fixed.slice(0, 3).join("; ") || "none needed"}`);
   }
   const pops = (plan.sfx ?? []).filter((x) => x.kind === "soft_pop").length;
   add("shots: a group pops once per element", pops >= 3, `${pops} pops`);

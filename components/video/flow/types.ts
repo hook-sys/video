@@ -160,6 +160,8 @@ export type FlowPlan = {
   // Explainer: frame spans where the whole canvas turns brand colour (the
   // product reveal, Keka's full-colour moment).
   flashes?: [number, number][];
+  // What the resolve pass changed, and what it could not (resolve.ts).
+  resolved?: { fixed: string[]; left: string[] };
   // A pointer in world space: glides along path, visible where show > 0,
   // and presses (a ripple) at each click frame.
   cursor?: { path: Track<Vec>; show: Track<number>; clicks: number[] };
