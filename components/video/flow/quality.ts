@@ -23,7 +23,7 @@ export type PlanQuality = {
 
 export const QUALITY_BAR = { deadFrames: 66, emptyFrames: 12, minElementScale: 0.42, minLabelPx: 34, cameraAccel: 3, zoomAccel: 0.0025, collisionFrames: 6 };
 
-type Rect = { x0: number; y0: number; x1: number; y1: number; what: string; owner?: string; round?: boolean };
+type Rect = { x0: number; y0: number; x1: number; y1: number; what: string; owner?: string; round?: boolean; moving?: boolean };
 const overlap = (a: Rect, b: Rect): boolean => {
   // A round node overlaps a box only if the box reaches into the circle.
   if (b.round || a.round) {
@@ -191,10 +191,13 @@ export function planQuality(plan: FlowPlan): PlanQuality {
         // Sharp, settled elements must not sit on each other (merges and
         // triggers overlap on purpose while moving; blurred ones are backdrop).
         const still = Math.hypot(...([0, 1].map((k) => vec(n.pos, f + 4)[k] - vec(n.pos, f - 4)[k]) as [number, number])) < 4;
-        if (st.opacity < 0.9 || st.scale < 0.05 || num(n.blur, f, 0) > 1.5 || !still || (n.erase !== undefined && f >= n.erase)) continue;
+        // (Words may not land on a clearly visible element even while it
+        // moves: a leaving shot's icons under the next shot's line.)
+        if (st.opacity < 0.6 || st.scale < 0.05 || num(n.blur, f, 0) > 1.5 || (n.erase !== undefined && f >= n.erase)) continue;
+        const moving = !still || st.opacity < 0.9;
         const [x, y] = sx(st.pos);
         const [hw, hh] = [((n.w ?? 400) * st.scale * zoom) / 2, ((n.h ?? 300) * st.scale * zoom) / 2];
-        rects.push({ x0: x - hw, x1: x + hw, y0: y - hh, y1: y + hh, what: `element ${n.id}`, owner: n.id });
+        rects.push({ x0: x - hw, x1: x + hw, y0: y - hh, y1: y + hh, what: `element ${n.id}`, owner: n.id, moving });
         continue;
       }
       if (n.kind !== "orb" || st.opacity < 0.6 || st.scale < 0.6) continue;
@@ -216,7 +219,7 @@ export function planQuality(plan: FlowPlan): PlanQuality {
       if (hit || !a.what.startsWith("label")) continue;
       for (const b of rects) if (b.owner !== a.owner && b.what.startsWith("node") && overlap(a, b)) hit = `${a.what} over ${b.what}`;
     }
-    const els = rects.filter((r) => r.what.startsWith("element"));
+    const els = rects.filter((r) => r.what.startsWith("element") && !r.moving);
     const meant = (plan.overlaps ?? []).filter((o) => f >= o.start && f < o.end);
     const together = (a: Rect, b: Rect) => meant.some((o) => o.ids.includes(a.owner!) && o.ids.includes(b.owner!));
     for (let i = 0; i < els.length && !hit; i++) for (let j = i + 1; j < els.length && !hit; j++) if (!together(els[i], els[j]) && overlap(els[i], els[j])) hit = `${els[i].what} over ${els[j].what}`;

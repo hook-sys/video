@@ -124,7 +124,7 @@ export function compositionCheck(
 
   // The technical gate, mapped onto the same rulebook.
   for (const p of qualityProblems(planQuality(plan))) {
-    if (p.includes("element") && p.includes("over element")) add("stacked", p);
+    if (p.includes(": element") && p.includes("over element")) add("stacked", p);
     else if (p.includes("overlap")) add("overlap-text", p);
     else if (p.includes("empty frame")) add("empty-frame", p);
     else if (p.includes("jolt")) add("camera-swing", p);

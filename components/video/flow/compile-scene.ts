@@ -447,11 +447,14 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         let push: Vec | undefined;
         if (SCENE_STEP[tr]) {
           const [sx, sy] = SCENE_STEP[tr];
+          const wordsWith = explainer && beats[i + 1] && paired.has(beats[i + 1]);
           push = [sx, sy];
           for (const [, n] of old) {
             // Old and new move together with the same timing, like one strip.
             animate(n.h.spec.pos, t, 22, [n.pos[0] - sx, n.pos[1] - sy], "inOut");
-            animate(n.h.spec.opacity!, t + 18, 4, 0, "in");
+            // (Explainer words arriving with this shot: the old shot is gone
+            // before they land, never under them.)
+            animate(n.h.spec.opacity!, wordsWith ? t : t + 18, wordsWith ? 6 : 4, 0, "in");
           }
           enterAt = t;
         } else if (tr === "zoom-through") {
@@ -861,9 +864,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const text = b.text ?? "";
         const wf = wordFrames(text, ((paired.has(b) ? t - 6 : t) + LEAD) / FPS - 0.2, timeline).map((w) => Math.min(w, stageEnd - (stageEnd < total ? 24 : 8)));
         // The line (and the dim behind a display line) arrives with its first word.
-        // (Explainer: words that share their shot's cue wait for the push to
-        // clear the last shot, never over its leaving icons.)
-        const start = Math.max(Math.min(wf[0], Math.max(t + 2, wf[0] - 8)), explainer && paired.has(b) ? t + 16 : 0);
+        // (Words sharing their shot's cue never arrive before the shot does:
+        // the last shot's icons are still clearing then.)
+        const start = Math.max(Math.min(wf[0], Math.max(t + 2, wf[0] - 8)), explainer && paired.has(b) ? t + 6 : 0);
         let style: NonNullable<FlowText["style"]> = b.text_layout === "panel" ? "panel" : b.text_layout === "display" ? "display" : b.text_layout === "pill" ? "pill" : live.size ? "caption" : "display";
         if (b.text_layout === "side") style = live.size ? "caption" : "display";
         // Explainer: beside a subject on the right, the words sit big on the left.
