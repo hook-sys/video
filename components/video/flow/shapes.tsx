@@ -37,12 +37,12 @@ export function TextObject({ text, w, h, t, theme }: { text: string; w: number; 
   );
 }
 
-export function ShapeObject({ shape, label, w, h, t, frame, theme }: { shape: string; label?: string; w: number; h: number; t: number; frame: number; theme: FlowTheme }) {
+export function ShapeObject({ shape, label, w, h, t, frame, theme, labelPx }: { shape: string; label?: string; w: number; h: number; t: number; frame: number; theme: FlowTheme; labelPx?: number }) {
   const draw = ramp(t, 0, 22, "inOut");
   const pulse = 1 + 0.03 * Math.sin(frame / 18);
   const stroke = theme.primary;
   const labelEl = label && (
-    <div style={{ position: "absolute", left: 0, right: 0, top: "50%", transform: "translateY(-50%)", textAlign: "center", fontSize: Math.min(44, w * 0.14), fontWeight: 700, color: shape === "orb" || shape === "pill" ? "#fff" : ink(theme), opacity: ramp(t, 10, 12), whiteSpace: "nowrap" }}>
+    <div style={{ position: "absolute", left: 0, right: 0, top: "50%", transform: "translateY(-50%)", textAlign: "center", fontSize: labelPx ?? Math.min(44, w * 0.14), fontWeight: 700, color: shape === "orb" || shape === "pill" ? "#fff" : ink(theme), opacity: ramp(t, 10, 12), whiteSpace: "nowrap" }}>
       {label}
     </div>
   );
@@ -114,7 +114,7 @@ export function ShapeObject({ shape, label, w, h, t, frame, theme }: { shape: st
   );
 }
 
-export function VisualObject({ visual, label, w, h, t, frame, theme }: { visual: string; label?: string; w: number; h: number; t: number; frame: number; theme: FlowTheme }) {
+export function VisualObject({ visual, label, w, h, t, frame, theme, labelPx }: { visual: string; label?: string; w: number; h: number; t: number; frame: number; theme: FlowTheme; labelPx?: number }) {
   const k = ramp(t, 0, 18, "out");
   const panel: React.CSSProperties = {
     position: "relative",
@@ -194,7 +194,7 @@ export function VisualObject({ visual, label, w, h, t, frame, theme }: { visual:
   return (
     <div style={{ width: w, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, opacity: k }}>
       <div style={panel}>{art}</div>
-      {label && <div style={{ fontSize: 32, fontWeight: 650, color: ink(theme), whiteSpace: "nowrap" }}>{label}</div>}
+      {label && <div style={{ fontSize: labelPx ?? 32, fontWeight: 650, color: ink(theme), whiteSpace: "nowrap" }}>{label}</div>}
     </div>
   );
 }

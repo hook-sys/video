@@ -70,6 +70,7 @@ export type FlowNode = {
   tilt?: Track<Vec3>;
   rot?: Track<number>;
   blur?: Track<number>;
+  lit?: Track<number>; // explainer: 1 = the tile fills with the brand colour (the step being talked about)
   appear?: number;
   erase?: number;
   z?: number; // stacking order (higher is in front)
@@ -87,6 +88,7 @@ export type FlowLink = {
   packets?: { icon: string; start: number; end: number }[];
   success?: number; // frame the line turns success colour
   fade?: [number, number]; // frames it fades out
+  arrow?: boolean; // an arrowhead at the "to" end
 };
 
 export type FlowText = {
@@ -105,6 +107,9 @@ export type FlowText = {
   // How the accent words are marked: gradient ink (default), a brand-colour
   // pill that sweeps in behind them, or a line striking them out ("No more ~~x~~").
   mark?: "gradient" | "pill" | "strike";
+  // Explainer: the whole line settles in together (words 0.1 s apart) and
+  // the mark still lands on the accent word's spoken frame.
+  markAt?: number;
 };
 
 // A rolling checklist: one item at a time in focus, the previous one lifting
@@ -146,6 +151,9 @@ export type FlowPlan = {
   seed?: number;
   // Explainer pace: a calmer backdrop and less idle float.
   calm?: boolean;
+  // The explainer look (shot templates): a flat light canvas with edge decor,
+  // one text scale, lit step tiles, a brand-colour cursor.
+  explainer?: boolean;
   // A pointer in world space: glides along path, visible where show > 0,
   // and presses (a ripple) at each click frame.
   cursor?: { path: Track<Vec>; show: Track<number>; clicks: number[] };

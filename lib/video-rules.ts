@@ -66,6 +66,13 @@ export const VIDEO_RULES: VideoRule[] = [
   { id: "random-decor", never: "never use emoji, 3D shapes or mascots unless they illustrate the exact words being spoken (a '?' on a question is fine)", enforced: ["prompt"], seen: "Keka uses '?' and a smile only on those words; Webflow-style abstract 3D does not explain a SaaS" },
   { id: "silent-event", never: "never add a sound without a visible event; a repeated event may repeat its sound (five logos = five pops) but sounds never overlap closer than 0.2 s — stagger the events", enforced: ["code"], seen: "Owner: SFX were not right" },
   { id: "weak-ending", never: "never end without the logo, a tagline and a call to action held 2–3 s", enforced: ["prompt"], seen: "Wellio, ST8MNT end on logo + CTA" },
+  // ── from the 30 Sep explainer (every automatic check passed; it still looked bad) ──
+  { id: "dead-click", never: "never click a card that has no button; a click always visibly changes the button", enforced: ["prompt", "code"], seen: "8091c79a: the cursor clicked an input and nothing happened" },
+  { id: "loose-steps", never: "never show steps side by side without an arrow from one to the next; the step being talked about lights up", enforced: ["code"], seen: "8091c79a: steps were identical tiles in a row" },
+  { id: "label-sizes", never: "never mix label sizes on one screen: every label reads at one size", enforced: ["code"], seen: "8091c79a: 70 px and 20 px labels side by side" },
+  { id: "ghost-text", never: "never let a line arrive over a fading scene or leave one word waiting alone on a slow voice", enforced: ["code"], seen: "8091c79a: 'It' over a fading logo; 'Your' alone for 1 s" },
+  { id: "invented-caption", never: "never write a caption the voice does not say (every word of 4+ letters is spoken)", enforced: ["prompt", "code"], seen: "8091c79a: 'Download quality'" },
+  { id: "small-cta", never: "never end on a small grey call to action; it is a brand-colour button", enforced: ["code"], seen: "8091c79a: 'Try it free today' in small grey type" },
   { id: "camera-swing", never: "never swing the camera away from the action (long pans that overshoot)", enforced: ["code", "detect"], seen: "Fuzz: camera overshot 800 px after a focus" },
 ];
 

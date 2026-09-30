@@ -99,6 +99,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   // Explainer pace (the default): soft entrances, one backdrop, sound only where
   // something visibly lands.
   const calm = script.pace !== "lively";
+  const explainer = script.style === "explainer";
   const stagger = calm ? 6 : 4; // ≥ 0.2 s apart, so each pop is heard
 
   // ── schedule ──
@@ -459,6 +460,18 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         layoutName = place(b.elements ?? [], t, b.layout ?? layoutName, b.style, true);
         // One pop per newcomer: five logos arriving are five pops.
         for (const at of entered) f.sfx(at, "soft_pop");
+        // A next step: a dashed arrow from the previous one, and the light
+        // (the brand fill) moves to the step being talked about.
+        const prev = b.to ? live.get(b.to) : undefined;
+        const next = prev && (b.elements ?? []).map((e) => live.get(e.id)).find(Boolean);
+        if (prev && next) {
+          const l = f.connect(prev.h, next.h, entered[0] ?? t, { dur: 14, dashed: true, bend: -40 });
+          l.arrow = true;
+          if (explainer) {
+            animate((prev.h.spec.lit ??= [[0, 1]]), t, 10, 0, "inOut");
+            next.h.spec.lit = [[0, 0], [(entered[0] ?? t) + 8, 0], [(entered[0] ?? t) + 18, 1, "inOut"]];
+          }
+        }
         break;
       case "lift": {
         // Cards rise out of the screen (small, from its surface) and travel to
@@ -800,16 +813,25 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         }
         const pos: Vec = style === "caption" ? [0, 350] : style === "pill" ? [0, 370] : [0, 0];
         const mark = b.style === "pill" || b.style === "strike" ? b.style : undefined;
-        f.text(text, start, end, { style, pos, size: fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: wf, mark: b.accent ? mark : undefined });
-        if (mark && b.accent) {
-          // The mark lands just after the last accent word is spoken.
-          const ws = text.split(/\s+/);
-          const acc = new Set(b.accent.toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z0-9]/g, "")));
-          const isAcc = (w: string) => acc.has(w.toLowerCase().replace(/[^a-z0-9]/g, ""));
-          const j = mark === "strike" ? ws.findIndex(isAcc) : ws.reduce((k, w, x) => (isAcc(w) ? x : k), -1);
-          if (j >= 0) f.sfx((wf[j] ?? start) + MARK_DELAY, mark === "strike" ? "click" : "soft_pop");
-        }
-        if (style === "display") {
+        // The mark lands just after the (last, or for a strike the first) accent word is spoken.
+        const ws = text.split(/\s+/);
+        const acc = new Set((b.accent ?? "").toLowerCase().split(/\s+/).map((w) => w.replace(/[^a-z0-9]/g, "")).filter(Boolean));
+        const isAcc = (w: string) => acc.has(w.toLowerCase().replace(/[^a-z0-9]/g, ""));
+        const j = mark === "strike" ? ws.findIndex(isAcc) : ws.reduce((k, w, x) => (isAcc(w) ? x : k), -1);
+        // Explainer: a line never waits word by word on a slow voice (no lone
+        // "Your" on screen); it settles in whole, 0.1 s per word.
+        const shown = explainer ? wf.map((_, i) => wf[0] + i * 3) : wf;
+        f.text(text, start, end, { style, pos, size: fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: shown, mark: b.accent ? mark : undefined, markAt: explainer && j >= 0 ? wf[j] : undefined });
+        if (mark && b.accent && j >= 0) f.sfx((wf[j] ?? start) + MARK_DELAY, mark === "strike" ? "click" : "soft_pop");
+        if (style === "display" && explainer) {
+          // Explainer: a big line owns the frame; the scene before it leaves
+          // (nothing faded and ghostly behind the words).
+          for (const [id, n] of live) {
+            leave(n, start - 8, "fade");
+            live.delete(id);
+          }
+          f.sfx(wf[0], "subtle_impact");
+        } else if (style === "display") {
           f.dimTo(start - 4, 12, 1).dimTo(Math.min(end, total) + 8, 12, 0);
           f.sfx(wf[0], "subtle_impact");
         }
@@ -833,6 +855,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const plan = f.build();
   // Every video gets its own base world (from its words, so it is stable).
   if (calm) plan.calm = true;
+  if (explainer) plan.explainer = true;
   plan.seed = [...narration].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 1_000_003, 7);
   // The cursor: glides in before each click (from off to the lower right when
   // it was hidden), clicks, and leaves when no click follows soon.

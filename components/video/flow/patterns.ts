@@ -243,8 +243,8 @@ export class Flow {
     (this.plan.sfx ??= []).push({ frame: Math.max(0, Math.round(frame)), kind });
     return this;
   }
-  text(text: string, start: number, end: number, { pos = [0, 0] as Vec, size = 72, weight, accent, style, words, mark }: { pos?: Vec; size?: number; weight?: number; accent?: string; style?: FlowText["style"]; words?: number[]; mark?: FlowText["mark"] } = {}) {
-    this.plan.texts.push({ text, start, end, pos, size, weight, accent, style, words, mark });
+  text(text: string, start: number, end: number, { pos = [0, 0] as Vec, size = 72, weight, accent, style, words, mark, markAt }: { pos?: Vec; size?: number; weight?: number; accent?: string; style?: FlowText["style"]; words?: number[]; mark?: FlowText["mark"]; markAt?: number } = {}) {
+    this.plan.texts.push({ text, start, end, pos, size, weight, accent, style, words, mark, markAt });
     return this;
   }
   lottie(name: string, start: number, size: number, where: { node?: FlowNodeHandle; pos?: Vec }) {

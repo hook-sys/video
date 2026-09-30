@@ -98,7 +98,7 @@ export type SceneBeat = z.infer<typeof Beat>;
 export const SceneScriptModel = z.object({ theme: z.enum(FLOW_THEMES), beats: z.array(Beat) });
 // pace: "calm" (explainer: gentle entrances, one steady backdrop, the subject
 // always in focus) or "lively" (more motion); set from the motion preference.
-export const SceneScript = z.object({ version: z.literal(2).default(2), theme: z.enum(FLOW_THEMES), beats: z.array(Beat), pace: z.enum(["calm", "lively"]).nullable().optional() });
+export const SceneScript = z.object({ version: z.literal(2).default(2), theme: z.enum(FLOW_THEMES), beats: z.array(Beat), pace: z.enum(["calm", "lively"]).nullable().optional(), style: z.enum(["explainer"]).nullable().optional() });
 export type SceneScript = z.infer<typeof SceneScript>;
 
 export const MAX_SCENE_BEATS = 24;

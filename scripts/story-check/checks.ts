@@ -567,6 +567,11 @@ function shotTemplates(): Check[] {
   add("shots: the MotionBrief fixture expands and compiles", blockers.length + invalid.length + notes.length === 0, [...blockers, ...invalid, ...notes].join("; ") || `${SHOT_FIXTURE.shots.length} shots → ${script.beats.length} beats, ${plan.nodes.length} nodes`);
   const bad = compositionCheck(script, plan, { narration: SHOT_NARRATION, durationSeconds: 30 }).filter((v) => ["crowded", "no-hero", "tiny-screens", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "same-layouts", "cut-spam"].includes(v.rule));
   add("shots: no composition rule broken (crowded, no hero, overlaps, backdrops …)", bad.length === 0, bad.map((v) => `${v.rule}: ${v.detail}`).join("; ") || "clean");
+  const arrows = plan.links.filter((l) => l.arrow && l.style === "dashed").length;
+  const lit = plan.nodes.filter((n) => n.lit).length;
+  add("shots: steps are joined by dashed arrows and the spoken step lights up (explainer look)", !!plan.explainer && arrows >= 2 && lit >= 2, `${arrows} arrows, ${lit} lit tiles, explainer ${!!plan.explainer}`);
+  const ghosts = compileSceneScript(expandShots(SHOT_FIXTURE, [], "Making a promo video usually takes weeks."), { narration: SHOT_NARRATION, durationSeconds: 30 });
+  add("shots: a caption the voice does not say is dropped", !ghosts.texts.some((x) => x.text === "Your video is ready"), ghosts.texts.map((x) => x.text).join(" | "));
   const pops = (plan.sfx ?? []).filter((x) => x.kind === "soft_pop").length;
   add("shots: a group pops once per element", pops >= 3, `${pops} pops`);
   // Guards: a word as a "number", a second logo reveal and an unknown icon.

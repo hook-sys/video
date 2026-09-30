@@ -34,6 +34,7 @@ RULES
 - line for the promise and the closing phrase (2–6 words, the most important word as accent). The brand lockup (logo, name, call to action) is added automatically after the last shot — do not add a reveal or a line for the call to action.
 - Vary: never the same shot kind three times in a row; mix pictures (problem, steps, group, ui, number) with at most 3 lines.
 - Labels 1–2 words, titles 1–4 words, button 1–2 words (a verb), result 2–4 words. Plain words from the narration and the direction; no invented facts, customers or numbers.
+- Captions (line on problem and number shots) use only words the voice says; otherwise leave them null. The ui shot card must have a button: action-panel (default), login, checkout or cta.
 - theme: "lavender" (friendly SaaS), "mint" (health, wellness, finance, calm), "teal" (operations, B2B, data, security) or "midnight" (dark, premium). creative_preferences.visual_style is a hint.`;
 
 export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null };
@@ -50,7 +51,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
     if (!raw) return { shots: null, script: null, problems: ["no structured output"], ...none };
     const shots = ShotScript.parse(raw);
     const expandNotes: string[] = [];
-    const script = expandShots(shots, expandNotes);
+    const script = expandShots(shots, expandNotes, input.narration);
     const problems = sceneScriptBlockers(script, input.narration, input.words, input.duration_seconds);
     if (problems.length) return { shots, script: null, problems, ...none };
     try {

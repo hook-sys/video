@@ -83,7 +83,18 @@ const numberText = (asset: string | null | undefined) => {
 
 export type ExpandNotes = string[];
 
-export function expandShots(script: ShotScript, notes: ExpandNotes = []): SceneScript {
+// A caption must say what the voice says: every word of 4+ letters is
+// spoken (no invented "Download quality").
+const spoken = (line: string | null, narration?: string) => {
+  if (!line || !narration) return line;
+  const said = new Set(narration.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+  const w = (line.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((x) => x.length >= 4);
+  return w.every((x) => said.has(x)) ? line : null;
+};
+// Cards whose last block is a button (a click needs one to press).
+const BUTTON_CARDS = ["action-panel", "login", "checkout", "cta"];
+
+export function expandShots(script: ShotScript, notes: ExpandNotes = [], narration?: string): SceneScript {
   const beats: SceneBeat[] = [];
   let scenes = 0;
   let revealed = false;
@@ -105,7 +116,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = []): SceneS
       case "problem": {
         const p = picture(s.subject ?? "visual:clock", words(s.label, 3));
         scene(s.cue, [el(id("subject"), p.asset, p.label)], "stage", "rise");
-        const line = words(s.line, 6);
+        const line = spoken(words(s.line, 6), narration);
         const at = s.line_cue ?? lastWord(s.cue);
         if (line && at) caption(at, line, s.accent, s.mark === "strike" ? "strike" : null);
         lastUi = null;
@@ -125,11 +136,14 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = []): SceneS
         }
         const list = items.slice(0, 4);
         if (!list.length) break;
+        let prevStep: string | null = null;
         list.forEach((i, k) => {
           const p = picture(i.asset, words(i.label, 2));
           const e = el(id("step"), p.asset, p.label);
           if (k === 0) scene(i.cue ?? s.cue, [e], "stage-row", "rise");
-          else beats.push(beat({ cue: i.cue ?? s.cue, action: "place", elements: [e], layout: "stage-row", style: "rise" }));
+          // Each next step: a dashed arrow from the one before, and it lights up.
+          else beats.push(beat({ cue: i.cue ?? s.cue, action: "place", elements: [e], layout: "stage-row", style: "rise", to: prevStep }));
+          prevStep = e.id;
         });
         lastUi = null;
         break;
@@ -154,7 +168,9 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = []): SceneS
         break;
       }
       case "ui": {
-        const tpl = (UI_CARDS as readonly string[]).includes(s.card ?? "") ? s.card! : "action-panel";
+        // A click needs a button: cards without one become the action panel.
+        const asked = (UI_CARDS as readonly string[]).includes(s.card ?? "") ? s.card! : "action-panel";
+        const tpl = s.action_cue && !BUTTON_CARDS.includes(asked) ? "action-panel" : asked;
         const ui = id("ui");
         const button = words(s.button, 3) ?? "Continue";
         scene(s.cue, [el(ui, `card:${tpl}/glass`, null, content({ title: words(s.title, 4), note: words(s.input, 8), label: null, action: button }))], "stage", "rise");
@@ -175,7 +191,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = []): SceneS
         }
         const num = id("num");
         scene(s.cue, [el(num, `text:${first}`)], "stage", "pop");
-        const line = words(s.line, 5);
+        const line = spoken(words(s.line, 5), narration);
         const at = s.line_cue ?? lastWord(s.cue);
         if (line && at) caption(at, line, null, null);
         for (const i of items.slice(0, 3)) {
@@ -192,7 +208,7 @@ export function expandShots(script: ShotScript, notes: ExpandNotes = []): SceneS
       }
     }
   }
-  return SceneScript.parse({ version: 2, theme: script.theme, pace: "calm", beats });
+  return SceneScript.parse({ version: 2, theme: script.theme, pace: "calm", style: "explainer", beats });
 }
 
 // "Generate" → "Generating…"; other buttons show a tick.

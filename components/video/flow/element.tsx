@@ -19,7 +19,11 @@ function tiltAt(track: Track<Vec3> | undefined, frame: number): Vec3 {
   return [0, 1, 2].map((i) => num(track.map(([t, v, e]) => [t, v[i], e]), frame, 0)) as Vec3;
 }
 
-export function ElementView({ s, frame, theme, calm }: { s: NodeState; frame: number; theme: FlowTheme; calm?: boolean }) {
+// Explainer labels read at one size on screen whatever the element's scale
+// (a label scaled with a 2× icon was 70 px, next to a 20 px one).
+const LABEL_PX = 40;
+
+export function ElementView({ s, frame, theme, calm, explainer }: { s: NodeState; frame: number; theme: FlowTheme; calm?: boolean; explainer?: boolean }) {
   const { node, pos, scale, opacity } = s;
   const el = node.el!;
   if (scale < 0.01 || opacity < 0.01) return null;
@@ -31,6 +35,8 @@ export function ElementView({ s, frame, theme, calm }: { s: NodeState; frame: nu
   const t = frame - (node.appear ?? 0);
   const erase = node.erase !== undefined ? ramp(frame, node.erase, 16, "inOut") : 0;
   if (erase >= 1) return null;
+  const labelPx = explainer ? LABEL_PX / Math.max(0.3, scale * 0.9) : undefined;
+  const lit = explainer ? num(node.lit, frame, 0) : 0;
 
   let body: React.ReactNode = null;
   if (el.type === "card") {
@@ -68,10 +74,15 @@ export function ElementView({ s, frame, theme, calm }: { s: NodeState; frame: nu
   } else if (el.type === "icon") {
     body = (
       <div style={{ width: w, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-        <div style={{ width: w, height: w, borderRadius: w * 0.26, background: theme.dark ? "linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03))" : "linear-gradient(160deg, rgba(255,255,255,.96), rgba(255,255,255,.72))", boxShadow: `0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.18), inset 0 0 0 1.5px rgba(255,255,255,.9)`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Icon name={el.icon} size={w * 0.44} color={theme.primary} strokeWidth={2} draw={ramp(t, 2, 16, "inOut")} />
+        <div style={{ position: "relative", width: w, height: w, borderRadius: w * 0.26, background: theme.dark ? "linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03))" : "linear-gradient(160deg, rgba(255,255,255,.96), rgba(255,255,255,.72))", boxShadow: `0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.18), inset 0 0 0 1.5px rgba(255,255,255,.9)`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+          {/* Explainer: the step being talked about fills with the brand colour. */}
+          {lit > 0.01 && <div style={{ position: "absolute", inset: 0, background: `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`, opacity: lit }} />}
+          {explainer && lit < 0.99 && <div style={{ position: "absolute", width: w * 0.66, height: w * 0.66, borderRadius: "50%", background: theme.soft, opacity: 1 - lit }} />}
+          <div style={{ position: "relative" }}>
+            <Icon name={el.icon} size={w * 0.44} color={lit > 0.5 ? "#FFFFFF" : theme.primary} strokeWidth={2} draw={ramp(t, 2, 16, "inOut")} />
+          </div>
         </div>
-        {el.label && <div style={{ fontSize: Math.max(22, w * 0.2), fontWeight: 600, color: theme.ink, whiteSpace: "nowrap", opacity: ramp(t, 10, 12) }}>{el.label}</div>}
+        {el.label && <div style={{ fontSize: labelPx ?? Math.max(22, w * 0.2), fontWeight: 600, color: theme.ink, whiteSpace: "nowrap", opacity: ramp(t, 10, 12) }}>{el.label}</div>}
       </div>
     );
   } else if (el.type === "text") {
@@ -79,9 +90,9 @@ export function ElementView({ s, frame, theme, calm }: { s: NodeState; frame: nu
     const next = upd && String(upd.content.value ?? upd.content.title ?? upd.content.amount ?? upd.content.label ?? "");
     body = <TextObject text={next || el.text} w={w} h={h} t={upd ? frame - upd.at : t} theme={theme} />;
   } else if (el.type === "shape") {
-    body = <ShapeObject shape={el.shape} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} />;
+    body = <ShapeObject shape={el.shape} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} labelPx={labelPx} />;
   } else if (el.type === "visual") {
-    body = <VisualObject visual={el.visual} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} />;
+    body = <VisualObject visual={el.visual} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} labelPx={labelPx} />;
   } else if (el.type === "logo") {
     body = (
       <div style={{ width: w, height: h, borderRadius: Math.min(w, h) * 0.24, background: "rgba(255,255,255,.95)", boxShadow: `0 30px 70px ${theme.glow}0.25), inset 0 0 0 1.5px #fff`, display: "flex", alignItems: "center", justifyContent: "center", padding: 18, boxSizing: "border-box" }}>

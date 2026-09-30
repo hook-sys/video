@@ -102,10 +102,10 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
         .filter((s) => s.node.kind === "el" && include(s.node.id))
         .sort((a, b) => (a.node.z ?? 0) - (b.node.z ?? 0))
         .map((s) => (
-          <ElementView key={s.node.id} s={s} frame={frame} theme={theme} calm={plan.calm} />
+          <ElementView key={s.node.id} s={s} frame={frame} theme={theme} calm={plan.calm} explainer={plan.explainer} />
         ))}
       {plan.links.filter((l) => include(l.from) && include(l.to)).flatMap((l) => (l.packets ?? []).map((p, i) => <Packet key={`${l.id}-${i}`} link={l} packet={p} states={states} frame={frame} theme={theme} />))}
-      {withExtras && plan.cursor && <Cursor cursor={plan.cursor} frame={frame} theme={theme} />}
+      {withExtras && plan.cursor && <Cursor cursor={plan.cursor} frame={frame} theme={theme} explainer={plan.explainer} />}
       {withExtras && plan.lotties.filter((l) => isLottieName(l.name) && (!l.node || include(l.node))).map((l, i) => {
         const at = (l.node && states.get(l.node)?.pos) || l.pos || [0, 0];
         return (
@@ -121,7 +121,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
   );
   return (
     <AbsoluteFill style={{ fontFamily: FLOW_FONT, overflow: "hidden" }}>
-      <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} />
+      <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} />
       {(plan.backdrops ?? []).map((b, i, all) => {
         // Cross-fade 24 frames into each backdrop; it fades as the next arrives
         // and clears for the brand lockup.
@@ -134,7 +134,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
       )}
       {irises.filter((i) => !i.done).map((i, n) => (
         <AbsoluteFill key={n} style={{ clipPath: i.k > 0 ? `circle(${i.r}px at ${i.x}px ${i.y}px)` : undefined }}>
-          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} />}
+          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} />}
           {content((id) => i.ir.members.includes(id), false)}
         </AbsoluteFill>
       ))}
@@ -148,7 +148,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
         <RollingList key={`list-${i}`} list={l} frame={frame} theme={theme} />
       ))}
       {plan.texts.map((t, i) => (
-        <Kinetic key={i} t={t} frame={frame} theme={theme} />
+        <Kinetic key={i} t={t} frame={frame} theme={theme} explainer={plan.explainer} />
       ))}
       {plan.brand && <BrandLockup brand={plan.brand} frame={frame} theme={theme} />}
       {audioUrl && <Sound src={audioUrl} />}
@@ -163,7 +163,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
 
 // ── cursor ──────────────────────────────────────────────────────────────────
 // A pointer that glides to what the narration is about and clicks it (a ripple).
-function Cursor({ cursor, frame, theme }: { cursor: NonNullable<FlowPlan["cursor"]>; frame: number; theme: FlowTheme }) {
+function Cursor({ cursor, frame, theme, explainer }: { cursor: NonNullable<FlowPlan["cursor"]>; frame: number; theme: FlowTheme; explainer?: boolean }) {
   const show = num(cursor.show, frame, 0);
   if (show <= 0.001) return null;
   const [x, y] = vec(cursor.path, frame);
@@ -175,9 +175,22 @@ function Cursor({ cursor, frame, theme }: { cursor: NonNullable<FlowPlan["cursor
         const k = (frame - c) / 22;
         return <div key={c} style={{ position: "absolute", left: -60 * k - 10, top: -60 * k - 10, width: 20 + 120 * k, height: 20 + 120 * k, borderRadius: "50%", border: `3px solid ${theme.primary}`, opacity: 1 - k }} />;
       })}
+      {explainer ? (
+        // A big brand-gradient arrow (Keka's colourful pointer).
+        <svg width={70} height={70} viewBox="0 0 24 24" style={{ position: "absolute", left: -10, top: -6, transform: `scale(${1 - press * 0.14})`, transformOrigin: "6px 4px", filter: `drop-shadow(0 8px 14px ${theme.glow}0.35))` }}>
+          <defs>
+            <linearGradient id="cur-g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor={theme.primary} />
+              <stop offset="1" stopColor={theme.accent} />
+            </linearGradient>
+          </defs>
+          <path d="M5 3l14 7.5-6.2 1.6L10 18.5z" fill="url(#cur-g)" stroke="#FFFFFF" strokeWidth={1.4} strokeLinejoin="round" />
+        </svg>
+      ) : (
       <svg width={44} height={44} viewBox="0 0 24 24" style={{ position: "absolute", left: -6, top: -4, transform: `scale(${1 - press * 0.14})`, transformOrigin: "6px 4px", filter: "drop-shadow(0 6px 10px rgba(0,0,0,.28))" }}>
         <path d="M5 3l14 7.5-6.2 1.6L10 18.5z" fill={theme.dark ? "#FFFFFF" : "#111827"} stroke={theme.dark ? "#111827" : "#FFFFFF"} strokeWidth={1.6} strokeLinejoin="round" />
       </svg>
+      )}
     </div>
   );
 }
@@ -192,7 +205,8 @@ function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan[
 // ── world ───────────────────────────────────────────────────────────────────
 // A soft mesh of coloured light that keeps drifting (and moves a little with
 // the camera), so the frame breathes even when nothing else moves.
-export function World({ theme, frame, camera, seed = 0 }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number }) {
+export function World({ theme, frame, camera, seed = 0, explainer }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number; explainer?: boolean }) {
+  if (explainer) return <FlatWorld theme={theme} frame={frame} camera={camera} seed={seed} />;
   const par = (k: number): Vec => [-camera[0] * k, -camera[1] * k];
   // Per-video variation: the blobs sit elsewhere and the light comes from another side.
   const sx = seed ? ((seed % 997) / 997 - 0.5) * 900 : 0;
@@ -220,6 +234,43 @@ export function World({ theme, frame, camera, seed = 0 }: { theme: FlowTheme; fr
             blob(3, [520, 1020], 950, theme.blobs[0], 0.28),
           ]}
       <AbsoluteFill style={{ background: theme.dark ? "radial-gradient(80% 70% at 50% 50%, transparent 55%, rgba(0,0,0,.45))" : `radial-gradient(90% 80% at 50% 50%, transparent 62%, ${theme.glow}0.06))` }} />
+    </AbsoluteFill>
+  );
+}
+
+// The explainer canvas (Keka): one flat, light, cool colour and quiet decor
+// only at the edges — dot patches, a dashed curve, one thick accent arc half
+// out of frame. Nothing sits behind the subject in the centre.
+export const tint = (hex: string, k: number) => {
+  const n = parseInt(hex.slice(1, 7), 16);
+  const c = [n >> 16, (n >> 8) & 255, n & 255].map((v) => Math.round(v + (255 - v) * (1 - k)));
+  return `rgb(${c.join(",")})`;
+};
+function FlatWorld({ theme, frame, camera, seed }: { theme: FlowTheme; frame: number; camera: Vec; seed: number }) {
+  const px = -camera[0] * 0.06;
+  const py = -camera[1] * 0.06;
+  const flip = seed % 2 ? -1 : 1;
+  const dots = (x: number, y: number, cols: number, rows: number, color: string) => (
+    <svg style={{ position: "absolute", left: x + px, top: y + py, overflow: "visible" }} width={cols * 18} height={rows * 18}>
+      {Array.from({ length: cols * rows }, (_, i) => <circle key={i} cx={(i % cols) * 18 + 3} cy={Math.floor(i / cols) * 18 + 3} r={3} fill={color} />)}
+    </svg>
+  );
+  const bg = theme.dark ? theme.bg[1] : tint(theme.primary, 0.07);
+  const arcSpin = frame * 0.03;
+  return (
+    <AbsoluteFill style={{ background: bg, overflow: "hidden" }}>
+      <div style={{ position: "absolute", inset: 0, transform: flip < 0 ? "scaleX(-1)" : undefined }}>
+        {/* one thick accent arc, half out of frame (bottom right) */}
+        <svg style={{ position: "absolute", left: 1990 + px * 2, top: 1150 + py * 2, overflow: "visible" }} width={10} height={10}>
+          <circle cx={0} cy={0} r={300} fill="none" stroke={theme.accent} strokeWidth={52} strokeLinecap="round" strokeDasharray="520 2400" transform={`rotate(${178 + arcSpin})`} opacity={0.85} />
+        </svg>
+        {/* a thin dashed curve (top left) */}
+        <svg style={{ position: "absolute", left: 40 + px, top: -40 + py, overflow: "visible" }} width={10} height={10}>
+          <path d="M0 40 C 180 60, 260 180, 240 360" fill="none" stroke={theme.sub} strokeOpacity={0.45} strokeWidth={2.5} strokeDasharray="6 10" />
+        </svg>
+        {dots(1560, 40, 9, 2, tint(theme.primary, 0.45))}
+        {dots(90, 930, 7, 5, tint(theme.accent, 0.55))}
+      </div>
     </AbsoluteFill>
   );
 }
@@ -391,6 +442,11 @@ function LinkLine({ link, states, frame, theme }: { link: FlowLink; states: Map<
     <g opacity={fade * c.visible}>
       <path d={d} fill="none" stroke={color} strokeOpacity={0.18} strokeWidth={14} strokeLinecap="round" />
       <path d={d} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round" strokeDasharray={link.style === "dashed" ? "2 16" : undefined} />
+      {link.arrow && t > 0.9 && (() => {
+        const a = Math.atan2(end[1] - q1[1], end[0] - q1[0]);
+        const h = (k: number): string => `${end[0] - 22 * Math.cos(a + k)},${end[1] - 22 * Math.sin(a + k)}`;
+        return <polyline points={`${h(0.5)} ${end[0]},${end[1]} ${h(-0.5)}`} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round" strokeLinejoin="round" opacity={(t - 0.9) * 10} />;
+      })()}
     </g>
   );
 }
@@ -412,7 +468,7 @@ function Packet({ link, packet, states, frame, theme }: { link: FlowLink; packet
 // ── kinetic text (screen space) ─────────────────────────────────────────────
 // Each word comes into focus (blur → sharp, rising slightly) exactly when it
 // is spoken (its voice timestamp), then the line lifts away together.
-function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowTheme }) {
+function Kinetic({ t, frame, theme, explainer }: { t: FlowText; frame: number; theme: FlowTheme; explainer?: boolean }) {
   if (frame < t.start - 2 || frame > t.end + 16) return null;
   const style = t.style ?? "headline";
   const type = TYPE[style];
@@ -432,6 +488,7 @@ function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowT
   // A strike draws across the words as they are spoken; a pill lands after them.
   const markK =
     lastAccent < 0 ? 0
+    : t.markAt !== undefined ? ramp(frame, t.markAt + MARK_DELAY, 14, "inOut")
     : mark === "strike" ? ramp(frame, at(firstAccent) + MARK_DELAY, Math.max(12, at(lastAccent) - at(firstAccent) + 8), "inOut")
     : ramp(frame, at(lastAccent) + MARK_DELAY, 14, "inOut");
   const word = (w: string, last: boolean, strong: boolean, i: number) => {
@@ -447,6 +504,9 @@ function Kinetic({ t, frame, theme }: { t: FlowText; frame: number; theme: FlowT
           filter: k < 0.99 ? `blur(${(1 - k) * 12}px)` : undefined,
           transform: `translateY(${(1 - k) * 0.32}em)`,
           fontWeight: strong ? type.weight : Math.max(420, type.weight - 180),
+          // Explainer: two-tone lines — the words in a light brand tint, the
+          // accent bold (Keka: "are you working" / "Remotely").
+          ...(explainer && !onPanel && !accent.has(bare(w)) && style !== "pill" && { color: tint(theme.primary, 0.62), fontWeight: 500 }),
           ...(isAccent &&
             (onPanel
               ? { color: theme.dark ? theme.bg[1] : theme.ink }
@@ -726,7 +786,7 @@ function BrandLockup({ brand, frame, theme }: { brand: FlowBrand; frame: number;
         </div>
       )}
       {brand.cta && (
-        <div style={{ position: "absolute", left: "50%", top: "62%", transform: `translate(-50%, ${(1 - cta) * 24}px)`, opacity: cta, filter: cta < 0.99 ? `blur(${(1 - cta) * 8}px)` : undefined, fontSize: 44, fontWeight: 520, letterSpacing: "-0.01em", color: theme.sub, whiteSpace: "nowrap" }}>
+        <div style={{ position: "absolute", left: "50%", top: "62%", transform: `translate(-50%, ${(1 - cta) * 24}px)`, opacity: cta, filter: cta < 0.99 ? `blur(${(1 - cta) * 8}px)` : undefined, fontSize: 40, fontWeight: 650, letterSpacing: "-0.01em", color: "#FFFFFF", whiteSpace: "nowrap", padding: "18px 44px", borderRadius: 999, background: `linear-gradient(90deg, ${theme.primary}, ${theme.primary2})`, boxShadow: `0 18px 40px ${theme.glow}0.3)` }}>
           {brand.cta}
         </div>
       )}
