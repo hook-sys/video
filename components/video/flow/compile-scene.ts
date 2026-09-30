@@ -873,7 +873,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           // Explainer: a big line owns the frame; the scene before it leaves
           // (nothing faded and ghostly behind the words).
           for (const [id, n] of live) {
-            leave(n, start - 8, "fade");
+            leave(n, start - 18, "fade");
             live.delete(id);
           }
           f.sfx(wf[0], "subtle_impact");
