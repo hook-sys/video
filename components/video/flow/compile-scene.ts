@@ -397,11 +397,33 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     // It still breathes: each shot is one slow, continuous move (in, then out
     // on the next, drifting sideways) so the frame never stands still.
     if (explainer) {
-      if (move !== "scene") return;
+      if (!move.startsWith("scene")) return;
       const next = beats.findIndex((x, k) => starts[k] > t && x.action === "scene");
       const len = (next >= 0 ? starts[next] : stageEnd) - t;
       // (The look's seed decides whether the first shot pushes in or out.)
       const k = (sceneIdx + (script.look?.seed ?? 0)) % 2 ? -1 : 1;
+      // Phase 3: the Director's shot intent (a camera move) decides the move;
+      // the code decides how far and how fast, inside the frame-safe range
+      // the stages are laid out for (zoom 1.06–1.18, ±50 px). Without one
+      // (older shots, "static") the shot alternates in and out as before.
+      const intent = move.slice(6);
+      const MOVES: Record<string, [Vec, number, Vec, number]> = {
+        "push-in": [[0, 0], 1.06, [0, 0], 1.18],
+        "pull-back": [[0, 0], 1.18, [0, 0], 1.06],
+        "pan-right": [[-50, 0], 1.12, [50, 0], 1.12],
+        "pan-left": [[50, 0], 1.12, [-50, 0], 1.12],
+        rise: [[0, 40], 1.1, [0, -30], 1.1],
+        drift: [[-20 * k, 0], 1.11, [20 * k, -6], 1.13],
+        hold: [[0, 0], 1.12, [0, 0], 1.12],
+      };
+      const m = MOVES[intent];
+      if (m) {
+        // Settle into the move's start, then travel it for the whole shot.
+        const settle = Math.min(12, Math.max(1, len - 6));
+        f.camera(t, sceneIdx === 0 ? 1 : settle, m[0], m[1]);
+        f.camera(t + settle, Math.max(6, len - settle), m[2], m[3], intent === "hold" ? "inOut" : "linear");
+        return;
+      }
       if (sceneIdx === 0) f.camera(t, 1, [-30 * k, 0], k > 0 ? 1.07 : 1.17);
       f.camera(t, Math.max(12, len), [30 * k, -10 * k], k > 0 ? 1.17 : 1.07, "linear");
       return;
@@ -413,7 +435,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     const cc: Vec = [c[0], c[1] + (bottom ? bottom / 2 / z : 0)];
     const settle = Math.min(22, Math.max(10, span - 4));
     const [a, b]: [Vec, Vec] = move === "pan-left" ? [[cc[0] + 140, cc[1]], [cc[0] - 140, cc[1]]] : move === "pan-right" ? [[cc[0] - 140, cc[1]], [cc[0] + 140, cc[1]]] : move === "rise" ? [[cc[0], cc[1] + 90], [cc[0], cc[1] - 60]] : [cc, cc];
-    const [z0, z1] = move === "push-in" ? [z * 0.92, z * 1.1] : move === "pull-back" ? [z * 1.2, z * 0.98] : move === "static" ? [z, z] : [z, z * 1.03];
+    const [z0, z1] = move === "push-in" ? [z * 0.92, z * 1.1] : move === "pull-back" ? [z * 1.2, z * 0.98] : move === "static" || move === "hold" ? [z, z] : [z, z * 1.03];
     f.camera(t, settle, a, z0);
     if (span - settle > 6) f.camera(t + settle, span - settle, b, z1, "linear");
   };
@@ -501,7 +523,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         if (sceneIdx > 0) f.sfx(t, "whoosh");
         // A group popping in: one pop per element (five logos = five pops).
         if (b.style === "pop" && entered.length > 1) for (const at of entered) f.sfx(at, "soft_pop");
-        shoot(t, span, explainer ? "scene" : sceneMove);
+        shoot(t, span, explainer ? `scene:${b.camera ?? "static"}` : sceneMove);
         framed = false;
         break;
       }

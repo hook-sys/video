@@ -27,6 +27,8 @@ import { paymentsHubPlan } from "@/components/video/flow/fixtures/payments-hub";
 import { validateFlowPlan } from "@/components/video/flow/validate";
 import { FLOW_SCRIPT_FIXTURES } from "@/components/video/flow/fixtures/scripts";
 import { beatFrames, compileFlowScript } from "@/components/video/flow/compile";
+import { num } from "@/components/video/flow/eval";
+import { spokenCueTimes } from "@/lib/voice-timing";
 import { type FlowScript, flowScriptBlockers, repairFlowScript } from "@/lib/flow-script";
 import { flowEngineEnabled, usableFlow } from "@/lib/story-engine";
 import { planQuality, QUALITY_BAR, qualityProblems } from "@/components/video/flow/quality";
@@ -40,7 +42,7 @@ import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
-import { expandShots, ShotScript, ShotScriptModel } from "@/lib/shots";
+import { expandShots, INTENT_CAMERA, SHOT_INTENTS, ShotScript, ShotScriptModel } from "@/lib/shots";
 import { REAL_SHOT_VIDEOS } from "@/components/video/flow/fixtures/real-shots";
 import { OBJECTS } from "@/components/video/flow/object-names";
 import { SHOT_FIXTURE, SHOT_NARRATION } from "@/components/video/flow/fixtures/shots";
@@ -599,6 +601,34 @@ function shotTemplates(): Check[] {
   const withConcepts = ShotScript.safeParse({ ...(REAL_SHOT_VIDEOS[0].shots as object), creative: { message: "Video in minutes", audience: "SaaS teams", tone: "calm", pace: "balanced" }, concepts: [{ cue: "Making a product video", see: "a filmstrip stalls under a pile of steps", hero: "visual:filmstrip", persists: null, avoid: "people" }] });
   add("phase 2: creative + concepts are kept with the shots", withConcepts.success && withConcepts.data.concepts?.length === 1 && withConcepts.data.creative?.pace === "balanced", withConcepts.success ? "stored" : "failed to parse");
   add("phase 2: the Director must write creative and concepts", !ShotScriptModel.safeParse(REAL_SHOT_VIDEOS[0].shots).success, "a model answer without them is rejected");
+  // Phase 3: a camera intent per shot. Older shots have none (null) and keep
+  // the alternating move; each intent becomes a camera move the compiler
+  // resolves, and no intent pushes a subject out of frame or breaks a rule.
+  const p3 = REAL_SHOT_VIDEOS[REAL_SHOT_VIDEOS.length - 1];
+  const p3Words = p3.words.split(" ").map((x) => x.split("@"));
+  const p3w = p3Words.map(([text, st], i) => ({ text, start: +st, end: p3Words[i + 1] ? +p3Words[i + 1][1] : +st + 0.5 }));
+  const p3n = p3Words.map(([x]) => x).join(" ");
+  const p3Parsed = ShotScript.parse(p3.shots);
+  add("phase 3: shots stored before camera intents parse (camera = null)", p3Parsed.shots.every((x) => x.camera === null), `${p3Parsed.shots.length} shots, camera null`);
+  const p3Default = repairCues(expandShots(p3Parsed, [], p3n), p3n, p3w, p3.duration).script;
+  add("phase 3: no intent keeps the default camera", p3Default.beats.filter((x) => x.action === "scene").every((x) => x.camera === "static"), "scene camera = static (alternating in/out)");
+  const intentRows: string[] = [];
+  let intentsOk = true;
+  for (const intent of SHOT_INTENTS) {
+    const withIntent = { ...p3Parsed, shots: p3Parsed.shots.map((x) => ({ ...x, camera: intent })) };
+    const sc = repairCues(expandShots(withIntent, [], p3n), p3n, p3w, p3.duration).script;
+    const mapped = sc.beats.filter((x) => x.action === "scene").every((x) => x.camera === INTENT_CAMERA[intent]);
+    const pl = compileSceneScript(sc, { narration: p3n, words: p3w, durationSeconds: p3.duration, brand: { name: "MotionBrief", logo: "logo", cta: "Try it free today" } });
+    const bad = compositionCheck(sc, pl, { narration: p3n, words: p3w, durationSeconds: p3.duration }).filter((x) => ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "tiny-screens"].includes(x.rule));
+    // The move is real: the zoom differs between a shot's start and end (or holds for hold).
+    const second = sc.beats.findIndex((x, i) => i > 0 && x.action === "scene");
+    const t0 = Math.round((spokenCueTimes([sc.beats[second].cue], p3w)[0] ?? 0) * 30);
+    const z = (f: number) => num(pl.camera.zoom, f, 1);
+    const moved = INTENT_CAMERA[intent] === "hold" ? Math.abs(z(t0 + 30) - z(t0 + 50)) < 0.01 : true;
+    if (!mapped || bad.length || validateFlowPlan(pl).length || !moved) intentsOk = false;
+    intentRows.push(`${intent}→${INTENT_CAMERA[intent]}${bad.length ? ` (${bad.map((x) => x.rule).join(",")})` : ""}`);
+  }
+  add("phase 3: every camera intent maps to a move and renders cleanly", intentsOk, intentRows.join(" · "));
   // Every real video made so far must still render cleanly (regressions).
   const BAD = ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "tiny-screens"];
   for (const v of REAL_SHOT_VIDEOS) {

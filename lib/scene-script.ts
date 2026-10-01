@@ -43,7 +43,8 @@ export const SCENE_ACTIONS = [
 ] as const;
 export type SceneAction = (typeof SCENE_ACTIONS)[number];
 
-export const CAMERA_MOVES = ["push-in", "pull-back", "pan-left", "pan-right", "rise", "drift", "static"] as const;
+// (hold: the camera stays still on purpose — a shot intent; static is the default.)
+export const CAMERA_MOVES = ["push-in", "pull-back", "pan-left", "pan-right", "rise", "drift", "static", "hold"] as const;
 export const TRANSITIONS = ["cut", "dissolve", "push-left", "push-right", "push-up", "zoom-through", "panel-wipe", "morph"] as const;
 export const ENTER_STYLES = ["pop", "rise", "slide-left", "slide-right", "drop", "blur", "flip", "scale-up", "cascade", "bounce", "spin", "tilt"] as const;
 export const PATH_STYLES = ["arc", "straight", "swoop"] as const;

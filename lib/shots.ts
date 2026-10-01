@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isIconName } from "@/components/video/icons";
 import { FLOW_THEMES } from "@/lib/flow-script";
-import { CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
+import { CAMERA_MOVES, CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
 
 // Shot templates: tested building blocks a video is made of. The Director
 // only picks a shot per sentence and fills its words; every size, place,
@@ -9,6 +9,23 @@ import { CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBe
 // (npm run check:story renders each shot). A ShotScript expands into a
 // SceneScript, which the scene compiler turns into the video.
 
+// Phase 3: camera intents the Director picks per shot.
+export const SHOT_INTENTS = ["establish", "reveal", "push", "pull_back", "follow", "track", "hold", "overhead", "close", "transition"] as const;
+export type ShotIntent = (typeof SHOT_INTENTS)[number];
+// Each intent as one of the compiler's camera moves (compile-scene.ts resolves
+// position, zoom, duration and easing).
+export const INTENT_CAMERA: Record<ShotIntent, (typeof CAMERA_MOVES)[number]> = {
+  establish: "drift", // wide, settling
+  reveal: "pull-back", // the subject opens up
+  push: "push-in",
+  close: "push-in",
+  pull_back: "pull-back",
+  follow: "pan-right",
+  track: "pan-left",
+  hold: "hold",
+  overhead: "rise",
+  transition: "drift",
+};
 export const SHOT_KINDS = ["problem", "steps", "group", "reveal", "ui", "outputs", "number", "line"] as const;
 export type ShotKind = (typeof SHOT_KINDS)[number];
 
@@ -44,8 +61,13 @@ const Shot = z.object({
   result: z.string().nullable(), // ui: success card title (2–4 words)
   result_cue: z.string().nullable(),
   items: z.array(Item).nullable(),
+  // Phase 3: how the shot is seen — a semantic intent, never coordinates.
+  // The compiler turns it into the camera move (compile-scene.ts).
+  camera: z.enum(SHOT_INTENTS).nullable(),
 });
 export type Shot = z.infer<typeof Shot>;
+// Stored shots from before Phase 3 have no camera intent (null).
+const StoredShot = Shot.extend({ camera: z.enum(SHOT_INTENTS).nullable().default(null) });
 // Phase 2: before choosing shots the Director writes what the video means
 // (creative) and, per sentence, what the viewer should SEE (concepts). The
 // shots then show those concepts. Stored with the shots for later phases;
@@ -66,7 +88,7 @@ export const Concept = z.object({
 export type Creative = z.infer<typeof Creative>;
 export type Concept = z.infer<typeof Concept>;
 export const ShotScriptModel = z.object({ theme: z.enum(FLOW_THEMES), creative: Creative, concepts: z.array(Concept), shots: z.array(Shot) });
-export const ShotScript = ShotScriptModel.extend({ version: z.literal(3).default(3), creative: Creative.nullable().default(null), concepts: z.array(Concept).nullable().default(null) });
+export const ShotScript = ShotScriptModel.extend({ version: z.literal(3).default(3), creative: Creative.nullable().default(null), concepts: z.array(Concept).nullable().default(null), shots: z.array(StoredShot) });
 export type ShotScript = z.infer<typeof ShotScript>;
 
 // ── expansion ──
@@ -123,7 +145,7 @@ const rng = (seed: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-export function expandShots(script: Pick<ShotScript, "theme" | "shots"> & { version?: number }, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant): SceneScript {
+export function expandShots(script: { theme: ShotScript["theme"]; shots: (Omit<Shot, "camera"> & { camera?: ShotIntent | null })[]; version?: number }, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant): SceneScript {
   // (the seed is mixed first: neighbouring seeds give unrelated videos)
   const pick = variant ? rng(Math.imul(variant.seed ^ 0x9e3779b9, 0x85ebca6b)) : null;
   const choose = <T,>(fallback: T, options: readonly T[]) => (pick ? options[Math.floor(pick() * options.length)] : fallback);
@@ -159,15 +181,16 @@ export function expandShots(script: Pick<ShotScript, "theme" | "shots"> & { vers
   // fade in on top of the old one, "90%" over "4K" — it pushes the old away.
   // After a full-frame line nothing is left to push, so it dissolves.)
   let lastLayout: string | null = null;
+  let intent: ShotIntent | null = null; // the current shot's camera intent
   const scene = (cue: string, elements: SceneElement[], layout: string, style: string | null = null, transition?: "dissolve") => {
     const prev = beats[beats.length - 1];
     const dissolve = (layout !== lastLayout || prev?.text_layout === "display") && (transition ?? (prev?.action === "statement" || cut === "soft" ? "dissolve" : null));
-    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: "static", transition: scenes === 0 ? "cut" : dissolve ? "dissolve" : push, backdrop: scenes === 0 ? "mesh" : null }));
+    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: intent ? INTENT_CAMERA[intent] : "static", transition: scenes === 0 ? "cut" : dissolve ? "dissolve" : push, backdrop: scenes === 0 ? "mesh" : null }));
     lastLayout = layout;
     scenes++;
   };
   // swap: a word the accent flips to when the voice says it ("weeks" → "minutes").
-  const swapOf = (s: Shot) => {
+  const swapOf = (s: Pick<Shot, "items">) => {
     const w = s.items?.[0]?.asset?.startsWith("text:") ? words(s.items[0].asset.slice(5), 2) : null;
     return w ? [w] : null;
   };
@@ -175,6 +198,7 @@ export function expandShots(script: Pick<ShotScript, "theme" | "shots"> & { vers
     beats.push(beat({ cue, action: "statement", text, accent: accent && text.toLowerCase().includes(accent.toLowerCase()) ? accent : null, style: mark, text_layout: "side", items: swap }));
 
   for (const s of script.shots) {
+    intent = s.camera ?? null;
     const items = (s.items ?? []).filter((i) => i.asset);
     switch (s.shot) {
       case "problem": {

@@ -22,6 +22,8 @@ OUTPUT: { theme, creative, concepts[], shots[] }. Unused fields are null. Think 
 2. concepts[] — for each sentence or idea, answer "what should the viewer SEE to understand this?": cue (1–6 words where it is spoken), see (concrete objects and what happens to them, e.g. "scattered sheets pile up, then slide into one clear chart" — never a vague "show a dashboard"), hero (the one object in focus, written as an ASSET), persists (an object carried over from the previous idea, else null), avoid (what must not be shown, else null).
 3. shots[] — the shots that show those concepts: each concept's hero is that shot's subject or item; keep a persisting object as the subject of the next shot when the shot allows it.
 
+CAMERA (each shot's camera, an intent — never positions or numbers): establish (the opening: wide and settling) · reveal (the product or answer opens up) · push (move closer to what matters now) · close (a detail in focus) · pull_back (show the bigger picture) · follow / track (the eye travels across a row or a flow) · hold (stay still so a number or a line can be read) · overhead (rise above it) · transition (a quiet bridge). Open with establish; reveal where the product is named; hold on numbers and on the closing line; push on the problem; vary — never the same intent three shots in a row.
+
 SHOTS (shot: what it shows — the fields it uses):
 ${shotCatalogText()}
 
