@@ -1,0 +1,218 @@
+{
+ "hero:payment-card": {
+  "size": 2400,
+  "views": {
+   "front": {
+    "beauty": "/hero3d/payment-card/front.webp",
+    "accent": "/hero3d/payment-card/front-accent.webp",
+    "shadow": "/hero3d/payment-card/front-shadow.webp",
+    "yaw": 0,
+    "elevation": 6
+   },
+   "three-quarter": {
+    "beauty": "/hero3d/payment-card/three-quarter.webp",
+    "accent": "/hero3d/payment-card/three-quarter-accent.webp",
+    "shadow": "/hero3d/payment-card/three-quarter-shadow.webp",
+    "yaw": 32,
+    "elevation": 18
+   },
+   "side": {
+    "beauty": "/hero3d/payment-card/side.webp",
+    "accent": "/hero3d/payment-card/side-accent.webp",
+    "shadow": "/hero3d/payment-card/side-shadow.webp",
+    "yaw": 66,
+    "elevation": 12
+   }
+  },
+  "turntable": {
+   "frames": 24,
+   "yawFrom": 0,
+   "yawTo": 60,
+   "elevation": 18,
+   "pattern": "/hero3d/payment-card/turntable/{00..23}.webp"
+  },
+  "score": 84,
+  "production": false,
+  "notes": "Believable titanium card with real edge thickness and gold contacts; face is a flat, untextured gradient with no brushed grain or micro-scratches."
+ },
+ "hero:chart-block": {
+  "size": 2400,
+  "views": {
+   "front": {
+    "beauty": "/hero3d/chart-block/front.webp",
+    "accent": "/hero3d/chart-block/front-accent.webp",
+    "shadow": "/hero3d/chart-block/front-shadow.webp",
+    "yaw": 0,
+    "elevation": 6
+   },
+   "three-quarter": {
+    "beauty": "/hero3d/chart-block/three-quarter.webp",
+    "accent": "/hero3d/chart-block/three-quarter-accent.webp",
+    "shadow": "/hero3d/chart-block/three-quarter-shadow.webp",
+    "yaw": 32,
+    "elevation": 18
+   },
+   "side": {
+    "beauty": "/hero3d/chart-block/side.webp",
+    "accent": "/hero3d/chart-block/side-accent.webp",
+    "shadow": "/hero3d/chart-block/side-shadow.webp",
+    "yaw": 66,
+    "elevation": 12
+   }
+  },
+  "turntable": {
+   "frames": 24,
+   "yawFrom": 0,
+   "yawTo": 60,
+   "elevation": 18,
+   "pattern": "/hero3d/chart-block/turntable/{00..23}.webp"
+  },
+  "score": 82,
+  "production": false,
+  "notes": "Clear read; frosted base looks like grey plastic rather than glass, bars lack occlusion where they meet the base."
+ },
+ "hero:padlock": {
+  "size": 2400,
+  "views": {
+   "front": {
+    "beauty": "/hero3d/padlock/front.webp",
+    "accent": "/hero3d/padlock/front-accent.webp",
+    "shadow": "/hero3d/padlock/front-shadow.webp",
+    "yaw": 0,
+    "elevation": 6
+   },
+   "three-quarter": {
+    "beauty": "/hero3d/padlock/three-quarter.webp",
+    "accent": "/hero3d/padlock/three-quarter-accent.webp",
+    "shadow": "/hero3d/padlock/three-quarter-shadow.webp",
+    "yaw": 32,
+    "elevation": 18
+   },
+   "side": {
+    "beauty": "/hero3d/padlock/side.webp",
+    "accent": "/hero3d/padlock/side-accent.webp",
+    "shadow": "/hero3d/padlock/side-shadow.webp",
+    "yaw": 66,
+    "elevation": 12
+   }
+  },
+  "turntable": {
+   "frames": 24,
+   "yawFrom": 0,
+   "yawTo": 60,
+   "elevation": 18,
+   "pattern": "/hero3d/padlock/turntable/{00..23}.webp"
+  },
+  "score": 84,
+  "production": false,
+  "notes": "Clean bevels and chrome shackle; glass face reads as flat grey, no contact darkening at the shackle entry."
+ },
+ "hero:ai-chip": {
+  "size": 2400,
+  "views": {
+   "front": {
+    "beauty": "/hero3d/ai-chip/front.webp",
+    "accent": "/hero3d/ai-chip/front-accent.webp",
+    "shadow": "/hero3d/ai-chip/front-shadow.webp",
+    "yaw": 0,
+    "elevation": 6
+   },
+   "three-quarter": {
+    "beauty": "/hero3d/ai-chip/three-quarter.webp",
+    "accent": "/hero3d/ai-chip/three-quarter-accent.webp",
+    "shadow": "/hero3d/ai-chip/three-quarter-shadow.webp",
+    "yaw": 32,
+    "elevation": 18
+   },
+   "side": {
+    "beauty": "/hero3d/ai-chip/side.webp",
+    "accent": "/hero3d/ai-chip/side-accent.webp",
+    "shadow": "/hero3d/ai-chip/side-shadow.webp",
+    "yaw": 66,
+    "elevation": 12
+   }
+  },
+  "turntable": {
+   "frames": 24,
+   "yawFrom": 0,
+   "yawTo": 60,
+   "elevation": 18,
+   "pattern": "/hero3d/ai-chip/turntable/{00..23}.webp"
+  },
+  "score": 86,
+  "production": false,
+  "notes": "Strongest of the set: gold pins, spreader and traces read well; spreader is untextured and the package has no occlusion."
+ },
+ "hero:document-stack": {
+  "size": 2400,
+  "views": {
+   "front": {
+    "beauty": "/hero3d/document-stack/front.webp",
+    "accent": "/hero3d/document-stack/front-accent.webp",
+    "shadow": "/hero3d/document-stack/front-shadow.webp",
+    "yaw": 0,
+    "elevation": 6
+   },
+   "three-quarter": {
+    "beauty": "/hero3d/document-stack/three-quarter.webp",
+    "accent": "/hero3d/document-stack/three-quarter-accent.webp",
+    "shadow": "/hero3d/document-stack/three-quarter-shadow.webp",
+    "yaw": 32,
+    "elevation": 18
+   },
+   "side": {
+    "beauty": "/hero3d/document-stack/side.webp",
+    "accent": "/hero3d/document-stack/side-accent.webp",
+    "shadow": "/hero3d/document-stack/side-shadow.webp",
+    "yaw": 66,
+    "elevation": 12
+   }
+  },
+  "turntable": {
+   "frames": 24,
+   "yawFrom": 0,
+   "yawTo": 60,
+   "elevation": 18,
+   "pattern": "/hero3d/document-stack/turntable/{00..23}.webp"
+  },
+  "score": 82,
+  "production": false,
+  "notes": "Paper and stack depth believable; line blocks and the clip are simple, no paper grain or soft occlusion between sheets."
+ },
+ "hero:chat-bubble": {
+  "size": 2400,
+  "views": {
+   "front": {
+    "beauty": "/hero3d/chat-bubble/front.webp",
+    "accent": "/hero3d/chat-bubble/front-accent.webp",
+    "shadow": "/hero3d/chat-bubble/front-shadow.webp",
+    "yaw": 0,
+    "elevation": 6
+   },
+   "three-quarter": {
+    "beauty": "/hero3d/chat-bubble/three-quarter.webp",
+    "accent": "/hero3d/chat-bubble/three-quarter-accent.webp",
+    "shadow": "/hero3d/chat-bubble/three-quarter-shadow.webp",
+    "yaw": 32,
+    "elevation": 18
+   },
+   "side": {
+    "beauty": "/hero3d/chat-bubble/side.webp",
+    "accent": "/hero3d/chat-bubble/side-accent.webp",
+    "shadow": "/hero3d/chat-bubble/side-shadow.webp",
+    "yaw": 66,
+    "elevation": 12
+   }
+  },
+  "turntable": {
+   "frames": 24,
+   "yawFrom": 0,
+   "yawTo": 60,
+   "elevation": 18,
+   "pattern": "/hero3d/chat-bubble/turntable/{00..23}.webp"
+  },
+  "score": 78,
+  "production": false,
+  "notes": "Milky acrylic instead of glass (no refraction on a transparent background); weakest of the set."
+ }
+}

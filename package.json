@@ -11,7 +11,9 @@
     "check:story": "node scripts/story-check/run.mjs",
     "icons:build": "node scripts/icons/build.mjs",
     "lottie:build": "node scripts/lottie/build.mjs",
-    "check:parity": "node scripts/parity/run.mjs"
+    "check:parity": "node scripts/parity/run.mjs",
+    "hero3d:build": "node scripts/hero3d/build.mjs",
+    "check:hero3d": "node scripts/hero3d/check.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
@@ -42,6 +44,7 @@
     "eslint-config-next": "16.3.6",
     "lucide-static": "1.48.0",
     "tailwindcss": "^4",
+    "three": "0.186.1",
     "typescript": "^5"
   }
 }
