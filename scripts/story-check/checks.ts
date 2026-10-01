@@ -1,7 +1,8 @@
 // Deterministic StoryWorld checks that need no rendering: story validation,
 // stored-brief compatibility, compiled-timeline frame checks and voice timing.
 // Bundled and run by scripts/story-check/run.mjs.
-import { LOOK_FEATURES, searchVariants, seedFrom } from "@/lib/shot-search";
+import { creativeSimilarity, downloadEntry, LOOK_FEATURES, MAX_BUILT_SIMILARITY, sameCreative, scoreCandidate, searchCreative, searchVariants, seedFrom } from "@/lib/shot-search";
+import { CREATIVE_A, CREATIVE_B, CREATIVE_C, CREATIVE_D, DIRECTION_A, DIRECTION_B, DIRECTION_D } from "@/components/video/flow/fixtures/creative-directions";
 import { ProductBrief } from "@/lib/ai/product-brief";
 import { DIRECTION_MAX, directionFor, LOOKS, lockBriefScript, lockedVoiceScript, STYLE_PRESETS, type StylePreset, VISUAL_STYLES, VOICE_SCRIPT_MAX } from "@/lib/projects";
 import { validateStory, VisualStory } from "@/lib/visual-story";
@@ -601,7 +602,10 @@ function shotTemplates(): Check[] {
   add("phase 2: shot scripts stored before concepts still parse", oldStored.success && oldStored.data.creative === null && oldStored.data.concepts === null, oldStored.success ? "creative = null, concepts = null" : "failed to parse");
   const withConcepts = ShotScript.safeParse({ ...(REAL_SHOT_VIDEOS[0].shots as object), creative: { message: "Video in minutes", audience: "SaaS teams", tone: "calm", pace: "balanced" }, concepts: [{ cue: "Making a product video", see: "a filmstrip stalls under a pile of steps", hero: "visual:filmstrip", persists: null, avoid: "people" }] });
   add("phase 2: creative + concepts are kept with the shots", withConcepts.success && withConcepts.data.concepts?.length === 1 && withConcepts.data.creative?.pace === "balanced", withConcepts.success ? "stored" : "failed to parse");
-  add("phase 2: the Director must write creative and concepts", !ShotScriptModel.safeParse(REAL_SHOT_VIDEOS[0].shots).success, "a model answer without them is rejected");
+  // (a model answer: shared creative + directions A–D, each with concepts and shots)
+  const modelAnswer = (shots: object[], concepts: object[] | null = []) => ({ theme: "lavender", creative: { message: "m", audience: "a", tone: "t", pace: "calm" }, variants: [{ id: "A", direction: DIRECTION_A, ...(concepts ? { concepts } : {}), shots }] });
+  const fullShots = ShotScript.parse(REAL_SHOT_VIDEOS[0].shots).shots.map((x) => ({ ...x, objects: null }));
+  add("phase 2: the Director must write creative and concepts", ShotScriptModel.safeParse(modelAnswer(fullShots)).success && !ShotScriptModel.safeParse(modelAnswer(fullShots, null)).success && !ShotScriptModel.safeParse({ ...modelAnswer(fullShots), creative: undefined }).success, "a model answer without them is rejected");
   // Phase 3: a camera intent per shot. Older shots have none (null) and keep
   // the alternating move; each intent becomes a camera move the compiler
   // resolves, and no intent pushes a subject out of frame or breaks a rule.
@@ -662,7 +666,7 @@ function shotTemplates(): Check[] {
   add("phase 4 C: an unknown persistent object is caught (and ignored, never drawn wrong)", unknownNotes.some((n) => n.includes('unknown object "ghost"')) && unknownScript.beats.every((b) => (b.elements ?? []).every((e) => e.asset !== null)), unknownNotes.find((n) => n.includes("ghost")) ?? "not caught");
   add("phase 4 C: conflicting identity, stay+exit and a disappearance are caught", conflict.errors.length === 3 && gone.warnings.some((w) => w.includes("disappears")) && gone.warnings.some((w) => w.includes("not on screen")), [...conflict.errors, ...gone.warnings].join(" · "));
   add("phase 4 D: shots stored before object identity parse (objects = null) and expand as before", p3Parsed.shots.every((x) => x.objects === null) && JSON.stringify(expandShots(p3Parsed, [], p3n)) === JSON.stringify(expandShots({ ...p3Parsed, shots: p3Parsed.shots.map((x) => ({ ...x, objects: [] })) }, [], p3n)), `${p3Parsed.shots.length} shots, objects null`);
-  add("phase 4: the Director must write each shot's objects (null allowed)", !ShotScriptModel.safeParse({ theme: "lavender", creative: { message: "m", audience: "a", tone: "t", pace: "calm" }, concepts: [], shots: p3Parsed.shots.map((x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== "objects"))) }).success, "a model answer without them is rejected");
+  add("phase 4: the Director must write each shot's objects (null allowed)", !ShotScriptModel.safeParse(modelAnswer(p3Parsed.shots.map((x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== "objects"))))).success, "a model answer without them is rejected");
   // Phase 5: objects get a semantic behavior (what, never how); the
   // compiler maps each to a tested scene action. A five-shot chain:
   // a video enters → persists → clips accumulate beside it → they converge
@@ -733,6 +737,48 @@ function shotTemplates(): Check[] {
   add("phase 5 I: no behavior takes an object out of the frame", !outside, outside || "every moving object stays inside 1920×1080");
   const j5Bad = compositionCheck(j5a.sc, j5a.plan, { narration: p3n, words: p3w, durationSeconds: p3.duration }).filter((x) => ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "tiny-screens"].includes(x.rule));
   add("phase 5 J: enter → persist → accumulate → converge → transform compiles validly", !sceneScriptBlockers(j5a.sc, p3n, p3w, p3.duration).length && !validateFlowPlan(j5a.plan).length && !j5a.notes.length && !tfOk.errors.length && !!acc && !!conv && !!tf, `${j5a.notes.join(" · ") || "no notes"}${j5Bad.length ? `; review: ${j5Bad.map((x) => `${x.rule}@${x.detail.slice(0, 60)}`).join(" | ")}` : ""}`);
+  // Phase 6.5: four creative directions (A–D) for one locked script. The
+  // 14 tries are shared by the directions; each keeps its cleanest try, and
+  // only genuinely different stories are offered — a look never counts.
+  const ctx65 = { narration: p3n, words: p3w, durationSeconds: p3.duration, brand: { name: "MotionBrief", logo: "logo" } };
+  const dirA = CREATIVE_A(p3Parsed);
+  const [dirB, dirC, dirD] = [CREATIVE_B, CREATIVE_C, CREATIVE_D].map((x) => ShotScript.parse(x));
+  const four = searchCreative([dirA, dirB, dirC, dirD], ctx65, 12345);
+  const ids = four.picks.map((p) => p.shots?.variant);
+  add("phase 6.5 A: all four videos speak the same locked script", four.picks.length === 4 && four.picks.every((p) => !sceneScriptBlockers(p.script, p3n, p3w, p3.duration).length && p.script.beats.every((b) => repairCues({ ...p.script, beats: [b] }, p3n, p3w, p3.duration).script.beats.length === 1)), `${four.picks.length} videos, every cue spoken in the one narration`);
+  const durations = new Set(four.picks.map((p) => p.plan.duration));
+  const studio = readFileSync("app/projects/[id]/variant-studio.tsx", "utf8");
+  add("phase 6.5 B: all four use the same voice (one timing, one audio track)", durations.size === 1 && /inputProps=\{\{ plan: v\.plan, audioUrl \}/.test(studio) && /renderPlanToFile\(\{ plan: variants\[i\]\.plan, audioUrl,/.test(studio), `one length: ${[...durations][0]} frames; the studio plays and renders every video with the project's audioUrl`);
+  add("phase 6.5 C: the four directions are different stories", new Set(ids).size === 4 && new Set(four.picks.map((p) => p.shots?.direction?.concept)).size === 4, four.picks.map((p) => `${p.shots?.variant}: ${p.shots?.direction?.concept}`).join(" · "));
+  // A only-look change: the same shots under another seed (look), or under
+  // other words and other cameras — never a second creative.
+  const lookA = searchVariants(dirA, ctx65, 999, { tries: 2, pick: 1 }).best!;
+  const lookA2 = searchVariants(dirA, ctx65, 4242, { tries: 2, pick: 1 }).best!;
+  const reworded = { ...dirA, variant: "B", direction: DIRECTION_B, shots: dirA.shots.map((x) => ({ ...x, camera: "follow" as const })) };
+  const simLook = creativeSimilarity(dirA, dirA, lookA.script, lookA2.script);
+  const simWords = creativeSimilarity(dirA, reworded);
+  add("phase 6.5 D: a look, camera or wording change alone is not creative diversity", lookA.script.look?.decor !== undefined && sameCreative(simLook) && sameCreative(simWords), `other look: similarity ${simLook.total.toFixed(2)} · same shots, new words + camera: built ${simWords.built.toFixed(2)} (> ${MAX_BUILT_SIMILARITY})`);
+  const twice = searchCreative([dirA, dirB, { ...dirC, variant: "A" }], ctx65, 12345);
+  add("phase 6.5 E: one direction is never offered twice", twice.picks.filter((p) => p.shots?.variant === "A").length === 1 && twice.skipped.some((x) => x.reason.startsWith("the same direction")), `${twice.picks.map((p) => p.shots?.variant).join(", ")}; skipped: ${twice.skipped.map((x) => `${x.variant} (${x.reason})`).join(", ")}`);
+  const ab = creativeSimilarity(dirA, dirB, four.picks.find((p) => p.shots?.variant === "A")?.script, four.picks.find((p) => p.shots?.variant === "B")?.script);
+  add("phase 6.5 F: concept, hero, story and shot differences are measured", ab.parts.concept < 0.5 && ab.parts.hero < 0.5 && ab.parts.story < 0.7 && ab.parts.shots < 0.7 && !sameCreative(ab) && simLook.parts.concept === 1 && simLook.parts.shots === 1, Object.entries(ab.parts).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(" · "));
+  const one = searchCreative([dirA], ctx65, 7);
+  add("phase 6.5 G: never more than 14 candidates", four.tried.length <= 14 && one.tried.length <= 14 && searchCreative([dirA, dirB, dirC, dirD, { ...dirB, variant: "E" }], ctx65, 3).tried.length <= 14, `four directions: ${four.tried.length} tries · one direction: ${one.tried.length}`);
+  add("phase 6.5 H: the quality score still decides (cleanest first)", four.picks.every((p) => p.score === scoreCandidate(p.violations, p.plan)) && four.picks.every((p, i) => i === 0 || p.score >= four.picks[i - 1].score), four.picks.map((p) => `${p.shots?.variant}=${p.score}`).join(" · "));
+  const lookAlikes = [dirA, { ...dirA, variant: "B", direction: DIRECTION_B }, dirC, { ...dirC, variant: "D", direction: DIRECTION_D }];
+  const thin = searchCreative(lookAlikes, ctx65, 12345);
+  add("phase 6.5 I: clean but alike directions are dropped, not shown", thin.picks.length === 2 && thin.insufficient && thin.skipped.filter((x) => x.reason.startsWith("too close")).length === 2, `${thin.picks.map((p) => p.shots?.variant).join(", ")}; skipped: ${thin.skipped.map((x) => `${x.variant} (${x.reason})`).join(", ")}`);
+  add("phase 6.5 J: four independent valid directions → all four are offered", four.picks.length === 4 && !four.insufficient && [...ids].sort().join("") === "ABCD", ids.join(", "));
+  const copies = searchCreative([dirA, { ...dirA, variant: "B" }, { ...dirA, variant: "C" }, { ...dirA, variant: "D" }], ctx65, 12345);
+  add("phase 6.5 K: without independent directions it never pads to four", copies.picks.length === 1 && copies.insufficient, `${copies.picks.length} video; insufficient creative diversity reported`);
+  const BRIEF_FIXTURE = { product_name: "MotionBrief", product_summary: "s", supported_features: [], supported_claims: [], cta: "Go", scenes: [{ duration_seconds: 3, purpose: "p", narration: "x", on_screen_text: [], visual: "ui", animation: "fade" }], script: p3n };
+  const chosen = { seed: four.picks[1].seed, scene: four.picks[1].script, variant: four.picks[1].shots?.variant ?? null, direction: four.picks[1].shots?.direction ?? null };
+  const entry = downloadEntry(chosen, "2026-10-01T00:00:00.000Z");
+  const tasted = ProductBrief.safeParse({ ...BRIEF_FIXTURE, variants: [chosen], taste: { downloads: [entry] } });
+  const actions65 = readFileSync("app/projects/actions.ts", "utf8");
+  add("phase 6.5 L: a download saves its direction with its look", tasted.success && tasted.data.taste?.downloads[0].selected_variant === chosen.variant && tasted.data.taste?.downloads[0].direction?.camera === chosen.direction?.camera && !!entry.look && /downloadEntry\(variant, new Date\(\)\.toISOString\(\)\)/.test(actions65), `selected ${entry.selected_variant}: ${entry.direction?.concept} · look ${entry.look?.decor}/${entry.look?.icons}`);
+  const oldBrief = ProductBrief.safeParse({ ...BRIEF_FIXTURE, variants: [{ seed: 1, score: 0, scene: lookA.script }], taste: { downloads: [{ seed: 1, look: lookA.script.look ?? null, at: "2026-09-30T00:00:00.000Z" }] } });
+  add("phase 6.5 M: older projects (no directions) still parse and render", oldBrief.success && oldBrief.data.variants?.[0].direction === undefined && p3Parsed.direction === null && p3Parsed.variant === null && REAL_SHOT_VIDEOS.every((v) => ShotScript.safeParse(v.shots).success) && !!searchCreative([p3Parsed], ctx65, 1).best, "old variants, taste and shot scripts parse; a script without a direction still builds");
   // Every real video made so far must still render cleanly (regressions).
   const BAD = ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "tiny-screens"];
   for (const v of REAL_SHOT_VIDEOS) {

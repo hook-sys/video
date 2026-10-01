@@ -4,9 +4,9 @@ import { zodTextFormat } from "openai/helpers/zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import type { SceneDirectorInput, SceneDirectorResult } from "@/lib/ai/scene-director";
 import { compositionCheck, violationNote } from "@/components/video/flow/composition-check";
-import { searchVariants, seedFrom } from "@/lib/shot-search";
+import { searchCreative, seedFrom } from "@/lib/shot-search";
 import type { SceneScript } from "@/lib/scene-script";
-import { continuityCheck, expandShots, shotCatalogText, ShotScript, ShotScriptModel } from "@/lib/shots";
+import { continuityCheck, type Direction, directionScripts, expandShots, shotCatalogText, type ShotScript, ShotScriptModel } from "@/lib/shots";
 import { tokenize } from "@/lib/voice-timing";
 
 // Shot Director: picks a tested shot template (lib/shots.ts) for each moment
@@ -16,11 +16,12 @@ import { tokenize } from "@/lib/voice-timing";
 
 const INSTRUCTIONS = `You are the editor of a calm explainer video for a software product (the style of Keka, Linear or Stripe explainers: one idea at a time, one subject always in focus). The narration is final and already recorded. You cut it into SHOTS and pick, for each, a tested shot template and its words. The engine draws every shot (sizes, places, motion, cursor, sound), so you only choose the shot and write its short texts.
 
-OUTPUT: { theme, creative, concepts[], shots[] }. Unused fields are null. Think in this order:
+OUTPUT: { theme, creative, variants[] }. Unused fields are null. Think in this order:
 
-1. creative — read only the NARRATION: message (the one thing to remember), audience, tone, pace (calm | balanced | brisk).
-2. concepts[] — for each sentence or idea, answer "what should the viewer SEE to understand this?": cue (1–6 words where it is spoken), see (concrete objects and what happens to them, e.g. "scattered sheets pile up, then slide into one clear chart" — never a vague "show a dashboard"), hero (the one object in focus, written as an ASSET), persists (the object id carried over from the previous idea — the same id its shots use — else null), avoid (what must not be shown, else null).
-3. shots[] — the shots that show those concepts: each concept's hero is that shot's subject or item; keep a persisting object as the subject of the next shot when the shot allows it.
+1. creative — read only the NARRATION: message (the one thing to remember), audience, tone, pace (calm | balanced | brisk). Shared by all variants.
+2. variants[] — FOUR independent creative directions (id A, B, C, D) for the SAME narration. Each: { id, direction, concepts[], shots[] }. direction = { concept (the visual idea), hero (the one visual it is built around), metaphor, story (the story approach), shot_approach (which shots carry it), assets (the asset strategy), opening, ending, motion (the motion language), camera (the camera language) } — words only, never numbers or positions. The four must be genuinely different visual interpretations: another concept, hero, metaphor, story, shot sequence, asset strategy, object behaviors and camera language. Never the same idea with other colours, background, icons, transitions or camera — the engine varies the look by itself. Example for a finance tool: A scattered data → one organized view · B revenue, expenses and cash flow run through one system · C raw numbers → insight → a business decision · D separate financial pieces connect into one business picture. Each variant follows the narration's meaning, covers it from the first word to the last and keeps every rule below.
+3. In each variant, concepts[] — for each sentence or idea, answer "what should the viewer SEE to understand this?" in that variant's direction: cue (1–6 words where it is spoken), see (concrete objects and what happens to them, e.g. "scattered sheets pile up, then slide into one clear chart" — never a vague "show a dashboard"), hero (the one object in focus, written as an ASSET), persists (the object id carried over from the previous idea — the same id its shots use — else null), avoid (what must not be shown, else null).
+4. In each variant, shots[] — the shots that show its concepts: each concept's hero is that shot's subject or item; keep a persisting object as the subject of the next shot when the shot allows it.
 
 OBJECTS (each shot's objects — the story's things, by identity, never positions): one entry per picture that matters: id (a short semantic id like "release_notes", the SAME id every time the same thing is shown), role (hero | support | context), asset (which picture of this shot it is: the subject, an item's asset, "card" for the ui card, "logo" for the reveal), enters (true where it first appears; false when it continues from an earlier shot), persistent (true when it stays into the next shot), exits (true when it leaves after this shot; never with persistent), transforms_from / transforms_to (the id of the object it turns from / into, else null). A concept's persisting object keeps its id in the next shot (enters false), so the viewer follows ONE object instead of seeing a new copy. behavior (what the object DOES in this shot, else null): { type, target, cue } — type is one of enter (comes in with the shot; only when enters is true) · move (goes to the target) · accumulate (pieces pile up beside the target, the collection point; give each piece its own id, the same asset is fine) · converge (several objects fly into the target) · assemble (pieces combine into the target) · transform (becomes the target — set transforms_to to it, and the target's transforms_from to this id) · connect (a line to the target) · dock (lands in the target) · route (travels along a path to the target) · reveal (everything comes into view) · highlight (it pulses; the rest dims) · exit (it leaves). target is another object id of the SAME shot (needed for move, accumulate, converge, assemble, transform, connect, dock, route; else null). cue is 1–6 narration words when it happens, later than the shot's other cues (null only for enter). After converge, assemble, transform, dock or exit the object is gone: never persistent. You say WHAT happens; never positions, sizes, durations or easing. Null when a shot has nothing to carry.
 
@@ -45,8 +46,8 @@ RULES
 - Captions (line on problem and number shots) use only words the voice says; otherwise leave them null. The ui shot card must have a button: action-panel (default), login, checkout or cta.
 - theme: "lavender" (friendly SaaS), "mint" (health, wellness, finance, calm), "teal" (operations, B2B, data, security) or "midnight" (dark, premium). creative_preferences.visual_style is a hint.`;
 
-// The videos offered to the customer: the same shots in different looks (the first is `script`).
-export type ShotVariantOut = { seed: number; score: number; scene: SceneScript };
+// The videos offered to the customer: one per creative direction (the first is `script`).
+export type ShotVariantOut = { seed: number; score: number; scene: SceneScript; variant: string | null; direction: Direction | null };
 export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null; variants: ShotVariantOut[] };
 
 export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000): Promise<ShotDirectorResult> {
@@ -57,27 +58,36 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   const format = { format: zodTextFormat(ShotScriptModel, "shot_script") };
   const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
   const none = { violations: [] as ReturnType<typeof compositionCheck>, notes: [] as string[], variants: [] as ShotVariantOut[] };
-  // Each draft is built several ways and the cleanest variant is kept
-  // (lib/shot-search.ts); the seed comes from the project.
+  // Each draft holds four creative directions; each is built a few ways, its
+  // cleanest kept, and the directions that are truly different are offered
+  // (lib/shot-search.ts searchCreative); the seed comes from the project.
   const seed = input.seed ?? seedFrom(input.narration);
   const check = (raw: unknown) => {
     if (!raw) return { shots: null, script: null, problems: ["no structured output"], ...none };
-    const shots = ShotScript.parse(raw);
-    // Phase 4: object continuity (errors reach the revision through the expand notes).
-    const chain = continuityCheck(shots.shots);
-    if (chain.errors.length || chain.warnings.length) console.info("shot continuity:", chain);
+    // Phase 6.5: one shot script per creative direction (A–D).
+    const scripts = directionScripts(ShotScriptModel.parse(raw));
+    if (!scripts.length) return { shots: null, script: null, problems: ["no creative directions"], ...none };
     const expandNotes: string[] = [];
-    expandShots(shots, expandNotes, input.narration);
+    for (const shots of scripts) {
+      // Phase 4: object continuity (errors reach the revision through the expand notes).
+      const chain = continuityCheck(shots.shots);
+      if (chain.errors.length || chain.warnings.length) console.info("shot continuity:", { variant: shots.variant, ...chain });
+      const notes: string[] = [];
+      expandShots(shots, notes, input.narration);
+      expandNotes.push(...notes.map((n) => `direction ${shots.variant}: ${n}`));
+    }
     try {
-      const found = searchVariants(shots, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots, brand: { name: input.product_name ?? "", logo: "logo" } }, seed, { taste: input.taste });
-      if (found.blockers.length) return { shots, script: null, problems: found.blockers, ...none };
-      if (!found.best) return { shots, script: null, problems: ["no variant compiles to a valid plan"], ...none };
+      const found = searchCreative(scripts, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots, brand: { name: input.product_name ?? "", logo: "logo" } }, seed, { taste: input.taste });
+      if (!found.best) return { shots: scripts[0], script: null, problems: found.blockers.length ? found.blockers : ["no direction compiles to a valid plan"], ...none };
       const { script, violations, plan } = found.best;
-      console.info("shot variants:", { repaired: found.best.notes.filter((n) => n.startsWith("cue ")), tried: found.tried, picks: found.picks.map((p) => ({ seed: p.seed, score: p.score, look: p.script.look })), resolved: plan.resolved });
-      const variants = found.picks.map((p) => ({ seed: p.seed, score: p.score, scene: p.script }));
-      return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote)], variants };
+      const shots = found.best.shots ?? scripts[0];
+      console.info("shot variants:", { repaired: found.best.notes.filter((n) => n.startsWith("cue ")), tried: found.tried, picks: found.picks.map((p) => ({ variant: p.shots?.variant, seed: p.seed, score: p.score, concept: p.shots?.direction?.concept })), skipped: found.skipped, resolved: plan.resolved });
+      const variants = found.picks.map((p) => ({ seed: p.seed, score: p.score, scene: p.script, variant: p.shots?.variant ?? null, direction: p.shots?.direction ?? null }));
+      // Fewer than four different directions is never padded with copies.
+      const thin = found.insufficient ? [`insufficient creative diversity: ${found.picks.length} of 4 directions are valid and different (${found.skipped.map((x) => `${x.variant}: ${x.reason}`).join("; ")}) — make each direction a different concept, hero, story and shot sequence`] : [];
+      return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote), ...thin], variants };
     } catch (e) {
-      return { shots, script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], ...none };
+      return { shots: scripts[0], script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], ...none };
     }
   };
   let attempts = 0;
@@ -113,7 +123,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       attempts++;
       try {
         const revised = await client.responses.parse(
-          { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your shots failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete ShotScript.`, text: format, ...quick },
+          { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your shots failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete ShotScript with all four variants.`, text: format, ...quick },
           { timeout: Math.min(60_000, left) },
         );
         usage.inputTokens += revised.usage?.input_tokens ?? 0;

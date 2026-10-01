@@ -1,6 +1,6 @@
 "use server";
 
-import { LOOK_FEATURES, seedFrom, type Taste } from "@/lib/shot-search";
+import { downloadEntry, LOOK_FEATURES, seedFrom, type Taste } from "@/lib/shot-search";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -485,7 +485,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   if (v2.script && look === "Light glass" && v2.script.theme === "midnight") v2.script.theme = "lavender";
   // Explainer pace unless the customer asked for more motion.
   if (v2.script) v2.script.pace = ["Dynamic", "High Energy"].includes(input.creative_preferences.motion_level) ? "lively" : "calm";
-  // The four videos (same shots, different looks) the customer chooses between.
+  // The videos the customer chooses between: one per creative direction.
   const variants = shot.script && v2 === shot ? shot.variants.map((v) => ({ ...v, scene: { ...v.scene, theme: v2.script!.theme, pace: v2.script!.pace } })) : [];
   const stored = v2.script ? { scene: v2.script, ...(shot.script ? { shots: shot.shots } : {}), ...(variants.length > 1 ? { variants } : {}) } : result.script ? { flow: result.script } : null;
   if (stored) {
@@ -1227,7 +1227,7 @@ export async function recordVariantDownload(projectId: string, seed: number) {
     if (!project || !brief.success) return;
     const variant = brief.data.variants?.find((v) => v.seed === seed);
     if (!variant) return;
-    const downloads = [...(brief.data.taste?.downloads ?? []), { seed, look: variant.scene.look ?? null, at: new Date().toISOString() }];
+    const downloads = [...(brief.data.taste?.downloads ?? []), downloadEntry(variant, new Date().toISOString())];
     await admin.from("projects").update({ brief: { ...(project.brief as object), taste: { downloads } } }).eq("id", projectId).eq("user_id", user.id);
   } catch (e) {
     console.warn("variant download not recorded:", e instanceof Error ? e.message : e);

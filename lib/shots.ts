@@ -129,9 +129,40 @@ export const Concept = z.object({
 });
 export type Creative = z.infer<typeof Creative>;
 export type Concept = z.infer<typeof Concept>;
-export const ShotScriptModel = z.object({ theme: z.enum(FLOW_THEMES), creative: Creative, concepts: z.array(Concept), shots: z.array(Shot) });
-export const ShotScript = ShotScriptModel.extend({ version: z.literal(3).default(3), creative: Creative.nullable().default(null), concepts: z.array(Concept).nullable().default(null), shots: z.array(StoredShot) });
+// Phase 6.5: four independent creative directions for the same locked script
+// (one Director call). Each direction is its own visual interpretation —
+// concept, hero, metaphor, story, shots — never only another look; its
+// concepts and shots are the Phase 2–5 schemas.
+export const CREATIVE_IDS = ["A", "B", "C", "D"] as const;
+export const Direction = z.object({
+  concept: z.string(), // the visual idea, e.g. "scattered numbers become one clear view"
+  hero: z.string(), // the one visual the video is built around
+  metaphor: z.string(), // what it stands for, e.g. "a pile sorted into a shelf"
+  story: z.string(), // the story approach, e.g. "problem → product → proof"
+  shot_approach: z.string(), // which shots carry it, e.g. "a UI demo, then numbers"
+  assets: z.string(), // the asset strategy, e.g. "3D objects for feelings, icons for things"
+  opening: z.string(),
+  ending: z.string(),
+  motion: z.string(), // the motion language, e.g. "pieces gather and merge"
+  camera: z.string(), // the camera language, e.g. "slow pushes, holds on numbers"
+});
+export type Direction = z.infer<typeof Direction>;
+export const CreativeVariant = z.object({ id: z.enum(CREATIVE_IDS), direction: Direction, concepts: z.array(Concept), shots: z.array(Shot) });
+export const ShotScriptModel = z.object({ theme: z.enum(FLOW_THEMES), creative: Creative, variants: z.array(CreativeVariant) });
+// A stored shot script is ONE direction (older ones have none: null).
+export const ShotScript = z.object({
+  version: z.literal(3).default(3),
+  theme: z.enum(FLOW_THEMES),
+  creative: Creative.nullable().default(null),
+  concepts: z.array(Concept).nullable().default(null),
+  shots: z.array(StoredShot),
+  variant: z.string().nullable().default(null),
+  direction: Direction.nullable().default(null),
+});
 export type ShotScript = z.infer<typeof ShotScript>;
+// The Director's answer as one shot script per direction (A–D, in order).
+export const directionScripts = (model: z.infer<typeof ShotScriptModel>): ShotScript[] =>
+  model.variants.map((v) => ShotScript.parse({ version: 3, theme: model.theme, creative: model.creative, concepts: v.concepts, shots: v.shots, variant: v.id, direction: v.direction }));
 
 // ── expansion ──
 const EMPTY_CONTENT: SceneContent = { title: null, subtitle: null, value: null, label: null, status: null, name: null, amount: null, delta: null, note: null, action: null, date: null, items: null };
