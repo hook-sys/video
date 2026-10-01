@@ -4,7 +4,7 @@
 import { creativeSimilarity, dnaSimilarity, downloadEntry, INSUFFICIENT_VISUAL_DIVERSITY, LOOK_FEATURES, MAX_BUILT_SIMILARITY, sameCreative, sameDna, scoreCandidate, searchCreative, searchVariants, seedFrom } from "@/lib/shot-search";
 import { CREATIVE_A, CREATIVE_B, CREATIVE_C, CREATIVE_D, DIRECTION_A, DIRECTION_B, DIRECTION_D, DNA_A, DNA_B, DNA_C, DNA_D } from "@/components/video/flow/fixtures/creative-directions";
 import { ProductBrief } from "@/lib/ai/product-brief";
-import { fourDirectionsTimeout, generateShotScript, SINGLE_MS } from "@/lib/ai/shot-director";
+import { directionMode, fourDirectionsTimeout, generateShotScript, SINGLE_MS } from "@/lib/ai/shot-director";
 import { flowBudgetMs } from "@/lib/pipeline";
 import { DIRECTION_MAX, directionFor, LOOKS, lockBriefScript, lockedVoiceScript, STYLE_PRESETS, type StylePreset, VISUAL_STYLES, VOICE_SCRIPT_MAX } from "@/lib/projects";
 import { validateStory, VisualStory } from "@/lib/visual-story";
@@ -37,7 +37,7 @@ import { flowEngineEnabled, usableFlow } from "@/lib/story-engine";
 import { planQuality, QUALITY_BAR, qualityProblems } from "@/components/video/flow/quality";
 import { SCENE_FIXTURES } from "@/components/video/flow/fixtures/scenes";
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
-import { RECIPE_SHOTS, RECIPE_SHOTS_LEGACY, recipeFixture } from "@/components/video/flow/fixtures/recipe";
+import { RECIPE_DURATION, RECIPE_NARRATION, RECIPE_SHOTS, RECIPE_SHOTS_LEGACY, recipeFixture } from "@/components/video/flow/fixtures/recipe";
 import { PARALLAX } from "@/lib/scene-recipe";
 
 import { CARD_TEMPLATES } from "@/components/video/flow/cards/templates";
@@ -45,10 +45,10 @@ import { ASSET_COUNT } from "@/components/video/flow/cards/catalog";
 import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { DEPTH, LAYOUT_PRESETS, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES } from "@/components/video/flow/layouts";
 import { BACKDROPS } from "@/components/video/flow/backdrop-names";
-import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, type SceneScript, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
+import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, SceneScript, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
-import { BEHAVIOR_ACTION, type BehaviorReport, conceptsOf, continuityCheck, directionScripts, Dna, dnaLook, dnaProblems, expandShots, INTENT_CAMERA, SHOT_INTENTS, ShotObject as ShotObjectModel, type ShotObject, ShotScript, ShotScriptModel } from "@/lib/shots";
+import { BEHAVIOR_ACTION, type BehaviorReport, isFixableNote, conceptsOf, continuityCheck, directionScripts, Dna, dnaLook, dnaProblems, expandShots, INTENT_CAMERA, SHOT_INTENTS, ShotObject as ShotObjectModel, type ShotObject, ShotScript, ShotScriptModel } from "@/lib/shots";
 import { computeStates } from "@/components/video/flow/states";
 import { REAL_SHOT_VIDEOS } from "@/components/video/flow/fixtures/real-shots";
 import { OBJECTS } from "@/components/video/flow/object-names";
@@ -585,7 +585,7 @@ const toModelShot = (x: ShotScript["shots"][number]) => ({
 const fakeAnswer = (scripts: ShotScript[]) => ({ theme: scripts[0].theme, creative: scripts[0].creative ?? { message: "m", audience: "a", tone: "t", pace: "calm" as const }, variants: scripts.map((x) => ({ id: x.variant, dna: x.dna, direction: x.direction, shots: x.shots.map(toModelShot) })) });
 // The real Shot Director with a stand-in client: four directions; four
 // timing out (then one); too little time for four; no time at all.
-async function directorRun(budget: number, fourFails: boolean) {
+async function directorRun(budget: number, fourFails: boolean, wanted: "single" | "four" = "four") {
   const v = REAL_SHOT_VIDEOS[REAL_SHOT_VIDEOS.length - 1];
   const W = v.words.split(" ").map((x) => x.split("@"));
   const words = W.map(([text, st], i) => ({ text, start: +st, end: W[i + 1] ? +W[i + 1][1] : +st + 0.5 }));
@@ -602,10 +602,33 @@ async function directorRun(budget: number, fourFails: boolean) {
       },
     },
   } as unknown as Parameters<typeof generateShotScript>[3];
-  const r = await generateShotScript({ narration, words, duration_seconds: v.duration, product_name: "MotionBrief", seed: 12345 }, undefined, budget, client);
+  const r = await generateShotScript({ narration, words, duration_seconds: v.duration, product_name: "MotionBrief", seed: 12345 }, undefined, budget, client, wanted);
   return { ...r, calls };
 }
+// (The four-direction picker is opt-in now: these runs ask for it.)
 const DIRECTOR_RUNS = { four: await directorRun(150_000, false), fallback: await directorRun(150_000, true), short: await directorRun(60_000, false), none: await directorRun(35_000, false) };
+// The primary path: one direction (with scene recipes) through the real
+// Director, search and storage; the stand-in client answers what was asked.
+async function singleRun(budget: number, answer: ShotScript, narration: string, duration: number, flawed = false) {
+  const calls: { single: boolean; timeout: number }[] = [];
+  const client = {
+    responses: {
+      parse: async (params: { instructions?: string | null }, opts?: { timeout?: number }) => {
+        calls.push({ single: !!params.instructions?.includes("ONE variant only"), timeout: opts?.timeout ?? 0 });
+        // (flawed: the first answer has an unspoken cue, the revision fixes it)
+        const shots = flawed && calls.length === 1 ? { ...answer, shots: answer.shots.map((x, i) => (i === 0 ? { ...x, cue: "words nobody says" } : x)) } : answer;
+        return { id: `r${calls.length}`, usage: { input_tokens: 1, output_tokens: 1 }, output_parsed: fakeAnswer([{ ...shots, variant: "A", dna: DNA_A, direction: DIRECTION_A }]) };
+      },
+    },
+  } as unknown as Parameters<typeof generateShotScript>[3];
+  const r = await generateShotScript({ narration, words: null, duration_seconds: duration, product_name: "Flowly", seed: 777 }, undefined, budget, client);
+  return { ...r, calls };
+}
+const SINGLE_RUNS = {
+  recipe: await singleRun(150_000, RECIPE_SHOTS, RECIPE_NARRATION, RECIPE_DURATION),
+  revised: await singleRun(150_000, RECIPE_SHOTS, RECIPE_NARRATION, RECIPE_DURATION, true),
+  none: await singleRun(25_000, RECIPE_SHOTS, RECIPE_NARRATION, RECIPE_DURATION),
+};
 
 function shotTemplates(): Check[] {
   const checks: Check[] = [];
@@ -1053,6 +1076,33 @@ function simpleForm(): Check[] {
   return checks;
 }
 
+// Single direction is the primary path: one Director call (one revision if
+// needed) → one direction's recipes → search → stored → reloaded → compiled.
+function singleDirection(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  add("single A: one direction is the default; four only when SHOT_DIRECTIONS=4", directionMode(undefined) === "single" && directionMode("1") === "single" && directionMode("") === "single" && directionMode("4") === "four" && directionMode(" 4 ") === "four", `default ${directionMode(undefined)} · "4" → ${directionMode("4")}`);
+  const r = SINGLE_RUNS.recipe;
+  const recipeBeats = (r.script?.beats ?? []).filter((b) => b.action === "scene" && b.recipe).length;
+  // (The fixture keeps one real note — a 2.9 s hold before the lockup — so one
+  // review round follows; it asks for one direction too.)
+  add("single B: every call asks for one direction and its video is the full answer (no diversity shortfall)", !!r.script && r.calls.length >= 1 && r.calls.length <= 2 && r.calls.every((c) => c.single) && r.errors.filter(isFixableNote).length <= 1 && r.variants.length === 1 && r.diagnostics?.mode === "single" && r.diagnostics.status === "ok" && !r.errors.some((e) => e.includes("fallback") || e.includes(INSUFFICIENT_VISUAL_DIVERSITY)), `calls: ${r.calls.map((c) => `${c.single ? "one" : "four"} (${Math.round(c.timeout / 1000)} s)`).join(", ")} · status ${r.diagnostics?.status} · ${r.variants.length} video · notes: ${r.errors.slice(0, 2).join(" · ") || "none"}`);
+  add("single C: the direction's recipes reach the chosen video", recipeBeats === RECIPE_SHOTS.shots.length && (r.shots?.shots ?? []).filter((x) => x.recipe).length === RECIPE_SHOTS.shots.length && r.diagnostics?.directions[0]?.behaviors.applied === 7 && r.diagnostics.directions[0].behaviors.dropped === 0, `${recipeBeats} recipe scenes · behaviors ${JSON.stringify(r.diagnostics?.directions[0]?.behaviors)}`);
+  // Stored as the pipeline stores it (scene + shots; no variants for one video), reloaded, compiled.
+  const actionsSrc = readFileSync("app/projects/actions.ts", "utf8");
+  const storedJson = JSON.parse(JSON.stringify({ scene: r.script, shots: r.shots, ...(r.variants.length > 1 ? { variants: r.variants } : {}) }));
+  const scene = SceneScript.parse(storedJson.scene);
+  const shots = ShotScript.parse(storedJson.shots);
+  const plan = compileSceneScript(scene, { narration: RECIPE_NARRATION, durationSeconds: RECIPE_DURATION, brand: { name: "Flowly", cta: "Start free" } });
+  add("single D: stored and reloaded, the recipes survive and the video compiles from them", /\.\.\.\(variants\.length > 1 \? \{ variants \} : \{\}\)/.test(actionsSrc) && !("variants" in storedJson) && scene.beats.filter((b) => b.recipe).length === recipeBeats && shots.shots.filter((x) => x.recipe).length === RECIPE_SHOTS.shots.length && validateFlowPlan(plan).length === 0 && (plan.backdrops ?? []).length === 4 && plan.nodes.some((n) => n.layer === 0) && plan.nodes.some((n) => n.layer === 3), `stored keys: ${Object.keys(storedJson).join(", ")} · ${scene.beats.filter((b) => b.recipe).length} recipe scenes reloaded · backdrops ${(plan.backdrops ?? []).map((b) => b.kind).join(", ")}`);
+  add("single G: a mapped-intent note is reported but never triggers a revision; a real problem does", r.errors.some((e) => e.includes("transition iris")) && !isFixableNote(r.errors.find((e) => e.includes("transition iris"))!) && isFixableNote("direction A: recipe s1: hero \"icon:mail\" is not a drawable hero"), r.errors.filter((e) => !isFixableNote(e)).length + " mapped notes reported");
+  const rv = SINGLE_RUNS.revised;
+  add("single E: a flawed answer gets one revision, still one direction", !!rv.script && rv.calls.length === 2 && rv.calls.every((c) => c.single) && rv.revised && rv.diagnostics?.status === "ok", `calls: ${rv.calls.map((c) => (c.single ? "one" : "four")).join(" → ")} · revised ${rv.revised}`);
+  const nn = SINGLE_RUNS.none;
+  add("single F: no time → a clear failure, no request beyond the budget", !nn.script && nn.calls.length === 0 && nn.errors.some((e) => e.startsWith("single direction skipped")) && nn.diagnostics?.status === "failed", nn.errors.join(" · "));
+  return checks;
+}
+
 // Scene Recipe: every recipe field traced from the shot to the compiled plan
 // (and through computeStates, which is what the renderer draws).
 function sceneRecipeChecks(): Check[] {
@@ -1129,6 +1179,7 @@ export function runChecks(): Section[] {
     { name: "scene director (v2) scripts", checks: sceneDirector() },
     { name: "shot templates", checks: shotTemplates() },
     { name: "scene recipe", checks: sceneRecipeChecks() },
+    { name: "single direction (primary path)", checks: singleDirection() },
   ];
   for (const f of FIXTURES) {
     const n = normalizeStory(f.story);

@@ -6,7 +6,7 @@ import type { SceneDirectorInput, SceneDirectorResult } from "@/lib/ai/scene-dir
 import { compositionCheck, violationNote } from "@/components/video/flow/composition-check";
 import { type DirectionDiagnostics, searchCreative, seedFrom } from "@/lib/shot-search";
 import type { SceneScript } from "@/lib/scene-script";
-import { continuityCheck, type Direction, directionScripts, type Dna, expandShots, shotCatalogText, type ShotScript, ShotScriptModel } from "@/lib/shots";
+import { continuityCheck, type Direction, directionScripts, type Dna, expandShots, isFixableNote, shotCatalogText, type ShotScript, ShotScriptModel } from "@/lib/shots";
 import { tokenize } from "@/lib/voice-timing";
 
 // Shot Director: picks a tested shot template (lib/shots.ts) for each moment
@@ -66,7 +66,12 @@ export const SINGLE_MS = 55_000;
 // back for the one-direction answer. (Four directions took ~95 s uncompacted
 // in a real run; the compact answer is shorter.) Under 30 s it is skipped.
 export const fourDirectionsTimeout = (leftMs: number) => Math.min(110_000, leftMs - 8_000 - SINGLE_MS);
-const SINGLE = `\n\nThis time write ONE variant only (id A): your strongest direction.`;
+const SINGLE = `\n\nThis time write ONE variant only (id A): your strongest direction. The rules on how four directions differ do not apply; every other rule does. With one direction there is room for a scene recipe on every meaningful shot.`;
+// How many directions a Director call asks for. One strong direction is the
+// primary path (one script → one premium video); the four-direction picker
+// stays available behind SHOT_DIRECTIONS=4.
+export type DirectionMode = "single" | "four";
+export const directionMode = (env: string | undefined = process.env.SHOT_DIRECTIONS): DirectionMode => (env?.trim() === "4" ? "four" : "single");
 
 // The videos offered to the customer: one per creative direction (the first is `script`).
 export type ShotVariantOut = { seed: number; score: number; scene: SceneScript; variant: string | null; direction: Direction | null; dna: Dna | null };
@@ -76,7 +81,7 @@ export type ShotDirectorDiagnostics = { mode: "four" | "single"; status: string;
 export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null; variants: ShotVariantOut[]; diagnostics: ShotDirectorDiagnostics | null };
 
 // `client` is for tests (a stand-in for the OpenAI client).
-export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000, client?: Pick<OpenAI, "responses">): Promise<ShotDirectorResult> {
+export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000, client?: Pick<OpenAI, "responses">, wanted: DirectionMode = directionMode()): Promise<ShotDirectorResult> {
   const started = Date.now();
   const timing = input.words?.length ? "voice" : "estimated";
   const model = process.env.OPENAI_MODEL || "gpt-5-mini";
@@ -103,7 +108,8 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       expandNotes.push(...notes.map((n) => `direction ${shots.variant}: ${n}`));
     }
     try {
-      const found = searchCreative(scripts, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots, brand: { name: input.product_name ?? "", logo: "logo" } }, seed, { taste: input.taste });
+      // (One direction asked for: one video is the full answer, not too few.)
+      const found = searchCreative(scripts, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots, brand: { name: input.product_name ?? "", logo: "logo" } }, seed, { taste: input.taste, pick: wanted === "single" ? 1 : 4 });
       if (!found.best) return { shots: scripts[0], script: null, problems: found.blockers.length ? found.blockers : ["no direction compiles to a valid plan"], ...none, directions: found.diagnostics };
       const { script, violations, plan } = found.best;
       const shots = found.best.shots ?? scripts[0];
@@ -141,6 +147,40 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
     };
     const left = () => budgetMs - (Date.now() - started);
     let result: ReturnType<typeof check> = { shots: null, script: null, problems: [], ...none };
+    let fellBack = false; // four directions failed and one was asked for instead
+    // One revision of an answer that failed its checks, if time allows.
+    const revise = async (firstId: string | undefined, instructions: string, ask4: string, timeout: number) => {
+      if (!firstId || timeout < 20_000) return;
+      try {
+        attempts++;
+        const revised = await ai.responses.parse({ model, instructions, previous_response_id: firstId, input: `Your shots failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\n${ask4}`, text: format, ...quick }, { timeout });
+        count(revised);
+        const second = check(revised.output_parsed);
+        if (!result.script || (second.script && second.violations.length <= result.violations.length)) result = second;
+        problems = result.problems.length ? result.problems : result.notes;
+      } catch (e) {
+        problems = [`revision failed: ${e instanceof Error ? e.message : String(e)}`, ...problems];
+      }
+    };
+    if (wanted === "single") {
+      // The primary path: one strong direction, one revision if it needs one.
+      if (left() >= 30_000) {
+        try {
+          const one = await ask(INSTRUCTIONS + SINGLE, Math.min(110_000, left() - 3_000));
+          count(one);
+          result = check(one.output_parsed);
+          problems = result.problems.length ? result.problems : result.notes;
+          console.info("shot director (one direction):", { ms: Date.now() - started, output_tokens: one.usage?.output_tokens, usable: !!result.script, problems: problems.slice(0, 8) });
+          if (!result.script || result.notes.some(isFixableNote)) await revise(one.id, INSTRUCTIONS + SINGLE, "Return the corrected complete ShotScript with variant A only.", Math.min(60_000, left() - 3_000));
+        } catch (e) {
+          problems = [`single direction failed: ${e instanceof Error ? e.message : String(e)}`];
+          console.warn("shot director: one direction failed", { ms: Date.now() - started, error: problems[0] });
+        }
+      } else problems = [`single direction skipped: ${Math.round(left() / 1000)} s left`];
+      if (!result.script) console.warn("shot director: no usable shots", { ms: Date.now() - started, problems: problems.slice(0, 6) });
+      const diagnostics: ShotDirectorDiagnostics = { mode: "single", status: result.script ? result.status : "failed", directions: result.directions, output_tokens: usage.outputTokens };
+      return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: problems, ms: Date.now() - started, timing, violations: result.violations, diagnostics };
+    }
     // Four directions in one call, with time kept back for the one-direction
     // answer should it fail (no blind retry of the same request).
     const fourTimeout = fourDirectionsTimeout(left());
@@ -152,21 +192,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
         problems = result.problems.length ? result.problems : result.notes;
         console.info("shot director first draft:", { ms: Date.now() - started, output_tokens: first.usage?.output_tokens, usable: !!result.script, variants: result.variants.map((v) => v.variant), problems: problems.slice(0, 8) });
         // One revision while the one-direction answer still fits after it.
-        if ((!result.script || result.notes.length) && first.id && left() - SINGLE_MS > 30_000) {
-          try {
-            attempts++;
-            const revised = await ai.responses.parse(
-              { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your shots failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete ShotScript with all four variants.`, text: format, ...quick },
-              { timeout: Math.min(60_000, left() - (result.script ? 3_000 : SINGLE_MS)) },
-            );
-            count(revised);
-            const second = check(revised.output_parsed);
-            if (!result.script || (second.script && second.violations.length <= result.violations.length)) result = second;
-            problems = result.problems.length ? result.problems : result.notes;
-          } catch (e) {
-            problems = [`revision failed: ${e instanceof Error ? e.message : String(e)}`, ...problems];
-          }
-        }
+        if ((!result.script || result.notes.some(isFixableNote)) && first.id && left() - SINGLE_MS > 30_000) await revise(first.id, INSTRUCTIONS, "Return the corrected complete ShotScript with all four variants.", Math.min(60_000, left() - (result.script ? 3_000 : SINGLE_MS)));
       } catch (e) {
         problems = [`four directions failed: ${e instanceof Error ? e.message : String(e)}`];
         console.warn("shot director: four directions failed", { ms: Date.now() - started, error: problems[0] });
@@ -178,6 +204,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       fourDirections = result.directions;
       if (left() >= SINGLE_MS) {
         mode = "single";
+        fellBack = true;
         try {
           const one = await ask(INSTRUCTIONS + SINGLE, Math.min(90_000, left() - 3_000));
           count(one);
@@ -192,7 +219,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       if (!result.script) console.warn("shot director: no usable shots", { ms: Date.now() - started, problems: problems.slice(0, 6) });
     }
     const diagnostics: ShotDirectorDiagnostics = { mode, status: result.script ? result.status : "failed", directions: mode === "single" && fourDirections.length ? fourDirections : result.directions, output_tokens: usage.outputTokens };
-    return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: mode === "single" ? [`fallback: one direction`, ...problems] : problems, ms: Date.now() - started, timing, violations: result.violations, diagnostics };
+    return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: fellBack ? [`fallback: one direction`, ...problems] : problems, ms: Date.now() - started, timing, violations: result.violations, diagnostics };
   } catch (e) {
     return { script: null, shots: null, variants: [], attempts, revised: attempts > 1, errors: [e instanceof Error ? e.message : String(e)], ms: Date.now() - started, timing, violations: [], diagnostics: null };
   } finally {

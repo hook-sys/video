@@ -252,6 +252,10 @@ export const directionScripts = (model: z.infer<typeof ShotScriptModel>): ShotSc
   });
 
 // ── expansion ──
+// Marks a note that only says how an intent was drawn (a recipe transition
+// mapped to its closest renderer form): reported, never a reason to revise.
+export const MAPPED_NOTE = "mapped:";
+export const isFixableNote = (note: string) => !note.includes(`: ${MAPPED_NOTE} `);
 const EMPTY_CONTENT: SceneContent = { title: null, subtitle: null, value: null, label: null, status: null, name: null, amount: null, delta: null, note: null, action: null, date: null, items: null };
 const content = (c: Partial<SceneContent>): SceneContent => ({ ...EMPTY_CONTENT, ...c });
 const beat = (b: Partial<SceneBeat> & Pick<SceneBeat, "cue" | "action">): SceneBeat => ({
@@ -758,7 +762,7 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     if (morphFrom) roles[morphFrom] = { role: "support", layer: LAYER.midground, relation: "feeds-hero" };
     const tIn: RecipeTransition = scenes === 0 ? "cut" : r.transition_in;
     const tr = sceneTransition(tIn, scenes);
-    if (RECIPE_MAPPED[tIn]) notes.push(`recipe ${r.scene_id}: transition ${tIn} → ${RECIPE_MAPPED[tIn]}`);
+    if (RECIPE_MAPPED[tIn]) notes.push(`recipe ${r.scene_id}: ${MAPPED_NOTE} transition ${tIn} → ${RECIPE_MAPPED[tIn]}`);
     if (tIn === "object-transform" && !carriedHero && !morphFrom) notes.push(`recipe ${r.scene_id}: object-transform with nothing to carry (no persistent hero before it): dissolve`);
     const compiled: CompiledRecipe = { id: r.scene_id, composition: r.composition, environment: r.environment, hero: heroId, heroType: r.hero.type, roles, text: { position: r.typography.position, scale: r.typography.scale }, camera: r.camera, flash: tr.flash, words: false };
     const elements = [heroEl, ...[...support.values()].filter((e) => !later.includes(e)), ...(morphFrom ? [{ id: morphFrom, asset: null, label: null, screen: null, content: null } as SceneElement] : [])];
