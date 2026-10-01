@@ -652,6 +652,10 @@ function lockedScript(): Check[] {
   add("brief.script === user script (form suffix removed only)", locked.script === userScript, JSON.stringify(locked.script));
   const parsed = ProductBrief.safeParse(locked);
   add("the locked brief parses and keeps the script", parsed.success && parsed.data.script === userScript, parsed.success ? "stored brief.script is the user's script" : "brief failed to parse");
+  // As a browser really submits it (line breaks as \r\n): the stored Finora project.
+  const crlf = "Managing business finances shouldn’t mean dealing with scattered spreadsheets and numbers.\r\n\r\nFinora brings your financial data into one clear view.";
+  const crlfLocked = lockedVoiceScript(`${crlf}\r\n\r\nVisual style: Bold\r\nLook: Dark glow`);
+  add("browser line breaks (\\r\\n): the suffix is removed, the script kept", crlfLocked === crlf, JSON.stringify(crlfLocked.slice(-40)));
   add("no suffix: the whole script is kept", lockedVoiceScript(`  ${userScript}  `) === userScript, "trimmed ends only");
   const midText = "Pick a Visual style: bold or calm.";
   add("\"Visual style:\" inside the script is not cut", lockedVoiceScript(`${midText}\n\nVisual style: Bold`) === midText, JSON.stringify(lockedVoiceScript(`${midText}\n\nVisual style: Bold`)));

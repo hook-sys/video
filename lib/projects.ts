@@ -5,7 +5,8 @@ export const DIRECTION_MAX = 560;
 // The customer's voiceover script, exactly as typed: the form appends
 // "\n\nVisual style: …" (and "Look: …") to it in `direction`; only that suffix
 // is removed. This locked text is what the voice speaks and every Director reads.
-export const lockedVoiceScript = (direction: string | null | undefined) => (direction ?? "").split(/\n\nVisual style:/)[0].trim();
+// (Browsers send the form's line breaks as \r\n.)
+export const lockedVoiceScript = (direction: string | null | undefined) => (direction ?? "").split(/\r?\n\r?\nVisual style:/)[0].trim();
 // A generated brief with the customer's script as its narration, word for
 // word. Projects from the script-first form carry a video direction; older
 // ones (no direction) keep the brief's own script.
