@@ -19,6 +19,7 @@ export type PlanQuality = {
   collisionFrames: number; // frames where text, nodes or labels overlap
   collisionAt: number;
   collision: string; // what overlapped first
+  collisions: { at: number; frames: number; what: string }[]; // every distinct overlap (first frame, how long)
 };
 
 export const QUALITY_BAR = { deadFrames: 66, emptyFrames: 12, minElementScale: 0.42, minLabelPx: 34, cameraAccel: 3, zoomAccel: 0.0025, collisionFrames: 6 };
@@ -179,6 +180,7 @@ export function planQuality(plan: FlowPlan): PlanQuality {
   let collisionFrames = 0;
   let collisionAt = -1;
   let collision = "";
+  const collisions: PlanQuality["collisions"] = [];
   for (let f = 0; f < plan.duration; f += 2) {
     if (num(plan.dim, f, 0) > 0.5 || (plan.brand && f >= plan.brand.start - 4)) continue;
     const zoom = num(plan.camera.zoom, f, 1);
@@ -214,15 +216,25 @@ export function planQuality(plan: FlowPlan): PlanQuality {
     }
     const texts = plan.texts.filter((t) => t.style !== "display" && t.style !== "panel" && f >= (t.words?.[0] ?? t.start) && f < t.end).map(textRect);
     let hit = "";
-    for (const t of texts) for (const r of rects) if (!hit && overlap(t, r)) hit = `${t.what} over ${r.what}`;
+    const seen: string[] = [];
+    for (const t of texts) for (const r of rects) if (overlap(t, r)) seen.push(`${t.what} over ${r.what}`);
+    // Two lines of words on each other.
+    for (let i = 0; i < texts.length; i++) for (let j = i + 1; j < texts.length; j++) if (overlap(texts[i], texts[j])) seen.push(`${texts[i].what} over ${texts[j].what}`);
+    hit = seen[0] ?? "";
     for (const a of rects) {
-      if (hit || !a.what.startsWith("label")) continue;
-      for (const b of rects) if (b.owner !== a.owner && b.what.startsWith("node") && overlap(a, b)) hit = `${a.what} over ${b.what}`;
+      if (!a.what.startsWith("label")) continue;
+      for (const b of rects) if (b.owner !== a.owner && b.what.startsWith("node") && overlap(a, b)) seen.push(`${a.what} over ${b.what}`);
     }
     const els = rects.filter((r) => r.what.startsWith("element") && !r.moving);
     const meant = (plan.overlaps ?? []).filter((o) => f >= o.start && f < o.end);
     const together = (a: Rect, b: Rect) => meant.some((o) => o.ids.includes(a.owner!) && o.ids.includes(b.owner!));
-    for (let i = 0; i < els.length && !hit; i++) for (let j = i + 1; j < els.length && !hit; j++) if (!together(els[i], els[j]) && overlap(els[i], els[j])) hit = `${els[i].what} over ${els[j].what}`;
+    for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) if (!together(els[i], els[j]) && overlap(els[i], els[j])) seen.push(`${els[i].what} over ${els[j].what}`);
+    hit ||= seen[0] ?? "";
+    for (const what of new Set(seen)) {
+      const c = collisions.find((x) => x.what === what);
+      if (c) c.frames += 2;
+      else if (collisions.length < 12) collisions.push({ at: f, frames: 2, what });
+    }
     if (hit) {
       collisionFrames += 2;
       if (collisionAt < 0) [collisionAt, collision] = [f, hit];
@@ -238,7 +250,7 @@ export function planQuality(plan: FlowPlan): PlanQuality {
     return [...lines.filter((l) => textWidth(l, t.size) > limit).map((l) => `"${l}" at ${t.size}px`), ...out];
   });
 
-  return { deadFrames, deadAt, emptyFrames, emptyAt, minElementScale: minElementScale === Infinity ? 1 : Math.round(minElementScale * 100) / 100, minLabelPx: minLabelPx === Infinity ? 99 : Math.round(minLabelPx), cameraAccel: Math.round(cameraAccel * 100) / 100, accelAt, zoomAccel: Math.round(zoomAccel * 10000) / 10000, overflow, collisionFrames, collisionAt, collision };
+  return { deadFrames, deadAt, emptyFrames, emptyAt, minElementScale: minElementScale === Infinity ? 1 : Math.round(minElementScale * 100) / 100, minLabelPx: minLabelPx === Infinity ? 99 : Math.round(minLabelPx), cameraAccel: Math.round(cameraAccel * 100) / 100, accelAt, zoomAccel: Math.round(zoomAccel * 10000) / 10000, overflow, collisionFrames, collisionAt, collision, collisions };
 }
 
 export function qualityProblems(q: PlanQuality): string[] {

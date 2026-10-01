@@ -170,6 +170,9 @@ export type FlowPlan = {
   iconStyle?: string;
   // What the resolve pass changed, and what it could not (resolve.ts).
   resolved?: { fixed: string[]; left: string[] };
+  // Beats the schedule could not place (too close to the one before, or a
+  // minor accent pushed too late): kept for the diagnostics.
+  skipped?: { cue: string; action: string; reason: string }[];
   // A pointer in world space: glides along path, visible where show > 0,
   // and presses (a ripple) at each click frame.
   cursor?: { path: Track<Vec>; show: Track<number>; clicks: number[] };

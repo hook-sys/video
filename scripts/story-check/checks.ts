@@ -1,8 +1,8 @@
 // Deterministic StoryWorld checks that need no rendering: story validation,
 // stored-brief compatibility, compiled-timeline frame checks and voice timing.
 // Bundled and run by scripts/story-check/run.mjs.
-import { creativeSimilarity, downloadEntry, LOOK_FEATURES, MAX_BUILT_SIMILARITY, sameCreative, scoreCandidate, searchCreative, searchVariants, seedFrom } from "@/lib/shot-search";
-import { CREATIVE_A, CREATIVE_B, CREATIVE_C, CREATIVE_D, DIRECTION_A, DIRECTION_B, DIRECTION_D } from "@/components/video/flow/fixtures/creative-directions";
+import { creativeSimilarity, dnaSimilarity, downloadEntry, INSUFFICIENT_VISUAL_DIVERSITY, LOOK_FEATURES, MAX_BUILT_SIMILARITY, sameCreative, sameDna, scoreCandidate, searchCreative, searchVariants, seedFrom } from "@/lib/shot-search";
+import { CREATIVE_A, CREATIVE_B, CREATIVE_C, CREATIVE_D, DIRECTION_A, DIRECTION_B, DIRECTION_D, DNA_A, DNA_B, DNA_C, DNA_D } from "@/components/video/flow/fixtures/creative-directions";
 import { ProductBrief } from "@/lib/ai/product-brief";
 import { generateShotScript } from "@/lib/ai/shot-director";
 import { DIRECTION_MAX, directionFor, LOOKS, lockBriefScript, lockedVoiceScript, STYLE_PRESETS, type StylePreset, VISUAL_STYLES, VOICE_SCRIPT_MAX } from "@/lib/projects";
@@ -44,7 +44,7 @@ import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, type SceneScript, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
-import { BEHAVIOR_ACTION, conceptsOf, continuityCheck, directionScripts, expandShots, INTENT_CAMERA, SHOT_INTENTS, ShotObject as ShotObjectModel, type ShotObject, ShotScript, ShotScriptModel } from "@/lib/shots";
+import { BEHAVIOR_ACTION, type BehaviorReport, conceptsOf, continuityCheck, directionScripts, Dna, dnaLook, dnaProblems, expandShots, INTENT_CAMERA, SHOT_INTENTS, ShotObject as ShotObjectModel, type ShotObject, ShotScript, ShotScriptModel } from "@/lib/shots";
 import { computeStates } from "@/components/video/flow/states";
 import { REAL_SHOT_VIDEOS } from "@/components/video/flow/fixtures/real-shots";
 import { OBJECTS } from "@/components/video/flow/object-names";
@@ -577,7 +577,7 @@ const toModelShot = (x: ShotScript["shots"][number]) => ({
   camera: x.camera,
   objects: x.objects,
 });
-const fakeAnswer = (scripts: ShotScript[]) => ({ theme: scripts[0].theme, creative: scripts[0].creative ?? { message: "m", audience: "a", tone: "t", pace: "calm" as const }, variants: scripts.map((x) => ({ id: x.variant, direction: x.direction, shots: x.shots.map(toModelShot) })) });
+const fakeAnswer = (scripts: ShotScript[]) => ({ theme: scripts[0].theme, creative: scripts[0].creative ?? { message: "m", audience: "a", tone: "t", pace: "calm" as const }, variants: scripts.map((x) => ({ id: x.variant, dna: x.dna, direction: x.direction, shots: x.shots.map(toModelShot) })) });
 // The real Shot Director with a stand-in client: four directions; four
 // timing out (then one); too little time for four; no time at all.
 async function directorRun(budget: number, fourFails: boolean) {
@@ -641,7 +641,7 @@ function shotTemplates(): Check[] {
   const withConcepts = ShotScript.safeParse({ ...(REAL_SHOT_VIDEOS[0].shots as object), creative: { message: "Video in minutes", audience: "SaaS teams", tone: "calm", pace: "balanced" }, concepts: [{ cue: "Making a product video", see: "a filmstrip stalls under a pile of steps", hero: "visual:filmstrip", persists: null, avoid: "people" }] });
   add("phase 2: creative + concepts are kept with the shots", withConcepts.success && withConcepts.data.concepts?.length === 1 && withConcepts.data.creative?.pace === "balanced", withConcepts.success ? "stored" : "failed to parse");
   // (a model answer: shared creative + directions A–D, each with compact shots)
-  const modelAnswer = (shots: object[]) => ({ theme: "lavender", creative: { message: "m", audience: "a", tone: "t", pace: "calm" }, variants: [{ id: "A", direction: DIRECTION_A, shots }] });
+  const modelAnswer = (shots: object[]) => ({ theme: "lavender", creative: { message: "m", audience: "a", tone: "t", pace: "calm" }, variants: [{ id: "A", dna: DNA_A, direction: DIRECTION_A, shots }] });
   const fullShots = ShotScript.parse(REAL_SHOT_VIDEOS[0].shots).shots.map((x) => toModelShot({ ...x, objects: null }));
   const fromModel = directionScripts(ShotScriptModel.parse(modelAnswer(fullShots)))[0];
   add("phase 2: the Director must write creative; concepts are read off its shots", !ShotScriptModel.safeParse({ ...modelAnswer(fullShots), creative: undefined }).success && fromModel.concepts?.length === fullShots.length && fromModel.concepts.every((c, i) => c.cue === fromModel.shots[i].cue && !!c.hero), `${fromModel.concepts?.length} concepts, e.g. ${fromModel.concepts?.[0].cue} → ${fromModel.concepts?.[0].hero}: ${fromModel.concepts?.[0].see}`);
@@ -806,7 +806,7 @@ function shotTemplates(): Check[] {
   add("phase 6.5 H: the quality score still decides (cleanest first)", four.picks.every((p) => p.score === scoreCandidate(p.violations, p.plan)) && four.picks.every((p, i) => i === 0 || p.score >= four.picks[i - 1].score), four.picks.map((p) => `${p.shots?.variant}=${p.score}`).join(" · "));
   const lookAlikes = [dirA, { ...dirA, variant: "B", direction: DIRECTION_B }, dirC, { ...dirC, variant: "D", direction: DIRECTION_D }];
   const thin = searchCreative(lookAlikes, ctx65, 12345);
-  add("phase 6.5 I: clean but alike directions are dropped, not shown", thin.picks.length === 2 && thin.insufficient && thin.skipped.filter((x) => x.reason.startsWith("too close")).length === 2, `${thin.picks.map((p) => p.shots?.variant).join(", ")}; skipped: ${thin.skipped.map((x) => `${x.variant} (${x.reason})`).join(", ")}`);
+  add("phase 6.5 I: clean but alike directions are dropped, not shown", thin.picks.length === 2 && thin.insufficient && thin.skipped.filter((x) => x.reason.startsWith("too close") || x.reason.startsWith("same visual DNA")).length === 2, `${thin.picks.map((p) => p.shots?.variant).join(", ")}; skipped: ${thin.skipped.map((x) => `${x.variant} (${x.reason})`).join(", ")}`);
   add("phase 6.5 J: four independent valid directions → all four are offered", four.picks.length === 4 && !four.insufficient && [...ids].sort().join("") === "ABCD", ids.join(", "));
   const copies = searchCreative([dirA, { ...dirA, variant: "B" }, { ...dirA, variant: "C" }, { ...dirA, variant: "D" }], ctx65, 12345);
   add("phase 6.5 K: without independent directions it never pads to four", copies.picks.length === 1 && copies.insufficient, `${copies.picks.length} video; insufficient creative diversity reported`);
@@ -822,7 +822,7 @@ function shotTemplates(): Check[] {
   // no per-direction concepts); every Phase 2–5 field comes back intact.
   const flat4 = [dirA, dirB, dirC, dirD];
   const compact = fakeAnswer(flat4);
-  const legacy = { theme: "lavender", creative: dirA.creative, variants: flat4.map((x) => ({ id: x.variant, direction: x.direction, concepts: conceptsOf(x.shots), shots: x.shots })) };
+  const legacy = { theme: "lavender", creative: dirA.creative, variants: flat4.map((x) => ({ id: x.variant, dna: x.dna, direction: x.direction, concepts: conceptsOf(x.shots), shots: x.shots })) };
   const [cLen, lLen] = [JSON.stringify(compact).length, JSON.stringify(legacy).length];
   add("phase 6.5: the four-direction answer is much more compact than before", cLen <= lLen * 0.7, `${cLen} vs ${lLen} characters (${Math.round((1 - cLen / lLen) * 100)}% shorter, about ${Math.round(cLen / 3.5)} vs ${Math.round(lLen / 3.5)} tokens)`);
   const parsedCompact = ShotScriptModel.safeParse(compact);
@@ -844,6 +844,80 @@ function shotTemplates(): Check[] {
   add("phase 6.5 K: with little time left it asks for one direction only", !!short.script && short.calls.length === 1 && short.calls[0].single && short.variants.length === 1, `budget 60 s: ${short.calls.map((c) => `${c.single ? "one" : "four"} (${Math.round(c.timeout / 1000)} s)`).join(", ")}`);
   const none5 = DIRECTOR_RUNS.none;
   add("phase 6.5: no time for either → a clear failure, no request beyond the budget", !none5.script && none5.calls.length === 0 && none5.errors.some((e) => e.startsWith("four directions skipped")) && none5.errors.some((e) => e.startsWith("single direction skipped")), none5.errors.join(" · "));
+  // ── Phase 6.5 visual DNA, diagnostics, timing, behaviors, overlap ──
+  const dnas = [DNA_A, DNA_B, DNA_C, DNA_D];
+  add("DNA A: the visual DNA schema is valid", dnas.every((d) => Dna.safeParse(d).success), dnas.map((d) => d.composition).join(" · "));
+  const badDna = Dna.safeParse({ ...DNA_A, composition: "magazine" });
+  const badAnswer = ShotScriptModel.safeParse({ ...compact, variants: compact.variants.map((v, i) => (i ? v : { ...v, dna: { ...v.dna, cards: "lots" } })) });
+  add("DNA B: a DNA value outside the list is rejected", !badDna.success && !badAnswer.success, "composition \"magazine\" and cards \"lots\" rejected");
+  add("DNA C: all four directions carry their DNA", run4.variants.length === 4 && run4.variants.every((v) => !!v.dna) && back.every((x) => !!x.dna), run4.variants.map((v) => `${v.variant}: ${v.dna?.composition}/${v.dna?.cards}/${v.dna?.typography}`).join(" · "));
+  const pairs = four.picks.flatMap((a, i) => four.picks.slice(i + 1).map((b) => ({ a, b, d: dnaSimilarity(a.shots!, b.shots!)! })));
+  add("DNA D: every pair of the four differs in at least 6 of 9 DNA dimensions", pairs.length === 6 && pairs.every((x) => x.d.different.length >= 6 && !sameDna(x.d)), pairs.map((x) => `${x.a.shots?.variant}${x.b.shots?.variant} ${x.d.different.length}/9`).join(" · "));
+  const lookOnly = dnaSimilarity(dirA, { ...dirA, dna: { ...DNA_A, icons: "outline" } })!;
+  const lookDna = dnaSimilarity(lookA.shots!, lookA2.shots!)!;
+  add("DNA E: a look-only difference does not count as another DNA", sameDna(lookOnly) && sameDna(lookDna) && lookA.script.look?.decor === lookA2.script.look?.decor, `other icon style: ${lookOnly.different.length}/9 differ · other seed: ${lookDna.different.length}/9 differ (same background ${lookA.script.look?.decor})`);
+  const sameStruct = searchCreative([dirA, { ...dirB, dna: DNA_A }], ctx65, 12345);
+  add("DNA F: a direction with the same structural DNA is rejected", sameStruct.picks.length === 1 && sameStruct.status === INSUFFICIENT_VISUAL_DIVERSITY && sameStruct.skipped.some((x) => x.reason.startsWith("same visual DNA as A")), sameStruct.skipped.map((x) => `${x.variant}: ${x.reason}`).join(" · "));
+  const wrongFamily = dnaProblems(dirB.shots, DNA_D);
+  const followsA = [11, 222, 3333].map((sd) => expandShots(dirA, [], p3n, { seed: sd }));
+  const lookOk = followsA.every((sc) => JSON.stringify({ decor: sc.look?.decor, tone: sc.look?.tone, icons: sc.look?.icons, cut: sc.look?.cut }) === JSON.stringify(dnaLook(DNA_A)));
+  const camOk = followsA[0].beats.filter((b) => b.action === "scene").every((b) => ["drift", "push-in", "pull-back", "hold"].includes(b.camera ?? ""));
+  const penalised = searchVariants({ ...dirB, dna: DNA_D }, ctx65, 7, { tries: 2, pick: 1 }).best;
+  add("DNA G: the DNA decides the look, the camera and the allowed shots", wrongFamily.some((x) => x.startsWith("cards none")) && wrongFamily.some((x) => x.startsWith("composition object-story")) && lookOk && camOk && !!penalised && penalised.score >= 6 && dnas.every((d, i) => !dnaProblems(flat4[i].shots, d).length), `B's shots under D's DNA: ${wrongFamily.join("; ")} (score ${penalised?.score}); A's look = ${JSON.stringify(dnaLook(DNA_A))} for every seed`);
+  // Timing: the voice's words place every moment.
+  const groupPlan = compileSceneScript(repairCues(expandShots(p3Parsed, [], p3n), p3n, p3w, p3.duration).script, { narration: p3n, words: p3w, durationSeconds: p3.duration, brand: { name: "MotionBrief", logo: "logo" } });
+  const wordAt = (w: string) => Math.round(p3w.find((x) => x.text.toLowerCase().startsWith(w))!.start * 30);
+  const litAt = (label: string) => {
+    const node = groupPlan.nodes.find((n) => n.kind === "el" && JSON.stringify(n.el ?? {}).includes(`"${label}"`) && n.lit && n.lit.length > 2);
+    // (it starts lighting 10 frames before it is fully lit)
+    const on = node?.lit?.find(([f2, v2]) => v2 === 1 && f2 > 0);
+    return on ? on[0] - 10 : null;
+  };
+  const [emailLit, linkedLit] = [litAt("Email"), litAt("LinkedIn")];
+  add("timing H: each moment starts on its spoken word", emailLit !== null && Math.abs(emailLit - wordAt("email")) <= 8 && linkedLit !== null && Math.abs(linkedLit - wordAt("linkedin")) <= 8, `"email" said at ${wordAt("email")}, lit at ${emailLit} · "LinkedIn" said at ${wordAt("linkedin")}, lit at ${linkedLit} (frames)`);
+  const groupBeats = expandShots(p3Parsed, [], p3n).beats;
+  const shareAt = groupBeats.findIndex((b) => b.cue === "Share them on your website,");
+  add("timing I: a group said item by item lights each item on its own word", groupBeats[shareAt]?.style === "steps" && groupBeats.slice(shareAt + 1, shareAt + 3).map((b) => `${b.action}@${b.cue}`).join(",") === "activate@email,activate@LinkedIn", groupBeats.slice(shareAt, shareAt + 3).map((b) => `${b.action}@${b.cue}`).join(" → "));
+  const resultShots = { ...p3Parsed, shots: p3Parsed.shots.map((x, i) => (i === 4 ? { ...x, result: "Videos ready", result_cue: "In about two minutes" } : i === 5 ? { ...x, shot: "outputs" as const, subject: null, line: null, items: [{ cue: null, asset: "visual:filmstrip", label: "Videos" }] } : x)) };
+  const resultScript = repairCues(expandShots(resultShots, [], p3n), p3n, p3w, p3.duration).script;
+  const upd = resultScript.beats.find((b) => b.action === "update" && b.cue === "In about two minutes");
+  const resultPlan = compileSceneScript(resultScript, { narration: p3n, words: p3w, durationSeconds: p3.duration, brand: { name: "MotionBrief", logo: "logo" } });
+  const cardUpd = resultPlan.nodes.flatMap((n) => (n.el?.type === "card" ? (n.el.updates ?? []) : [])).find((u) => JSON.stringify(u.content).includes("Videos ready"));
+  add("timing J: the result appears when it is said (also with outputs after it)", !!upd && !!cardUpd && cardUpd.at >= wordAt("in") - 6 && cardUpd.at - wordAt("in") <= 15 && !resultScript.beats.some((b) => (b.elements ?? []).some((e) => e.asset?.startsWith("card:success"))), `"In about two minutes" at ${wordAt("in")}: the card reads "Videos ready" at ${cardUpd?.at} (the click before it needs its 20 frames)`);
+  // Behaviors: two moments on one word — the second moves to the next free word.
+  const busy: BehaviorReport[] = [];
+  const busyScript = expandShots({ ...p3Parsed, shots: p3Parsed.shots.map((x, i) => (i === 0 ? { ...x, objects: [o5("bell", "object:bell", true, false, act("highlight", null, "nobody sees them."))] } : x)) }, [], p3n, undefined, busy);
+  const busyBeat = busyScript.beats.find((b) => b.action === "highlight");
+  add("behavior K: a valid behavior on a busy word is delayed, not dropped", busy[0]?.status === "delayed" && !!busyBeat && busyBeat.cue !== "nobody sees them.", `${busy[0]?.type} of ${busy[0]?.object}: ${busy[0]?.status} to "${busyBeat?.cue}" (${busy[0]?.reason})`);
+  const joined: BehaviorReport[] = [];
+  const joinScript = expandShots({ ...p3Parsed, shots: p3Parsed.shots.map((x, i) => (i === 4 ? { ...x, objects: [o5("wave", "visual:waveform", true, false, act("dock", "panel", "choose a voice,")), o5("panel", "card", true, false, null)] } : x)) }, [], p3n, undefined, joined);
+  const uiScene = joinScript.beats.find((b) => b.action === "scene" && (b.elements ?? []).some((e) => e.asset?.startsWith("card:")));
+  add("behavior K: an acting object the shot does not draw joins it when there is room", joined[0]?.status === "applied" && (uiScene?.elements ?? []).some((e) => e.asset === "visual:waveform") && joinScript.beats.some((b) => b.action === "trigger" && b.cue === "choose a voice,"), `ui scene: ${(uiScene?.elements ?? []).map((e) => e.asset).join(" + ")} (${uiScene?.layout}); dock → trigger on "choose a voice,"`);
+  const why: BehaviorReport[] = [];
+  expandShots({ ...p3Parsed, shots: p3Parsed.shots.map((x, i) => (i === 7 ? { ...x, objects: [o5("site", "icon:globe", true, false, act("dock", null, "in email")), o5("wave", "visual:waveform", true, false, act("highlight", null, "on LinkedIn."))] } : x)) }, [], p3n, undefined, why);
+  add("behavior L: a dropped behavior always says why", why.length === 2 && why.every((x) => x.status === "dropped" && !!x.reason) && why.some((x) => x.reason === "unsupported-composition") && why.some((x) => x.reason === "invalid-target"), why.map((x) => `${x.type} of ${x.object}: ${x.reason}`).join(" · "));
+  // Overlap: the detector catches overlaps planted in a clean plan.
+  const clean = planQuality(groupPlan);
+  const planted = JSON.parse(JSON.stringify(groupPlan)) as typeof groupPlan;
+  const side = planted.texts.find((t) => t.style === "side")!;
+  planted.texts.push({ ...side, text: `${side.text} again` });
+  const settled = planted.nodes.filter((n) => n.kind === "el" && n.appear !== undefined);
+  const [n1, n2] = [settled[0], settled[1]];
+  if (n1 && n2) n2.pos = n1.pos;
+  const caught = planQuality(planted);
+  add("overlap M: planted text/text and element overlaps are caught", clean.collisions.length === 0 && caught.collisions.some((c) => c.what.startsWith("text") && c.what.includes("over text")) && caught.collisions.length >= 1, `clean: ${clean.collisions.length} · planted: ${caught.collisions.map((c) => `${c.what} (${(c.at / 30).toFixed(1)} s)`).slice(0, 3).join(" · ")}`);
+  // Diagnostics: why a direction was left out, kept for the project.
+  const rej = sameStruct.diagnostics.find((d) => d.direction_id === "B");
+  const generate = readFileSync("app/projects/actions.ts", "utf8");
+  add("diagnostics N: a rejected direction's reason is kept with the project", !!rej && !rej.selected && rej.rejected_against_variant === "A" && rej.similarity_dimensions.includes("composition") && rej.rejection_reasons.length > 0 && rej.candidate_attempts > 0 && run4.diagnostics?.directions.length === 4 && /brief: \{ \.\.\.\(fresh!\.brief as object\), \.\.\.\(stored \?\? \{\}\), diagnostics \}/.test(generate), `B: ${rej?.rejection_reasons[0]} · attempts ${rej?.candidate_attempts}, valid ${rej?.valid_count} · saved as brief.diagnostics`);
+  add("diversity O: four valid, different directions stay four", four.picks.length === 4 && four.status === "ok" && four.diagnostics.every((d) => d.selected), four.diagnostics.map((d) => `${d.direction_id} q${d.quality_score}`).join(" · "));
+  add("diversity P: without enough different directions it never copies to four", copies.picks.length === 1 && copies.status === INSUFFICIENT_VISUAL_DIVERSITY && copies.diagnostics.filter((d) => !d.selected).every((d) => d.rejected_against_variant === "A"), `${copies.picks.length} video · ${copies.status}`);
+  const oldWithDiag = ProductBrief.safeParse({ ...BRIEF_FIXTURE });
+  add("compat Q: old projects (no DNA, no diagnostics) still parse and build", oldWithDiag.success && oldWithDiag.data.diagnostics === null && p3Parsed.dna === null && expandShots(p3Parsed, [], p3n).beats.length > 0, "dna = null, diagnostics = null");
+  // The call to action: a closing brand sentence without its own shot brings the lockup in on its first word.
+  const noCta = { ...p3Parsed, shots: p3Parsed.shots.slice(0, -1) };
+  const ctaPlan = compileSceneScript(repairCues(expandShots(noCta, [], p3n), p3n, p3w, p3.duration).script, { narration: p3n, words: p3w, durationSeconds: p3.duration, brand: { name: "MotionBrief", logo: "logo", cta: "Start free" } });
+  add("timing: the lockup arrives with the spoken call to action", !!ctaPlan.brand && Math.abs(ctaPlan.brand.start - wordAt("start")) <= 6 && !!groupPlan.brand && groupPlan.brand.start > wordAt("start"), `"Start free with MotionBrief" at ${wordAt("start")}: lockup at ${ctaPlan.brand?.start} (with its own shot: ${groupPlan.brand?.start})`);
   // Every real video made so far must still render cleanly (regressions).
   const BAD = ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "tiny-screens"];
   for (const v of REAL_SHOT_VIDEOS) {

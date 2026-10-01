@@ -1,4 +1,4 @@
-import type { Direction, ShotScript } from "@/lib/shots";
+import type { Direction, Dna, ShotScript } from "@/lib/shots";
 
 // Phase 6.5 fixture: four creative directions for the MotionBrief test-4
 // narration (the last real video in real-shots.ts). A is the shots that
@@ -6,7 +6,13 @@ import type { Direction, ShotScript } from "@/lib/shots";
 const n = { subject: null, label: null, line: null, line_cue: null, accent: null, mark: null, card: null, title: null, input: null, button: null, action_cue: null, result: null, result_cue: null, items: null, camera: null, objects: null };
 const it = (asset: string, label: string | null = null, cue: string | null = null) => ({ cue, asset, label });
 const creative = { message: "Every launch gets its video in minutes", audience: "SaaS product teams", tone: "calm and confident", pace: "balanced" as const };
-const script = (variant: string, direction: Direction, shots: object[]): ShotScript => ({ version: 3, theme: "lavender", creative, concepts: null, variant, direction, shots: shots.map((s) => ({ ...n, ...s })) as ShotScript["shots"] });
+const script = (variant: string, direction: Direction, dna: Dna, shots: object[]): ShotScript => ({ version: 3, theme: "lavender", creative, concepts: null, variant, direction, dna, shots: shots.map((s) => ({ ...n, ...s })) as ShotScript["shots"] });
+
+// Four visual DNAs: every pair differs in at least 6 of the 9 dimensions.
+export const DNA_A: Dna = { composition: "hero", cards: "accent", icons: "solid", typography: "editorial", transitions: "push", motion: "scale-reveal", camera: "push", background: "open" };
+export const DNA_B: Dna = { composition: "workspace", cards: "primary", icons: "outline", typography: "ui-labels", transitions: "panel", motion: "physical", camera: "lateral", background: "grid" };
+export const DNA_C: Dna = { composition: "kinetic-type", cards: "accent", icons: "minimal", typography: "dominant", transitions: "type", motion: "scale-reveal", camera: "static", background: "bold-field" };
+export const DNA_D: Dna = { composition: "object-story", cards: "none", icons: "solid", typography: "secondary", transitions: "object", motion: "assemble", camera: "orbit", background: "environment" };
 
 export const DIRECTION_A: Direction = {
   concept: "an unheard launch finally gets announced",
@@ -57,9 +63,9 @@ export const DIRECTION_D: Direction = {
   camera: "pull back to reveal the whole picture",
 };
 
-export const CREATIVE_A = (shots: ShotScript): ShotScript => ({ ...shots, variant: "A", direction: DIRECTION_A });
+export const CREATIVE_A = (shots: ShotScript): ShotScript => ({ ...shots, variant: "A", direction: DIRECTION_A, dna: DNA_A });
 
-export const CREATIVE_B = script("B", DIRECTION_B, [
+export const CREATIVE_B = script("B", DIRECTION_B, DNA_B, [
   { shot: "problem", cue: "Your team ships new features", subject: "icon:file-text", label: "Release notes", line: "nobody sees them", line_cue: "nobody sees them.", accent: "nobody", camera: "establish" },
   { shot: "problem", cue: "Making a launch video takes days.", subject: "visual:clock", label: "Days", camera: "push" },
   { shot: "reveal", cue: "MotionBrief changes that.", camera: "reveal" },
@@ -71,7 +77,7 @@ export const CREATIVE_B = script("B", DIRECTION_B, [
   { shot: "line", cue: "Start free with MotionBrief.", line: "Start free with MotionBrief", accent: "MotionBrief", camera: "hold" },
 ]);
 
-export const CREATIVE_C = script("C", DIRECTION_C, [
+export const CREATIVE_C = script("C", DIRECTION_C, DNA_C, [
   { shot: "problem", cue: "Your team ships new features", subject: "object:question", label: "Seen?", camera: "establish" },
   { shot: "line", cue: "Making a launch video takes days.", line: "A video takes days", accent: "days", mark: "strike", camera: "hold" },
   { shot: "reveal", cue: "MotionBrief changes that.", camera: "reveal" },
@@ -83,7 +89,7 @@ export const CREATIVE_C = script("C", DIRECTION_C, [
   { shot: "line", cue: "Start free with MotionBrief.", line: "Start free with MotionBrief", accent: "free", camera: "hold" },
 ]);
 
-export const CREATIVE_D = script("D", DIRECTION_D, [
+export const CREATIVE_D = script("D", DIRECTION_D, DNA_D, [
   { shot: "group", cue: "Your team ships new features", items: [it("icon:rocket", "Features"), it("icon:bell", "News"), it("icon:calendar", "Weekly")], camera: "establish" },
   { shot: "problem", cue: "but nobody sees them.", subject: "object:exclaim", label: "Unseen", camera: "push" },
   { shot: "line", cue: "Making a launch video takes days.", line: "Takes days", accent: "days", mark: "strike", camera: "hold" },

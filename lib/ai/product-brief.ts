@@ -5,7 +5,7 @@ import { checkContinuity, keepOmittedObjects } from "@/lib/ai/blueprint-check";
 import { StoryAssetRecord, VisualStory } from "@/lib/visual-story";
 import { FlowScript } from "@/lib/flow-script";
 import { Look, SceneScript } from "@/lib/scene-script";
-import { Direction } from "@/lib/shots";
+import { Direction, Dna } from "@/lib/shots";
 
 // Internal scene model. `animation`, `transition` and sound effect `cue`s are
 // free-text directions chosen by the AI from the scene's meaning; the Remotion
@@ -183,10 +183,12 @@ export const ProductBrief = z.object({
   story_assets: z.array(StoryAssetRecord).nullable().default(null).catch(null),
   // The videos offered to choose from: one per creative direction (older
   // projects: the same shots in different looks, no direction); the first is `scene`.
-  variants: z.array(z.object({ seed: z.number(), score: z.number().optional(), scene: SceneScript, variant: z.string().nullable().optional(), direction: Direction.nullable().optional() })).nullable().default(null).catch(null),
+  variants: z.array(z.object({ seed: z.number(), score: z.number().optional(), scene: SceneScript, variant: z.string().nullable().optional(), direction: Direction.nullable().optional(), dna: Dna.nullable().optional() })).nullable().default(null).catch(null),
   // What the customer downloaded (the taste the next videos learn from):
   // its look, and since Phase 6.5 its creative direction.
-  taste: z.object({ downloads: z.array(z.object({ seed: z.number(), look: Look.nullable(), at: z.string(), selected_variant: z.string().nullable().optional(), direction: Direction.nullable().optional() })) }).nullable().default(null).catch(null),
+  taste: z.object({ downloads: z.array(z.object({ seed: z.number(), look: Look.nullable(), at: z.string(), selected_variant: z.string().nullable().optional(), direction: Direction.nullable().optional(), dna: Dna.nullable().optional() })) }).nullable().default(null).catch(null),
+  // What the Shot Director's search did (per direction; see generateFlow).
+  diagnostics: z.record(z.string(), z.unknown()).nullable().default(null).catch(null),
 });
 export type SoundEffect = z.infer<typeof SoundEffect>;
 export type SceneAction = z.infer<typeof SceneAction>;

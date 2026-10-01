@@ -489,12 +489,24 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // The videos the customer chooses between: one per creative direction.
   const variants = shot.script && v2 === shot ? shot.variants.map((v) => ({ ...v, scene: { ...v.scene, theme: v2.script!.theme, pace: v2.script!.pace } })) : [];
   const stored = v2.script ? { scene: v2.script, ...(shot.script ? { shots: shot.shots } : {}), ...(variants.length > 1 ? { variants } : {}) } : result.script ? { flow: result.script } : null;
-  if (stored) {
+  // What the Shot Director's search did with each direction (why one was
+  // dropped, its DNA, its behaviors) and which build made it — kept even
+  // when nothing usable came back.
+  const diagnostics = {
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
+    at: new Date().toISOString(),
+    engine: v2.script ? (v2 === shot ? "shots" : "scene") : result.script ? "flow" : null,
+    director_ms: shot.ms,
+    ...(shot.diagnostics ?? { mode: null, status: "failed", directions: [], output_tokens: null }),
+    previews: variants.length > 1 ? variants.length : v2.script ? 1 : 0,
+    problems: shot.errors.slice(0, 6),
+  };
+  {
     // Re-read so nothing written meanwhile is lost; only `scene`/`flow` change.
     const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
     const current = ProductBrief.safeParse(fresh?.brief);
     if (current.success && !current.data.flow && !current.data.scene) {
-      await admin.from("projects").update({ brief: { ...(fresh!.brief as object), ...stored } }).eq("id", projectId).eq("user_id", userId);
+      await admin.from("projects").update({ brief: { ...(fresh!.brief as object), ...(stored ?? {}), diagnostics } }).eq("id", projectId).eq("user_id", userId);
     }
   }
   // Direction library: what the Director made of the customer's direction.
@@ -505,7 +517,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     .update({
       narration: brief.data.script,
       flow_script: script,
-      outcome: { stored: !!script, engine: v2.script ? "scene" : result.script ? "flow" : null, attempts, problems: (v2.script ? v2.errors : [...v2.errors, ...result.errors]).slice(0, 8), theme: script?.theme ?? null },
+      outcome: { stored: !!script, engine: v2.script ? "scene" : result.script ? "flow" : null, attempts, problems: (v2.script ? v2.errors : [...v2.errors, ...result.errors]).slice(0, 8), theme: script?.theme ?? null, status: diagnostics.status, previews: diagnostics.previews, commit: diagnostics.commit },
       updated_at: new Date().toISOString(),
     })
     .eq("project_id", projectId);

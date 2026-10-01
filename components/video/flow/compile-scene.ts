@@ -97,11 +97,23 @@ const toContent = (c: SceneContent | null | undefined): Record<string, unknown> 
 export function compileSceneScript(script: SceneScript, { narration, words, durationSeconds, theme, brand, screenshots }: SceneCompileOptions): FlowPlan {
   const total = Math.round(durationSeconds * FPS);
   const timeline = words?.length ? words : estimateWords(narration, durationSeconds);
-  const stageEnd = brand?.name?.trim() || brand?.logo ? brandStartFrame(total, timeline) : total;
   // Explainer pace (the default): soft entrances, one backdrop, sound only where
   // something visibly lands.
   const calm = script.pace !== "lively";
   const explainer = script.style === "explainer";
+  let stageEnd = brand?.name?.trim() || brand?.logo ? brandStartFrame(total, timeline) : total;
+  // Explainer: a closing sentence that names the brand ("Start free with
+  // MotionBrief.") and has no shot of its own is the call to action — the
+  // lockup arrives with its first word instead of after a dead stretch.
+  if (explainer && brand?.name?.trim() && timeline.length > 2) {
+    const name = brand.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    let k = timeline.length - 1;
+    while (k > 0 && !/[.!?]["')\]]*$/.test(timeline[k - 1].text)) k--;
+    const said = timeline.slice(k).map((w) => w.text).join("").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const from = Math.round(timeline[k].start * FPS) - LEAD;
+    const lastCue = Math.max(-1, ...spokenCueTimes(script.beats.map((b) => b.cue), timeline).map((x) => (x === null ? -1 : x)));
+    if (k > 0 && name && said.includes(name) && lastCue < timeline[k].start && from > 0 && from < stageEnd) stageEnd = Math.max(from, 45);
+  }
   const stagger = calm ? 6 : 4; // ≥ 0.2 s apart, so each pop is heard
 
   // ── schedule ──
@@ -111,6 +123,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const times = spokenCueTimes(script.beats.map((b) => (paired.has(b) ? "" : b.cue)), timeline);
   const beats: SceneBeat[] = [];
   const starts: number[] = [];
+  const skipped: NonNullable<FlowPlan["skipped"]> = [];
   let last = -MIN_GAP;
   script.beats.forEach((b, i) => {
     if (paired.has(b) && beats[beats.length - 1] === script.beats[i - 1]) {
@@ -123,8 +136,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     const prev = beats[beats.length - 1];
     const earliest = prev ? starts[starts.length - 1] + MIN_FRAMES[prev.action] : 0;
     const t = Math.min(stageEnd - 24, Math.max(0, cue, earliest));
-    if (MINOR.has(b.action) && t - cue > 20) return;
-    if (prev && t - starts[starts.length - 1] < MIN_GAP) return;
+    if (MINOR.has(b.action) && t - cue > 20) return void skipped.push({ cue: b.cue, action: b.action, reason: `a minor accent ${t - cue} frames late` });
+    if (prev && t - starts[starts.length - 1] < MIN_GAP) return void skipped.push({ cue: b.cue, action: b.action, reason: `${t - starts[starts.length - 1]} frames after the ${prev.action} before it` });
     beats.push(b);
     starts.push(t);
     last = t;
@@ -1006,6 +1019,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   // Elements that never appeared (skipped beats) are dropped.
   plan.nodes = plan.nodes.filter((n: FlowNode) => n.kind !== "el" || n.appear !== undefined);
   const out = smoothCamera(plan);
+  if (skipped.length) out.skipped = skipped;
   // Explainer: the rules are enforced on the finished plan, not only reported.
   if (explainer) resolvePlan(out);
   return out;

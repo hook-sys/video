@@ -165,7 +165,30 @@ export const ModelShot = z.object({
 });
 export type ModelShot = z.infer<typeof ModelShot>;
 // A direction and its shots; its concepts (Phase 2) are read off the shots.
-export const CreativeVariant = z.object({ id: z.enum(CREATIVE_IDS), direction: Direction, shots: z.array(ModelShot) });
+// The direction's visual DNA: controlled values only (no free text), so the
+// four can be compared and each one's shots and look are made to follow it.
+export const DNA_VALUES = {
+  composition: ["hero", "workspace", "kinetic-type", "object-story"],
+  cards: ["none", "accent", "primary"],
+  icons: ["outline", "solid", "minimal"],
+  typography: ["editorial", "ui-labels", "dominant", "secondary"],
+  transitions: ["push", "panel", "type", "object"],
+  motion: ["physical", "assemble", "scale-reveal", "transform"],
+  camera: ["push", "lateral", "static", "orbit"],
+  background: ["open", "grid", "bold-field", "environment"],
+} as const;
+export const Dna = z.object({
+  composition: z.enum(DNA_VALUES.composition),
+  cards: z.enum(DNA_VALUES.cards),
+  icons: z.enum(DNA_VALUES.icons),
+  typography: z.enum(DNA_VALUES.typography),
+  transitions: z.enum(DNA_VALUES.transitions),
+  motion: z.enum(DNA_VALUES.motion),
+  camera: z.enum(DNA_VALUES.camera),
+  background: z.enum(DNA_VALUES.background),
+});
+export type Dna = z.infer<typeof Dna>;
+export const CreativeVariant = z.object({ id: z.enum(CREATIVE_IDS), dna: Dna, direction: Direction, shots: z.array(ModelShot) });
 export const ShotScriptModel = z.object({ theme: z.enum(FLOW_THEMES), creative: Creative, variants: z.array(CreativeVariant) });
 // A stored shot script is ONE direction (older ones have none: null).
 export const ShotScript = z.object({
@@ -176,6 +199,7 @@ export const ShotScript = z.object({
   shots: z.array(StoredShot),
   variant: z.string().nullable().default(null),
   direction: Direction.nullable().default(null),
+  dna: Dna.nullable().default(null),
 });
 export type ShotScript = z.infer<typeof ShotScript>;
 // A compact shot as the stored Shot (every Phase 2–5 field kept).
@@ -214,7 +238,7 @@ export const conceptsOf = (shots: ConceptSource[]): Concept[] =>
 export const directionScripts = (model: z.infer<typeof ShotScriptModel>): ShotScript[] =>
   model.variants.map((v) => {
     const shots = v.shots.map(flatShot);
-    return ShotScript.parse({ version: 3, theme: model.theme, creative: model.creative, concepts: conceptsOf(shots), shots, variant: v.id, direction: v.direction });
+    return ShotScript.parse({ version: 3, theme: model.theme, creative: model.creative, concepts: conceptsOf(shots), shots, variant: v.id, direction: v.direction, dna: v.dna });
   });
 
 // ── expansion ──
@@ -360,11 +384,29 @@ export const BEHAVIOR_ACTION: Record<Exclude<BehaviorType, "enter">, SceneBeat["
   highlight: "highlight", // a pulse; the rest dims for a moment
   exit: "erase",
 };
-function bindObjects(shots: ShotInput[], beats: SceneBeat[], ranges: [number, number][], notes: ExpandNotes) {
+// What became of each object's behavior: applied on its cue, delayed to a
+// free word of the same shot (two moments on one word), or dropped — always
+// with a reason.
+export type BehaviorReport = { shot: number; object: string; type: string; status: "applied" | "delayed" | "dropped"; reason: string | null; cue: string | null };
+const norm = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
+function bindObjects(shots: ShotInput[], beats: SceneBeat[], ranges: [number, number][], notes: ExpandNotes, narration?: string, report?: BehaviorReport[]) {
   const { errors } = continuityCheck(shots);
   notes.push(...errors.map((e) => `continuity: ${e}`));
   const bad = new Set(errors.map((e) => /^shot (\d+): (?:unknown )?object "([^"]+)"/.exec(e)).filter((m) => m).map((m) => `${m![1]}:${m![2]}`));
-  const badBehavior = new Set(errors.map((e) => /^shot (\d+): behavior of "([^"]+)"/.exec(e)).filter((m) => m).map((m) => `${m![1]}:${m![2]}`));
+  const badBehavior = new Map(errors.map((e) => [/^shot (\d+): behavior of "([^"]+)"/.exec(e), e] as const).filter(([m]) => m).map(([m, e]) => [`${m![1]}:${m![2]}`, e]));
+  // The narration's words, and where each shot starts in them (a delayed
+  // moment stays inside its own shot).
+  const toks = (narration ?? "").split(/\s+/).filter(Boolean);
+  const keys = toks.map(norm);
+  const find = (cue: string | null | undefined, from: number) => {
+    const want = (cue ?? "").split(/\s+/).map(norm).filter(Boolean);
+    if (!want.length) return -1;
+    for (let k = Math.max(0, from); k + want.length <= keys.length; k++) if (want.every((w, j) => keys[k + j] === w)) return k;
+    return -1;
+  };
+  const shotAt: number[] = [];
+  shots.forEach((s, i) => shotAt.push(find(s.cue, i ? Math.max(0, shotAt[i - 1]) : 0)));
+  const classify = (e: string) => (/unknown object|transforms from unknown|needs a target|cannot target itself|targets unknown/.test(e) ? "invalid-target" : /persist|enter on an object/.test(e) ? "persistence-conflict" : /which itself leaves/.test(e) ? "target-unavailable" : "invalid");
   const elementOf = new Map<string, { el: string; at: number; exits: boolean }>(); // object id → its element
   const rename = (from: string, to: string, start: number) => {
     for (const b of beats.slice(start)) {
@@ -379,10 +421,33 @@ function bindObjects(shots: ShotInput[], beats: SceneBeat[], ranges: [number, nu
     const here = new Map<string, string>(); // object id → its element in this shot
     for (const o of s.objects ?? []) {
       if (bad.has(`${i + 1}:${o.id}`)) continue;
-      const own = beats.slice(from, to).flatMap((b) => (b.elements ?? []).map((e) => ({ b, e }))).find(({ e }) => !used.has(e) && sameAsset(e.asset, o.asset));
-      if (!own) continue; // (its picture was not drawn: nothing to bind)
-      used.add(own.e);
+      let own = beats.slice(from, to).flatMap((b) => (b.elements ?? []).map((e) => ({ b, e }))).find(({ e }) => !used.has(e) && sameAsset(e.asset, o.asset));
       const prev = elementOf.get(o.id);
+      const onScreen = prev && prev.at === i - 1 && !prev.exits;
+      const sceneBeat = beats.slice(from, to).find((b) => b.action === "scene");
+      if (!own) {
+        // Its picture is not one this shot's template draws.
+        if (onScreen && !sceneBeat) {
+          // No new scene (outputs, a caption): it is still on screen.
+          elementOf.set(o.id, { el: prev.el, at: i, exits: o.exits || CONSUMING.includes(o.behavior?.type ?? "") });
+          here.set(o.id, prev.el);
+          continue;
+        }
+        // A carried or acting object joins a scene with room (at most 3 on screen).
+        const pictureOk = onScreen || /^(icon|visual|object):/.test(o.asset);
+        if (!sceneBeat || !pictureOk || (!o.behavior && !onScreen) || (sceneBeat.elements?.length ?? 0) > 2 || o.exits) continue;
+        const added = onScreen ? { id: prev.el, asset: null, label: null, screen: null, content: null } : el(`${o.id.replace(/[^a-z0-9]/gi, "").slice(0, 16) || "obj"}${i + 1}x`, picture(o.asset, null).asset);
+        if (sceneBeat.layout === "stage") sceneBeat.layout = "stage-duo";
+        sceneBeat.elements = [...(sceneBeat.elements ?? []), added];
+        own = { b: sceneBeat, e: added };
+        if (onScreen) {
+          used.add(added);
+          elementOf.set(o.id, { el: prev.el, at: i, exits: o.exits || CONSUMING.includes(o.behavior?.type ?? "") });
+          here.set(o.id, prev.el);
+          continue;
+        }
+      }
+      used.add(own.e);
       const gone = o.exits || (!badBehavior.has(`${i + 1}:${o.id}`) && CONSUMING.includes(o.behavior?.type ?? ""));
       // Carried only straight from the shot before, into a new scene.
       if (prev && prev.at === i - 1 && !prev.exits && own.b.action === "scene" && !(own.b.elements ?? []).some((e) => e.id === prev.el)) {
@@ -395,35 +460,82 @@ function bindObjects(shots: ShotInput[], beats: SceneBeat[], ranges: [number, nu
       here.set(o.id, elementOf.get(o.id)!.el);
     }
     // Behaviors → beats at the end of the shot, in the order listed. Pieces
-    // with the same verb, target and cue move as one beat.
+    // with the same verb, target and cue move as one beat; a moment on a
+    // word another moment already uses moves to the next free word of the
+    // same shot (never silently lost).
     const added: SceneBeat[] = [];
-    const cues = new Set(beats.slice(from, to).map((b) => b.cue));
+    const cues = new Set(beats.slice(from, to).map((b) => norm(b.cue)));
     const left = new Set(here.values()); // still on screen in this shot
+    const end = shotAt.slice(i + 1).find((k) => k >= 0) ?? toks.length;
+    const free = (cue: string) => {
+      if (!cues.has(norm(cue))) return cue;
+      const last = lastWord(cue);
+      if (last && !cues.has(norm(last))) return last;
+      const at = find(cue, Math.max(0, shotAt[i]));
+      if (at < 0) return null;
+      for (let k = at + cue.split(/\s+/).length; k < end; k++) if (keys[k] && !cues.has(keys[k])) return toks[k];
+      return null;
+    };
+    const note = (o: ShotObject, status: BehaviorReport["status"], reason: string | null, cue: string | null) => {
+      report?.push({ shot: i + 1, object: o.id, type: o.behavior!.type, status, reason, cue });
+      if (status === "dropped") notes.push(`behavior: ${o.behavior!.type} of "${o.id}" in shot ${i + 1} dropped (${reason})`);
+    };
     for (const o of s.objects ?? []) {
       const bh = o.behavior;
+      if (!bh || bh.type === "enter") continue;
       const el = here.get(o.id);
-      if (!bh || !el || bh.type === "enter" || badBehavior.has(`${i + 1}:${o.id}`) || !(bh.type in BEHAVIOR_ACTION) || !bh.cue) continue;
+      const error = badBehavior.get(`${i + 1}:${o.id}`);
+      if (error) {
+        note(o, "dropped", classify(error), bh.cue);
+        continue;
+      }
+      if (!(bh.type in BEHAVIOR_ACTION)) {
+        note(o, "dropped", "invalid", bh.cue);
+        continue;
+      }
+      if (!bh.cue) {
+        note(o, "dropped", "no-cue", null);
+        continue;
+      }
+      if (!el) {
+        // (its picture is not one this shot draws: the template cannot show it)
+        note(o, "dropped", bad.has(`${i + 1}:${o.id}`) ? "invalid-target" : "unsupported-composition", bh.cue);
+        continue;
+      }
       const action = BEHAVIOR_ACTION[bh.type as Exclude<BehaviorType, "enter">];
       const target = bh.target ? here.get(bh.target) : undefined;
       if (!left.has(el) || (TARGETED.includes(bh.type) && (!target || !left.has(target)))) {
-        notes.push(`behavior: ${bh.type} of "${o.id}" in shot ${i + 1} has nothing on screen to act on: skipped`);
+        note(o, "dropped", TARGETED.includes(bh.type) && !target ? "unsupported-composition" : "target-unavailable", bh.cue);
         continue;
       }
       const group = added.find((b) => b.cue === bh.cue && b.action === action && b.to === (target ?? null) && (action === "move" || action === "merge"));
       if (group) {
         group.targets = action === "merge" ? [...group.targets!.slice(0, -1), el, target!] : [...group.targets!, el].slice(0, 4);
-      } else if (cues.has(bh.cue)) {
-        notes.push(`behavior: ${bh.type} of "${o.id}" in shot ${i + 1} shares its cue "${bh.cue}" with another moment: skipped`);
-        continue;
+        note(o, "applied", null, bh.cue);
       } else {
-        cues.add(bh.cue);
+        const cue = free(bh.cue);
+        if (!cue) {
+          note(o, "dropped", "timing-conflict", bh.cue);
+          continue;
+        }
+        cues.add(norm(cue));
         const targets = action === "merge" ? [el, target!] : action === "reveal" ? null : [el];
-        added.push(beat({ cue: bh.cue, action, targets, to: TARGETED.includes(bh.type) ? target! : null, style: action === "erase" ? "fade" : null }));
+        added.push(beat({ cue, action, targets, to: TARGETED.includes(bh.type) ? target! : null, style: action === "erase" ? "fade" : null }));
+        note(o, cue === bh.cue ? "applied" : "delayed", cue === bh.cue ? null : `"${bh.cue}" was taken`, cue);
       }
       if (CONSUMING.includes(bh.type)) left.delete(el);
     }
     if (added.length) {
-      beats.splice(to, 0, ...added);
+      // In spoken order inside the shot (cues are matched forward in time).
+      const all = [...beats.slice(from, to), ...added];
+      let key = -1;
+      const keyed = all.map((b, k) => {
+        const at = find(b.cue, Math.max(0, shotAt[i]));
+        key = at >= 0 ? at : key;
+        return { b, key, k };
+      });
+      keyed.sort((x, y) => x.key - y.key || x.k - y.k);
+      beats.splice(from, to - from, ...keyed.map((x) => x.b));
       ranges[i][1] += added.length;
       for (let k = i + 1; k < ranges.length; k++) ranges[k] = [ranges[k][0] + added.length, ranges[k][1] + added.length];
     }
@@ -431,16 +543,90 @@ function bindObjects(shots: ShotInput[], beats: SceneBeat[], ranges: [number, nu
   return new Map([...elementOf].map(([k, v]) => [k, v.el]));
 }
 
-export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInput[]; version?: number }, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant): SceneScript {
+// ── Visual DNA → the look and the camera (deterministic) ──
+// Background, icons and hand-over follow the direction's DNA, not the seed
+// (the seed still varies the side and the entrances).
+const DNA_BACKGROUND: Record<Dna["background"], { decor: (typeof DECORS)[number]; tone: (typeof TONES)[number] }> = {
+  open: { decor: "dots", tone: "white" },
+  grid: { decor: "ribbons", tone: "tint" },
+  "bold-field": { decor: "glow", tone: "deep" },
+  environment: { decor: "waves", tone: "tint" },
+};
+const DNA_ICONS: Record<Dna["icons"], (typeof ICON_STYLES)[number]> = { outline: "outline", solid: "solid", minimal: "soft" };
+const DNA_CUT: Record<Dna["transitions"], (typeof CUTS)[number]> = { push: "slide", panel: "rise", type: "soft", object: "zoom" };
+// The camera intents each camera language allows (any shot may still open
+// wide, reveal the product or hold to be read); others become its main one.
+const DNA_CAMERA: Record<Dna["camera"], { main: ShotIntent; allow: ShotIntent[] }> = {
+  push: { main: "push", allow: ["push", "close"] },
+  lateral: { main: "follow", allow: ["follow", "track", "transition"] },
+  static: { main: "hold", allow: [] },
+  orbit: { main: "pull_back", allow: ["pull_back", "overhead", "transition"] },
+};
+export const dnaCamera = (dna: Dna, intent: ShotIntent | null | undefined, first: boolean): ShotIntent => {
+  const c = DNA_CAMERA[dna.camera];
+  if (intent && (["establish", "reveal", "hold"].includes(intent) || c.allow.includes(intent))) return intent;
+  return first ? "establish" : c.main;
+};
+export const dnaLook = (dna: Dna) => ({ ...DNA_BACKGROUND[dna.background], icons: DNA_ICONS[dna.icons], cut: DNA_CUT[dna.transitions] });
+
+// Whether the shots follow their DNA (composition, cards, typography,
+// motion). Each problem is named; the search counts them against the
+// direction and the Director is asked to fix them.
+type DnaShot = { shot: ShotKind; subject: string | null; line?: string | null; items?: { asset: string }[] | null; objects?: { behavior?: { type: string } | null }[] | null };
+export function dnaProblems(shots: DnaShot[], dna: Dna): string[] {
+  const out: string[] = [];
+  const count = (f: (s: DnaShot) => boolean) => shots.filter(f).length;
+  const ui = count((s) => s.shot === "ui");
+  const outputs = count((s) => s.shot === "outputs");
+  const typeShots = count((s) => s.shot === "line" || s.shot === "number");
+  const plainLines = count((s) => s.shot === "line" && !s.subject);
+  const pictures = count((s) => [s.subject, ...(s.items ?? []).map((i) => i.asset)].some((a) => /^(object|visual):/.test(a ?? "")));
+  const acts = new Set(shots.flatMap((s) => (s.objects ?? []).map((o) => o.behavior?.type).filter((t): t is string => !!t)));
+  const has = (...k: string[]) => k.some((x) => acts.has(x));
+  const swaps = count((s) => (s.items ?? []).some((i) => i.asset.startsWith("text:")));
+  const kinds = (k: ShotKind) => shots.some((s) => s.shot === k);
+  const need = (ok: boolean, what: string) => ok || out.push(what);
+  switch (dna.composition) {
+    case "hero": need(ui <= 1, `composition hero: ${ui} ui shots (at most 1; the subject is a picture, not a screen)`); break;
+    case "workspace": need(ui >= 1, "composition workspace: no ui shot (the product's screen is the hero)"); break;
+    case "kinetic-type": need(typeShots >= Math.ceil(shots.length * 0.4) && ui <= 1, `composition kinetic-type: ${typeShots} of ${shots.length} shots are line or number (at least 40%), ${ui} ui`); break;
+    case "object-story": need(pictures >= 2 && acts.size >= 1 && ui <= 1, `composition object-story: ${pictures} shots with object:/visual: pictures (need 2), ${acts.size} object behaviors (need 1), ${ui} ui`); break;
+  }
+  switch (dna.cards) {
+    case "none": need(ui + outputs === 0, `cards none: ${ui + outputs} ui/outputs shots`); break;
+    case "accent": need(ui <= 1 && outputs === 0, `cards accent: ${ui} ui and ${outputs} outputs shots (at most one ui, no outputs)`); break;
+    case "primary": need(ui >= 1, "cards primary: no ui shot"); break;
+  }
+  switch (dna.typography) {
+    case "editorial": need(plainLines >= 1, "typography editorial: no line shot in big type"); break;
+    case "ui-labels": need(ui >= 1, "typography ui-labels: no ui shot to carry the labels"); break;
+    case "dominant": need(typeShots >= 3, `typography dominant: ${typeShots} line/number shots (need 3)`); break;
+    case "secondary": need(plainLines <= 2, `typography secondary: ${plainLines} big-type lines (at most 2)`); break;
+  }
+  switch (dna.motion) {
+    case "physical": need(has("move", "route", "dock", "accumulate") || kinds("steps") || kinds("outputs"), "motion physical: nothing travels (no move/route/dock/accumulate, steps or outputs)"); break;
+    case "assemble": need(has("accumulate", "assemble", "converge", "dock", "connect") || kinds("outputs"), "motion assemble: nothing gathers or connects"); break;
+    case "scale-reveal": need(kinds("number") || kinds("reveal"), "motion scale-reveal: no number or reveal shot"); break;
+    case "transform": need(has("transform", "converge") || swaps > 0, "motion transform: nothing transforms (no transform/converge behavior or word swap)"); break;
+  }
+  return out;
+}
+
+export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInput[]; version?: number; dna?: Dna | null }, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant, report?: BehaviorReport[]): SceneScript {
   // (the seed is mixed first: neighbouring seeds give unrelated videos)
   const pick = variant ? rng(Math.imul(variant.seed ^ 0x9e3779b9, 0x85ebca6b)) : null;
   const choose = <T,>(fallback: T, options: readonly T[]) => (pick ? options[Math.floor(pick() * options.length)] : fallback);
-  const decor = choose("dots", DECORS);
-  const tone = choose("tint", TONES);
-  const icons = choose("tile", ICON_STYLES);
+  const dna = script.dna ?? null;
+  const fromDna = dna ? dnaLook(dna) : null;
+  if (dna) notes.push(...dnaProblems(script.shots, dna).map((p) => `dna: ${p}`));
+  const [decor0, tone0, icons0] = [choose("dots", DECORS), choose("tint", TONES), choose("tile", ICON_STYLES)];
+  const decor = fromDna?.decor ?? decor0;
+  const tone = fromDna?.tone ?? tone0;
+  const icons = fromDna?.icons ?? icons0;
   // How shots hand over: slide (push left), rise (push up), soft (dissolves)
   // or zoom (through the old shot into the new).
-  const cut = choose("slide", CUTS);
+  const cut0 = choose("slide", CUTS);
+  const cut = fromDna?.cut ?? cut0;
   const push = ({ slide: "push-left", rise: "push-up", soft: "push-left", zoom: "zoom-through" } as const)[cut];
   // Which side a subject with words beside it stands on (the words take the other).
   const beside = choose("stage-right", ["stage-right", "stage-left"]);
@@ -486,7 +672,7 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
   const ranges: [number, number][] = []; // each shot's beats
   for (const s of script.shots) {
     ranges.push([beats.length, beats.length]);
-    intent = s.camera ?? null;
+    intent = dna ? dnaCamera(dna, s.camera, !beats.length) : (s.camera ?? null);
     const items = (s.items ?? []).filter((i) => i.asset);
     switch (s.shot) {
       case "problem": {
@@ -535,8 +721,17 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
       case "group": {
         const list = items.slice(0, 6).map((i) => picture(i.asset, words(i.label, 2)));
         if (!list.length) break;
-        // All arrive with the scene, 0.2 s apart, a pop each.
-        scene(s.cue, list.map((p) => el(id("g"), p.asset, p.label)), "stage-row", "pop", "dissolve");
+        const els = list.map((p) => el(id("g"), p.asset, p.label));
+        // Said one by one ("website, email, LinkedIn"): all wait faint from
+        // the start (one icon never stands alone) and each lights up on its
+        // own word. Said together: all arrive with the scene, a pop each.
+        const said = items.slice(1, 6).filter((i) => i.cue && i.cue !== s.cue);
+        if (said.length) {
+          scene(s.cue, els, "stage-row", "steps", "dissolve");
+          items.slice(1, 6).forEach((i, k) => {
+            if (i.cue && i.cue !== s.cue) beats.push(beat({ cue: i.cue, action: "activate", targets: [els[k + 1].id] }));
+          });
+        } else scene(s.cue, els, "stage-row", "pop", "dissolve");
         lastUi = null;
         break;
       }
@@ -563,6 +758,9 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
         // The success card only when no outputs follow (card + result + 2
         // outputs would crowd the frame).
         const outputsNext = script.shots[script.shots.indexOf(s) + 1]?.shot === "outputs";
+        // With outputs next (no room for a second card) the card itself shows
+        // the result on its words.
+        if (result && s.result_cue && outputsNext) beats.push(beat({ cue: s.result_cue, action: "update", targets: [ui], content: content({ title: result, note: words(s.input, 8), action: "✓ Done" }) }));
         if (result && s.result_cue && !outputsNext) beats.push(beat({ cue: s.result_cue, action: "place", layout: "stage-duo", style: "pop", elements: [el(id("done"), "card:success-toast/solid", null, content({ title: result, subtitle: null }))] }));
         lastUi = ui;
         break;
@@ -613,7 +811,7 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     }
     ranges[ranges.length - 1][1] = beats.length;
   }
-  if (script.shots.some((s) => s.objects?.length)) bindObjects(script.shots, beats, ranges, notes);
+  if (script.shots.some((s) => s.objects?.length)) bindObjects(script.shots, beats, ranges, notes, narration, report);
   return SceneScript.parse({ version: 2, theme: script.theme, pace: "calm", style: "explainer", beats, look });
 }
 

@@ -4,9 +4,9 @@ import { zodTextFormat } from "openai/helpers/zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import type { SceneDirectorInput, SceneDirectorResult } from "@/lib/ai/scene-director";
 import { compositionCheck, violationNote } from "@/components/video/flow/composition-check";
-import { searchCreative, seedFrom } from "@/lib/shot-search";
+import { type DirectionDiagnostics, searchCreative, seedFrom } from "@/lib/shot-search";
 import type { SceneScript } from "@/lib/scene-script";
-import { continuityCheck, type Direction, directionScripts, expandShots, shotCatalogText, type ShotScript, ShotScriptModel } from "@/lib/shots";
+import { continuityCheck, type Direction, directionScripts, type Dna, expandShots, shotCatalogText, type ShotScript, ShotScriptModel } from "@/lib/shots";
 import { tokenize } from "@/lib/voice-timing";
 
 // Shot Director: picks a tested shot template (lib/shots.ts) for each moment
@@ -18,7 +18,8 @@ const INSTRUCTIONS = `You are the editor of a calm explainer video for a softwar
 
 OUTPUT (JSON only, no prose; unused fields null): { theme, creative, variants[] }.
 - creative (shared): message, audience, tone, pace (calm | balanced | brisk).
-- variants: FOUR creative directions A, B, C, D for the SAME narration, each { id, direction, shots[] }.
+- variants: FOUR creative directions A, B, C, D for the SAME narration, each { id, dna, direction, shots[] }.
+- dna (controlled values only): composition hero | workspace | kinetic-type | object-story · cards none | accent | primary · icons outline | solid | minimal · typography editorial | ui-labels | dominant | secondary · transitions push | panel | type | object · motion physical | assemble | scale-reveal | transform · camera push | lateral | static | orbit · background open | grid | bold-field | environment. The four use four DIFFERENT compositions and differ in at least 6 of: composition, cards, typography, motion, transitions, camera, background, icons, shot sequence. The engine sets the look and the camera from the dna; the SHOTS must follow it: hero → a picture subject per shot, at most one ui · workspace → the product's ui card leads (ui, outputs) · kinetic-type → at least 40% line/number shots, at most one ui · object-story → object:/visual: pictures with object behaviors, at most one ui · cards none → no ui/outputs; accent → one ui, no outputs; primary → ui leads · typography editorial → at least one big line; dominant → 3+ line/number shots; secondary → at most 2 big lines · motion physical → things travel (move, route, dock, steps, outputs); assemble → pieces gather or connect; scale-reveal → numbers and reveals; transform → transform/converge or a word swap.
 - direction: concept, hero, metaphor, story, shot_approach, assets, opening, ending, motion, camera — each at most 8 words, never numbers or positions.
 - The four are genuinely different stories: another concept, hero, metaphor, story, shot sequence, assets, object behaviors and camera. Never the same shots with other colours, background, icons, transitions or camera (the engine varies the look). E.g. a finance tool: A scattered data → one view · B money flows through one system · C numbers → insight → decision · D pieces connect into one picture.
 - Each variant covers the whole narration and keeps every rule below. Each shot shows what the viewer should SEE for its words in that direction; a persisting object stays the next shot's subject when the shot allows.
@@ -52,8 +53,11 @@ const SINGLE_MS = 40_000;
 const SINGLE = `\n\nThis time write ONE variant only (id A): your strongest direction.`;
 
 // The videos offered to the customer: one per creative direction (the first is `script`).
-export type ShotVariantOut = { seed: number; score: number; scene: SceneScript; variant: string | null; direction: Direction | null };
-export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null; variants: ShotVariantOut[] };
+export type ShotVariantOut = { seed: number; score: number; scene: SceneScript; variant: string | null; direction: Direction | null; dna: Dna | null };
+// diagnostics: what the search did with each direction; status says whether
+// four different videos came out (else INSUFFICIENT_VISUAL_DIVERSITY).
+export type ShotDirectorDiagnostics = { mode: "four" | "single"; status: string; directions: DirectionDiagnostics[]; output_tokens: number };
+export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null; variants: ShotVariantOut[]; diagnostics: ShotDirectorDiagnostics | null };
 
 // `client` is for tests (a stand-in for the OpenAI client).
 export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000, client?: Pick<OpenAI, "responses">): Promise<ShotDirectorResult> {
@@ -63,7 +67,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(ShotScriptModel, "shot_script") };
   const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
-  const none = { violations: [] as ReturnType<typeof compositionCheck>, notes: [] as string[], variants: [] as ShotVariantOut[] };
+  const none = { violations: [] as ReturnType<typeof compositionCheck>, notes: [] as string[], variants: [] as ShotVariantOut[], status: "failed", directions: [] as DirectionDiagnostics[] };
   // Each draft holds four creative directions; each is built a few ways, its
   // cleanest kept, and the directions that are truly different are offered
   // (lib/shot-search.ts searchCreative); the seed comes from the project.
@@ -84,14 +88,14 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
     }
     try {
       const found = searchCreative(scripts, { narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, screenshots: input.screenshots, brand: { name: input.product_name ?? "", logo: "logo" } }, seed, { taste: input.taste });
-      if (!found.best) return { shots: scripts[0], script: null, problems: found.blockers.length ? found.blockers : ["no direction compiles to a valid plan"], ...none };
+      if (!found.best) return { shots: scripts[0], script: null, problems: found.blockers.length ? found.blockers : ["no direction compiles to a valid plan"], ...none, directions: found.diagnostics };
       const { script, violations, plan } = found.best;
       const shots = found.best.shots ?? scripts[0];
       console.info("shot variants:", { repaired: found.best.notes.filter((n) => n.startsWith("cue ")), tried: found.tried, picks: found.picks.map((p) => ({ variant: p.shots?.variant, seed: p.seed, score: p.score, concept: p.shots?.direction?.concept })), skipped: found.skipped, resolved: plan.resolved });
-      const variants = found.picks.map((p) => ({ seed: p.seed, score: p.score, scene: p.script, variant: p.shots?.variant ?? null, direction: p.shots?.direction ?? null }));
+      const variants = found.picks.map((p) => ({ seed: p.seed, score: p.score, scene: p.script, variant: p.shots?.variant ?? null, direction: p.shots?.direction ?? null, dna: p.shots?.dna ?? null }));
       // Fewer than four different directions is never padded with copies.
-      const thin = found.insufficient ? [`insufficient creative diversity: ${found.picks.length} of 4 directions are valid and different (${found.skipped.map((x) => `${x.variant}: ${x.reason}`).join("; ")}) — make each direction a different concept, hero, story and shot sequence`] : [];
-      return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote), ...thin], variants };
+      const thin = found.insufficient && scripts.length > 1 ? [`${found.status}: ${found.picks.length} of 4 directions are valid and different (${found.skipped.map((x) => `${x.variant}: ${x.reason}`).join("; ")}) — give each direction its own composition, cards, typography, motion and shot sequence`] : [];
+      return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote), ...thin], variants, status: found.status as string, directions: found.diagnostics };
     } catch (e) {
       return { shots: scripts[0], script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], ...none };
     }
@@ -99,6 +103,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   let attempts = 0;
   let problems: string[] = [];
   let mode: "four" | "single" = "four";
+  let fourDirections: DirectionDiagnostics[] = []; // (kept when the one-direction answer replaces them)
   try {
     if (!client && !process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
     const ai = client ?? new OpenAI({ maxRetries: 0 });
@@ -154,6 +159,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
     // Fallback: one direction through the same shot engine (never the
     // free-form Scene Director while this still fits).
     if (!result.script) {
+      fourDirections = result.directions;
       if (left() >= SINGLE_MS) {
         mode = "single";
         try {
@@ -169,9 +175,10 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       } else problems = [...problems, `single direction skipped: ${Math.round(left() / 1000)} s left`];
       if (!result.script) console.warn("shot director: no usable shots", { ms: Date.now() - started, problems: problems.slice(0, 6) });
     }
-    return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: mode === "single" ? [`fallback: one direction`, ...problems] : problems, ms: Date.now() - started, timing, violations: result.violations };
+    const diagnostics: ShotDirectorDiagnostics = { mode, status: result.script ? result.status : "failed", directions: mode === "single" && fourDirections.length ? fourDirections : result.directions, output_tokens: usage.outputTokens };
+    return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: mode === "single" ? [`fallback: one direction`, ...problems] : problems, ms: Date.now() - started, timing, violations: result.violations, diagnostics };
   } catch (e) {
-    return { script: null, shots: null, variants: [], attempts, revised: attempts > 1, errors: [e instanceof Error ? e.message : String(e)], ms: Date.now() - started, timing, violations: [] };
+    return { script: null, shots: null, variants: [], attempts, revised: attempts > 1, errors: [e instanceof Error ? e.message : String(e)], ms: Date.now() - started, timing, violations: [], diagnostics: null };
   } finally {
     if (attempts) onUsage?.(usage);
   }
