@@ -450,9 +450,10 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   let usage: BriefUsage | undefined;
   const addUsage = (u: BriefUsage) => (usage = usage ? { ...u, inputTokens: usage.inputTokens + u.inputTokens, outputTokens: usage.outputTokens + u.outputTokens } : u);
   // Shot templates first (lib/shots.ts): tested shots, the Director only picks
-  // and fills them. The free-form scene Director is the fallback.
-  const shot = await generateShotScript(input, addUsage, Math.min(budgetMs, 110_000));
-  console.info("shot director:", { projectId, outcome: shot.script ? "stored" : "none", attempts: shot.attempts, ms: shot.ms, shots: shot.shots?.shots.map((s) => `${s.shot}@${s.cue}`), creative: shot.shots?.creative, concepts: shot.shots?.concepts?.map((c) => `${c.cue} → ${c.hero}: ${c.see}`), problems: shot.errors.slice(0, 6) });
+  // and fills them (four directions, else one — inside generateShotScript).
+  // The free-form scene Director is the fallback only when no shots came back.
+  const shot = await generateShotScript(input, addUsage, budgetMs);
+  console.info("shot director:", { projectId, outcome: shot.script ? "stored" : "none", directions: shot.variants.map((v) => v.variant), attempts: shot.attempts, ms: shot.ms, shots: shot.shots?.shots.map((s) => `${s.shot}@${s.cue}`), creative: shot.shots?.creative, concepts: shot.shots?.concepts?.map((c) => `${c.cue} → ${c.hero}: ${c.see}`), problems: shot.errors.slice(0, 6) });
   const v2 = shot.script || budgetMs - (Date.now() - started) < 60_000 ? shot : await generateSceneScript(input, addUsage, Math.min(budgetMs - (Date.now() - started), 130_000));
   console.info("scene director:", {
     projectId,

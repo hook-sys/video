@@ -30,9 +30,10 @@ await build({
   platform: "node",
   format: "esm",
   outfile: bundled,
-  alias: { "@": root },
+  // ("server-only" is Next's guard against client bundles; nothing to guard here.)
+  alias: { "@": root, "server-only": path.join(root, "scripts/story-check/server-only.mjs") },
   jsx: "automatic",
-  external: ["remotion", "react", "react-dom", "zod"],
+  external: ["remotion", "react", "react-dom", "zod", "openai"],
   logLevel: "warning",
 });
 const { runChecks, FIXTURES, LOTTIE_NAMES, FLOW_SCRIPT_NAMES, SCENE_NAMES } = await import(pathToFileURL(bundled).href + `?t=${Date.now()}`);

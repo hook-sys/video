@@ -147,7 +147,25 @@ export const Direction = z.object({
   camera: z.string(), // the camera language, e.g. "slow pushes, holds on numbers"
 });
 export type Direction = z.infer<typeof Direction>;
-export const CreativeVariant = z.object({ id: z.enum(CREATIVE_IDS), direction: Direction, concepts: z.array(Concept), shots: z.array(Shot) });
+// What the Director writes per shot, compact: the words of a problem/number/
+// line shot in `text`, the ui shot's card in `ui` (one null instead of a
+// dozen). directionScripts() turns it back into the stored Shot.
+const ModelText = z.object({ line: z.string(), line_cue: z.string().nullable(), accent: z.string().nullable(), mark: z.enum(["strike", "pill"]).nullable() });
+const ModelUi = z.object({ card: z.string(), title: z.string().nullable(), input: z.string().nullable(), button: z.string().nullable(), action_cue: z.string().nullable(), result: z.string().nullable(), result_cue: z.string().nullable() });
+export const ModelShot = z.object({
+  shot: z.enum(SHOT_KINDS),
+  cue: z.string(),
+  subject: z.string().nullable(),
+  label: z.string().nullable(),
+  text: ModelText.nullable(),
+  ui: ModelUi.nullable(),
+  items: z.array(Item).nullable(),
+  camera: z.enum(SHOT_INTENTS).nullable(),
+  objects: z.array(ShotObject).nullable(),
+});
+export type ModelShot = z.infer<typeof ModelShot>;
+// A direction and its shots; its concepts (Phase 2) are read off the shots.
+export const CreativeVariant = z.object({ id: z.enum(CREATIVE_IDS), direction: Direction, shots: z.array(ModelShot) });
 export const ShotScriptModel = z.object({ theme: z.enum(FLOW_THEMES), creative: Creative, variants: z.array(CreativeVariant) });
 // A stored shot script is ONE direction (older ones have none: null).
 export const ShotScript = z.object({
@@ -160,9 +178,44 @@ export const ShotScript = z.object({
   direction: Direction.nullable().default(null),
 });
 export type ShotScript = z.infer<typeof ShotScript>;
+// A compact shot as the stored Shot (every Phase 2–5 field kept).
+export const flatShot = (m: ModelShot) => ({
+  shot: m.shot,
+  cue: m.cue,
+  subject: m.subject,
+  label: m.label,
+  line: m.text?.line ?? null,
+  line_cue: m.text?.line_cue ?? null,
+  accent: m.text?.accent ?? null,
+  mark: m.text?.mark ?? null,
+  card: m.ui?.card ?? null,
+  title: m.ui?.title ?? null,
+  input: m.ui?.input ?? null,
+  button: m.ui?.button ?? null,
+  action_cue: m.ui?.action_cue ?? null,
+  result: m.ui?.result ?? null,
+  result_cue: m.ui?.result_cue ?? null,
+  items: m.items,
+  camera: m.camera,
+  objects: m.objects,
+});
+// Phase 2 concepts read off the shots: where each idea is spoken, what is
+// seen, its hero and the object it carries over.
+type ConceptSource = Pick<ReturnType<typeof flatShot>, "shot" | "cue" | "subject" | "label" | "line" | "title" | "card" | "items"> & { objects: { id: string; enters: boolean }[] | null };
+export const conceptsOf = (shots: ConceptSource[]): Concept[] =>
+  shots.map((s) => ({
+    cue: s.cue,
+    see: [s.line, s.title, s.label, ...(s.items ?? []).map((i) => i.label)].filter(Boolean).join(" · ") || s.shot,
+    hero: s.subject ?? (s.card ? `card:${s.card}` : s.items?.[0]?.asset ?? (s.shot === "reveal" ? "logo" : s.shot)),
+    persists: s.objects?.find((o) => !o.enters)?.id ?? null,
+    avoid: null,
+  }));
 // The Director's answer as one shot script per direction (A–D, in order).
 export const directionScripts = (model: z.infer<typeof ShotScriptModel>): ShotScript[] =>
-  model.variants.map((v) => ShotScript.parse({ version: 3, theme: model.theme, creative: model.creative, concepts: v.concepts, shots: v.shots, variant: v.id, direction: v.direction }));
+  model.variants.map((v) => {
+    const shots = v.shots.map(flatShot);
+    return ShotScript.parse({ version: 3, theme: model.theme, creative: model.creative, concepts: conceptsOf(shots), shots, variant: v.id, direction: v.direction });
+  });
 
 // ── expansion ──
 const EMPTY_CONTENT: SceneContent = { title: null, subtitle: null, value: null, label: null, status: null, name: null, amount: null, delta: null, note: null, action: null, date: null, items: null };

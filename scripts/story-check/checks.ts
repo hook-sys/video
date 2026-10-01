@@ -4,6 +4,7 @@
 import { creativeSimilarity, downloadEntry, LOOK_FEATURES, MAX_BUILT_SIMILARITY, sameCreative, scoreCandidate, searchCreative, searchVariants, seedFrom } from "@/lib/shot-search";
 import { CREATIVE_A, CREATIVE_B, CREATIVE_C, CREATIVE_D, DIRECTION_A, DIRECTION_B, DIRECTION_D } from "@/components/video/flow/fixtures/creative-directions";
 import { ProductBrief } from "@/lib/ai/product-brief";
+import { generateShotScript } from "@/lib/ai/shot-director";
 import { DIRECTION_MAX, directionFor, LOOKS, lockBriefScript, lockedVoiceScript, STYLE_PRESETS, type StylePreset, VISUAL_STYLES, VOICE_SCRIPT_MAX } from "@/lib/projects";
 import { validateStory, VisualStory } from "@/lib/visual-story";
 import { compileStory } from "@/components/video/engine/compiler";
@@ -43,7 +44,7 @@ import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, type SceneScript, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
-import { BEHAVIOR_ACTION, continuityCheck, expandShots, INTENT_CAMERA, SHOT_INTENTS, ShotObject as ShotObjectModel, type ShotObject, ShotScript, ShotScriptModel } from "@/lib/shots";
+import { BEHAVIOR_ACTION, conceptsOf, continuityCheck, directionScripts, expandShots, INTENT_CAMERA, SHOT_INTENTS, ShotObject as ShotObjectModel, type ShotObject, ShotScript, ShotScriptModel } from "@/lib/shots";
 import { computeStates } from "@/components/video/flow/states";
 import { REAL_SHOT_VIDEOS } from "@/components/video/flow/fixtures/real-shots";
 import { OBJECTS } from "@/components/video/flow/object-names";
@@ -564,6 +565,43 @@ function sceneDirector(): Check[] {
 
 // Shot templates (lib/shots.ts): the fixture expands, compiles and breaks no
 // composition rule; the guards turn bad picks into safe ones.
+// Phase 6.5: a stored shot as the Director writes it (compact groups).
+const toModelShot = (x: ShotScript["shots"][number]) => ({
+  shot: x.shot,
+  cue: x.cue,
+  subject: x.subject,
+  label: x.label,
+  text: x.line ? { line: x.line, line_cue: x.line_cue, accent: x.accent, mark: x.mark } : null,
+  ui: x.card ? { card: x.card, title: x.title, input: x.input, button: x.button, action_cue: x.action_cue, result: x.result, result_cue: x.result_cue } : null,
+  items: x.items,
+  camera: x.camera,
+  objects: x.objects,
+});
+const fakeAnswer = (scripts: ShotScript[]) => ({ theme: scripts[0].theme, creative: scripts[0].creative ?? { message: "m", audience: "a", tone: "t", pace: "calm" as const }, variants: scripts.map((x) => ({ id: x.variant, direction: x.direction, shots: x.shots.map(toModelShot) })) });
+// The real Shot Director with a stand-in client: four directions; four
+// timing out (then one); too little time for four; no time at all.
+async function directorRun(budget: number, fourFails: boolean) {
+  const v = REAL_SHOT_VIDEOS[REAL_SHOT_VIDEOS.length - 1];
+  const W = v.words.split(" ").map((x) => x.split("@"));
+  const words = W.map(([text, st], i) => ({ text, start: +st, end: W[i + 1] ? +W[i + 1][1] : +st + 0.5 }));
+  const narration = W.map(([x]) => x).join(" ");
+  const four = [CREATIVE_A(ShotScript.parse(v.shots)), ...[CREATIVE_B, CREATIVE_C, CREATIVE_D].map((x) => ShotScript.parse(x))];
+  const calls: { single: boolean; timeout: number }[] = [];
+  const client = {
+    responses: {
+      parse: async (params: { instructions?: string | null }, opts?: { timeout?: number }) => {
+        const single = !!params.instructions?.includes("ONE variant only");
+        calls.push({ single, timeout: opts?.timeout ?? 0 });
+        if (!single && fourFails) throw new Error("Request timed out.");
+        return { id: `r${calls.length}`, usage: { input_tokens: 1, output_tokens: 1 }, output_parsed: fakeAnswer(single ? [four[0]] : four) };
+      },
+    },
+  } as unknown as Parameters<typeof generateShotScript>[3];
+  const r = await generateShotScript({ narration, words, duration_seconds: v.duration, product_name: "MotionBrief", seed: 12345 }, undefined, budget, client);
+  return { ...r, calls };
+}
+const DIRECTOR_RUNS = { four: await directorRun(150_000, false), fallback: await directorRun(150_000, true), short: await directorRun(60_000, false), none: await directorRun(35_000, false) };
+
 function shotTemplates(): Check[] {
   const checks: Check[] = [];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
@@ -602,10 +640,11 @@ function shotTemplates(): Check[] {
   add("phase 2: shot scripts stored before concepts still parse", oldStored.success && oldStored.data.creative === null && oldStored.data.concepts === null, oldStored.success ? "creative = null, concepts = null" : "failed to parse");
   const withConcepts = ShotScript.safeParse({ ...(REAL_SHOT_VIDEOS[0].shots as object), creative: { message: "Video in minutes", audience: "SaaS teams", tone: "calm", pace: "balanced" }, concepts: [{ cue: "Making a product video", see: "a filmstrip stalls under a pile of steps", hero: "visual:filmstrip", persists: null, avoid: "people" }] });
   add("phase 2: creative + concepts are kept with the shots", withConcepts.success && withConcepts.data.concepts?.length === 1 && withConcepts.data.creative?.pace === "balanced", withConcepts.success ? "stored" : "failed to parse");
-  // (a model answer: shared creative + directions A–D, each with concepts and shots)
-  const modelAnswer = (shots: object[], concepts: object[] | null = []) => ({ theme: "lavender", creative: { message: "m", audience: "a", tone: "t", pace: "calm" }, variants: [{ id: "A", direction: DIRECTION_A, ...(concepts ? { concepts } : {}), shots }] });
-  const fullShots = ShotScript.parse(REAL_SHOT_VIDEOS[0].shots).shots.map((x) => ({ ...x, objects: null }));
-  add("phase 2: the Director must write creative and concepts", ShotScriptModel.safeParse(modelAnswer(fullShots)).success && !ShotScriptModel.safeParse(modelAnswer(fullShots, null)).success && !ShotScriptModel.safeParse({ ...modelAnswer(fullShots), creative: undefined }).success, "a model answer without them is rejected");
+  // (a model answer: shared creative + directions A–D, each with compact shots)
+  const modelAnswer = (shots: object[]) => ({ theme: "lavender", creative: { message: "m", audience: "a", tone: "t", pace: "calm" }, variants: [{ id: "A", direction: DIRECTION_A, shots }] });
+  const fullShots = ShotScript.parse(REAL_SHOT_VIDEOS[0].shots).shots.map((x) => toModelShot({ ...x, objects: null }));
+  const fromModel = directionScripts(ShotScriptModel.parse(modelAnswer(fullShots)))[0];
+  add("phase 2: the Director must write creative; concepts are read off its shots", !ShotScriptModel.safeParse({ ...modelAnswer(fullShots), creative: undefined }).success && fromModel.concepts?.length === fullShots.length && fromModel.concepts.every((c, i) => c.cue === fromModel.shots[i].cue && !!c.hero), `${fromModel.concepts?.length} concepts, e.g. ${fromModel.concepts?.[0].cue} → ${fromModel.concepts?.[0].hero}: ${fromModel.concepts?.[0].see}`);
   // Phase 3: a camera intent per shot. Older shots have none (null) and keep
   // the alternating move; each intent becomes a camera move the compiler
   // resolves, and no intent pushes a subject out of frame or breaks a rule.
@@ -666,7 +705,7 @@ function shotTemplates(): Check[] {
   add("phase 4 C: an unknown persistent object is caught (and ignored, never drawn wrong)", unknownNotes.some((n) => n.includes('unknown object "ghost"')) && unknownScript.beats.every((b) => (b.elements ?? []).every((e) => e.asset !== null)), unknownNotes.find((n) => n.includes("ghost")) ?? "not caught");
   add("phase 4 C: conflicting identity, stay+exit and a disappearance are caught", conflict.errors.length === 3 && gone.warnings.some((w) => w.includes("disappears")) && gone.warnings.some((w) => w.includes("not on screen")), [...conflict.errors, ...gone.warnings].join(" · "));
   add("phase 4 D: shots stored before object identity parse (objects = null) and expand as before", p3Parsed.shots.every((x) => x.objects === null) && JSON.stringify(expandShots(p3Parsed, [], p3n)) === JSON.stringify(expandShots({ ...p3Parsed, shots: p3Parsed.shots.map((x) => ({ ...x, objects: [] })) }, [], p3n)), `${p3Parsed.shots.length} shots, objects null`);
-  add("phase 4: the Director must write each shot's objects (null allowed)", !ShotScriptModel.safeParse(modelAnswer(p3Parsed.shots.map((x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== "objects"))))).success, "a model answer without them is rejected");
+  add("phase 4: the Director must write each shot's objects (null allowed)", !ShotScriptModel.safeParse(modelAnswer(p3Parsed.shots.map((x) => Object.fromEntries(Object.entries(toModelShot(x)).filter(([k]) => k !== "objects"))))).success, "a model answer without them is rejected");
   // Phase 5: objects get a semantic behavior (what, never how); the
   // compiler maps each to a tested scene action. A five-shot chain:
   // a video enters → persists → clips accumulate beside it → they converge
@@ -779,6 +818,32 @@ function shotTemplates(): Check[] {
   add("phase 6.5 L: a download saves its direction with its look", tasted.success && tasted.data.taste?.downloads[0].selected_variant === chosen.variant && tasted.data.taste?.downloads[0].direction?.camera === chosen.direction?.camera && !!entry.look && /downloadEntry\(variant, new Date\(\)\.toISOString\(\)\)/.test(actions65), `selected ${entry.selected_variant}: ${entry.direction?.concept} · look ${entry.look?.decor}/${entry.look?.icons}`);
   const oldBrief = ProductBrief.safeParse({ ...BRIEF_FIXTURE, variants: [{ seed: 1, score: 0, scene: lookA.script }], taste: { downloads: [{ seed: 1, look: lookA.script.look ?? null, at: "2026-09-30T00:00:00.000Z" }] } });
   add("phase 6.5 M: older projects (no directions) still parse and render", oldBrief.success && oldBrief.data.variants?.[0].direction === undefined && p3Parsed.direction === null && p3Parsed.variant === null && REAL_SHOT_VIDEOS.every((v) => ShotScript.safeParse(v.shots).success) && !!searchCreative([p3Parsed], ctx65, 1).best, "old variants, taste and shot scripts parse; a script without a direction still builds");
+  // Phase 6.5 compaction: the Director writes compact shots (text/ui groups,
+  // no per-direction concepts); every Phase 2–5 field comes back intact.
+  const flat4 = [dirA, dirB, dirC, dirD];
+  const compact = fakeAnswer(flat4);
+  const legacy = { theme: "lavender", creative: dirA.creative, variants: flat4.map((x) => ({ id: x.variant, direction: x.direction, concepts: conceptsOf(x.shots), shots: x.shots })) };
+  const [cLen, lLen] = [JSON.stringify(compact).length, JSON.stringify(legacy).length];
+  add("phase 6.5: the four-direction answer is much more compact than before", cLen <= lLen * 0.7, `${cLen} vs ${lLen} characters (${Math.round((1 - cLen / lLen) * 100)}% shorter, about ${Math.round(cLen / 3.5)} vs ${Math.round(lLen / 3.5)} tokens)`);
+  const parsedCompact = ShotScriptModel.safeParse(compact);
+  add("phase 6.5 H: the compact schema is valid", parsedCompact.success && parsedCompact.data.variants.length === 4, parsedCompact.success ? "4 variants parse" : JSON.stringify(parsedCompact.error.issues.slice(0, 2)));
+  const back = parsedCompact.success ? directionScripts(parsedCompact.data) : [];
+  const same = back.length === 4 && back.every((x, i) => JSON.stringify(x.shots) === JSON.stringify(flat4[i].shots) && JSON.stringify(x.direction) === JSON.stringify(flat4[i].direction) && x.variant === flat4[i].variant);
+  const dObjects = back[3]?.shots.flatMap((x) => x.objects ?? []) ?? [];
+  add("phase 6.5 G: Phase 2–5 fields survive the compact answer", same && dObjects.some((o) => o.behavior?.type === "connect" && o.behavior.target === "mail" && o.behavior.cue === "in email") && back.slice(1).every((x) => x.shots.every((y) => y.camera !== null)) && back.every((x) => x.concepts?.length === x.shots.length), `shots, cameras, objects, behaviors, targets, cues and directions identical after the round trip; ${dObjects.length} objects in D`);
+  const bad1 = ShotScriptModel.safeParse({ ...compact, variants: compact.variants.map((v, i) => (i ? v : { ...v, shots: [{ ...v.shots[0], shot: "montage" }] })) });
+  const bad2 = ShotScriptModel.safeParse({ ...compact, variants: compact.variants.map((v) => ({ id: v.id, shots: v.shots })) });
+  const bad3 = ShotScriptModel.safeParse({ ...compact, variants: compact.variants.map((v) => ({ ...v, shots: v.shots.map((x) => ({ ...x, x: 120, duration: 2 })) })) });
+  add("phase 6.5 I: an invalid answer is rejected", !bad1.success && !bad2.success && bad3.success && !JSON.stringify(directionScripts(bad3.data)).includes('"duration"'), "unknown shot kind and missing direction rejected; stray numbers (x, duration) never reach the shots");
+  const run4 = DIRECTOR_RUNS.four;
+  add("phase 6.5 C: the Director's four directions come back as four videos", !!run4.script && run4.variants.length === 4 && run4.variants.map((v) => v.variant).join("") === "ABCD" && !run4.calls[0].single && !run4.calls.some((c) => c.single) && !run4.errors.includes("fallback: one direction"), `${run4.variants.map((v) => `${v.variant}: ${v.direction?.concept}`).join(" · ")} · calls: ${run4.calls.map((c) => (c.single ? "one" : "four")).join(" → ")} (the second is the review round)`);
+  add("phase 6.5 D: the four videos are genuinely different", run4.variants.every((a, i) => run4.variants.every((b, j) => i === j || a.direction?.concept !== b.direction?.concept)) && !run4.errors.some((e) => e.startsWith("insufficient")), "no direction dropped as too close");
+  const fb = DIRECTOR_RUNS.fallback;
+  add("phase 6.5 J: four directions time out → one direction through the shot engine", !!fb.script && fb.script.style === "explainer" && fb.errors[0] === "fallback: one direction" && fb.errors.some((e) => e.includes("timed out")) && fb.calls.length === 2 && !fb.calls[0].single && fb.calls[1].single && fb.calls[0].timeout <= 150_000 - 8_000 - 40_000, `calls: ${fb.calls.map((c) => `${c.single ? "one" : "four"} (${Math.round(c.timeout / 1000)} s)`).join(" → ")}; ${fb.errors.slice(0, 2).join(" · ")}`);
+  const short = DIRECTOR_RUNS.short;
+  add("phase 6.5 K: with little time left it asks for one direction only", !!short.script && short.calls.length === 1 && short.calls[0].single && short.variants.length === 1, `budget 60 s: ${short.calls.map((c) => `${c.single ? "one" : "four"} (${Math.round(c.timeout / 1000)} s)`).join(", ")}`);
+  const none5 = DIRECTOR_RUNS.none;
+  add("phase 6.5: no time for either → a clear failure, no request beyond the budget", !none5.script && none5.calls.length === 0 && none5.errors.some((e) => e.startsWith("four directions skipped")) && none5.errors.some((e) => e.startsWith("single direction skipped")), none5.errors.join(" · "));
   // Every real video made so far must still render cleanly (regressions).
   const BAD = ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "tiny-screens"];
   for (const v of REAL_SHOT_VIDEOS) {

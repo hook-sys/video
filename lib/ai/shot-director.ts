@@ -16,21 +16,22 @@ import { tokenize } from "@/lib/voice-timing";
 
 const INSTRUCTIONS = `You are the editor of a calm explainer video for a software product (the style of Keka, Linear or Stripe explainers: one idea at a time, one subject always in focus). The narration is final and already recorded. You cut it into SHOTS and pick, for each, a tested shot template and its words. The engine draws every shot (sizes, places, motion, cursor, sound), so you only choose the shot and write its short texts.
 
-OUTPUT: { theme, creative, variants[] }. Unused fields are null. Think in this order:
+OUTPUT (JSON only, no prose; unused fields null): { theme, creative, variants[] }.
+- creative (shared): message, audience, tone, pace (calm | balanced | brisk).
+- variants: FOUR creative directions A, B, C, D for the SAME narration, each { id, direction, shots[] }.
+- direction: concept, hero, metaphor, story, shot_approach, assets, opening, ending, motion, camera — each at most 8 words, never numbers or positions.
+- The four are genuinely different stories: another concept, hero, metaphor, story, shot sequence, assets, object behaviors and camera. Never the same shots with other colours, background, icons, transitions or camera (the engine varies the look). E.g. a finance tool: A scattered data → one view · B money flows through one system · C numbers → insight → decision · D pieces connect into one picture.
+- Each variant covers the whole narration and keeps every rule below. Each shot shows what the viewer should SEE for its words in that direction; a persisting object stays the next shot's subject when the shot allows.
+- shot fields: shot, cue, subject, label, text { line, line_cue, accent, mark } (problem, number, line shots), ui { card, title, input, button, action_cue, result, result_cue } (ui shot), items, camera, objects.
 
-1. creative — read only the NARRATION: message (the one thing to remember), audience, tone, pace (calm | balanced | brisk). Shared by all variants.
-2. variants[] — FOUR independent creative directions (id A, B, C, D) for the SAME narration. Each: { id, direction, concepts[], shots[] }. direction = { concept (the visual idea), hero (the one visual it is built around), metaphor, story (the story approach), shot_approach (which shots carry it), assets (the asset strategy), opening, ending, motion (the motion language), camera (the camera language) } — words only, never numbers or positions. The four must be genuinely different visual interpretations: another concept, hero, metaphor, story, shot sequence, asset strategy, object behaviors and camera language. Never the same idea with other colours, background, icons, transitions or camera — the engine varies the look by itself. Example for a finance tool: A scattered data → one organized view · B revenue, expenses and cash flow run through one system · C raw numbers → insight → a business decision · D separate financial pieces connect into one business picture. Each variant follows the narration's meaning, covers it from the first word to the last and keeps every rule below.
-3. In each variant, concepts[] — for each sentence or idea, answer "what should the viewer SEE to understand this?" in that variant's direction: cue (1–6 words where it is spoken), see (concrete objects and what happens to them, e.g. "scattered sheets pile up, then slide into one clear chart" — never a vague "show a dashboard"), hero (the one object in focus, written as an ASSET), persists (the object id carried over from the previous idea — the same id its shots use — else null), avoid (what must not be shown, else null).
-4. In each variant, shots[] — the shots that show its concepts: each concept's hero is that shot's subject or item; keep a persisting object as the subject of the next shot when the shot allows it.
-
-OBJECTS (each shot's objects — the story's things, by identity, never positions): one entry per picture that matters: id (a short semantic id like "release_notes", the SAME id every time the same thing is shown), role (hero | support | context), asset (which picture of this shot it is: the subject, an item's asset, "card" for the ui card, "logo" for the reveal), enters (true where it first appears; false when it continues from an earlier shot), persistent (true when it stays into the next shot), exits (true when it leaves after this shot; never with persistent), transforms_from / transforms_to (the id of the object it turns from / into, else null). A concept's persisting object keeps its id in the next shot (enters false), so the viewer follows ONE object instead of seeing a new copy. behavior (what the object DOES in this shot, else null): { type, target, cue } — type is one of enter (comes in with the shot; only when enters is true) · move (goes to the target) · accumulate (pieces pile up beside the target, the collection point; give each piece its own id, the same asset is fine) · converge (several objects fly into the target) · assemble (pieces combine into the target) · transform (becomes the target — set transforms_to to it, and the target's transforms_from to this id) · connect (a line to the target) · dock (lands in the target) · route (travels along a path to the target) · reveal (everything comes into view) · highlight (it pulses; the rest dims) · exit (it leaves). target is another object id of the SAME shot (needed for move, accumulate, converge, assemble, transform, connect, dock, route; else null). cue is 1–6 narration words when it happens, later than the shot's other cues (null only for enter). After converge, assemble, transform, dock or exit the object is gone: never persistent. You say WHAT happens; never positions, sizes, durations or easing. Null when a shot has nothing to carry.
+OBJECTS (each shot's objects — the story's things, by identity, never positions): one entry per picture that matters: id (a short semantic id like "release_notes", the SAME id every time the same thing is shown), role (hero | support | context), asset (which picture of this shot it is: the subject, an item's asset, "card" for the ui card, "logo" for the reveal), enters (true where it first appears; false when it continues from an earlier shot), persistent (true when it stays into the next shot), exits (true when it leaves after this shot; never with persistent), transforms_from / transforms_to (the id of the object it turns from / into, else null). A persisting object keeps its id in the next shot (enters false), so the viewer follows ONE object instead of seeing a new copy. behavior (what the object DOES in this shot, else null): { type, target, cue } — type is one of enter (comes in with the shot; only when enters is true) · move (goes to the target) · accumulate (pieces pile up beside the target, the collection point; give each piece its own id, the same asset is fine) · converge (several objects fly into the target) · assemble (pieces combine into the target) · transform (becomes the target — set transforms_to to it, and the target's transforms_from to this id) · connect (a line to the target) · dock (lands in the target) · route (travels along a path to the target) · reveal (everything comes into view) · highlight (it pulses; the rest dims) · exit (it leaves). target is another object id of the SAME shot (needed for move, accumulate, converge, assemble, transform, connect, dock, route; else null). cue is 1–6 narration words when it happens, later than the shot's other cues (null only for enter). After converge, assemble, transform, dock or exit the object is gone: never persistent. You say WHAT happens; never positions, sizes, durations or easing. objects null when nothing carries over or acts.
 
 CAMERA (each shot's camera, an intent — never positions or numbers): establish (the opening: wide and settling) · reveal (the product or answer opens up) · push (move closer to what matters now) · close (a detail in focus) · pull_back (show the bigger picture) · follow / track (the eye travels across a row or a flow) · hold (stay still so a number or a line can be read) · overhead (rise above it) · transition (a quiet bridge). Open with establish; reveal where the product is named; hold on numbers and on the closing line; push on the problem; vary — never the same intent three shots in a row.
 
 SHOTS (shot: what it shows — the fields it uses):
 ${shotCatalogText()}
 
-CUES: every cue (cue, line_cue, action_cue, result_cue, items[].cue) is 1–6 consecutive words copied EXACTLY from NARRATION, all in spoken order across the whole video (each cue after the previous one). A shot starts on its cue; its other moments land on their own later cues.
+CUES: every cue (cue, text.line_cue, ui.action_cue, ui.result_cue, items[].cue, behavior.cue) is 1–6 consecutive words copied EXACTLY from NARRATION, all in spoken order across the whole video (each cue after the previous one). A shot starts on its cue; its other moments land on their own later cues.
 
 ASSETS: object:<question|exclaim|check|rocket|bulb|star|trophy|shield|lock|bell|gift|target|coin|bolt|chart> (a glossy 3D object for a feeling or an idea: a question → question, an idea → bulb, launch or speed → rocket or bolt, a win → trophy or star, safe → shield or lock, done → check, money → coin, a goal → target, growth → chart, news → bell; the problem shot's subject, or beside a line) · icon:<lucide icon name> (a plain object: clock, file-text, mic, users, calendar, credit-card, shield-check, chart-line, globe, mail, share-2, rocket, search, bell, …) · visual:<waveform|filmstrip|clock|progress|download|play|bars> (voice/audio → waveform; video/scenes → filmstrip; time → clock; loading/rendering → progress; download/export → download; growth/results → bars) · text:<a number or measure with a digit> (only in the number shot). There are no brand logos of other companies: for "YouTube, Instagram …" use a group with a short label each (the engine shows labelled chips).
 
@@ -46,11 +47,16 @@ RULES
 - Captions (line on problem and number shots) use only words the voice says; otherwise leave them null. The ui shot card must have a button: action-panel (default), login, checkout or cta.
 - theme: "lavender" (friendly SaaS), "mint" (health, wellness, finance, calm), "teal" (operations, B2B, data, security) or "midnight" (dark, premium). creative_preferences.visual_style is a hint.`;
 
+// The one-direction answer (fallback): needs about this long, and asks for A only.
+const SINGLE_MS = 40_000;
+const SINGLE = `\n\nThis time write ONE variant only (id A): your strongest direction.`;
+
 // The videos offered to the customer: one per creative direction (the first is `script`).
 export type ShotVariantOut = { seed: number; score: number; scene: SceneScript; variant: string | null; direction: Direction | null };
 export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null; variants: ShotVariantOut[] };
 
-export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000): Promise<ShotDirectorResult> {
+// `client` is for tests (a stand-in for the OpenAI client).
+export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000, client?: Pick<OpenAI, "responses">): Promise<ShotDirectorResult> {
   const started = Date.now();
   const timing = input.words?.length ? "voice" : "estimated";
   const model = process.env.OPENAI_MODEL || "gpt-5-mini";
@@ -92,50 +98,78 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   };
   let attempts = 0;
   let problems: string[] = [];
+  let mode: "four" | "single" = "four";
   try {
-    if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
-    const client = new OpenAI({ maxRetries: 0 });
-    attempts++;
-    const first = await client.responses.parse(
-      {
-        model,
-        instructions: INSTRUCTIONS,
-        input: JSON.stringify({
-          NARRATION: input.narration,
-          WORDS: input.words?.length ? input.words.filter((w) => tokenize(w.text).length).map((w) => [w.text, Math.round(w.start * 100) / 100]) : null,
-          duration_seconds: input.duration_seconds,
-          product_name: input.product_name ?? null,
-          DIRECTION: input.creative_preferences?.advanced_direction?.trim() || input.creative_preferences?.direction?.trim() || null,
-          creative_preferences: input.creative_preferences ? { ...input.creative_preferences, advanced_direction: undefined } : null,
-        }),
-        text: format,
-        ...quick,
-      },
-      { timeout: Math.min(90_000, budgetMs - 8_000) },
-    );
-    usage.inputTokens += first.usage?.input_tokens ?? 0;
-    usage.outputTokens += first.usage?.output_tokens ?? 0;
-    let result = check(first.output_parsed);
-    problems = result.problems.length ? result.problems : result.notes;
-    console.info("shot director first draft:", { ms: Date.now() - started, usable: !!result.script, problems: problems.slice(0, 8) });
-    const left = budgetMs - (Date.now() - started);
-    if ((!result.script || result.notes.length) && first.id && left > 20_000) {
+    if (!client && !process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
+    const ai = client ?? new OpenAI({ maxRetries: 0 });
+    const request = JSON.stringify({
+      NARRATION: input.narration,
+      WORDS: input.words?.length ? input.words.filter((w) => tokenize(w.text).length).map((w) => [w.text, Math.round(w.start * 100) / 100]) : null,
+      duration_seconds: input.duration_seconds,
+      product_name: input.product_name ?? null,
+      DIRECTION: input.creative_preferences?.advanced_direction?.trim() || input.creative_preferences?.direction?.trim() || null,
+      creative_preferences: input.creative_preferences ? { ...input.creative_preferences, advanced_direction: undefined } : null,
+    });
+    const ask = (instructions: string, timeout: number) => {
       attempts++;
+      return ai.responses.parse({ model, instructions, input: request, text: format, ...quick }, { timeout });
+    };
+    const count = (r: { usage?: { input_tokens?: number; output_tokens?: number } | null }) => {
+      usage.inputTokens += r.usage?.input_tokens ?? 0;
+      usage.outputTokens += r.usage?.output_tokens ?? 0;
+    };
+    const left = () => budgetMs - (Date.now() - started);
+    let result: ReturnType<typeof check> = { shots: null, script: null, problems: [], ...none };
+    // Four directions in one call, with time kept back for the one-direction
+    // answer should it fail (no blind retry of the same request).
+    const fourTimeout = Math.min(90_000, left() - 8_000 - SINGLE_MS);
+    if (fourTimeout >= 30_000) {
       try {
-        const revised = await client.responses.parse(
-          { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your shots failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete ShotScript with all four variants.`, text: format, ...quick },
-          { timeout: Math.min(60_000, left) },
-        );
-        usage.inputTokens += revised.usage?.input_tokens ?? 0;
-        usage.outputTokens += revised.usage?.output_tokens ?? 0;
-        const second = check(revised.output_parsed);
-        if (!result.script || (second.script && second.violations.length <= result.violations.length)) result = second;
+        const first = await ask(INSTRUCTIONS, fourTimeout);
+        count(first);
+        result = check(first.output_parsed);
         problems = result.problems.length ? result.problems : result.notes;
+        console.info("shot director first draft:", { ms: Date.now() - started, output_tokens: first.usage?.output_tokens, usable: !!result.script, variants: result.variants.map((v) => v.variant), problems: problems.slice(0, 8) });
+        // One revision while the one-direction answer still fits after it.
+        if ((!result.script || result.notes.length) && first.id && left() - SINGLE_MS > 30_000) {
+          try {
+            attempts++;
+            const revised = await ai.responses.parse(
+              { model, instructions: INSTRUCTIONS, previous_response_id: first.id, input: `Your shots failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete ShotScript with all four variants.`, text: format, ...quick },
+              { timeout: Math.min(60_000, left() - (result.script ? 3_000 : SINGLE_MS)) },
+            );
+            count(revised);
+            const second = check(revised.output_parsed);
+            if (!result.script || (second.script && second.violations.length <= result.violations.length)) result = second;
+            problems = result.problems.length ? result.problems : result.notes;
+          } catch (e) {
+            problems = [`revision failed: ${e instanceof Error ? e.message : String(e)}`, ...problems];
+          }
+        }
       } catch (e) {
-        problems = [`revision failed: ${e instanceof Error ? e.message : String(e)}`, ...problems];
+        problems = [`four directions failed: ${e instanceof Error ? e.message : String(e)}`];
+        console.warn("shot director: four directions failed", { ms: Date.now() - started, error: problems[0] });
       }
+    } else problems = [`four directions skipped: ${Math.round(left() / 1000)} s left`];
+    // Fallback: one direction through the same shot engine (never the
+    // free-form Scene Director while this still fits).
+    if (!result.script) {
+      if (left() >= SINGLE_MS) {
+        mode = "single";
+        try {
+          const one = await ask(INSTRUCTIONS + SINGLE, Math.min(60_000, left() - 3_000));
+          count(one);
+          const single = check(one.output_parsed);
+          if (single.script) result = single;
+          problems = [...problems, ...(single.problems.length ? single.problems : single.notes).map((p) => `single: ${p}`)];
+          console.info("shot director single direction:", { ms: Date.now() - started, output_tokens: one.usage?.output_tokens, usable: !!single.script });
+        } catch (e) {
+          problems = [...problems, `single direction failed: ${e instanceof Error ? e.message : String(e)}`];
+        }
+      } else problems = [...problems, `single direction skipped: ${Math.round(left() / 1000)} s left`];
+      if (!result.script) console.warn("shot director: no usable shots", { ms: Date.now() - started, problems: problems.slice(0, 6) });
     }
-    return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: problems, ms: Date.now() - started, timing, violations: result.violations };
+    return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: mode === "single" ? [`fallback: one direction`, ...problems] : problems, ms: Date.now() - started, timing, violations: result.violations };
   } catch (e) {
     return { script: null, shots: null, variants: [], attempts, revised: attempts > 1, errors: [e instanceof Error ? e.message : String(e)], ms: Date.now() - started, timing, violations: [] };
   } finally {
