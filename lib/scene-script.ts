@@ -18,7 +18,7 @@ import { FLOW_THEMES, STATEMENT_LAYOUTS, estimateWords } from "@/lib/flow-script
 export const SCENE_ACTIONS = [
   "scene", // start a scene: new elements in a layout, a camera move, a transition in
   "place", // add elements to the current scene
-  "move", // an element travels to another element
+  "move", // an element (or 2–4 together) travels to another element
   "trigger", // an element travels to another, which reacts (and may update)
   "update", // a card's content changes (a status, a number)
   "connect", // a line (with a travelling packet) between two elements
@@ -317,6 +317,10 @@ export function sceneScriptBlockers(script: SceneScript, narration: string, voic
         break;
       }
       case "move":
+        // (Several targets: they gather beside the destination — accumulate.)
+        need(b.targets?.length && b.targets.length <= 4 && b.targets.every(known), i, "needs 1–4 targets on screen");
+        need(b.to && known(b.to) && !b.targets?.includes(b.to), i, "needs a different destination on screen");
+        break;
       case "trigger":
       case "connect":
         need(b.targets?.length === 1 && known(b.targets[0]), i, "needs one target on screen");

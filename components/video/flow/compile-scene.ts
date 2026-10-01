@@ -579,20 +579,24 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       }
       case "move": {
         // It takes the layout slot next to its destination; the others shift.
+        // (Several targets gather there together, one after another.)
         const [a] = tgt;
         if (!a || !to) break;
-        const ids = [...live.keys()].filter((id) => id !== b.targets![0]);
-        ids.splice(ids.indexOf(b.to!) + 1, 0, b.targets![0]);
+        const movers = b.targets!.filter((id) => live.has(id) && id !== b.to);
+        const ids = [...live.keys()].filter((id) => !movers.includes(id));
+        ids.splice(ids.indexOf(b.to!) + 1, 0, ...movers);
         const chosen = slotsFor(layoutName, ids.map((id) => [live.get(id)!.w, live.get(id)!.h0] as Vec), sceneIdx);
         ids.forEach((id, k) => {
           const n = live.get(id)!;
           const s = chosen.slots[k];
           const at = worldSlot(s);
-          if (n !== a && Math.hypot(at[0] - n.pos[0], at[1] - n.pos[1]) < 4) return;
+          const m = tgt.indexOf(n);
+          if (m < 0 && Math.hypot(at[0] - n.pos[0], at[1] - n.pos[1]) < 4) return;
           n.fit = fitIn(n.w, n.h0, s);
           n.depth = s.depth;
-          travel(n, n === a ? t : t + 4, 22, at, n === a ? (b.style ?? "arc") : "straight");
-          animate(n.h.spec.scale!, n === a ? t : t + 4, 22, n.fit, "inOut");
+          const t0 = m >= 0 ? t + m * 4 : t + 4;
+          travel(n, t0, 22, at, m >= 0 ? (b.style ?? "arc") : "straight");
+          animate(n.h.spec.scale!, t0, 22, n.fit, "inOut");
           if (n.h.spec.blur) animate(n.h.spec.blur, t, 16, DEPTH[s.depth].blur, "inOut");
         });
         moveSfx(t);

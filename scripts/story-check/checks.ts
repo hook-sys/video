@@ -27,7 +27,7 @@ import { paymentsHubPlan } from "@/components/video/flow/fixtures/payments-hub";
 import { validateFlowPlan } from "@/components/video/flow/validate";
 import { FLOW_SCRIPT_FIXTURES } from "@/components/video/flow/fixtures/scripts";
 import { beatFrames, compileFlowScript } from "@/components/video/flow/compile";
-import { num } from "@/components/video/flow/eval";
+import { num, vec } from "@/components/video/flow/eval";
 import { spokenCueTimes } from "@/lib/voice-timing";
 import { type FlowScript, flowScriptBlockers, repairFlowScript } from "@/lib/flow-script";
 import { flowEngineEnabled, usableFlow } from "@/lib/story-engine";
@@ -39,10 +39,11 @@ import { ASSET_COUNT } from "@/components/video/flow/cards/catalog";
 import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { DEPTH, LAYOUT_PRESETS, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES } from "@/components/video/flow/layouts";
 import { BACKDROPS } from "@/components/video/flow/backdrop-names";
-import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
+import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, type SceneScript, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
-import { continuityCheck, expandShots, INTENT_CAMERA, SHOT_INTENTS, type ShotObject, ShotScript, ShotScriptModel } from "@/lib/shots";
+import { BEHAVIOR_ACTION, continuityCheck, expandShots, INTENT_CAMERA, SHOT_INTENTS, ShotObject as ShotObjectModel, type ShotObject, ShotScript, ShotScriptModel } from "@/lib/shots";
+import { computeStates } from "@/components/video/flow/states";
 import { REAL_SHOT_VIDEOS } from "@/components/video/flow/fixtures/real-shots";
 import { OBJECTS } from "@/components/video/flow/object-names";
 import { SHOT_FIXTURE, SHOT_NARRATION } from "@/components/video/flow/fixtures/shots";
@@ -662,6 +663,76 @@ function shotTemplates(): Check[] {
   add("phase 4 C: conflicting identity, stay+exit and a disappearance are caught", conflict.errors.length === 3 && gone.warnings.some((w) => w.includes("disappears")) && gone.warnings.some((w) => w.includes("not on screen")), [...conflict.errors, ...gone.warnings].join(" · "));
   add("phase 4 D: shots stored before object identity parse (objects = null) and expand as before", p3Parsed.shots.every((x) => x.objects === null) && JSON.stringify(expandShots(p3Parsed, [], p3n)) === JSON.stringify(expandShots({ ...p3Parsed, shots: p3Parsed.shots.map((x) => ({ ...x, objects: [] })) }, [], p3n)), `${p3Parsed.shots.length} shots, objects null`);
   add("phase 4: the Director must write each shot's objects (null allowed)", !ShotScriptModel.safeParse({ theme: "lavender", creative: { message: "m", audience: "a", tone: "t", pace: "calm" }, concepts: [], shots: p3Parsed.shots.map((x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== "objects"))) }).success, "a model answer without them is rejected");
+  // Phase 5: objects get a semantic behavior (what, never how); the
+  // compiler maps each to a tested scene action. A five-shot chain:
+  // a video enters → persists → clips accumulate beside it → they converge
+  // into it → it transforms into a rocket.
+  const act = (type: string, target: string | null, cue: string | null) => ({ type, target, cue });
+  const o5 = (id: string, asset: string, enters: boolean, persistent: boolean, behavior: ReturnType<typeof act> | null, extra: Partial<ShotObject> = {}): ShotObject => ({ ...obj(id, asset, enters, persistent, extra), behavior });
+  const it = (asset: string, label: string | null = null) => ({ cue: null, asset, label });
+  const j5Shots = p3Parsed.shots.map((x, i) =>
+    i === 5 ? { ...x, shot: "problem" as const, subject: "visual:filmstrip", label: null, line: null, line_cue: null, items: null, objects: [o5("video", "visual:filmstrip", true, true, act("enter", null, null))] }
+    : i === 6 ? { ...x, shot: "group" as const, cue: "Pick your favorite,", subject: null, line: null, line_cue: null, items: [it("visual:filmstrip"), it("visual:play", "Clip"), it("visual:play", "Clip")], objects: [o5("video", "visual:filmstrip", false, true, null), o5("clip1", "visual:play", true, true, act("accumulate", "video", "download all four")), o5("clip2", "visual:play", true, true, act("accumulate", "video", "download all four"))] }
+    : i === 7 ? { ...x, items: [it("visual:filmstrip"), it("visual:play", "Clip"), it("visual:play", "Clip")], objects: [o5("video", "visual:filmstrip", false, true, null), o5("clip1", "visual:play", false, false, act("converge", "video", "in email")), o5("clip2", "visual:play", false, false, act("converge", "video", "in email"))] }
+    : i === 8 ? { ...x, shot: "group" as const, line: null, subject: null, items: [it("visual:filmstrip"), it("object:rocket", "Launch")], objects: [o5("video", "visual:filmstrip", false, false, act("transform", "launch", "deserves a video"), { transforms_to: "launch" }), o5("launch", "object:rocket", true, false, null, { transforms_from: "video" })] }
+    : x,
+  );
+  const j5 = { ...p3Parsed, shots: j5Shots };
+  const j5Build = () => {
+    const notes: string[] = [];
+    const sc = repairCues(expandShots(j5, notes, p3n), p3n, p3w, p3.duration);
+    return { notes: [...notes, ...sc.notes.filter((n) => !n.startsWith("cue "))], sc: sc.script, plan: compileSceneScript(sc.script, { narration: p3n, words: p3w, durationSeconds: p3.duration, brand: { name: "MotionBrief", logo: "logo", cta: "Try it free today" } }) };
+  };
+  const j5a = j5Build();
+  const stored5 = ShotScript.safeParse(JSON.parse(JSON.stringify(j5)));
+  const model5 = ShotObjectModel.safeParse(o5("clip1", "visual:play", true, true, act("accumulate", "video", "download all four")));
+  add("phase 5 A: an accumulate behavior parses (stored and from the Director)", stored5.success && stored5.data.shots[6].objects?.[1].behavior?.type === "accumulate" && model5.success, stored5.success ? `shot 7: ${stored5.data.shots[6].objects?.map((x) => `${x.id}:${x.behavior?.type ?? "-"}`).join(", ")}` : "failed");
+  const vEl = j5a.sc.beats.find((b) => b.action === "scene" && b.cue === j5Shots[5].cue)?.elements?.[0]?.id;
+  const acc = j5a.sc.beats.find((b) => b.action === "move" && b.cue === "download all four");
+  const conv = j5a.sc.beats.find((b) => b.action === "merge" && b.cue === "in email");
+  const tf = j5a.sc.beats.find((b) => b.action === "merge" && b.cue === "deserves a video");
+  add("phase 5 B: converge resolves several objects onto one target", !!conv && conv.to === vEl && conv.targets!.length === 3 && conv.targets![2] === vEl && !!acc && acc.targets!.length === 2 && acc.to === vEl, `accumulate: move ${acc?.targets?.join("+")} → ${acc?.to} · converge: merge ${conv?.targets?.join("+")} → ${conv?.to}`);
+  const tfBad1 = continuityCheck(j5Shots.map((x, i) => (i === 8 ? { objects: [o5("video", "visual:filmstrip", false, false, act("transform", "launch", "deserves a video"), { transforms_to: "rocket2" }), o5("launch", "object:rocket", true, false, null)] } : { objects: x.objects ?? null })));
+  const tfBad2 = continuityCheck(j5Shots.map((x, i) => (i === 8 ? { objects: [o5("video", "visual:filmstrip", false, false, act("transform", "launch", "deserves a video")), o5("launch", "object:rocket", true, false, null, { transforms_from: "clip1" })] } : { objects: x.objects ?? null })));
+  const tfOk = continuityCheck(j5Shots);
+  add("phase 5 C: transform source → target is validated", !!tf && tf.targets![0] === vEl && tf.to !== vEl && !tfOk.errors.length && tfBad1.errors.some((e) => e.includes('transforms_to is "rocket2"')) && tfBad2.errors.some((e) => e.includes('comes from "clip1"')), `video ${tf?.targets?.[0]} → launch ${tf?.to}; wrong chains: ${[...tfBad1.errors, ...tfBad2.errors].join(" · ")}`);
+  // A wrong behavior is dropped, the object stays as it was.
+  const withBehavior = (shotIndex: number, objects: ShotObject[]) => ({ ...p3Parsed, shots: p3Parsed.shots.map((x, i) => (i === shotIndex ? { ...x, objects } : x)) });
+  const actionsOf = (sc: SceneScript) => sc.beats.map((b) => b.action).join(",");
+  const plainP3 = actionsOf(expandShots(p3Parsed, [], p3n));
+  const dNotes: string[] = [];
+  const dScript = expandShots(withBehavior(7, [o5("site", "icon:globe", true, false, act("connect", "crm", "in email"))]), dNotes, p3n);
+  add("phase 5 D: connect to an unknown object is caught (and dropped)", dNotes.some((n) => n.includes('targets unknown object "crm"')) && actionsOf(dScript) === plainP3, dNotes.find((n) => n.includes("crm")) ?? "not caught");
+  const eNotes: string[] = [];
+  const eScript = expandShots(withBehavior(7, [o5("site", "icon:globe", true, false, act("dock", null, "in email"))]), eNotes, p3n);
+  const eNotes2: string[] = [];
+  expandShots(withBehavior(7, [o5("site", "icon:globe", true, false, act("dock", "site", "in email"))]), eNotes2, p3n);
+  add("phase 5 E: dock without a valid target is rejected", eNotes.some((n) => n.includes("dock needs a target")) && eNotes2.some((n) => n.includes("cannot target itself")) && actionsOf(eScript) === plainP3, [...eNotes, ...eNotes2].filter((n) => n.includes("dock")).join(" · "));
+  const unknownB: string[] = [];
+  const uScript = expandShots(ShotScript.parse({ ...p3.shots as object, shots: (p3.shots as { shots: object[] }).shots.map((x, i) => (i === 7 ? { ...x, objects: [{ id: "site", role: "hero", asset: "icon:globe", enters: true, persistent: false, exits: false, transforms_from: null, transforms_to: null, behavior: { type: "explode", target: null, cue: "in email" } }] } : x)) }), unknownB, p3n);
+  add("phase 5: an unknown behavior is caught and the video falls back to no behavior", unknownB.some((n) => n.includes('unknown behavior "explode"')) && actionsOf(uScript) === plainP3, unknownB.find((n) => n.includes("explode")) ?? "not caught");
+  const oldObjects = ShotScript.safeParse({ ...(p3.shots as object), shots: (p3.shots as { shots: object[] }).shots.map((x, i) => (i === 7 ? { ...x, objects: [{ id: "site", role: "hero", asset: "icon:globe", enters: true, persistent: false, exits: false, transforms_from: null, transforms_to: null }] } : x)) });
+  add("phase 5 F: Phase 1–4 data still parses (objects without behavior → null)", oldObjects.success && oldObjects.data.shots[7].objects?.[0].behavior === null && REAL_SHOT_VIDEOS.every((v) => ShotScript.safeParse(v.shots).success), "stored shots, Phase 4 objects: behavior = null");
+  add("phase 5 G: objects without a behavior work as before (no extra beats)", actionsOf(expandShots(p4, [], p3n)) === actionsOf(expandShots({ ...p4, shots: p4.shots.map((x) => ({ ...x, objects: x.objects?.map((y) => ({ ...y, behavior: null })) ?? null })) }, [], p3n)) && !actionsOf(expandShots(p4, [], p3n)).includes("merge"), "Phase 4 chain: same beats");
+  const j5b = j5Build();
+  add("phase 5 H: the compiler resolves behaviors to the same motion every time", JSON.stringify(j5a.plan) === JSON.stringify(j5b.plan) && acc?.action === BEHAVIOR_ACTION.accumulate && conv?.action === BEHAVIOR_ACTION.converge && tf?.action === BEHAVIOR_ACTION.transform, "accumulate→move · converge→merge · transform→merge (identical plans)");
+  // While a behavior runs, what it moves stays in the frame.
+  let outside = "";
+  for (const b of j5a.sc.beats.filter((x) => ["move", "merge"].includes(x.action))) {
+    const t0 = Math.round((spokenCueTimes([b.cue], p3w)[0] ?? 0) * 30);
+    for (let f = t0; f < t0 + 40; f += 2) {
+      const zoom = num(j5a.plan.camera.zoom, f, 1);
+      const c = vec(j5a.plan.camera.center, f);
+      for (const st of computeStates(j5a.plan, f).values()) {
+        if (![...(b.targets ?? []), b.to].includes(st.node.id) || st.opacity < 0.3) continue;
+        const [x, y] = [960 + zoom * (st.pos[0] - c[0]), 540 + zoom * (st.pos[1] - c[1])];
+        if (x < 0 || x > 1920 || y < 0 || y > 1080) outside ||= `${st.node.id} at ${Math.round(x)},${Math.round(y)} (frame ${f}, ${b.action})`;
+      }
+    }
+  }
+  add("phase 5 I: no behavior takes an object out of the frame", !outside, outside || "every moving object stays inside 1920×1080");
+  const j5Bad = compositionCheck(j5a.sc, j5a.plan, { narration: p3n, words: p3w, durationSeconds: p3.duration }).filter((x) => ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "tiny-screens"].includes(x.rule));
+  add("phase 5 J: enter → persist → accumulate → converge → transform compiles validly", !sceneScriptBlockers(j5a.sc, p3n, p3w, p3.duration).length && !validateFlowPlan(j5a.plan).length && !j5a.notes.length && !tfOk.errors.length && !!acc && !!conv && !!tf, `${j5a.notes.join(" · ") || "no notes"}${j5Bad.length ? `; review: ${j5Bad.map((x) => `${x.rule}@${x.detail.slice(0, 60)}`).join(" | ")}` : ""}`);
   // Every real video made so far must still render cleanly (regressions).
   const BAD = ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "tiny-screens"];
   for (const v of REAL_SHOT_VIDEOS) {

@@ -49,6 +49,25 @@ export const UI_CARDS = ["action-panel", "ai-prompt", "search", "upload", "check
 // of a new copy appearing. Like StoryWorld's continuity_id
 // (lib/visual-story.ts), but for the explainer's tested pictures.
 export const OBJECT_ROLES = ["hero", "support", "context"] as const;
+// Phase 5: what an object DOES in its shot — a semantic verb, never numbers.
+// The compiler turns each into its tested motion (BEHAVIOR_ACTION below).
+export const BEHAVIORS = ["enter", "move", "accumulate", "converge", "assemble", "transform", "connect", "dock", "route", "reveal", "highlight", "exit"] as const;
+export type BehaviorType = (typeof BEHAVIORS)[number];
+// Behaviors that act toward another object of the same shot.
+export const TARGETED: readonly string[] = ["move", "accumulate", "converge", "assemble", "transform", "connect", "dock", "route"];
+// Behaviors after which the object is gone (absorbed or left).
+export const CONSUMING: readonly string[] = ["converge", "assemble", "transform", "dock", "exit"];
+// Pieces that may share one picture (three coins accumulating).
+const GROUPED: readonly string[] = ["accumulate", "converge", "assemble"];
+export const Behavior = z.object({
+  type: z.enum(BEHAVIORS),
+  target: z.string().nullable(), // the object id it acts toward (same shot)
+  cue: z.string().nullable(), // 1–6 narration words when it happens (enter: null, it comes with the shot)
+});
+// Stored behaviors are read loosely: an unknown verb is caught by
+// continuityCheck and ignored, never a failed parse.
+const StoredBehavior = z.object({ type: z.string(), target: z.string().nullable().default(null), cue: z.string().nullable().default(null) });
+export type ObjectBehavior = z.infer<typeof StoredBehavior>;
 export const ShotObject = z.object({
   id: z.string(), // short semantic id, the same in every shot that shows it
   role: z.enum(OBJECT_ROLES),
@@ -56,10 +75,13 @@ export const ShotObject = z.object({
   enters: z.boolean(), // true: first seen here · false: it continues from an earlier shot
   persistent: z.boolean(), // stays into the next shot
   exits: z.boolean(), // leaves at the end of this shot
-  transforms_from: z.string().nullable(), // an earlier object this one becomes (recorded; animated in a later phase)
+  transforms_from: z.string().nullable(), // an earlier object this one becomes
   transforms_to: z.string().nullable(),
+  behavior: Behavior.nullable(),
 });
-export type ShotObject = z.infer<typeof ShotObject>;
+// Objects stored before Phase 5 have no behavior (null).
+const StoredShotObject = ShotObject.extend({ behavior: StoredBehavior.nullable().default(null) });
+export type ShotObject = Omit<z.infer<typeof ShotObject>, "behavior"> & { behavior?: ObjectBehavior | null };
 const Item = z.object({ cue: z.string().nullable(), asset: z.string(), label: z.string().nullable() });
 const Shot = z.object({
   shot: z.enum(SHOT_KINDS),
@@ -87,7 +109,7 @@ const Shot = z.object({
 export type Shot = z.infer<typeof Shot>;
 // Stored shots from before Phase 3 have no camera intent, from before Phase 4
 // no objects (null).
-const StoredShot = Shot.extend({ camera: z.enum(SHOT_INTENTS).nullable().default(null), objects: z.array(ShotObject).nullable().default(null) });
+const StoredShot = Shot.extend({ camera: z.enum(SHOT_INTENTS).nullable().default(null), objects: z.array(StoredShotObject).nullable().default(null) });
 // Phase 2: before choosing shots the Director writes what the video means
 // (creative) and, per sentence, what the viewer should SEE (concepts). The
 // shots then show those concepts. Stored with the shots for later phases;
@@ -180,8 +202,13 @@ export function continuityCheck(shots: { objects?: ShotObject[] | null }[]): Con
     const objs = s.objects ?? [];
     const ids = objs.map((o) => o.id);
     for (const id of new Set(ids)) if (ids.filter((x) => x === id).length > 1) errors.push(`shot ${i + 1}: object "${id}" is listed twice`);
-    const assets = objs.map((o) => o.asset);
-    for (const a of new Set(assets)) if (assets.filter((x) => x === a).length > 1) errors.push(`shot ${i + 1}: "${a}" is given two object ids (${objs.filter((o) => o.asset === a).map((o) => o.id).join(", ")})`);
+    // One picture, one identity — except pieces gathering into the same
+    // target (three coins accumulating), each bound to its own copy.
+    for (const a of new Set(objs.map((o) => o.asset))) {
+      const same = objs.filter((o) => o.asset === a);
+      if (same.length > 1 && !same.every((o) => GROUPED.includes(o.behavior?.type ?? "") && o.behavior?.target === same[0].behavior?.target)) errors.push(`shot ${i + 1}: "${a}" is given two object ids (${same.map((o) => o.id).join(", ")})`);
+    }
+    const inShot = new Map(objs.map((o) => [o.id, o] as const));
     for (const o of objs) {
       const seen = last.get(o.id);
       if (o.persistent && o.exits) errors.push(`shot ${i + 1}: object "${o.id}" cannot both stay (persistent) and exit`);
@@ -191,10 +218,34 @@ export function continuityCheck(shots: { objects?: ShotObject[] | null }[]): Con
       else if (!o.enters && seen && seen.at < i - 1) warnings.push(`shot ${i + 1}: object "${o.id}" was not on screen in the shot before: shown again`);
       if (o.transforms_from !== null && (o.transforms_from === o.id || !last.has(o.transforms_from))) errors.push(`shot ${i + 1}: object "${o.id}" transforms from unknown object "${o.transforms_from}"`);
       if (o.transforms_to === o.id) errors.push(`shot ${i + 1}: object "${o.id}" transforms into itself`);
+      // Phase 5: its behavior (a wrong one is dropped; the object stays as it is).
+      const bh = o.behavior;
+      if (!bh) continue;
+      const at = `shot ${i + 1}: behavior of "${o.id}"`;
+      if (!(BEHAVIORS as readonly string[]).includes(bh.type)) {
+        errors.push(`${at}: unknown behavior "${bh.type}"`);
+        continue;
+      }
+      const target = bh.target ? inShot.get(bh.target) : undefined;
+      if (TARGETED.includes(bh.type)) {
+        if (!bh.target) errors.push(`${at}: ${bh.type} needs a target object`);
+        else if (bh.target === o.id) errors.push(`${at}: ${bh.type} cannot target itself`);
+        else if (!target) errors.push(`${at}: ${bh.type} targets unknown object "${bh.target}" (not in this shot)`);
+        else if (CONSUMING.includes(target.behavior?.type ?? "")) errors.push(`${at}: ${bh.type} targets "${bh.target}", which itself leaves in this shot`);
+      }
+      if (bh.type === "enter" && !o.enters) errors.push(`${at}: enter on an object that continues from an earlier shot`);
+      if (CONSUMING.includes(bh.type) && o.persistent) errors.push(`${at}: ${bh.type} ends it, so it cannot persist`);
+      if (bh.type === "transform" && target) {
+        if (o.transforms_to && o.transforms_to !== target.id) errors.push(`${at}: transforms into "${target.id}" but transforms_to is "${o.transforms_to}"`);
+        if (target.transforms_from && target.transforms_from !== o.id) errors.push(`${at}: transforms into "${target.id}", which comes from "${target.transforms_from}"`);
+      }
+      if (bh.type === "assemble" && objs.filter((x) => x.behavior?.type === "assemble" && x.behavior.target === bh.target).length < 2) warnings.push(`${at}: assemble with one piece (shown as converge)`);
+      if (bh.type !== "enter" && !bh.cue) warnings.push(`${at}: ${bh.type} has no cue: skipped`);
     }
     // Promised to stay, but the next shot does not show it.
     for (const [id, x] of last) if (x.at === i - 1 && x.persistent && !ids.includes(id)) warnings.push(`shot ${i + 1}: object "${id}" should persist from shot ${i} but disappears`);
-    objs.forEach((o) => last.set(o.id, { at: i, exits: o.exits, persistent: o.persistent }));
+    // (absorbed, docked or transformed: gone, like an exit)
+    objs.forEach((o) => last.set(o.id, { at: i, exits: o.exits || CONSUMING.includes(o.behavior?.type ?? ""), persistent: o.persistent }));
   });
   shots.forEach((s, i) =>
     (s.objects ?? []).forEach((o) => {
@@ -209,11 +260,27 @@ const sameAsset = (element: string | null, asked: string) => !!element && (asked
 
 // Gives each story object one element id for the whole video: an object the
 // shot before showed is carried (asset null — compile-scene moves the same
-// element to its new place); a new one keeps its fresh id. Returns the ids.
+// element to its new place); a new one keeps its fresh id. Then each object's
+// behavior becomes a tested scene action on its cue (BEHAVIOR_ACTION).
+// Returns the ids.
+export const BEHAVIOR_ACTION: Record<Exclude<BehaviorType, "enter">, SceneBeat["action"]> = {
+  move: "move", // travels to the target's side
+  accumulate: "move", // the pieces gather beside the collection point, one after another
+  converge: "merge", // fly into the target, which grows
+  assemble: "merge",
+  transform: "merge", // flows into what it becomes (its new state), which reacts
+  connect: "connect", // a line with a travelling packet
+  dock: "trigger", // lands in the target, which reacts
+  route: "flow", // packets run along the path to the target
+  reveal: "reveal", // everything comes into view
+  highlight: "highlight", // a pulse; the rest dims for a moment
+  exit: "erase",
+};
 function bindObjects(shots: ShotInput[], beats: SceneBeat[], ranges: [number, number][], notes: ExpandNotes) {
   const { errors } = continuityCheck(shots);
   notes.push(...errors.map((e) => `continuity: ${e}`));
   const bad = new Set(errors.map((e) => /^shot (\d+): (?:unknown )?object "([^"]+)"/.exec(e)).filter((m) => m).map((m) => `${m![1]}:${m![2]}`));
+  const badBehavior = new Set(errors.map((e) => /^shot (\d+): behavior of "([^"]+)"/.exec(e)).filter((m) => m).map((m) => `${m![1]}:${m![2]}`));
   const elementOf = new Map<string, { el: string; at: number; exits: boolean }>(); // object id → its element
   const rename = (from: string, to: string, start: number) => {
     for (const b of beats.slice(start)) {
@@ -224,19 +291,57 @@ function bindObjects(shots: ShotInput[], beats: SceneBeat[], ranges: [number, nu
   };
   shots.forEach((s, i) => {
     const [from, to] = ranges[i];
+    const used = new Set<SceneElement>(); // (pieces sharing a picture take one copy each)
+    const here = new Map<string, string>(); // object id → its element in this shot
     for (const o of s.objects ?? []) {
       if (bad.has(`${i + 1}:${o.id}`)) continue;
-      const own = beats.slice(from, to).flatMap((b) => (b.elements ?? []).map((e) => ({ b, e }))).find(({ e }) => sameAsset(e.asset, o.asset));
+      const own = beats.slice(from, to).flatMap((b) => (b.elements ?? []).map((e) => ({ b, e }))).find(({ e }) => !used.has(e) && sameAsset(e.asset, o.asset));
       if (!own) continue; // (its picture was not drawn: nothing to bind)
+      used.add(own.e);
       const prev = elementOf.get(o.id);
+      const gone = o.exits || (!badBehavior.has(`${i + 1}:${o.id}`) && CONSUMING.includes(o.behavior?.type ?? ""));
       // Carried only straight from the shot before, into a new scene.
       if (prev && prev.at === i - 1 && !prev.exits && own.b.action === "scene" && !(own.b.elements ?? []).some((e) => e.id === prev.el)) {
         rename(own.e.id, prev.el, from);
         own.e.asset = null;
         own.e.label = null;
         own.e.content = null;
-        elementOf.set(o.id, { el: prev.el, at: i, exits: o.exits });
-      } else elementOf.set(o.id, { el: own.e.id, at: i, exits: o.exits });
+        elementOf.set(o.id, { el: prev.el, at: i, exits: gone });
+      } else elementOf.set(o.id, { el: own.e.id, at: i, exits: gone });
+      here.set(o.id, elementOf.get(o.id)!.el);
+    }
+    // Behaviors → beats at the end of the shot, in the order listed. Pieces
+    // with the same verb, target and cue move as one beat.
+    const added: SceneBeat[] = [];
+    const cues = new Set(beats.slice(from, to).map((b) => b.cue));
+    const left = new Set(here.values()); // still on screen in this shot
+    for (const o of s.objects ?? []) {
+      const bh = o.behavior;
+      const el = here.get(o.id);
+      if (!bh || !el || bh.type === "enter" || badBehavior.has(`${i + 1}:${o.id}`) || !(bh.type in BEHAVIOR_ACTION) || !bh.cue) continue;
+      const action = BEHAVIOR_ACTION[bh.type as Exclude<BehaviorType, "enter">];
+      const target = bh.target ? here.get(bh.target) : undefined;
+      if (!left.has(el) || (TARGETED.includes(bh.type) && (!target || !left.has(target)))) {
+        notes.push(`behavior: ${bh.type} of "${o.id}" in shot ${i + 1} has nothing on screen to act on: skipped`);
+        continue;
+      }
+      const group = added.find((b) => b.cue === bh.cue && b.action === action && b.to === (target ?? null) && (action === "move" || action === "merge"));
+      if (group) {
+        group.targets = action === "merge" ? [...group.targets!.slice(0, -1), el, target!] : [...group.targets!, el].slice(0, 4);
+      } else if (cues.has(bh.cue)) {
+        notes.push(`behavior: ${bh.type} of "${o.id}" in shot ${i + 1} shares its cue "${bh.cue}" with another moment: skipped`);
+        continue;
+      } else {
+        cues.add(bh.cue);
+        const targets = action === "merge" ? [el, target!] : action === "reveal" ? null : [el];
+        added.push(beat({ cue: bh.cue, action, targets, to: TARGETED.includes(bh.type) ? target! : null, style: action === "erase" ? "fade" : null }));
+      }
+      if (CONSUMING.includes(bh.type)) left.delete(el);
+    }
+    if (added.length) {
+      beats.splice(to, 0, ...added);
+      ranges[i][1] += added.length;
+      for (let k = i + 1; k < ranges.length; k++) ranges[k] = [ranges[k][0] + added.length, ranges[k][1] + added.length];
     }
   });
   return new Map([...elementOf].map(([k, v]) => [k, v.el]));
