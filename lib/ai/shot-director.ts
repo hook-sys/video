@@ -6,7 +6,7 @@ import type { SceneDirectorInput, SceneDirectorResult } from "@/lib/ai/scene-dir
 import { compositionCheck, violationNote } from "@/components/video/flow/composition-check";
 import { searchVariants, seedFrom } from "@/lib/shot-search";
 import type { SceneScript } from "@/lib/scene-script";
-import { expandShots, shotCatalogText, ShotScript, ShotScriptModel } from "@/lib/shots";
+import { continuityCheck, expandShots, shotCatalogText, ShotScript, ShotScriptModel } from "@/lib/shots";
 import { tokenize } from "@/lib/voice-timing";
 
 // Shot Director: picks a tested shot template (lib/shots.ts) for each moment
@@ -19,8 +19,10 @@ const INSTRUCTIONS = `You are the editor of a calm explainer video for a softwar
 OUTPUT: { theme, creative, concepts[], shots[] }. Unused fields are null. Think in this order:
 
 1. creative — read only the NARRATION: message (the one thing to remember), audience, tone, pace (calm | balanced | brisk).
-2. concepts[] — for each sentence or idea, answer "what should the viewer SEE to understand this?": cue (1–6 words where it is spoken), see (concrete objects and what happens to them, e.g. "scattered sheets pile up, then slide into one clear chart" — never a vague "show a dashboard"), hero (the one object in focus, written as an ASSET), persists (an object carried over from the previous idea, else null), avoid (what must not be shown, else null).
+2. concepts[] — for each sentence or idea, answer "what should the viewer SEE to understand this?": cue (1–6 words where it is spoken), see (concrete objects and what happens to them, e.g. "scattered sheets pile up, then slide into one clear chart" — never a vague "show a dashboard"), hero (the one object in focus, written as an ASSET), persists (the object id carried over from the previous idea — the same id its shots use — else null), avoid (what must not be shown, else null).
 3. shots[] — the shots that show those concepts: each concept's hero is that shot's subject or item; keep a persisting object as the subject of the next shot when the shot allows it.
+
+OBJECTS (each shot's objects — the story's things, by identity, never positions): one entry per picture that matters: id (a short semantic id like "release_notes", the SAME id every time the same thing is shown), role (hero | support | context), asset (which picture of this shot it is: the subject, an item's asset, "card" for the ui card, "logo" for the reveal), enters (true where it first appears; false when it continues from an earlier shot), persistent (true when it stays into the next shot), exits (true when it leaves after this shot; never with persistent), transforms_from / transforms_to (the id of the object it turns from / into, else null). A concept's persisting object keeps its id in the next shot (enters false), so the viewer follows ONE object instead of seeing a new copy. Null when a shot has nothing to carry.
 
 CAMERA (each shot's camera, an intent — never positions or numbers): establish (the opening: wide and settling) · reveal (the product or answer opens up) · push (move closer to what matters now) · close (a detail in focus) · pull_back (show the bigger picture) · follow / track (the eye travels across a row or a flow) · hold (stay still so a number or a line can be read) · overhead (rise above it) · transition (a quiet bridge). Open with establish; reveal where the product is named; hold on numbers and on the closing line; push on the problem; vary — never the same intent three shots in a row.
 
@@ -61,6 +63,9 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   const check = (raw: unknown) => {
     if (!raw) return { shots: null, script: null, problems: ["no structured output"], ...none };
     const shots = ShotScript.parse(raw);
+    // Phase 4: object continuity (errors reach the revision through the expand notes).
+    const chain = continuityCheck(shots.shots);
+    if (chain.errors.length || chain.warnings.length) console.info("shot continuity:", chain);
     const expandNotes: string[] = [];
     expandShots(shots, expandNotes, input.narration);
     try {

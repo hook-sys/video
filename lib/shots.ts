@@ -43,6 +43,23 @@ export const SHOT_CATALOG: Record<ShotKind, string> = {
 // Cards the ui shot may use (readable as a big hero).
 export const UI_CARDS = ["action-panel", "ai-prompt", "search", "upload", "checkout", "login", "cta", "invoice", "calendar-event", "task", "chat", "email", "payment", "order", "appointment", "social-post", "campaign"] as const;
 
+// Phase 4: a story object — one semantic thing ("release_notes", "video")
+// that keeps its identity from shot to shot. The same id is the same object
+// on screen: carried into the next shot (it travels to its new place) instead
+// of a new copy appearing. Like StoryWorld's continuity_id
+// (lib/visual-story.ts), but for the explainer's tested pictures.
+export const OBJECT_ROLES = ["hero", "support", "context"] as const;
+export const ShotObject = z.object({
+  id: z.string(), // short semantic id, the same in every shot that shows it
+  role: z.enum(OBJECT_ROLES),
+  asset: z.string(), // which of this shot's pictures it is (its subject or an item asset; "card" for the ui card, "logo" for the reveal)
+  enters: z.boolean(), // true: first seen here · false: it continues from an earlier shot
+  persistent: z.boolean(), // stays into the next shot
+  exits: z.boolean(), // leaves at the end of this shot
+  transforms_from: z.string().nullable(), // an earlier object this one becomes (recorded; animated in a later phase)
+  transforms_to: z.string().nullable(),
+});
+export type ShotObject = z.infer<typeof ShotObject>;
 const Item = z.object({ cue: z.string().nullable(), asset: z.string(), label: z.string().nullable() });
 const Shot = z.object({
   shot: z.enum(SHOT_KINDS),
@@ -64,10 +81,13 @@ const Shot = z.object({
   // Phase 3: how the shot is seen — a semantic intent, never coordinates.
   // The compiler turns it into the camera move (compile-scene.ts).
   camera: z.enum(SHOT_INTENTS).nullable(),
+  // Phase 4: which story objects this shot shows (identity, never positions).
+  objects: z.array(ShotObject).nullable(),
 });
 export type Shot = z.infer<typeof Shot>;
-// Stored shots from before Phase 3 have no camera intent (null).
-const StoredShot = Shot.extend({ camera: z.enum(SHOT_INTENTS).nullable().default(null) });
+// Stored shots from before Phase 3 have no camera intent, from before Phase 4
+// no objects (null).
+const StoredShot = Shot.extend({ camera: z.enum(SHOT_INTENTS).nullable().default(null), objects: z.array(ShotObject).nullable().default(null) });
 // Phase 2: before choosing shots the Director writes what the video means
 // (creative) and, per sentence, what the viewer should SEE (concepts). The
 // shots then show those concepts. Stored with the shots for later phases;
@@ -145,7 +165,84 @@ const rng = (seed: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-export function expandShots(script: { theme: ShotScript["theme"]; shots: (Omit<Shot, "camera"> & { camera?: ShotIntent | null })[]; version?: number }, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant): SceneScript {
+type ShotInput = Omit<Shot, "camera" | "objects"> & { camera?: ShotIntent | null; objects?: ShotObject[] | null };
+
+// ── Phase 4: object continuity ──
+// Checks the objects' chain before anything is drawn. Errors are wrong
+// references (the Director is asked to fix them; the expander ignores those
+// objects); warnings are kept as they are and only logged.
+export type Continuity = { errors: string[]; warnings: string[] };
+export function continuityCheck(shots: { objects?: ShotObject[] | null }[]): Continuity {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const last = new Map<string, { at: number; exits: boolean; persistent: boolean }>(); // id → its latest shot
+  shots.forEach((s, i) => {
+    const objs = s.objects ?? [];
+    const ids = objs.map((o) => o.id);
+    for (const id of new Set(ids)) if (ids.filter((x) => x === id).length > 1) errors.push(`shot ${i + 1}: object "${id}" is listed twice`);
+    const assets = objs.map((o) => o.asset);
+    for (const a of new Set(assets)) if (assets.filter((x) => x === a).length > 1) errors.push(`shot ${i + 1}: "${a}" is given two object ids (${objs.filter((o) => o.asset === a).map((o) => o.id).join(", ")})`);
+    for (const o of objs) {
+      const seen = last.get(o.id);
+      if (o.persistent && o.exits) errors.push(`shot ${i + 1}: object "${o.id}" cannot both stay (persistent) and exit`);
+      if (!o.enters && !seen) errors.push(`shot ${i + 1}: unknown object "${o.id}" (not shown before; set enters true)`);
+      if (o.enters && seen && !seen.exits) warnings.push(`shot ${i + 1}: object "${o.id}" enters again without having exited: kept as the same object`);
+      if (!o.enters && seen?.exits) warnings.push(`shot ${i + 1}: object "${o.id}" comes back after it exited: shown again`);
+      else if (!o.enters && seen && seen.at < i - 1) warnings.push(`shot ${i + 1}: object "${o.id}" was not on screen in the shot before: shown again`);
+      if (o.transforms_from !== null && (o.transforms_from === o.id || !last.has(o.transforms_from))) errors.push(`shot ${i + 1}: object "${o.id}" transforms from unknown object "${o.transforms_from}"`);
+      if (o.transforms_to === o.id) errors.push(`shot ${i + 1}: object "${o.id}" transforms into itself`);
+    }
+    // Promised to stay, but the next shot does not show it.
+    for (const [id, x] of last) if (x.at === i - 1 && x.persistent && !ids.includes(id)) warnings.push(`shot ${i + 1}: object "${id}" should persist from shot ${i} but disappears`);
+    objs.forEach((o) => last.set(o.id, { at: i, exits: o.exits, persistent: o.persistent }));
+  });
+  shots.forEach((s, i) =>
+    (s.objects ?? []).forEach((o) => {
+      if (o.transforms_to && !shots.slice(i + 1).some((x) => x.objects?.some((y) => y.id === o.transforms_to))) warnings.push(`shot ${i + 1}: object "${o.id}" transforms to "${o.transforms_to}", which never appears`);
+    }),
+  );
+  return { errors, warnings };
+}
+
+// The same asset with or without its look ("card:upload/glass" = "card:upload").
+const sameAsset = (element: string | null, asked: string) => !!element && (asked === "card" ? element.startsWith("card:") : element.replace(/^(card:[^/]+)\/.*$/, "$1") === asked.replace(/^(card:[^/]+)\/.*$/, "$1"));
+
+// Gives each story object one element id for the whole video: an object the
+// shot before showed is carried (asset null — compile-scene moves the same
+// element to its new place); a new one keeps its fresh id. Returns the ids.
+function bindObjects(shots: ShotInput[], beats: SceneBeat[], ranges: [number, number][], notes: ExpandNotes) {
+  const { errors } = continuityCheck(shots);
+  notes.push(...errors.map((e) => `continuity: ${e}`));
+  const bad = new Set(errors.map((e) => /^shot (\d+): (?:unknown )?object "([^"]+)"/.exec(e)).filter((m) => m).map((m) => `${m![1]}:${m![2]}`));
+  const elementOf = new Map<string, { el: string; at: number; exits: boolean }>(); // object id → its element
+  const rename = (from: string, to: string, start: number) => {
+    for (const b of beats.slice(start)) {
+      for (const e of b.elements ?? []) if (e.id === from) e.id = to;
+      if (b.targets) b.targets = b.targets.map((t) => (t === from ? to : t));
+      if (b.to === from) b.to = to;
+    }
+  };
+  shots.forEach((s, i) => {
+    const [from, to] = ranges[i];
+    for (const o of s.objects ?? []) {
+      if (bad.has(`${i + 1}:${o.id}`)) continue;
+      const own = beats.slice(from, to).flatMap((b) => (b.elements ?? []).map((e) => ({ b, e }))).find(({ e }) => sameAsset(e.asset, o.asset));
+      if (!own) continue; // (its picture was not drawn: nothing to bind)
+      const prev = elementOf.get(o.id);
+      // Carried only straight from the shot before, into a new scene.
+      if (prev && prev.at === i - 1 && !prev.exits && own.b.action === "scene" && !(own.b.elements ?? []).some((e) => e.id === prev.el)) {
+        rename(own.e.id, prev.el, from);
+        own.e.asset = null;
+        own.e.label = null;
+        own.e.content = null;
+        elementOf.set(o.id, { el: prev.el, at: i, exits: o.exits });
+      } else elementOf.set(o.id, { el: own.e.id, at: i, exits: o.exits });
+    }
+  });
+  return new Map([...elementOf].map(([k, v]) => [k, v.el]));
+}
+
+export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInput[]; version?: number }, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant): SceneScript {
   // (the seed is mixed first: neighbouring seeds give unrelated videos)
   const pick = variant ? rng(Math.imul(variant.seed ^ 0x9e3779b9, 0x85ebca6b)) : null;
   const choose = <T,>(fallback: T, options: readonly T[]) => (pick ? options[Math.floor(pick() * options.length)] : fallback);
@@ -197,7 +294,9 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: (Omit<S
   const caption = (cue: string, text: string, accent: string | null, mark: "strike" | "pill" | null, swap: string[] | null = null) =>
     beats.push(beat({ cue, action: "statement", text, accent: accent && text.toLowerCase().includes(accent.toLowerCase()) ? accent : null, style: mark, text_layout: "side", items: swap }));
 
+  const ranges: [number, number][] = []; // each shot's beats
   for (const s of script.shots) {
+    ranges.push([beats.length, beats.length]);
     intent = s.camera ?? null;
     const items = (s.items ?? []).filter((i) => i.asset);
     switch (s.shot) {
@@ -323,7 +422,9 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: (Omit<S
         break;
       }
     }
+    ranges[ranges.length - 1][1] = beats.length;
   }
+  if (script.shots.some((s) => s.objects?.length)) bindObjects(script.shots, beats, ranges, notes);
   return SceneScript.parse({ version: 2, theme: script.theme, pace: "calm", style: "explainer", beats, look });
 }
 

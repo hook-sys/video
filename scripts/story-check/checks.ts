@@ -42,7 +42,7 @@ import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
-import { expandShots, INTENT_CAMERA, SHOT_INTENTS, ShotScript, ShotScriptModel } from "@/lib/shots";
+import { continuityCheck, expandShots, INTENT_CAMERA, SHOT_INTENTS, type ShotObject, ShotScript, ShotScriptModel } from "@/lib/shots";
 import { REAL_SHOT_VIDEOS } from "@/components/video/flow/fixtures/real-shots";
 import { OBJECTS } from "@/components/video/flow/object-names";
 import { SHOT_FIXTURE, SHOT_NARRATION } from "@/components/video/flow/fixtures/shots";
@@ -629,6 +629,39 @@ function shotTemplates(): Check[] {
     intentRows.push(`${intent}→${INTENT_CAMERA[intent]}${bad.length ? ` (${bad.map((x) => x.rule).join(",")})` : ""}`);
   }
   add("phase 3: every camera intent maps to a move and renders cleanly", intentsOk, intentRows.join(" · "));
+  // Phase 4: story objects keep one identity from shot to shot. One rocket
+  // shown in three shots is ONE element that travels (carried, asset null),
+  // not three copies; new objects next to it stay new.
+  const obj = (id: string, asset: string, enters: boolean, persistent: boolean, extra: Partial<ShotObject> = {}): ShotObject => ({ id, role: "hero", asset, enters, persistent, exits: false, transforms_from: null, transforms_to: null, ...extra });
+  const p4Shots = p3Parsed.shots.map((x, i) =>
+    i === 6 ? { ...x, shot: "problem" as const, subject: "object:rocket", label: null, line: null, line_cue: null, items: null, objects: [obj("launch", "object:rocket", true, true)] }
+    : i === 7 ? { ...x, items: [{ cue: null, asset: "object:rocket", label: "Launch" }, ...(x.items ?? []).slice(0, 2)], objects: [obj("launch", "object:rocket", false, true), obj("site", "icon:globe", true, false, { role: "support" })] }
+    : i === 8 ? { ...x, objects: [obj("launch", "object:rocket", false, false)] }
+    : x,
+  );
+  const p4 = { ...p3Parsed, shots: p4Shots };
+  const p4Notes: string[] = [];
+  const p4Script = repairCues(expandShots(p4, p4Notes, p3n), p3n, p3w, p3.duration).script;
+  const sceneOf = (cue: string) => p4Script.beats.find((x) => x.action === "scene" && x.cue === cue);
+  const rocketEls = [p4Shots[6].cue, p4Shots[7].cue, p4Shots[8].cue].map((c) => sceneOf(c)?.elements?.find((e) => e.asset === "object:rocket" || e.asset === null));
+  const sameId = rocketEls.every((e) => e && e.id === rocketEls[0]!.id);
+  add("phase 4 A: one object persists across 3 shots (carried, not re-created)", sameId && rocketEls[0]!.asset === "object:rocket" && rocketEls.slice(1).every((e) => e!.asset === null), rocketEls.map((e) => `${e?.id ?? "?"}:${e?.asset ?? "carried"}`).join(" → "));
+  const shot7 = sceneOf(p4Shots[7].cue)?.elements ?? [];
+  add("phase 4 B: new and persistent objects are told apart", shot7.filter((e) => e.asset === null).length === 1 && shot7.filter((e) => e.asset?.startsWith("icon:")).length === 2, shot7.map((e) => `${e.id}=${e.asset ?? "carried"}`).join(", "));
+  const p4Plan = compileSceneScript(p4Script, { narration: p3n, words: p3w, durationSeconds: p3.duration, brand: { name: "MotionBrief", logo: "logo", cta: "Try it free today" } });
+  const rocketNodes = p4Plan.nodes.filter((x) => x.id === rocketEls[0]!.id || x.id.startsWith(`${rocketEls[0]!.id}~`));
+  const p4Bad = compositionCheck(p4Script, p4Plan, { narration: p3n, words: p3w, durationSeconds: p3.duration }).filter((x) => ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "tiny-screens"].includes(x.rule));
+  add("phase 4 F: identity holds through the render (one node for the rocket, plan valid)", rocketNodes.length === 1 && !sceneScriptBlockers(p4Script, p3n, p3w, p3.duration).length && !validateFlowPlan(p4Plan).length && !p4Notes.some((n) => n.startsWith("continuity")), `${rocketNodes.length} rocket node(s)${p4Bad.length ? `; review: ${p4Bad.map((x) => x.rule).join(",")}` : ""}`);
+  // Wrong chains are caught before anything is drawn.
+  const unknownNotes: string[] = [];
+  const withUnknown = { ...p3Parsed, shots: p3Parsed.shots.map((x, i) => (i === 8 ? { ...x, objects: [obj("ghost", "object:rocket", false, false)] } : x)) };
+  const unknownScript = expandShots(withUnknown, unknownNotes, p3n);
+  const conflict = continuityCheck([{ objects: [obj("a", "icon:mail", true, true), obj("a", "icon:globe", true, false)] }, { objects: [obj("b", "icon:mail", true, true, { exits: true }), obj("c", "icon:mail", true, false)] }]);
+  const gone = continuityCheck([{ objects: [obj("a", "icon:mail", true, true)] }, { objects: [] }, { objects: [obj("a", "icon:mail", false, false)] }]);
+  add("phase 4 C: an unknown persistent object is caught (and ignored, never drawn wrong)", unknownNotes.some((n) => n.includes('unknown object "ghost"')) && unknownScript.beats.every((b) => (b.elements ?? []).every((e) => e.asset !== null)), unknownNotes.find((n) => n.includes("ghost")) ?? "not caught");
+  add("phase 4 C: conflicting identity, stay+exit and a disappearance are caught", conflict.errors.length === 3 && gone.warnings.some((w) => w.includes("disappears")) && gone.warnings.some((w) => w.includes("not on screen")), [...conflict.errors, ...gone.warnings].join(" · "));
+  add("phase 4 D: shots stored before object identity parse (objects = null) and expand as before", p3Parsed.shots.every((x) => x.objects === null) && JSON.stringify(expandShots(p3Parsed, [], p3n)) === JSON.stringify(expandShots({ ...p3Parsed, shots: p3Parsed.shots.map((x) => ({ ...x, objects: [] })) }, [], p3n)), `${p3Parsed.shots.length} shots, objects null`);
+  add("phase 4: the Director must write each shot's objects (null allowed)", !ShotScriptModel.safeParse({ theme: "lavender", creative: { message: "m", audience: "a", tone: "t", pace: "calm" }, concepts: [], shots: p3Parsed.shots.map((x) => Object.fromEntries(Object.entries(x).filter(([k]) => k !== "objects"))) }).success, "a model answer without them is rejected");
   // Every real video made so far must still render cleanly (regressions).
   const BAD = ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "tiny-screens"];
   for (const v of REAL_SHOT_VIDEOS) {
