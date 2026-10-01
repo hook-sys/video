@@ -3,7 +3,7 @@ import { compileSceneScript } from "@/components/video/flow/compile-scene";
 import { compositionCheck, type Violation } from "@/components/video/flow/composition-check";
 import type { FlowPlan } from "@/components/video/flow/types";
 import { validateFlowPlan } from "@/components/video/flow/validate";
-import { sceneScriptBlockers, type SceneScript } from "@/lib/scene-script";
+import { repairCues, sceneScriptBlockers, type SceneScript } from "@/lib/scene-script";
 import { expandShots, type ShotScript } from "@/lib/shots";
 import type { WordTiming } from "@/lib/voice-timing";
 
@@ -61,7 +61,10 @@ export function searchVariants(shots: ShotScript, ctx: SearchContext, baseSeed: 
   for (let k = 0; k < tries; k++) {
     const seed = (baseSeed + k * 7919) % 1_000_003;
     const notes: string[] = [];
-    const script = expandShots(shots, notes, ctx.narration, { seed });
+    // Cues the voice says differently are matched, not fatal (repairCues).
+    const fixed = repairCues(expandShots(shots, notes, ctx.narration, { seed }), ctx.narration, ctx.words, ctx.durationSeconds);
+    const script = fixed.script;
+    notes.push(...fixed.notes);
     const blocked = sceneScriptBlockers(script, ctx.narration, ctx.words, ctx.durationSeconds);
     if (blocked.length) {
       // The words decide these, not the variant: another try will not help.

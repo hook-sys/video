@@ -7,7 +7,7 @@ import { isLayout } from "@/components/video/flow/layouts";
 import { OBJECTS, type ObjectName } from "@/components/video/flow/object-names";
 import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { searchIcons } from "@/lib/icons";
-import { spokenCueTimes, tokenize, type WordTiming } from "@/lib/voice-timing";
+import { spokenCueTimes, tokenize, tokensForWord, type WordTiming } from "@/lib/voice-timing";
 import { FLOW_THEMES, STATEMENT_LAYOUTS, estimateWords } from "@/lib/flow-script";
 
 // SceneScript (Director v2): the video as scenes of product elements (cards,
@@ -186,6 +186,67 @@ export function repairSceneScript(script: SceneScript): SceneScript {
 const words = (s: string | null) => (s ?? "").trim().split(/\s+/).filter(Boolean).length;
 
 // Blocking problems: the compiler would show something wrong or out of sync.
+// Cues the voice does not say as written (the Director wrote "MotionBrief
+// changes that" but the voice has "Motion Brief", a cue repeated out of
+// order …): instead of throwing the script away, each cue is matched in
+// spoken order to the longest run of its words the voice does say next; a
+// beat with none of its words left is dropped (a scene takes the next word).
+export function repairCues(script: SceneScript, narration: string, voiceWords?: WordTiming[] | null, durationSeconds = 15): { script: SceneScript; notes: string[] } {
+  const timeline = voiceWords?.length ? voiceWords : estimateWords(narration, durationSeconds);
+  const stream = timeline.flatMap((w) => tokenize(w.text).map((t) => ({ t, start: w.start })));
+  const notes: string[] = [];
+  // Where `want` is spoken from token `from` on: [start token, end token] or null.
+  const find = (want: string[], from: number): [number, number] | null => {
+    for (let i = from; i < stream.length; i++) {
+      let at = i;
+      const ok = want.every((w) => {
+        const n = tokensForWord(stream, at, w);
+        at += n;
+        return n > 0;
+      });
+      if (ok) return [i, at];
+    }
+    return null;
+  };
+  let from = 0;
+  const beats: SceneBeat[] = [];
+  script.beats.forEach((b, i) => {
+    const paired = script.style === "explainer" && b.action === "statement" && beats.length > 0 && beats[beats.length - 1].action === "scene" && script.beats[i - 1]?.cue === b.cue;
+    if (paired) {
+      beats.push({ ...b, cue: beats[beats.length - 1].cue });
+      return;
+    }
+    const want = tokenize(b.cue);
+    const hit = want.length ? find(want, from) : null;
+    if (hit) {
+      from = hit[0] + 1;
+      beats.push(b);
+      return;
+    }
+    // The longest run of the cue's own words spoken next.
+    for (let len = want.length - 1; len >= 1; len--) {
+      for (let s0 = 0; s0 + len <= want.length; s0++) {
+        const part = find(want.slice(s0, s0 + len), from);
+        if (part) {
+          const cue = timeline.length ? stream.slice(part[0], part[1]).map((x) => x.t).join(" ") : want.slice(s0, s0 + len).join(" ");
+          notes.push(`cue "${b.cue}" is spoken as "${cue}"`);
+          from = part[0] + 1;
+          beats.push({ ...b, cue });
+          return;
+        }
+      }
+    }
+    if (b.action === "scene" && from < stream.length) {
+      notes.push(`cue "${b.cue}" is not spoken: the scene starts on "${stream[from].t}"`);
+      beats.push({ ...b, cue: stream[from].t });
+      from += 1;
+      return;
+    }
+    notes.push(`cue "${b.cue}" is not spoken: ${b.action} dropped`);
+  });
+  return { script: { ...script, beats }, notes };
+}
+
 export function sceneScriptBlockers(script: SceneScript, narration: string, voiceWords?: WordTiming[] | null, durationSeconds = 15): string[] {
   const errors: string[] = [];
   const beats = script.beats;
@@ -201,14 +262,17 @@ export function sceneScriptBlockers(script: SceneScript, narration: string, voic
   });
   if (!tokenize(narration).length) errors.push("empty narration");
   const speechEnd = timeline[timeline.length - 1]?.end ?? durationSeconds;
-  for (let i = 1; i < beats.length; i++) {
+  // (Explainer shots: pacing is checked on the video itself — the idle rule —
+  // and never throws a whole script away.)
+  const paced = script.style !== "explainer";
+  for (let i = 1; paced && i < beats.length; i++) {
     const [a, b] = [times[i - 1], times[i]];
     if (a === null || b === null) continue;
     const held = ["scene", "list", "arrange", "reveal"].includes(beats[i - 1].action) ? 4 : 3;
     if (b - a > held) errors.push(`${(b - a).toFixed(1)} s between beat ${i - 1} and beat ${i} with nothing new; add a beat in between (max ${held} s)`);
   }
   const last = times[times.length - 1];
-  if (last !== null && last !== undefined && speechEnd - last > 3.5) errors.push(`the last ${(speechEnd - last).toFixed(1)} s have no beat`);
+  if (paced && last !== null && last !== undefined && speechEnd - last > 3.5) errors.push(`the last ${(speechEnd - last).toFixed(1)} s have no beat`);
   if (!beats.some((b) => b.action === "statement" || b.action === "list")) errors.push("no statement: put the key phrase on screen with at least one statement");
   if (beats.filter((b) => b.action === "scene").length < 2) errors.push("use at least 2 scenes (the video must travel, not stay on one arrangement)");
 

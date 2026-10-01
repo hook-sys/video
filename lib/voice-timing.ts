@@ -69,13 +69,17 @@ export const sameWord = (a: string, b: string) =>
 // word, a brand name above all ("Plateful" → "Pl" + "ateful"), so 1–3
 // adjacent tokens may join into it. 0 when they don't.
 export function tokensForWord(stream: { t: string }[], i: number, w: string): number {
+  // The exact join wins: "Motion" + "Brief" is "MotionBrief" (a bare
+  // "Motion" is only its start), "108" + "0p" is "1080p".
   let joined = "";
+  let loose = 0;
   for (let k = 0; k < 3 && i + k < stream.length; k++) {
     joined += stream[i + k].t;
-    if (k === 0 ? sameWord(joined, w) : joined === w) return k + 1;
-    if (!w.startsWith(joined)) return 0;
+    if (joined === w) return k + 1;
+    if (k === 0 && sameWord(joined, w)) loose = 1;
+    if (!w.startsWith(joined)) break;
   }
-  return 0;
+  return loose;
 }
 
 // Where each cue phrase is actually spoken: the start time of its first word in

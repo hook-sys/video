@@ -62,7 +62,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       if (found.blockers.length) return { shots, script: null, problems: found.blockers, ...none };
       if (!found.best) return { shots, script: null, problems: ["no variant compiles to a valid plan"], ...none };
       const { script, violations, plan } = found.best;
-      console.info("shot variants:", { tried: found.tried, picks: found.picks.map((p) => ({ seed: p.seed, score: p.score, look: p.script.look })), resolved: plan.resolved });
+      console.info("shot variants:", { repaired: found.best.notes.filter((n) => n.startsWith("cue ")), tried: found.tried, picks: found.picks.map((p) => ({ seed: p.seed, score: p.score, look: p.script.look })), resolved: plan.resolved });
       const variants = found.picks.map((p) => ({ seed: p.seed, score: p.score, scene: p.script }));
       return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote)], variants };
     } catch (e) {

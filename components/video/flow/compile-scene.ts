@@ -141,6 +141,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const center: Vec = [0, 0]; // every scene is framed here (pushes move elements, not the camera)
   let layoutName = "grid";
   let sceneIdx = -1;
+  let sceneAt = 0; // when the current scene started (its words may be spoken from there)
   let uid = 0;
   const lines: { start: number; end: number; style: NonNullable<FlowText["style"]> }[] = [];
 
@@ -441,6 +442,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     switch (b.action) {
       case "scene": {
         sceneIdx++;
+        sceneAt = t;
         const tr = b.transition ?? (sceneIdx === 0 ? "cut" : ["dissolve", "push-left", "zoom-through", "push-up", "morph"][sceneIdx % 5]);
         const carried = new Set((b.elements ?? []).filter((e) => e.asset === null).map((e) => e.id));
         const old = [...live.entries()].filter(([id]) => !carried.has(id));
@@ -866,7 +868,11 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           break;
         }
         const text = b.text ?? "";
-        const wf = wordFrames(text, ((paired.has(b) ? t - 6 : t) + LEAD) / FPS - 0.2, timeline).map((w) => Math.min(w, stageEnd - (stageEnd < total ? 24 : 8)));
+        // (Explainer: a caption cued on its shot's last word says words spoken
+        // earlier in the shot — "four finished videos" on "videos" — so its
+        // words are looked for from the shot's start, not after the cue.)
+        const lookFrom = paired.has(b) ? t - 6 : explainer ? Math.min(t, Math.max(sceneAt, t - 120)) : t;
+        const wf = wordFrames(text, (lookFrom + LEAD) / FPS - 0.2, timeline).map((w) => Math.min(w, stageEnd - (stageEnd < total ? 24 : 8)));
         // The line (and the dim behind a display line) arrives with its first word.
         // (Words sharing their shot's cue never arrive before the shot does:
         // the last shot's icons are still clearing then.)
@@ -881,7 +887,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const end0 = lastLine ? lastEnd : Math.min(hardEnd, cover ? Math.max(wf[wf.length - 1] + 36, nextStart - 10) : Math.max(wf[wf.length - 1] + 36, nextStart + 20));
         // Explainer: a line is gone before the next shot arrives (never over its card).
         // (the words' 12-frame exit is over before the next shot comes in)
-        const end = explainer && !lastLine ? Math.max(wf[wf.length - 1] + 6, Math.min(end0, nextStart - 10)) : end0;
+        // And never past the next shot, whatever the word times say.
+        const nextScene = beats.findIndex((x, k) => k > i && x.action === "scene");
+        const end = explainer && !lastLine ? Math.min(Math.max(wf[wf.length - 1] + 6, Math.min(end0, nextStart - 10)), nextScene >= 0 ? starts[nextScene] - 4 : Infinity) : end0;
         lines.push({ start, end, style });
         if (style === "panel") {
           const first = [...live.values()][0];

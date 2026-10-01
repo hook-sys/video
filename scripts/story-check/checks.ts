@@ -36,7 +36,7 @@ import { ASSET_COUNT } from "@/components/video/flow/cards/catalog";
 import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { DEPTH, LAYOUT_PRESETS, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES } from "@/components/video/flow/layouts";
 import { BACKDROPS } from "@/components/video/flow/backdrop-names";
-import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
+import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
 import { expandShots, ShotScript } from "@/lib/shots";
@@ -598,7 +598,8 @@ function shotTemplates(): Check[] {
     const vw = W.map(([text, st], i) => ({ text, start: +st, end: W[i + 1] ? +W[i + 1][1] : +st + 0.5 }));
     const narr = W.map(([x]) => x).join(" ");
     const vn: string[] = [];
-    const vs = expandShots(ShotScript.parse(v.shots), vn, narr);
+    // (as in production: cues the voice says differently are matched first)
+    const vs = repairCues(expandShots(ShotScript.parse(v.shots), vn, narr), narr, vw, v.duration).script;
     const vp = compileSceneScript(vs, { narration: narr, words: vw, durationSeconds: v.duration, brand: { name: "MotionBrief", logo: "logo", cta: "Try it free today" } });
     const block = sceneScriptBlockers(vs, narr, vw, v.duration);
     const broken = compositionCheck(vs, vp, { narration: narr, words: vw, durationSeconds: v.duration }).filter((x) => BAD.includes(x.rule));
