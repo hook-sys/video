@@ -3,6 +3,7 @@
 // Bundled and run by scripts/story-check/run.mjs.
 import { LOOK_FEATURES, searchVariants, seedFrom } from "@/lib/shot-search";
 import { ProductBrief } from "@/lib/ai/product-brief";
+import { lockBriefScript, lockedVoiceScript } from "@/lib/projects";
 import { validateStory, VisualStory } from "@/lib/visual-story";
 import { compileStory } from "@/components/video/engine/compiler";
 import { normalizeStory } from "@/components/video/engine/normalize";
@@ -638,9 +639,36 @@ function shotTemplates(): Check[] {
   return checks;
 }
 
+// Phase 1: the customer's script is the narration, word for word.
+function lockedScript(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  const userScript = "Your team ships new features every week, but nobody sees them.\nMaking a launch video takes days — MotionBrief changes that.  Start free.";
+  // As the form stores it: the script, then the style suffix.
+  const direction = `${userScript}\n\nVisual style: Minimal\nLook: Light glass`;
+  const scene = { duration_seconds: 3, purpose: "p", narration: "x", on_screen_text: [], visual: "ui", animation: "fade" };
+  const generated = { product_name: "MotionBrief", product_summary: "s", supported_features: [], supported_claims: [], cta: "Go", scenes: [scene], script: "Your team releases features weekly, yet no one notices. MotionBrief fixes that." };
+  const locked = lockBriefScript(generated, { direction, advanced_direction: "Minimal explainer, one idea at a time." });
+  add("brief.script === user script (form suffix removed only)", locked.script === userScript, JSON.stringify(locked.script));
+  const parsed = ProductBrief.safeParse(locked);
+  add("the locked brief parses and keeps the script", parsed.success && parsed.data.script === userScript, parsed.success ? "stored brief.script is the user's script" : "brief failed to parse");
+  add("no suffix: the whole script is kept", lockedVoiceScript(`  ${userScript}  `) === userScript, "trimmed ends only");
+  const midText = "Pick a Visual style: bold or calm.";
+  add("\"Visual style:\" inside the script is not cut", lockedVoiceScript(`${midText}\n\nVisual style: Bold`) === midText, JSON.stringify(lockedVoiceScript(`${midText}\n\nVisual style: Bold`)));
+  const old = lockBriefScript(generated, { direction: "Make a video about our app", advanced_direction: null });
+  add("older projects (no video direction) keep the brief's script", old.script === generated.script, JSON.stringify(old.script));
+  // The voice speaks brief.script itself (generateVoice → generateFalVoice).
+  const src = readFileSync("app/projects/actions.ts", "utf8");
+  const voice = src.slice(src.indexOf("export async function generateVoice"), src.indexOf("export async function prepareAssets"));
+  add("generateVoice sends brief.script to the voice unchanged", /const script = project\.brief_status === "completed" \? project\.brief\?\.script : undefined;/.test(voice) && /generateFalVoice\(\{\s*script,/.test(voice), "script = brief.script → generateFalVoice({ script })");
+  add("generateBrief stores the locked script", /brief: lockBriefScript\(brief, project\)/.test(src), "briefUpdate({ brief: lockBriefScript(brief, project) })");
+  return checks;
+}
+
 export function runChecks(): Section[] {
   const sections: Section[] = [
     { name: "stored ProductBrief compatibility", checks: briefCompatibility() },
+    { name: "locked user script (phase 1)", checks: lockedScript() },
     { name: "VisualStory validation", checks: storyValidation() },
     { name: "legacy image generation gating", checks: legacyImageGating() },
     { name: "icon library", checks: iconLibrary() },

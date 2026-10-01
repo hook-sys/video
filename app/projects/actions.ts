@@ -31,6 +31,8 @@ import {
   VOICE_LANGUAGES,
   VOICE_GENDERS,
   VOICE_STYLES,
+  lockBriefScript,
+  lockedVoiceScript,
   logoPath,
   parseHttpUrl,
   validateLogo,
@@ -89,7 +91,7 @@ export async function createProject(
   const websiteUrl = String(formData.get("website_url") ?? "").trim();
   const direction = String(formData.get("direction") ?? "").trim();
   // The voiceover script, without the "Visual style: …" suffix the form adds.
-  const voiceScript = direction.split(/\n\nVisual style:/)[0].trim();
+  const voiceScript = lockedVoiceScript(direction);
   // A first estimate; the voice's real length replaces it once it exists.
   const duration = estimateVideoSeconds(voiceScript);
   const format = oneOf(FORMATS, formData.get("format"));
@@ -348,7 +350,9 @@ export async function generateBrief(projectId: string) {
       },
       (u) => (usage = u),
     );
-    await briefUpdate({ brief, brief_status: "completed", brief_error: null });
+    // The customer's script is the narration, word for word (lockBriefScript):
+    // the brief model never rewrites what the voice says.
+    await briefUpdate({ brief: lockBriefScript(brief, project), brief_status: "completed", brief_error: null });
   } catch (e) {
     console.error("brief generation failed:", projectId, e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : e);
     await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));

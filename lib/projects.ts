@@ -2,6 +2,17 @@
 // `direction` stores it with a short "Visual style: …" suffix.
 export const VOICE_SCRIPT_MAX = 500;
 export const DIRECTION_MAX = 560;
+// The customer's voiceover script, exactly as typed: the form appends
+// "\n\nVisual style: …" (and "Look: …") to it in `direction`; only that suffix
+// is removed. This locked text is what the voice speaks and every Director reads.
+export const lockedVoiceScript = (direction: string | null | undefined) => (direction ?? "").split(/\n\nVisual style:/)[0].trim();
+// A generated brief with the customer's script as its narration, word for
+// word. Projects from the script-first form carry a video direction; older
+// ones (no direction) keep the brief's own script.
+export function lockBriefScript<T extends { script: string }>(brief: T, project: { direction?: string | null; advanced_direction?: string | null }): T {
+  const locked = project.advanced_direction?.trim() ? lockedVoiceScript(project.direction) : "";
+  return locked ? { ...brief, script: locked } : brief;
+}
 // Kept for benchmarks and older projects; new videos last as long as their voice.
 export const DURATIONS = [15, 30, 60] as const;
 
