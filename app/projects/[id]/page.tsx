@@ -339,7 +339,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           </div>
           <div className="flex flex-col gap-2 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
             <h2 className="text-sm font-semibold">What viewers see</h2>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/75">{project.advanced_direction || "—"}</p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/75">{project.advanced_direction || "Chosen automatically from your script."}</p>
             <dl className="mt-2 grid grid-cols-2 gap-3 border-t border-foreground/[0.07] pt-3 text-xs">
               {[
                 ["Look", look],

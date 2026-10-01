@@ -3,7 +3,7 @@
 // Bundled and run by scripts/story-check/run.mjs.
 import { LOOK_FEATURES, searchVariants, seedFrom } from "@/lib/shot-search";
 import { ProductBrief } from "@/lib/ai/product-brief";
-import { lockBriefScript, lockedVoiceScript } from "@/lib/projects";
+import { DIRECTION_MAX, directionFor, LOOKS, lockBriefScript, lockedVoiceScript, STYLE_PRESETS, type StylePreset, VISUAL_STYLES, VOICE_SCRIPT_MAX } from "@/lib/projects";
 import { validateStory, VisualStory } from "@/lib/visual-story";
 import { compileStory } from "@/components/video/engine/compiler";
 import { normalizeStory } from "@/components/video/engine/normalize";
@@ -810,10 +810,52 @@ function lockedScript(): Check[] {
   return checks;
 }
 
+// Phase 6: the simple customer form — script, logo, brand name, one style,
+// voice, format. Everything else is decided from the script; the backend
+// keeps its fields (defaults) so old and new projects run the same way.
+function simpleForm(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  const userScript = "Managing business finances shouldn’t mean scattered spreadsheets.\n\nFinora brings your financial data into one clear view.";
+  const generated = { product_name: "Finora", product_summary: "s", supported_features: [], supported_claims: [], cta: "Go", scenes: [{ duration_seconds: 3, purpose: "p", narration: "x", on_screen_text: [], visual: "ui", animation: "fade" }], script: "Finora puts finance in one view." };
+  const rows: string[] = [];
+  let lockedAll = true;
+  for (const preset of Object.keys(STYLE_PRESETS) as StylePreset[]) {
+    const direction = directionFor(userScript, preset);
+    // (as the browser may send it: \r\n line breaks; no video direction)
+    for (const d of [direction, direction.replace(/\n/g, "\r\n")]) {
+      const locked = lockBriefScript(generated, { direction: d, advanced_direction: "" });
+      if (locked.script !== lockedVoiceScript(d) || lockedVoiceScript(d).replace(/\r/g, "") !== userScript) lockedAll = false;
+    }
+    // What the backend reads back (creativePreferences, direction library).
+    const style = direction.match(/Visual style:\s*(.+)\s*$/m)?.[1];
+    const look = direction.match(/^Look:\s*(.+)$/m)?.[1]?.trim() ?? "Auto";
+    if (style !== STYLE_PRESETS[preset].visual_style || look !== STYLE_PRESETS[preset].look || !(VISUAL_STYLES as readonly string[]).includes(style) || !(LOOKS as readonly string[]).includes(look)) lockedAll = false;
+    rows.push(`${preset}→${style}/${look}`);
+  }
+  add("every style locks the script, without a video direction (\\n and \\r\\n)", lockedAll, rows.join(" · "));
+  const longest = Math.max(...(Object.keys(STYLE_PRESETS) as StylePreset[]).map((p) => directionFor("x".repeat(VOICE_SCRIPT_MAX), p).length));
+  add("the longest script + style fits the stored direction", longest <= DIRECTION_MAX, `${longest} ≤ ${DIRECTION_MAX}`);
+  const oldSuffix = lockBriefScript(generated, { direction: "Make a video about our app\n\nVisual style: Minimal", advanced_direction: null });
+  add("older projects (no video direction, no lock line) keep the brief's script", oldSuffix.script === generated.script, JSON.stringify(oldSuffix.script));
+  const form = readFileSync("app/projects/new/create-project-form.tsx", "utf8");
+  const names = [...form.matchAll(/name="([a-z_]+)"/g)].map((m) => m[1]);
+  const kept = ["direction", "visual_style", "format", "voice_style", "voice_language", "voice_gender", "logo", "brand_name"];
+  const hidden = ["advanced_direction", "creative_direction", "motion_level", "visual_density", "screenshots", "call_to_action", "target_audience", "brand_color", "look"];
+  add("the form sends script, logo, brand name, style, voice and format", kept.every((n) => names.includes(n)), kept.join(", "));
+  add("internal decisions are not on the customer form", !hidden.some((n) => names.includes(n)), `not shown: ${hidden.join(", ")}`);
+  const actions = readFileSync("app/projects/actions.ts", "utf8");
+  const create = actions.slice(actions.indexOf("export async function createProject"), actions.indexOf("export async function", actions.indexOf("export async function createProject") + 10));
+  add("the backend accepts a project without the removed fields (defaults kept)", !/VIDEO_DIRECTION_MIN/.test(create) && /creative_direction"\)\) \?\? CREATIVE_DEFAULTS\.creative_direction/.test(create) && /motion_level"\)\) \?\? CREATIVE_DEFAULTS\.motion_level/.test(create) && /visual_density"\)\) \?\? CREATIVE_DEFAULTS\.visual_density/.test(create) && /\.filter\(\(f\): f is File => f instanceof File && f\.size > 0\)/.test(create), "video direction optional; story, motion, density default; no screenshots is fine");
+  add("the logo stays required", /const logoError = validateLogo\(logo\);/.test(create) && /name="logo"[\s\S]{0,80}required/.test(form), "validateLogo on the server, required on the form");
+  return checks;
+}
+
 export function runChecks(): Section[] {
   const sections: Section[] = [
     { name: "stored ProductBrief compatibility", checks: briefCompatibility() },
     { name: "locked user script (phase 1)", checks: lockedScript() },
+    { name: "simple customer form (phase 6)", checks: simpleForm() },
     { name: "VisualStory validation", checks: storyValidation() },
     { name: "legacy image generation gating", checks: legacyImageGating() },
     { name: "icon library", checks: iconLibrary() },

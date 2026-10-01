@@ -7,11 +7,15 @@ export const DIRECTION_MAX = 560;
 // is removed. This locked text is what the voice speaks and every Director reads.
 // (Browsers send the form's line breaks as \r\n.)
 export const lockedVoiceScript = (direction: string | null | undefined) => (direction ?? "").split(/\r?\n\r?\nVisual style:/)[0].trim();
+// The simple form (no video direction) marks its direction with this line,
+// so its script is locked too.
+export const SCRIPT_LOCK_LINE = "Script: exact";
 // A generated brief with the customer's script as its narration, word for
-// word. Projects from the script-first form carry a video direction; older
-// ones (no direction) keep the brief's own script.
+// word. Projects from the script-first form carry a video direction or the
+// lock line; older ones (neither) keep the brief's own script.
 export function lockBriefScript<T extends { script: string }>(brief: T, project: { direction?: string | null; advanced_direction?: string | null }): T {
-  const locked = project.advanced_direction?.trim() ? lockedVoiceScript(project.direction) : "";
+  const marked = new RegExp(`^${SCRIPT_LOCK_LINE}\\r?$`, "m").test(project.direction?.split(/\r?\n\r?\nVisual style:/)[1] ?? "");
+  const locked = project.advanced_direction?.trim() || marked ? lockedVoiceScript(project.direction) : "";
   return locked ? { ...brief, script: locked } : brief;
 }
 // Kept for benchmarks and older projects; new videos last as long as their voice.
@@ -34,6 +38,20 @@ export const VISUAL_STYLES = ["Premium SaaS", "Minimal", "Bold", "Corporate", "F
 // "Look:" line, like the visual style; Auto lets the Director choose.
 export const LOOKS = ["Auto", "Light glass", "Dark glow", "Warm brand"] as const;
 export type Look = (typeof LOOKS)[number];
+// The customer's one style choice: an existing visual style + look pair
+// (Auto: the default style, the Director picks the look).
+export const STYLE_PRESETS = {
+  Auto: { visual_style: "Premium SaaS", look: "Auto" },
+  Clean: { visual_style: "Minimal", look: "Light glass" },
+  Cinematic: { visual_style: "Cinematic", look: "Dark glow" },
+  Bold: { visual_style: "Bold", look: "Warm brand" },
+} as const satisfies Record<string, { visual_style: (typeof VISUAL_STYLES)[number]; look: Look }>;
+export type StylePreset = keyof typeof STYLE_PRESETS;
+// The direction the form stores: the script, then its style lines.
+export const directionFor = (script: string, preset: StylePreset) => {
+  const { visual_style, look } = STYLE_PRESETS[preset];
+  return script.trim() ? `${script.trim()}\n\nVisual style: ${visual_style}${look === "Auto" ? "" : `\nLook: ${look}`}\n${SCRIPT_LOCK_LINE}` : "";
+};
 // The theme a look forces on the video (null = the Director's choice).
 export const LOOK_THEME: Record<Look, "lavender" | "midnight" | null> = { Auto: null, "Light glass": null, "Dark glow": "midnight", "Warm brand": null };
 // Creative preferences: guidance for the AI director only (never facts).

@@ -6,29 +6,18 @@ import type { HeroCaption } from "@/components/landing/hero-plan";
 import type { FlowPlan } from "@/components/video/flow/types";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import {
-  ADVANCED_DIRECTION_MAX,
-  AUDIENCE_MAX,
   BRAND_NAME_MAX,
-  CTA_MAX,
-  VIDEO_DIRECTION_MIN,
-  CREATIVE_DEFAULTS,
-  CREATIVE_DIRECTIONS,
+  directionFor,
   VOICE_SCRIPT_MAX,
   FORMATS,
   LOGO_MAX_BYTES,
-  LOOKS,
-  MOTION_LEVELS,
-  SCREENSHOT_MAX_BYTES,
-  SCREENSHOT_MAX_FILES,
-  VISUAL_DENSITIES,
-  VISUAL_STYLES,
+  STYLE_PRESETS,
   VOICE_GENDERS,
   VOICE_LANGUAGES,
   VOICE_STYLES,
   estimateVideoSeconds,
   validateLogo,
-  validateScreenshots,
-  type Look,
+  type StylePreset,
 } from "@/lib/projects";
 
 const label = "text-sm font-medium";
@@ -38,59 +27,34 @@ const input =
 const area =
   "w-full resize-y rounded-2xl border border-foreground/12 bg-background p-4 text-base leading-relaxed transition placeholder:text-foreground/35 focus:border-violet-500 focus:outline-none focus:ring-4 focus:ring-violet-500/15";
 
-// The visual style and the look travel with the script in the direction text.
-const styleSuffix = (style: string, look: Look) => `\n\nVisual style: ${style}${look === "Auto" ? "" : `\nLook: ${look}`}`;
-
-// One-tap ideas for the scene direction (appended as sentences).
-const IDEAS = [
-  "Open on the problem our customers feel.",
-  "Show our dashboard in 3D, then zoom into the key number.",
-  "A cursor clicks through the main flow.",
-  "Before → after: the messy way is crossed out.",
-  "Big numbers count up.",
-  "Our integrations orbit the product.",
-  "End on our logo and call to action.",
-];
-
-const LOOK_INFO: Record<Look, string> = {
-  Auto: "We pick what fits your product",
-  "Light glass": "Bright, airy, frosted glass",
-  "Dark glow": "Deep, cinematic, glowing",
-  "Warm brand": "Your colour carries the film",
+// The customer picks one style; the Directors decide the story, motion,
+// density, shots, camera and objects from the script.
+const STYLE_INFO: Record<StylePreset, string> = {
+  Auto: "We pick what fits your script",
+  Clean: "Light, minimal, airy",
+  Cinematic: "Dark, deep, glowing",
+  Bold: "Your colours, big and bright",
+};
+const STYLE_BG: Record<StylePreset, string> = {
+  Auto: "linear-gradient(135deg, #e0e7ff, #f5d0fe 50%, #0f172a 50.5%, #312e81)",
+  Clean: "radial-gradient(80% 90% at 20% 20%, #ede9fe, transparent), radial-gradient(70% 80% at 90% 90%, #cffafe, transparent), #f8fafc",
+  Cinematic: "radial-gradient(60% 70% at 70% 30%, #6d28d955, transparent), radial-gradient(120% 90% at 50% 40%, #1e1b4b, #020617)",
+  Bold: "radial-gradient(70% 80% at 25% 25%, #7C3AED66, transparent), radial-gradient(70% 80% at 85% 85%, #f9731655, transparent), #fff7ed",
 };
 
 export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: number; waiting: { plan: FlowPlan; captions: HeroCaption[] } }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState("");
-  const [style, setStyle] = useState<string>(VISUAL_STYLES[0]);
-  const [look, setLook] = useState<Look>("Auto");
+  const [style, setStyle] = useState<StylePreset>("Auto");
   const [format, setFormat] = useState<string>(FORMATS[0]);
   const [logo, setLogo] = useState<{ name: string; url: string; size: number } | null>(null);
   const [logoError, setLogoError] = useState<string>();
-  const [shots, setShots] = useState<{ names: string[]; size: number }>({ names: [], size: 0 });
-  const [shotError, setShotError] = useState<string>();
-  const [videoDirection, setVideoDirection] = useState("");
-  const [useBrandColor, setUseBrandColor] = useState(false);
-  const [brandColor, setBrandColor] = useState("#7C3AED");
-  // What is typed in the hex box (may be incomplete while typing).
-  const [hexText, setHexText] = useState("#7C3AED");
-  const hexValid = /^#?[0-9a-fA-F]{6}$/.test(hexText.trim());
-  // The logo and screenshots share the upload budget on this server.
-  const budgetError =
-    maxTotalBytes && (logo?.size ?? 0) + shots.size > maxTotalBytes
-      ? `Logo and screenshots must total ${Math.floor(maxTotalBytes / 1024 / 1024)} MB or less.`
-      : undefined;
-  const error = logoError ?? shotError ?? budgetError ?? state.error;
+  // The logo shares the upload budget on this server.
+  const budgetError = maxTotalBytes && (logo?.size ?? 0) > maxTotalBytes ? `The logo must be ${Math.floor(maxTotalBytes / 1024 / 1024)} MB or less.` : undefined;
+  const error = logoError ?? budgetError ?? state.error;
   const seconds = script.trim() ? estimateVideoSeconds(script) : 0;
-  const ready = !!script.trim() && videoDirection.trim().length >= VIDEO_DIRECTION_MIN && !!logo;
-  const blocked = pending || !!logoError || !!shotError || !!budgetError || (useBrandColor && !hexValid);
-  const accent = useBrandColor ? brandColor : "#7C3AED";
-
-  const addIdea = (idea: string) =>
-    setVideoDirection((d) => {
-      const next = d.trim() ? `${d.trim()} ${idea}` : idea;
-      return next.slice(0, ADVANCED_DIRECTION_MAX);
-    });
+  const ready = !!script.trim() && !!logo;
+  const blocked = pending || !!logoError || !!budgetError;
 
   const submit = (
     <button
@@ -105,21 +69,21 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
     <>
       {pending && <WaitingScreen plan={waiting.plan} captions={waiting.captions} />}
       <form action={action} className={`grid gap-6 pb-28 lg:grid-cols-[minmax(0,1fr)_300px] lg:pb-0 ${pending ? "hidden" : ""}`}>
-        <input type="hidden" name="direction" value={script.trim() ? `${script.trim()}${styleSuffix(style, look)}` : ""} />
-        <input type="hidden" name="visual_style" value={style} />
+        <input type="hidden" name="direction" value={directionFor(script, style)} />
+        <input type="hidden" name="visual_style" value={STYLE_PRESETS[style].visual_style} />
         <input type="hidden" name="format" value={format} />
         {/* Voice style isn't offered to customers; keep the existing default. */}
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
 
         <div className="flex min-w-0 flex-col gap-5">
-          <Step n={1} title="Your script" sub="Exactly what the voice will say. The video lasts as long as the voice.">
+          <Step n={1} title="Your voice-over" sub="Exactly what the voice will say. The video lasts as long as the voice.">
             <textarea
               required
-              rows={6}
+              rows={7}
               maxLength={VOICE_SCRIPT_MAX}
               value={script}
               onChange={(e) => setScript(e.target.value)}
-              placeholder="e.g. Running an online store means juggling orders, stock and couriers. SeloraX brings it all into one dashboard…"
+              placeholder="Paste your short script… e.g. Running an online store means juggling orders, stock and couriers. SeloraX brings it all into one dashboard…"
               className={area}
             />
             <div className="flex items-center justify-between">
@@ -130,39 +94,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
             </div>
           </Step>
 
-          <Step n={2} title="What viewers see" sub="Describe the scenes in order: the main object, what changes, the mood and the ending.">
-            <textarea
-              name="advanced_direction"
-              required
-              rows={5}
-              minLength={VIDEO_DIRECTION_MIN}
-              maxLength={ADVANCED_DIRECTION_MAX}
-              value={videoDirection}
-              onChange={(e) => setVideoDirection(e.target.value)}
-              placeholder="e.g. Open on our dashboard in 3D. Orders, stock and couriers fly in and circle the store. On “one dashboard” everything snaps into place. End on our logo."
-              className={area}
-            />
-            <div className="flex flex-col gap-2">
-              <span className={hint}>Tap to add an idea</span>
-              <div className="flex flex-wrap gap-2">
-                {IDEAS.map((idea) => (
-                  <button
-                    key={idea}
-                    type="button"
-                    onClick={() => addIdea(idea)}
-                    className="rounded-full border border-foreground/12 px-3 py-1.5 text-xs text-foreground/70 transition hover:border-violet-500/50 hover:bg-violet-500/5 hover:text-foreground"
-                  >
-                    + {idea.replace(/\.$/, "")}
-                  </button>
-                ))}
-              </div>
-              <span className={`${hint} self-end tabular-nums`}>
-                {videoDirection.length}/{ADVANCED_DIRECTION_MAX}
-              </span>
-            </div>
-          </Step>
-
-          <Step n={3} title="Your brand" sub="Your logo closes the video; screenshots make it yours.">
+          <Step n={2} title="Brand" sub="Your logo closes the video.">
             <div className="grid gap-4 sm:grid-cols-2">
               <Upload
                 title="Logo"
@@ -190,103 +122,33 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
                   }}
                 />
               </Upload>
-              <Upload
-                title="Product screenshots"
-                text={shots.names.length ? `${shots.names.length} selected` : "Add screenshots"}
-                sub={shots.names.length ? shots.names.join(", ") : `Up to ${SCREENSHOT_MAX_FILES} · ${SCREENSHOT_MAX_BYTES / 1024 / 1024} MB each · recommended`}
-              >
-                <input
-                  name="screenshots"
-                  type="file"
-                  multiple
-                  accept="image/png,image/jpeg,image/webp"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const chosen = Array.from(e.target.files ?? []);
-                    setShots({ names: chosen.map((f) => f.name), size: chosen.reduce((n, f) => n + f.size, 0) });
-                    setShotError(validateScreenshots(chosen));
-                  }}
-                />
-              </Upload>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field title="Brand name">
+              <Field title="Brand name" optional>
                 <input name="brand_name" maxLength={BRAND_NAME_MAX} placeholder="e.g. SeloraX" className={input} />
               </Field>
-              <Field title="Call to action">
-                <input name="call_to_action" maxLength={CTA_MAX} placeholder="e.g. Start your free trial" className={input} />
-              </Field>
-              <Field title="Who is it for?">
-                <input name="target_audience" maxLength={AUDIENCE_MAX} placeholder="e.g. Small online shop owners" className={input} />
-              </Field>
-              <div className="flex flex-col gap-1.5">
-                <span className={label}>Brand colour</span>
-                <div className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 ${useBrandColor && !hexValid ? "border-red-500/60" : "border-foreground/12"}`}>
-                  <input type="checkbox" aria-label="Use my colour" checked={useBrandColor} onChange={(e) => setUseBrandColor(e.target.checked)} className="ml-1 accent-violet-600" />
-                  <input
-                    type="color"
-                    aria-label="Pick brand colour"
-                    value={brandColor}
-                    onChange={(e) => {
-                      setBrandColor(e.target.value.toUpperCase());
-                      setHexText(e.target.value.toUpperCase());
-                      setUseBrandColor(true);
-                    }}
-                    className="h-8 w-10 shrink-0 cursor-pointer rounded border-0 bg-transparent"
-                  />
-                  <input
-                    aria-label="Brand colour code"
-                    value={hexText}
-                    maxLength={7}
-                    spellCheck={false}
-                    placeholder="#7C3AED"
-                    onChange={(e) => {
-                      const v = e.target.value.trim();
-                      setHexText(v);
-                      setUseBrandColor(true);
-                      if (/^#?[0-9a-fA-F]{6}$/.test(v)) setBrandColor(`#${v.replace("#", "").toUpperCase()}`);
-                    }}
-                    onBlur={() => hexValid && setHexText(brandColor)}
-                    className="min-w-0 flex-1 bg-transparent px-1 py-1.5 font-mono text-sm uppercase outline-none placeholder:text-foreground/35"
-                  />
-                  <input type="hidden" name="brand_color" value={useBrandColor ? brandColor : ""} />
-                </div>
-                <span className={`text-[11px] ${useBrandColor && !hexValid ? "text-red-500" : "text-foreground/45"}`}>
-                  {useBrandColor && !hexValid ? "Enter a 6-digit code like #7C3AED" : "Pick a colour or type its code (e.g. #0E9CA6)"}
-                </span>
-              </div>
             </div>
           </Step>
 
-          <Step n={4} title="Look & feel" sub="How the video should look and move.">
-            <fieldset className="flex flex-col gap-2">
-              <legend className={`${label} mb-2`}>
-                Look <span className="ml-1 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">New</span>
-              </legend>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {LOOKS.map((l) => (
-                  <label key={l} className="cursor-pointer">
-                    <input type="radio" name="look" value={l} checked={look === l} onChange={() => setLook(l)} className="peer sr-only" />
-                    <span className="flex h-full flex-col gap-2 rounded-2xl border border-foreground/12 p-2 transition hover:border-foreground/30 peer-checked:border-violet-500 peer-checked:ring-4 peer-checked:ring-violet-500/15 peer-focus-visible:ring-4 peer-focus-visible:ring-violet-500/30">
-                      <LookPreview look={l} accent={accent} />
-                      <span className="px-1 text-sm font-medium">{l}</span>
-                      <span className="px-1 pb-1 text-[11px] leading-snug text-foreground/50">{LOOK_INFO[l]}</span>
+          <Step n={3} title="Style">
+            <fieldset className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <legend className="sr-only">Style</legend>
+              {(Object.keys(STYLE_PRESETS) as StylePreset[]).map((p) => (
+                <label key={p} className="cursor-pointer">
+                  <input type="radio" name="style" value={p} checked={style === p} onChange={() => setStyle(p)} className="peer sr-only" />
+                  <span className="flex h-full flex-col gap-2 rounded-2xl border border-foreground/12 p-2 transition hover:border-foreground/30 peer-checked:border-violet-500 peer-checked:ring-4 peer-checked:ring-violet-500/15 peer-focus-visible:ring-4 peer-focus-visible:ring-violet-500/30">
+                    <span className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl text-2xl text-white drop-shadow" style={{ background: STYLE_BG[p] }}>
+                      {p === "Auto" ? "✦" : ""}
                     </span>
-                  </label>
-                ))}
-              </div>
+                    <span className="px-1 text-sm font-medium">{p === "Auto" ? "Auto ✨" : p}</span>
+                    <span className="px-1 pb-1 text-[11px] leading-snug text-foreground/50">{STYLE_INFO[p]}</span>
+                  </span>
+                </label>
+              ))}
             </fieldset>
-            <Chips title="Visual style" name="visual_style_pick" options={VISUAL_STYLES} value={style} onChange={setStyle} />
-            <Chips title="Story" name="creative_direction" options={CREATIVE_DIRECTIONS} defaultValue={CREATIVE_DEFAULTS.creative_direction} />
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Chips title="Motion" name="motion_level" options={MOTION_LEVELS} defaultValue={CREATIVE_DEFAULTS.motion_level} />
-              <Chips title="Visual density" name="visual_density" options={VISUAL_DENSITIES} defaultValue={CREATIVE_DEFAULTS.visual_density} />
-            </div>
           </Step>
 
-          <Step n={5} title="Voice & format">
+          <Step n={4} title="Voice">
             <div className="grid gap-5 sm:grid-cols-2">
-              <Field title="Voice language">
+              <Field title="Language">
                 <select name="voice_language" required className={input}>
                   {VOICE_LANGUAGES.map((o) => (
                     <option key={o}>{o}</option>
@@ -295,8 +157,11 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
               </Field>
               <Chips title="Voice" name="voice_gender" options={VOICE_GENDERS} defaultValue={VOICE_GENDERS[0]} format={(g) => (g === "male" ? "Male" : "Female")} />
             </div>
+          </Step>
+
+          <Step n={5} title="Format">
             <fieldset className="flex flex-col gap-2">
-              <legend className={`${label} mb-2`}>Format</legend>
+              <legend className="sr-only">Format</legend>
               <div className="grid grid-cols-3 gap-3">
                 {FORMATS.map((f) => {
                   const [w, h] = f.split(":").map(Number);
@@ -326,16 +191,16 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
         {/* Summary: a sticky side card on desktop, a bottom bar on mobile. */}
         <aside className="hidden lg:block">
           <div className="sticky top-24 flex flex-col gap-4 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
-            <LookPreview look={look} accent={accent} big />
+            <span className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl text-3xl text-white drop-shadow" style={{ background: STYLE_BG[style] }}>
+              {style === "Auto" ? "✦" : ""}
+            </span>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Summary k="Length" v={seconds ? `≈ ${seconds} s` : "—"} />
               <Summary k="Format" v={format} />
-              <Summary k="Look" v={look} />
               <Summary k="Style" v={style} />
             </dl>
             <ul className="flex flex-col gap-1.5 text-xs text-foreground/60">
-              <Check ok={!!script.trim()}>Script</Check>
-              <Check ok={videoDirection.trim().length >= VIDEO_DIRECTION_MIN}>What viewers see</Check>
+              <Check ok={!!script.trim()}>Voice-over</Check>
               <Check ok={!!logo}>Logo</Check>
             </ul>
             {submit}
@@ -346,7 +211,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
           <div className="mx-auto flex max-w-2xl items-center gap-3">
             <div className="shrink-0 text-xs text-foreground/60">
               <p className="font-semibold text-foreground">{seconds ? `≈ ${seconds} s` : "New video"}</p>
-              <p>{ready ? "Ready" : `${[!script.trim() && "script", videoDirection.trim().length < VIDEO_DIRECTION_MIN && "scenes", !logo && "logo"].filter(Boolean).join(", ")} missing`}</p>
+              <p>{ready ? "Ready" : `${[!script.trim() && "voice-over", !logo && "logo"].filter(Boolean).join(", ")} missing`}</p>
             </div>
             <div className="flex-1">{submit}</div>
           </div>
@@ -371,10 +236,12 @@ function Step({ n, title, sub, children }: { n: number; title: string; sub?: str
   );
 }
 
-function Field({ title, children }: { title: string; children: React.ReactNode }) {
+function Field({ title, optional, children }: { title: string; optional?: boolean; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className={label}>{title}</span>
+      <span className={label}>
+        {title} {optional && <span className="font-normal text-foreground/45">(optional)</span>}
+      </span>
       {children}
     </label>
   );
@@ -435,39 +302,6 @@ function Chips<T extends string>({
         ))}
       </div>
     </fieldset>
-  );
-}
-
-// A tiny picture of each look: its background, a glass screen and an accent card.
-function LookPreview({ look, accent, big }: { look: Look; accent: string; big?: boolean }) {
-  const bg: Record<Look, string> = {
-    Auto: "linear-gradient(135deg, #e0e7ff, #f5d0fe 50%, #0f172a 50.5%, #312e81)",
-    "Light glass": "radial-gradient(80% 90% at 20% 20%, #ede9fe, transparent), radial-gradient(70% 80% at 90% 90%, #cffafe, transparent), #f8fafc",
-    "Dark glow": "radial-gradient(60% 70% at 70% 30%, #6d28d955, transparent), radial-gradient(120% 90% at 50% 40%, #1e1b4b, #020617)",
-    "Warm brand": `radial-gradient(70% 80% at 25% 25%, ${accent}55, transparent), radial-gradient(70% 80% at 85% 85%, ${accent}33, transparent), #fff7ed`,
-  };
-  const dark = look === "Dark glow";
-  return (
-    <span className={`relative block overflow-hidden rounded-xl ${big ? "aspect-video" : "aspect-[4/3]"}`} style={{ background: bg[look] }}>
-      {look === "Auto" ? (
-        <span className="absolute inset-0 flex items-center justify-center text-2xl text-white drop-shadow">✦</span>
-      ) : (
-        <>
-          <span
-            className="absolute left-[12%] top-[20%] h-[52%] w-[54%] rounded-md"
-            style={{ background: dark ? "rgba(255,255,255,.08)" : "rgba(255,255,255,.75)", border: `1px solid ${dark ? "rgba(255,255,255,.18)" : "#fff"}`, boxShadow: dark ? `0 0 24px ${accent}66` : "0 8px 20px rgba(80,60,200,.15)", transform: "perspective(200px) rotateY(-10deg)" }}
-          >
-            <span className="absolute left-[10%] top-[18%] h-[10%] w-[45%] rounded-full" style={{ background: dark ? "rgba(255,255,255,.4)" : "#c7d2fe" }} />
-            <span className="absolute bottom-[14%] left-[10%] flex h-[40%] w-[80%] items-end gap-[6%]">
-              {[40, 65, 50, 90].map((h, i) => (
-                <span key={i} className="flex-1 rounded-sm" style={{ height: `${h}%`, background: i === 3 ? accent : dark ? "rgba(255,255,255,.25)" : "#e0e7ff" }} />
-              ))}
-            </span>
-          </span>
-          <span className="absolute bottom-[16%] right-[10%] h-[30%] w-[34%] rounded-md" style={{ background: look === "Light glass" ? "#fff" : accent, boxShadow: `0 8px 18px ${accent}55` }} />
-        </>
-      )}
-    </span>
   );
 }
 

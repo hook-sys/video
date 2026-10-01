@@ -12,7 +12,6 @@ import {
   BRAND_NAME_MAX,
   CTA_MAX,
   isHexColor,
-  VIDEO_DIRECTION_MIN,
   CREATIVE_DEFAULTS,
   CREATIVE_DIRECTIONS,
   DIRECTION_MAX,
@@ -111,9 +110,8 @@ export async function createProject(
   if (!direction) return { error: "The voiceover script is required." };
   if (voiceScript.length > VOICE_SCRIPT_MAX || direction.length > DIRECTION_MAX)
     return { error: `The voiceover script must be ${VOICE_SCRIPT_MAX} characters or less.` };
-  // The video direction is the visual brief: required for new projects.
-  if (advancedDirection.length < VIDEO_DIRECTION_MIN)
-    return { error: `Describe what the video should show (at least ${VIDEO_DIRECTION_MIN} characters).` };
+  // The video direction is optional: the Directors work out the visuals from
+  // the script (the simple form does not ask for it).
   if (advancedDirection.length > ADVANCED_DIRECTION_MAX)
     return { error: `The video direction must be ${ADVANCED_DIRECTION_MAX} characters or less.` };
   if (brandColorRaw && !brandColor) return { error: "Brand colour must be a hex colour like #0E9CA6." };
