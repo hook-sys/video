@@ -48,8 +48,13 @@ RULES
 - Captions (line on problem and number shots) use only words the voice says; otherwise leave them null. The ui shot card must have a button: action-panel (default), login, checkout or cta.
 - theme: "lavender" (friendly SaaS), "mint" (health, wellness, finance, calm), "teal" (operations, B2B, data, security) or "midnight" (dark, premium). creative_preferences.visual_style is a hint.`;
 
-// The one-direction answer (fallback): needs about this long, and asks for A only.
-const SINGLE_MS = 40_000;
+// The one-direction answer (fallback): needs about this long (real runs:
+// 40–75 s), and asks for A only.
+export const SINGLE_MS = 55_000;
+// How long the four-direction call may take with `leftMs` to go: time is kept
+// back for the one-direction answer. (Four directions took ~95 s uncompacted
+// in a real run; the compact answer is shorter.) Under 30 s it is skipped.
+export const fourDirectionsTimeout = (leftMs: number) => Math.min(110_000, leftMs - 8_000 - SINGLE_MS);
 const SINGLE = `\n\nThis time write ONE variant only (id A): your strongest direction.`;
 
 // The videos offered to the customer: one per creative direction (the first is `script`).
@@ -127,7 +132,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
     let result: ReturnType<typeof check> = { shots: null, script: null, problems: [], ...none };
     // Four directions in one call, with time kept back for the one-direction
     // answer should it fail (no blind retry of the same request).
-    const fourTimeout = Math.min(90_000, left() - 8_000 - SINGLE_MS);
+    const fourTimeout = fourDirectionsTimeout(left());
     if (fourTimeout >= 30_000) {
       try {
         const first = await ask(INSTRUCTIONS, fourTimeout);
@@ -163,7 +168,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       if (left() >= SINGLE_MS) {
         mode = "single";
         try {
-          const one = await ask(INSTRUCTIONS + SINGLE, Math.min(60_000, left() - 3_000));
+          const one = await ask(INSTRUCTIONS + SINGLE, Math.min(90_000, left() - 3_000));
           count(one);
           const single = check(one.output_parsed);
           if (single.script) result = single;

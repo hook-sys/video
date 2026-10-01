@@ -4,7 +4,8 @@
 import { creativeSimilarity, dnaSimilarity, downloadEntry, INSUFFICIENT_VISUAL_DIVERSITY, LOOK_FEATURES, MAX_BUILT_SIMILARITY, sameCreative, sameDna, scoreCandidate, searchCreative, searchVariants, seedFrom } from "@/lib/shot-search";
 import { CREATIVE_A, CREATIVE_B, CREATIVE_C, CREATIVE_D, DIRECTION_A, DIRECTION_B, DIRECTION_D, DNA_A, DNA_B, DNA_C, DNA_D } from "@/components/video/flow/fixtures/creative-directions";
 import { ProductBrief } from "@/lib/ai/product-brief";
-import { generateShotScript } from "@/lib/ai/shot-director";
+import { fourDirectionsTimeout, generateShotScript, SINGLE_MS } from "@/lib/ai/shot-director";
+import { flowBudgetMs } from "@/lib/pipeline";
 import { DIRECTION_MAX, directionFor, LOOKS, lockBriefScript, lockedVoiceScript, STYLE_PRESETS, type StylePreset, VISUAL_STYLES, VOICE_SCRIPT_MAX } from "@/lib/projects";
 import { validateStory, VisualStory } from "@/lib/visual-story";
 import { compileStory } from "@/components/video/engine/compiler";
@@ -844,6 +845,18 @@ function shotTemplates(): Check[] {
   add("phase 6.5 K: with little time left it asks for one direction only", !!short.script && short.calls.length === 1 && short.calls[0].single && short.variants.length === 1, `budget 60 s: ${short.calls.map((c) => `${c.single ? "one" : "four"} (${Math.round(c.timeout / 1000)} s)`).join(", ")}`);
   const none5 = DIRECTOR_RUNS.none;
   add("phase 6.5: no time for either → a clear failure, no request beyond the budget", !none5.script && none5.calls.length === 0 && none5.errors.some((e) => e.startsWith("four directions skipped")) && none5.errors.some((e) => e.startsWith("single direction skipped")), none5.errors.join(" · "));
+  // ── Director time budget, from REAL runs (cost_events / DB timestamps) ──
+  // b4b89fdf: brief 135 s, voice 23 s → Director had ~90 s and both calls
+  // timed out. bddeedc8: the uncompacted four-direction call took ~95 s.
+  // With a locked script the brief now runs alongside voice + Director.
+  const REAL = { brief: 135_000, voice: 23_000, analyse: 5_000, fourCall: 95_000, oneCall: 75_000 };
+  const before = flowBudgetMs(REAL.analyse + REAL.brief + REAL.voice);
+  const after = flowBudgetMs(REAL.analyse + REAL.voice);
+  const fourBefore = Math.min(90_000, before - 8_000 - 40_000);
+  const fourAfter = fourDirectionsTimeout(after);
+  add("budget: with the brief alongside, the four-direction call gets the time a real run needed", fourBefore < REAL.fourCall && fourAfter >= REAL.fourCall && after - fourAfter >= SINGLE_MS - 8_000, `real brief 135 s + voice 23 s: before ${Math.round(before / 1000)} s (four ${Math.round(fourBefore / 1000)} s < needed 95 s) · now ${Math.round(after / 1000)} s (four ${Math.round(fourAfter / 1000)} s, one-direction reserve ${Math.round((after - fourAfter - 8_000) / 1000)} s)`);
+  const actionsSrc = readFileSync("app/projects/actions.ts", "utf8");
+  add("budget: brief, voice and Director run in the order that gives the Director that time", /const alongside = !!own2 && !!lockedScriptOf\(own2\) && !storyEngineEnabled\(\);/.test(actionsSrc) && /lockedScriptOf\(project\) \|\| undefined/.test(actionsSrc) && /\["scene", "flow", "story", "shots", "variants", "diagnostics", "taste"\]/.test(actionsSrc) && /if \(b\?\.brief_status === "completed" \|\| b\?\.brief_status === "failed"\) break;/.test(actionsSrc), "voice from the locked script · brief keeps the Director's scene/shots/variants · the Director waits for the brief before storing");
   // ── Phase 6.5 visual DNA, diagnostics, timing, behaviors, overlap ──
   const dnas = [DNA_A, DNA_B, DNA_C, DNA_D];
   add("DNA A: the visual DNA schema is valid", dnas.every((d) => Dna.safeParse(d).success), dnas.map((d) => d.composition).join(" · "));
@@ -909,7 +922,7 @@ function shotTemplates(): Check[] {
   // Diagnostics: why a direction was left out, kept for the project.
   const rej = sameStruct.diagnostics.find((d) => d.direction_id === "B");
   const generate = readFileSync("app/projects/actions.ts", "utf8");
-  add("diagnostics N: a rejected direction's reason is kept with the project", !!rej && !rej.selected && rej.rejected_against_variant === "A" && rej.similarity_dimensions.includes("composition") && rej.rejection_reasons.length > 0 && rej.candidate_attempts > 0 && run4.diagnostics?.directions.length === 4 && /brief: \{ \.\.\.\(fresh!\.brief as object\), \.\.\.\(stored \?\? \{\}\), diagnostics \}/.test(generate), `B: ${rej?.rejection_reasons[0]} · attempts ${rej?.candidate_attempts}, valid ${rej?.valid_count} · saved as brief.diagnostics`);
+  add("diagnostics N: a rejected direction's reason is kept with the project", !!rej && !rej.selected && rej.rejected_against_variant === "A" && rej.similarity_dimensions.includes("composition") && rej.rejection_reasons.length > 0 && rej.candidate_attempts > 0 && run4.diagnostics?.directions.length === 4 && /brief: \{ \.\.\.\(\(fresh\?\.brief as object \| null\) \?\? \{\}\), \.\.\.\(stored \?\? \{\}\), diagnostics \}/.test(generate), `B: ${rej?.rejection_reasons[0]} · attempts ${rej?.candidate_attempts}, valid ${rej?.valid_count} · saved as brief.diagnostics`);
   add("diversity O: four valid, different directions stay four", four.picks.length === 4 && four.status === "ok" && four.diagnostics.every((d) => d.selected), four.diagnostics.map((d) => `${d.direction_id} q${d.quality_score}`).join(" · "));
   add("diversity P: without enough different directions it never copies to four", copies.picks.length === 1 && copies.status === INSUFFICIENT_VISUAL_DIVERSITY && copies.diagnostics.filter((d) => !d.selected).every((d) => d.rejected_against_variant === "A"), `${copies.picks.length} video · ${copies.status}`);
   const oldWithDiag = ProductBrief.safeParse({ ...BRIEF_FIXTURE });
@@ -990,8 +1003,8 @@ function lockedScript(): Check[] {
   // The voice speaks brief.script itself (generateVoice → generateFalVoice).
   const src = readFileSync("app/projects/actions.ts", "utf8");
   const voice = src.slice(src.indexOf("export async function generateVoice"), src.indexOf("export async function prepareAssets"));
-  add("generateVoice sends brief.script to the voice unchanged", /const script = project\.brief_status === "completed" \? project\.brief\?\.script : undefined;/.test(voice) && /generateFalVoice\(\{\s*script,/.test(voice), "script = brief.script → generateFalVoice({ script })");
-  add("generateBrief stores the locked script", /brief: lockBriefScript\(brief, project\)/.test(src), "briefUpdate({ brief: lockBriefScript(brief, project) })");
+  add("generateVoice sends brief.script to the voice unchanged", /const script = project\.brief_status === "completed" \? project\.brief\?\.script : lockedScriptOf\(project\) \|\| undefined;/.test(voice) && /generateFalVoice\(\{\s*script,/.test(voice), "script = brief.script (or, before the brief, the same locked script) → generateFalVoice({ script })");
+  add("generateBrief stores the locked script", /let next = lockBriefScript\(brief, project\);/.test(src) && /brief: \{ \.\.\.next, \.\.\.kept \}/.test(src), "briefUpdate({ brief: { ...lockBriefScript(brief, project), ...kept } })");
   return checks;
 }
 

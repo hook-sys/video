@@ -13,9 +13,13 @@ export const SCRIPT_LOCK_LINE = "Script: exact";
 // A generated brief with the customer's script as its narration, word for
 // word. Projects from the script-first form carry a video direction or the
 // lock line; older ones (neither) keep the brief's own script.
-export function lockBriefScript<T extends { script: string }>(brief: T, project: { direction?: string | null; advanced_direction?: string | null }): T {
+// The locked script of a project, or "" when the brief writes its own.
+export function lockedScriptOf(project: { direction?: string | null; advanced_direction?: string | null }) {
   const marked = new RegExp(`^${SCRIPT_LOCK_LINE}\\r?$`, "m").test(project.direction?.split(/\r?\n\r?\nVisual style:/)[1] ?? "");
-  const locked = project.advanced_direction?.trim() || marked ? lockedVoiceScript(project.direction) : "";
+  return project.advanced_direction?.trim() || marked ? lockedVoiceScript(project.direction) : "";
+}
+export function lockBriefScript<T extends { script: string }>(brief: T, project: { direction?: string | null; advanced_direction?: string | null }): T {
+  const locked = lockedScriptOf(project);
   return locked ? { ...brief, script: locked } : brief;
 }
 // Kept for benchmarks and older projects; new videos last as long as their voice.

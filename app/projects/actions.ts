@@ -31,6 +31,7 @@ import {
   VOICE_GENDERS,
   VOICE_STYLES,
   lockBriefScript,
+  lockedScriptOf,
   lockedVoiceScript,
   logoPath,
   parseHttpUrl,
@@ -51,7 +52,9 @@ import { falCost, openaiCost, renderCost, storageCost } from "@/lib/costs/pricin
 import { recordCost } from "@/lib/costs/record";
 import { canUseDevTools } from "@/lib/dev-tools";
 import {
+  flowBudgetMs,
   NEEDS_SCREENSHOTS_MESSAGE,
+  PIPELINE_BUDGET_MS,
   RENDER_WORKER_MESSAGE,
   type PipelineStep,
 } from "@/lib/pipeline";
@@ -350,7 +353,19 @@ export async function generateBrief(projectId: string) {
     );
     // The customer's script is the narration, word for word (lockBriefScript):
     // the brief model never rewrites what the voice says.
-    await briefUpdate({ brief: lockBriefScript(brief, project), brief_status: "completed", brief_error: null });
+    // With a locked script the voice and the Shot Director run alongside the
+    // brief: keep what they already stored, and fit the storyboard to the voice.
+    const { data: fresh } = await admin.from("projects").select("brief, voice_status, duration_seconds").eq("id", projectId).single();
+    const kept = Object.fromEntries(Object.entries((fresh?.brief as Record<string, unknown> | null) ?? {}).filter(([k]) => ["scene", "flow", "story", "shots", "variants", "diagnostics", "taste"].includes(k)));
+    let next = lockBriefScript(brief, project);
+    if (fresh?.voice_status === "completed" && fresh.duration_seconds) {
+      try {
+        next = { ...next, scenes: fitDurations(next, fresh.duration_seconds).scenes };
+      } catch {
+        // (keeps the brief's own timing)
+      }
+    }
+    await briefUpdate({ brief: { ...next, ...kept }, brief_status: "completed", brief_error: null });
   } catch (e) {
     console.error("brief generation failed:", projectId, e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : e);
     await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));
@@ -439,10 +454,13 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     .eq("user_id", userId)
     .maybeSingle();
   const brief = ProductBrief.safeParse(project?.brief);
-  if (!project || project.voice_status !== "completed" || !brief.success || brief.data.flow || brief.data.scene || project.format !== "16:9") return;
+  // (With a locked script this runs while the brief is still being written.)
+  const raw = (project?.brief ?? null) as { scene?: unknown; flow?: unknown } | null;
+  const narration = brief.success ? brief.data.script : project ? lockedScriptOf(project) : "";
+  if (!project || project.voice_status !== "completed" || !narration || raw?.flow || raw?.scene || project.format !== "16:9") return;
   const words = parseWordTimings((project.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
   const { count: screenshots } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
-  const input = { narration: brief.data.script, words, duration_seconds: project.duration_seconds, product_name: brief.data.product_name || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project), never: await loadNeverList(admin), seed: seedFrom(projectId), taste: await loadTaste(admin) };
+  const input = { narration, words, duration_seconds: project.duration_seconds, product_name: (brief.success ? brief.data.product_name : project.brand_name?.trim()) || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project), never: await loadNeverList(admin), seed: seedFrom(projectId), taste: await loadTaste(admin) };
   console.info("flow director start:", { projectId, timing: words?.length ? "voice" : "estimated", words: words?.length ?? 0, screenshots: screenshots ?? 0 });
   const started = Date.now();
   // Director v2 (scenes of product UI) first; the pattern Director is the
@@ -502,11 +520,17 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     problems: shot.errors.slice(0, 6),
   };
   {
-    // Re-read so nothing written meanwhile is lost; only `scene`/`flow` change.
+    // The brief is written alongside (locked script): wait for it, so one
+    // write never replaces the other. Then re-read; only these keys change.
+    for (let k = 0; k < 60; k++) {
+      const { data: b } = await admin.from("projects").select("brief_status").eq("id", projectId).single();
+      if (b?.brief_status === "completed" || b?.brief_status === "failed") break;
+      await new Promise((r) => setTimeout(r, 2_000));
+    }
     const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
-    const current = ProductBrief.safeParse(fresh?.brief);
-    if (current.success && !current.data.flow && !current.data.scene) {
-      await admin.from("projects").update({ brief: { ...(fresh!.brief as object), ...(stored ?? {}), diagnostics } }).eq("id", projectId).eq("user_id", userId);
+    const current = (fresh?.brief ?? null) as { scene?: unknown; flow?: unknown } | null;
+    if (!current?.flow && !current?.scene) {
+      await admin.from("projects").update({ brief: { ...((fresh?.brief as object | null) ?? {}), ...(stored ?? {}), diagnostics } }).eq("id", projectId).eq("user_id", userId);
     }
   }
   // Direction library: what the Director made of the customer's direction.
@@ -515,7 +539,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   await admin
     .from("direction_library")
     .update({
-      narration: brief.data.script,
+      narration,
       flow_script: script,
       outcome: { stored: !!script, engine: v2.script ? "scene" : result.script ? "flow" : null, attempts, problems: (v2.script ? v2.errors : [...v2.errors, ...result.errors]).slice(0, 8), theme: script?.theme ?? null, status: diagnostics.status, previews: diagnostics.previews, commit: diagnostics.commit },
       updated_at: new Date().toISOString(),
@@ -615,7 +639,7 @@ export async function generateVoice(projectId: string) {
   // RLS: only returns the project if this user owns it.
   const { data: project } = await supabase
     .from("projects")
-    .select("brief, brief_status, voice_language, voice_style, voice_gender, voice_result")
+    .select("brief, brief_status, direction, advanced_direction, voice_language, voice_style, voice_gender, voice_result")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return;
@@ -624,7 +648,8 @@ export async function generateVoice(projectId: string) {
   const voiceUpdate = (fields: Record<string, unknown>) =>
     admin.from("projects").update(fields).eq("id", projectId).eq("user_id", user.id);
 
-  const script = project.brief_status === "completed" ? project.brief?.script : undefined;
+  // A locked script is spoken as typed, so the voice need not wait for the brief.
+  const script = project.brief_status === "completed" ? project.brief?.script : lockedScriptOf(project) || undefined;
   if (typeof script !== "string" || !script.trim()) {
     await voiceUpdate({ voice_status: "failed", voice_error: "Generate the brief first." });
     revalidatePath(`/projects/${projectId}`);
@@ -1060,7 +1085,6 @@ async function claimPipeline(projectId: string, userId: string) {
  * Never throws; the outcome is stored on the project.
  */
 // The whole pipeline runs within one request (maxDuration 300 s).
-const PIPELINE_BUDGET_MS = 280_000;
 
 async function runPipeline(projectId: string, userId: string) {
   const pipelineStarted = Date.now();
@@ -1124,21 +1148,32 @@ async function runPipeline(projectId: string, userId: string) {
       return void (await fail(NEEDS_SCREENSHOTS_MESSAGE, "needs_input"));
     }
 
-    // 2. Product brief + script.
+    // 2. Product brief + script. A locked script (the customer's own words)
+    // needs no brief for the voice or the Shot Director, so the brief is
+    // written alongside them instead of before them: the Director gets the
+    // time the brief used to take (it took 80–150 s and left the Director
+    // too little to finish).
     await enter("writing");
     let p = await state();
-    if (p.brief_status !== "completed") {
-      await attempt(() => generateBrief(projectId));
+    const { data: own2 } = await admin.from("projects").select("direction, advanced_direction").eq("id", projectId).single();
+    const alongside = !!own2 && !!lockedScriptOf(own2) && !storyEngineEnabled();
+    const briefRun = p.brief_status !== "completed" ? attempt(() => generateBrief(projectId)) : null;
+    const briefDone = async () => {
+      if (briefRun) await briefRun;
       p = await state();
-      if (p.brief_status !== "completed") return void (await fail(p.brief_error ?? "Brief failed."));
-    }
+      return p.brief_status === "completed";
+    };
+    if (!alongside && !(await briefDone())) return void (await fail(p.brief_error ?? "Brief failed."));
 
     // 3. Voice: one track for the locked script, with word timestamps.
     await enter("voice");
     if (p.voice_status !== "completed") {
       await attempt(() => generateVoice(projectId));
       p = await state();
-      if (p.voice_status !== "completed") return void (await fail(p.voice_error ?? "Voice failed."));
+      if (p.voice_status !== "completed") {
+        if (briefRun) await briefRun;
+        return void (await fail(p.voice_error ?? "Voice failed."));
+      }
     }
 
     // Preview-only: the Visual Director starts only after the voice exists
@@ -1148,8 +1183,13 @@ async function runPipeline(projectId: string, userId: string) {
       storyEngineEnabled() && budget > 45_000
         ? attempt(() => generateStory(projectId, userId, Math.min(110_000, budget - 30_000)))
         : flowEngineEnabled() && budget > 45_000
-          ? attempt(() => generateFlow(projectId, userId, Math.min(150_000, budget - 30_000)))
+          ? attempt(() => generateFlow(projectId, userId, flowBudgetMs(Date.now() - pipelineStarted)))
           : null;
+    // The brief (written alongside) must be done before the visuals step.
+    if (alongside && !(await briefDone())) {
+      if (story) await story;
+      return void (await fail(p.brief_error ?? "Brief failed."));
+    }
 
     // 4. Visual asset manifest, then generated assets.
     await enter("visuals");

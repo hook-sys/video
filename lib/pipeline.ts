@@ -19,3 +19,9 @@ export const NEEDS_SCREENSHOTS_MESSAGE =
   "We couldn't read enough about your product from the website. To avoid inventing features, please create a new project and upload product screenshots.";
 
 export const RENDER_WORKER_MESSAGE = "Video rendering requires the production render worker.";
+
+// The whole pipeline runs within one request (maxDuration 300 s).
+export const PIPELINE_BUDGET_MS = 280_000;
+// The Shot Director's share: what is left after `elapsedMs`, minus 30 s for
+// the steps after it, at most 180 s.
+export const flowBudgetMs = (elapsedMs: number) => Math.min(180_000, PIPELINE_BUDGET_MS - elapsedMs - 30_000);
