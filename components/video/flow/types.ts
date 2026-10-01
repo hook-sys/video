@@ -75,6 +75,9 @@ export type FlowNode = {
   appear?: number;
   erase?: number;
   z?: number; // stacking order (higher is in front)
+  // Scene Recipe depth layer: 0 background, 1 midground, 2 hero, 3 foreground.
+  // Layers follow the camera by different amounts (parallax, states.ts).
+  layer?: 0 | 1 | 2 | 3;
   // Travel along a curve (quadratic bezier) between start and end frames.
   paths?: { start: number; end: number; from: Vec; ctrl: Vec; to: Vec; ease?: Ease }[];
 };
@@ -148,7 +151,8 @@ export type FlowPlan = {
   lists?: FlowList[];
   panels?: FlowPanel[];
   // Scene backdrops (particles, grid …) from their start frame, cross-faded.
-  backdrops?: { kind: string; start: number }[];
+  // strength: its opacity (default: 0.55 at the calm pace, else 1).
+  backdrops?: { kind: string; start: number; strength?: number }[];
   // Element nodes that overlap on purpose (a stack, a fan) during a window.
   overlaps?: { ids: string[]; start: number; end: number }[];
   brand?: FlowBrand;
@@ -161,7 +165,8 @@ export type FlowPlan = {
   explainer?: boolean;
   // Explainer: frame spans where the whole canvas turns brand colour (the
   // product reveal, Keka's full-colour moment).
-  flashes?: [number, number][];
+  // [start, end, soft?]: soft = frames of an even ramp in and out (a transition flash).
+  flashes?: [number, number, number?][];
   // Explainer canvas decor (a variant the search picks): dots, ribbons, waves, glow.
   decor?: string;
   // Explainer canvas tone: tint (default), white or deep.

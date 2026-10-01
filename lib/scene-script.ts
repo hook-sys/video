@@ -9,6 +9,7 @@ import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { searchIcons } from "@/lib/icons";
 import { spokenCueTimes, tokenize, tokensForWord, type WordTiming } from "@/lib/voice-timing";
 import { FLOW_THEMES, STATEMENT_LAYOUTS, estimateWords } from "@/lib/flow-script";
+import { CompiledRecipeSchema } from "@/lib/scene-recipe";
 
 // SceneScript (Director v2): the video as scenes of product elements (cards,
 // devices, screenshot crops, icons) on a canvas, each beat a motion verb on
@@ -96,7 +97,10 @@ const Beat = z.object({
   items: z.array(z.string()).nullable(), // list
   lottie: z.string().nullable(), // celebrate
 });
-export type SceneBeat = z.infer<typeof Beat>;
+// A stored beat may carry its scene's recipe (lib/scene-recipe.ts; scene
+// beats expanded from a shot that has one). Not part of the model's schema.
+const StoredBeat = Beat.extend({ recipe: CompiledRecipeSchema.nullable().optional() });
+export type SceneBeat = z.infer<typeof StoredBeat>;
 
 export const SceneScriptModel = z.object({ theme: z.enum(FLOW_THEMES), beats: z.array(Beat) });
 // pace: "calm" (explainer: gentle entrances, one steady backdrop, the subject
@@ -109,7 +113,7 @@ export const ICON_STYLES = ["tile", "solid", "soft", "outline"] as const;
 export const CUTS = ["slide", "rise", "soft", "zoom"] as const;
 export const Look = z.object({ decor: z.enum(DECORS), tone: z.enum(TONES).nullable().optional(), icons: z.enum(ICON_STYLES).nullable().optional(), cut: z.enum(CUTS).nullable().optional(), side: z.enum(["right", "left"]).nullable().optional(), seed: z.number().int() });
 export type Look = z.infer<typeof Look>;
-export const SceneScript = z.object({ version: z.literal(2).default(2), theme: z.enum(FLOW_THEMES), beats: z.array(Beat), pace: z.enum(["calm", "lively"]).nullable().optional(), style: z.enum(["explainer"]).nullable().optional(), look: Look.nullable().optional() });
+export const SceneScript = z.object({ version: z.literal(2).default(2), theme: z.enum(FLOW_THEMES), beats: z.array(StoredBeat), pace: z.enum(["calm", "lively"]).nullable().optional(), style: z.enum(["explainer"]).nullable().optional(), look: Look.nullable().optional() });
 export type SceneScript = z.infer<typeof SceneScript>;
 
 export const MAX_SCENE_BEATS = 24;

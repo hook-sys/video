@@ -130,7 +130,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
         // and clears for the brand lockup.
         const next = all[i + 1];
         const k = ramp(frame, b.start, 24, "inOut") * (next ? 1 - ramp(frame, next.start, 24, "inOut") : 1) * (plan.brand ? 1 - ramp(frame, plan.brand.start - 6, 14, "inOut") : 1);
-        return isBackdrop(b.kind) && k > 0.001 ? <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={plan.calm ? k * 0.55 : k} /> : null;
+        return isBackdrop(b.kind) && k > 0.001 ? <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={(b.strength ?? (plan.calm ? 0.55 : 1)) * k} /> : null;
       })}
       {dim < 0.999 && (
         <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - dim, filter: blurFilter(dim * 14), transform: `scale(${1 - 0.05 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
@@ -208,7 +208,7 @@ function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan[
 // ── world ───────────────────────────────────────────────────────────────────
 // A soft mesh of coloured light that keeps drifting (and moves a little with
 // the camera), so the frame breathes even when nothing else moves.
-export function World({ theme, frame, camera, seed = 0, explainer, flashes, decor, tone }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number; explainer?: boolean; flashes?: [number, number][]; decor?: string; tone?: string }) {
+export function World({ theme, frame, camera, seed = 0, explainer, flashes, decor, tone }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number; explainer?: boolean; flashes?: [number, number, number?][]; decor?: string; tone?: string }) {
   if (explainer) return <FlatWorld theme={theme} frame={frame} camera={camera} seed={seed} flashes={flashes} decor={decor} tone={tone} />;
   const par = (k: number): Vec => [-camera[0] * k, -camera[1] * k];
   // Per-video variation: the blobs sit elsewhere and the light comes from another side.
@@ -251,10 +251,11 @@ const wavePath = (y: number, amp: number, len: number, phase: number) =>
     return `${i ? "L" : "M"}${x} ${(y + amp * Math.sin((x / len) * Math.PI * 2 + phase)).toFixed(1)}`;
   }).join(" ");
 
-function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone }: { theme: FlowTheme; frame: number; camera: Vec; seed: number; flashes?: [number, number][]; decor?: string; tone?: string }) {
+function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone }: { theme: FlowTheme; frame: number; camera: Vec; seed: number; flashes?: [number, number, number?][]; decor?: string; tone?: string }) {
   // The brand-colour moment: a circle of brand colour grows from the centre and
   // fills the canvas, then fades back.
-  const flash = Math.max(0, ...(flashes ?? []).map(([s, e]) => ramp(frame, s - 4, 14, "out") * (1 - ramp(frame, e - 8, 12, "inOut"))));
+  // (A third value is a softer ramp both ways: a transition flash, not a reveal.)
+  const flash = Math.max(0, ...(flashes ?? []).map(([s, e, soft]) => (soft ? ramp(frame, s, soft, "inOut") * (1 - ramp(frame, e - soft, soft, "inOut")) : ramp(frame, s - 4, 14, "out") * (1 - ramp(frame, e - 8, 12, "inOut")))));
   // The decor drifts on its own slow cycles (and a little against the camera),
   // so the canvas is never a still picture.
   const px = -camera[0] * 0.5 + Math.sin(frame / 70) * 10;
@@ -692,12 +693,33 @@ function Panel({ p, frame, theme, width, height, toScreen }: { p: FlowPanel; fra
   return (
     <AbsoluteFill style={{ clipPath: `circle(${r}px at ${x}px ${y}px)`, transform: `translateX(${-out * 105}%)` }}>
       <AbsoluteFill style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.primary2})` }} />
-      <AbsoluteFill
-        style={{
-          background: `radial-gradient(60% 70% at ${30 + Math.sin(frame / 60) * 10}% 30%, rgba(255,255,255,.28), transparent 70%), radial-gradient(50% 60% at 80% ${80 + Math.cos(frame / 70) * 8}%, rgba(0,0,0,.12), transparent 70%)`,
-        }}
-      />
-      <AbsoluteFill style={{ backgroundImage: "radial-gradient(rgba(255,255,255,.14) 2px, transparent 2.5px)", backgroundSize: "34px 34px", maskImage: "linear-gradient(90deg, #000, transparent 45%)", WebkitMaskImage: "linear-gradient(90deg, #000, transparent 45%)" }} />
+      {/* The sheen and the dot texture in SVG (the download renderer draws
+          SVG gradients, patterns and masks, not CSS radial gradients or masks). */}
+      <svg style={{ position: "absolute", left: 0, top: 0 }} width={width} height={height}>
+        <defs>
+          <radialGradient id="pnl-light" cx={0.3 + Math.sin(frame / 60) * 0.1} cy={0.3} r={0.65}>
+            <stop offset="0" stopColor="#FFFFFF" stopOpacity={0.28} />
+            <stop offset="0.7" stopColor="#FFFFFF" stopOpacity={0} />
+          </radialGradient>
+          <radialGradient id="pnl-shade" cx={0.8} cy={0.8 + Math.cos(frame / 70) * 0.08} r={0.55}>
+            <stop offset="0" stopColor="#000000" stopOpacity={0.12} />
+            <stop offset="0.7" stopColor="#000000" stopOpacity={0} />
+          </radialGradient>
+          <pattern id="pnl-dots" width={34} height={34} patternUnits="userSpaceOnUse">
+            <circle cx={17} cy={17} r={2.2} fill="#FFFFFF" fillOpacity={0.14} />
+          </pattern>
+          <linearGradient id="pnl-fade" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#FFFFFF" />
+            <stop offset="0.45" stopColor="#FFFFFF" stopOpacity={0} />
+          </linearGradient>
+          <mask id="pnl-mask">
+            <rect width={width} height={height} fill="url(#pnl-fade)" />
+          </mask>
+        </defs>
+        <rect width={width} height={height} fill="url(#pnl-light)" />
+        <rect width={width} height={height} fill="url(#pnl-shade)" />
+        <rect width={width} height={height} fill="url(#pnl-dots)" mask="url(#pnl-mask)" />
+      </svg>
     </AbsoluteFill>
   );
 }

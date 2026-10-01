@@ -1,5 +1,6 @@
 import { CURVES } from "./ease";
 import { num, ramp, vec } from "./eval";
+import { PARALLAX } from "@/lib/scene-recipe";
 import type { FlowNode, FlowPlan, Vec } from "./types";
 
 export type NodeState = { node: FlowNode; pos: Vec; scale: number; opacity: number };
@@ -20,6 +21,21 @@ export function computeStates(plan: FlowPlan, frame: number) {
   const states = new Map<string, NodeState>();
   const base = (n: FlowNode): NodeState => ({ node: n, pos: onPath(n, frame) ?? vec(n.pos, frame), scale: num(n.scale, frame, 1), opacity: num(n.opacity, frame, 1) });
   for (const n of plan.nodes) if (!n.orbit) states.set(n.id, base(n));
+  // Depth layers (Scene Recipe): a layer nearer than the world (> 1) moves and
+  // grows more with the camera, a farther one less. Relative to the
+  // explainer's resting framing (centre 0,0, zoom 1.1).
+  if (plan.nodes.some((n) => n.layer !== undefined && n.layer !== 2)) {
+    const c = vec(plan.camera.center, frame);
+    const zoom = num(plan.camera.zoom, frame, 1);
+    for (const n of plan.nodes) {
+      const p = n.layer === undefined ? 1 : PARALLAX[n.layer];
+      const s = states.get(n.id);
+      if (!s || p === 1) continue;
+      const zl = (zoom / 1.1) ** (p - 1);
+      const q: Vec = [s.pos[0] + (1 - p) * c[0], s.pos[1] + (1 - p) * c[1]];
+      states.set(n.id, { ...s, pos: [c[0] + (q[0] - c[0]) * zl, c[1] + (q[1] - c[1]) * zl], scale: s.scale * zl });
+    }
+  }
   for (const n of plan.nodes) {
     if (!n.orbit) continue;
     const s = base(n);

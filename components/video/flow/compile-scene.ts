@@ -12,6 +12,7 @@ import { DEPTH, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES, type Slot } fro
 import { animate as animateAfter, Flow, type FlowNodeHandle, put as putAfter } from "./patterns";
 import { MARK_DELAY, type Ease, type FlowElement, type FlowLink, type FlowNode, type FlowPlan, type FlowText, type ThemeName, type Track, type Vec } from "./types";
 import { EXPLAINER_TYPE, fitSize } from "./typography";
+import { type CompiledRecipe, type Layer, recipeCamera, recipeSlots, recipeText } from "@/lib/scene-recipe";
 
 // SceneScript (Director v2) → FlowPlan. Scenes are arrangements of product
 // elements on one continuous canvas; beats are motion verbs on spoken words.
@@ -153,6 +154,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const known = new Map<string, Live>(); // every element ever made
   const center: Vec = [0, 0]; // every scene is framed here (pushes move elements, not the camera)
   let layoutName = "grid";
+  // The current scene's recipe (lib/scene-recipe.ts), if it has one.
+  let sceneRecipe: CompiledRecipe | null = null;
+  let carriedIn = false; // the current scene carries an element in from the last one
   let sceneIdx = -1;
   let sceneAt = 0; // when the current scene started (its words may be spoken from there)
   let uid = 0;
@@ -345,7 +349,11 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       const sp = specs.get(id);
       return n ? [n.w, n.h0] : [sp!.w, sp!.h];
     });
-    const { slots, name } = slotsFor(layout, sizes, sceneIdx);
+    // A recipe scene: each element at its composition's place and depth layer.
+    const rs = layout === "recipe" && sceneRecipe ? recipeSlots(sceneRecipe, kept) : null;
+    const { slots, name } = rs ? { slots: kept.map((id): Slot => ({ ...rs.get(id)!, rot: 0 })), name: "recipe" } : slotsFor(layout, sizes, sceneIdx);
+    const layerOf = (id: string): Layer | undefined => rs?.get(id)?.layer;
+    const zOf = (id: string, s: Slot, i: number) => (layerOf(id) ?? s.depth) * 10 + i;
     const nodeIds: string[] = [];
     kept.forEach((id, i) => {
       const s = slots[i];
@@ -354,7 +362,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       if (existing) {
         existing.fit = fitIn(existing.w, existing.h0, s);
         existing.depth = s.depth;
-        existing.h.spec.z = s.depth * 10 + i;
+        existing.h.spec.z = zOf(id, s, i);
+        if (rs) existing.h.spec.layer = layerOf(id);
         if (!live.has(id)) {
           // Carried in from an earlier scene: reappears where it was, then moves.
           put(existing.h.spec.opacity!, t, 1, "out");
@@ -368,18 +377,36 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       }
       const spec = specs.get(id)!;
       const nodeId = known.has(id) ? `${id}~${uid++}` : id;
-      const h = f.el(nodeId, at, { ...spec, z: s.depth * 10 + i });
+      const h = f.el(nodeId, at, { ...spec, z: zOf(id, s, i) });
+      if (rs) h.spec.layer = layerOf(id);
       const n: Live = { h, w: spec.w, h0: spec.h, fit: fitIn(spec.w, spec.h, s), pos: at, depth: s.depth };
       // A device or screenshot as the scene's hero enters tilted, then settles.
       const heroScreen = (i === 0 || s.depth === 2) && (spec.el.type === "device" || spec.el.type === "shot");
-      const enterStyle = style ?? (heroScreen ? "tilt" : calm ? ["rise", "pop", "scale-up", "blur"][(sceneIdx + i) % 4] : ["rise", "pop", "slide-left", "blur", "drop", "scale-up", "flip"][(sceneIdx + i) % 7]);
+      const role = rs ? sceneRecipe!.roles[id] : undefined;
+      const recipeEnter = role && (role.role === "hero" ? (["device", "shot", "card"].includes(spec.el.type) ? "tilt" : spec.el.type === "text" ? "scale-up" : "pop") : role.layer === 0 ? "blur" : "rise");
+      const enterStyle = style ?? recipeEnter ?? (heroScreen ? "tilt" : calm ? ["rise", "pop", "scale-up", "blur"][(sceneIdx + i) % 4] : ["rise", "pop", "slide-left", "blur", "drop", "scale-up", "flip"][(sceneIdx + i) % 7]);
       enter(n, push ? t : t + i * stagger, enterStyle, s.rot, push);
+      // A ui-plane or device hero stays a plane in 3D (tilted back), after it lands.
+      if (role?.role === "hero" && (sceneRecipe!.heroType === "ui-plane" || sceneRecipe!.heroType === "device")) {
+        const held: [number, number, number] = sceneRecipe!.heroType === "ui-plane" ? [14, -20, 2] : [6, -12, 0];
+        const tt = h.spec.tilt;
+        if (tt?.length) tt[tt.length - 1] = [tt[tt.length - 1][0], held, "inOut"];
+        else h.spec.tilt = [[t, [0, 0, 0]], [t + 30, held, "inOut"]];
+      }
       entered.push(push ? t : t + i * stagger);
       live.set(id, n);
       known.set(id, n);
       nodeIds.push(nodeId);
     });
     openOverlap(name, t, nodeIds);
+    // A recipe's background layer sits behind the hero, its foreground in
+    // front of it, on purpose (depth).
+    if (rs) {
+      const heroNode = kept.find((id) => sceneRecipe!.roles[id]?.role === "hero");
+      const back = kept.filter((id) => layerOf(id) === 0 || layerOf(id) === 3).map((id) => live.get(id)?.h.id).filter((x): x is string => !!x);
+      const hn = heroNode ? live.get(heroNode)?.h.id : undefined;
+      if (hn && back.length) overlaps.push({ ids: [hn, ...back], start: t, end: total });
+    }
     return name;
   };
 
@@ -415,6 +442,28 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       const len = (next >= 0 ? starts[next] : stageEnd) - t;
       // (The look's seed decides whether the first shot pushes in or out.)
       const k = (sceneIdx + (script.look?.seed ?? 0)) % 2 ? -1 : 1;
+      if (move === "scene:recipe" && sceneRecipe) {
+        // The recipe's camera intent, aimed at its hero (lib/scene-recipe.ts);
+        // a focus behavior later in the scene pushes on to its object then.
+        const hero = live.get(sceneRecipe.hero);
+        const cam = recipeCamera(sceneRecipe, hero?.pos ?? [0, 0]);
+        const settle = Math.min(12, Math.max(1, len - 6));
+        f.camera(t, sceneIdx === 0 ? 1 : settle, cam.from, cam.z0);
+        const fk = beats.findIndex((x, j) => starts[j] > t && starts[j] < t + len && x.action === "focus" && x.style === "recipe");
+        const ease = cam.from[0] === cam.to[0] && cam.z0 === cam.z1 ? "inOut" : "linear";
+        if (fk >= 0) {
+          const tf = starts[fk];
+          const tp = known.get(beats[fk].targets?.[0] ?? "")?.pos ?? hero?.pos ?? [0, 0];
+          f.camera(t + settle, Math.max(6, tf - t - settle), cam.to, cam.z1, ease);
+          f.camera(tf, 22, [Math.max(-160, Math.min(160, tp[0] * 0.2)), Math.max(-120, Math.min(120, tp[1] * 0.2))], Math.min(1.34, cam.z1 + 0.1), "inOut");
+        } else f.camera(t + settle, Math.max(6, len - settle), cam.to, cam.z1, ease);
+        // orbit-intent: the hero turns in 3D through the shot while the camera arcs.
+        if (cam.tilt && hero) {
+          const t0 = Math.max(t + 24, ...(hero.h.spec.tilt ?? []).map(([x]) => x));
+          hero.h.spec.tilt = [...(hero.h.spec.tilt ?? [[t, [0, 0, 0]]]), [t0, [4, cam.tilt[0], 0], "inOut"], [Math.max(t0 + 6, t + len), [4, cam.tilt[1], 0], "linear"]];
+        }
+        return;
+      }
       // Phase 3: the Director's shot intent (a camera move) decides the move;
       // the code decides how far and how fast, inside the frame-safe range
       // the stages are laid out for (zoom 1.06–1.18, ±50 px). Without one
@@ -457,9 +506,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const orbiting: { ids: string[]; start: number; end: number }[] = [];
   const rings: NonNullable<FlowPlan["rings"]> = []; // dashed orbit paths
   const ghosts: { live: Live; end: number }[] = []; // running orbits, for framing
-  const backdrops: { kind: string; start: number }[] = [];
+  const backdrops: { kind: string; start: number; strength?: number }[] = [];
   let focusedOn: Live | null = null; // the camera is pushed in on this element
-  const flashes: [number, number][] = [];
+  const flashes: [number, number, number?][] = [];
 
   // ── text ──
   const nextLineStart = (i: number) => {
@@ -478,6 +527,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       case "scene": {
         sceneIdx++;
         sceneAt = t;
+        sceneRecipe = b.recipe ?? null;
+        carriedIn = (b.elements ?? []).some((e) => e.asset === null);
         const tr = b.transition ?? (sceneIdx === 0 ? "cut" : ["dissolve", "push-left", "zoom-through", "push-up", "morph"][sceneIdx % 5]);
         const carried = new Set((b.elements ?? []).filter((e) => e.asset === null).map((e) => e.id));
         const old = [...live.entries()].filter(([id]) => !carried.has(id));
@@ -516,8 +567,12 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         layoutName = b.layout ?? "grid";
         // The scene's atmosphere (kept from the previous scene when not set).
         // Calm: the first scene's backdrop stays for the whole video.
-        const kind = calm && backdrops.length ? backdrops[0].kind : b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh");
-        if (backdrops[backdrops.length - 1]?.kind !== kind) backdrops.push({ kind, start: t });
+        // (A recipe scene's environment is its own; one shared with the scene
+        // before simply continues, so the world stays one place.)
+        const kind = sceneRecipe ? (b.backdrop ?? "mesh") : calm && backdrops.length ? backdrops[0].kind : b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh");
+        if (backdrops[backdrops.length - 1]?.kind !== kind) backdrops.push(sceneRecipe ? { kind, start: t, strength: 0.9 } : { kind, start: t });
+        // A flash / iris transition: a brand-colour circle sweeps the canvas as the scene arrives.
+        if (sceneRecipe?.flash && explainer) flashes.push([t - 6, t + 40, 22]);
         sceneMove = b.camera ?? ["push-in", "drift", "pan-right", "pull-back", "rise"][sceneIdx % 5];
         // A "steps" scene: every step is there from the start, faint, so no
         // icon stands alone in an empty frame; the first is lit, the others
@@ -536,7 +591,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         if (sceneIdx > 0) f.sfx(t, "whoosh");
         // A group popping in: one pop per element (five logos = five pops).
         if (b.style === "pop" && entered.length > 1) for (const at of entered) f.sfx(at, "soft_pop");
-        shoot(t, span, explainer ? `scene:${b.camera ?? "static"}` : sceneMove);
+        shoot(t, span, explainer ? (sceneRecipe ? "scene:recipe" : `scene:${b.camera ?? "static"}`) : sceneMove);
         framed = false;
         break;
       }
@@ -591,6 +646,16 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         break;
       }
       case "move": {
+        if (b.style === "recipe") {
+          // A recipe scene keeps its composition: the object travels to the
+          // target's near side (on an arc) and the rest stay where they are.
+          const [a] = tgt;
+          if (!a || !to) break;
+          const dir = Math.sign(a.pos[0] - to.pos[0]) || -1;
+          travel(a, t, 26, [to.pos[0] + dir * ((to.w * to.fit) / 2 + (a.w * a.fit) / 2 + 24), to.pos[1] + 30], "arc");
+          moveSfx(t);
+          break;
+        }
         // It takes the layout slot next to its destination; the others shift.
         // (Several targets gather there together, one after another.)
         const [a] = tgt;
@@ -855,6 +920,12 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const [a] = tgt;
         if (!a) break;
         for (const n of live.values()) if (n !== a) setBlur(n, t, 8, 14);
+        if (b.style === "recipe") {
+          // (The camera push is keyed with the scene's camera, see shoot.)
+          bump(a, t + 2);
+          framed = false;
+          break;
+        }
         const region = b.style ? DETAIL[b.style] : undefined;
         if (region) {
           // Zoom into one part of the element (a button, a chart, a field) so it reads.
@@ -915,13 +986,18 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         // The line (and the dim behind a display line) arrives with its first word.
         // (Words sharing their shot's cue never arrive before the shot does:
         // the last shot's icons are still clearing then.)
-        const start = Math.max(Math.min(wf[0], Math.max(t + 2, wf[0] - 8)), explainer && paired.has(b) ? t + 6 : 0);
+        // (A recipe scene's words wait for an object carried in from the last scene to land.)
+        const settled = sceneRecipe && b.text_layout === "side" && carriedIn ? sceneAt + 26 : 0;
+        const start = Math.max(Math.min(wf[0], Math.max(t + 2, wf[0] - 8)), explainer && paired.has(b) ? t + 6 : 0, settled);
         let style: NonNullable<FlowText["style"]> = b.text_layout === "panel" ? "panel" : b.text_layout === "display" ? "display" : b.text_layout === "pill" ? "pill" : live.size ? "caption" : "display";
         if (b.text_layout === "side") style = live.size ? "caption" : "display";
         // Explainer: beside a subject on the right, the words sit big on the left.
         const besideRight = explainer && b.text_layout === "side" && live.size > 0 && ["stage-right", "stage-left"].includes(layoutFamily(layoutName));
         const mirrored = besideRight && layoutFamily(layoutName) === "stage-left";
         if (besideRight) style = "side";
+        // A recipe scene places its words (lib/scene-recipe.ts recipeText).
+        const rt = sceneRecipe && b.text_layout === "side" ? recipeText(sceneRecipe) : null;
+        if (rt) style = rt.style;
         const cover = style === "display" || style === "panel";
         const end0 = lastLine ? lastEnd : Math.min(hardEnd, cover ? Math.max(wf[wf.length - 1] + 36, nextStart - 10) : Math.max(wf[wf.length - 1] + 36, nextStart + 20));
         // Explainer: a line is gone before the next shot arrives (never over its card).
@@ -935,7 +1011,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           f.panel(t, end, first ? first.pos : center);
           f.sfx(t, "whoosh");
         }
-        const pos: Vec = mirrored ? [760, -10] : besideRight ? [-760, -10] : style === "caption" ? [0, 350] : style === "pill" ? [0, 370] : [0, 0];
+        const pos: Vec = rt ? rt.pos : mirrored ? [760, -10] : besideRight ? [-760, -10] : style === "caption" ? [0, 350] : style === "pill" ? [0, 370] : [0, 0];
         const mark = b.style === "pill" || b.style === "strike" ? b.style : undefined;
         // The mark lands just after the (last, or for a strike the first) accent word is spoken.
         const ws = text.split(/\s+/);
@@ -949,7 +1025,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         const swapWord = b.action === "statement" && b.items?.[0] && b.accent ? b.items[0] : null;
         const swapAt = swapWord ? wordFrames(swapWord, (start + LEAD) / FPS, timeline)[0] : null;
         const swap = swapWord && swapAt !== null && swapAt !== undefined && swapAt > start && swapAt < end ? { at: swapAt, word: swapWord } : undefined;
-        f.text(text, start, end, { swap, style, pos, size: explainer ? Math.min(fitSize(text, style, b.accent ?? undefined), EXPLAINER_TYPE[style]) : fitSize(text, style, b.accent ?? undefined), accent: b.accent ?? undefined, words: shown, mark: b.accent ? mark : undefined, markAt: explainer && j >= 0 ? wf[j] : undefined, ...(mirrored && { align: "right" as const }) });
+        const size = rt ? Math.min(fitSize(text, style, b.accent ?? undefined), rt.size) : explainer ? Math.min(fitSize(text, style, b.accent ?? undefined), EXPLAINER_TYPE[style]) : fitSize(text, style, b.accent ?? undefined);
+        f.text(text, start, end, { swap, style, pos, size, accent: b.accent ?? undefined, words: shown, mark: b.accent ? mark : undefined, markAt: explainer && j >= 0 ? wf[j] : undefined, ...((rt ? rt.align === "right" : mirrored) && { align: "right" as const }) });
         if (mark && b.accent && j >= 0) f.sfx((wf[j] ?? start) + MARK_DELAY, mark === "strike" ? "click" : "soft_pop");
         if (style === "display" && explainer) {
           // Explainer: a big line owns the frame; the scene before it leaves

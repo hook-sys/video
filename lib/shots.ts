@@ -2,6 +2,9 @@ import { z } from "zod";
 import { isIconName } from "@/components/video/icons";
 import { FLOW_THEMES } from "@/lib/flow-script";
 import { CAMERA_MOVES, CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
+import { DEVICE_MODELS } from "@/components/video/flow/cards/device-data";
+import { type CompiledRecipe, ENV_BACKDROP, LAYER, RECIPE_MAPPED, type RecipeTransition, SceneRecipe, sceneTransition } from "@/lib/scene-recipe";
+import { tokenize } from "@/lib/voice-timing";
 
 // Shot templates: tested building blocks a video is made of. The Director
 // only picks a shot per sentence and fills its words; every size, place,
@@ -105,11 +108,16 @@ const Shot = z.object({
   camera: z.enum(SHOT_INTENTS).nullable(),
   // Phase 4: which story objects this shot shows (identity, never positions).
   objects: z.array(ShotObject).nullable(),
+  // How the scene visually exists (lib/scene-recipe.ts); null: the shot
+  // template's own composition.
+  recipe: SceneRecipe.nullable(),
 });
 export type Shot = z.infer<typeof Shot>;
 // Stored shots from before Phase 3 have no camera intent, from before Phase 4
 // no objects (null).
-const StoredShot = Shot.extend({ camera: z.enum(SHOT_INTENTS).nullable().default(null), objects: z.array(StoredShotObject).nullable().default(null) });
+// Shots stored before the Scene Recipe have none; an unreadable recipe is
+// dropped (the template composition is used), never a failed parse.
+const StoredShot = Shot.extend({ camera: z.enum(SHOT_INTENTS).nullable().default(null), objects: z.array(StoredShotObject).nullable().default(null), recipe: SceneRecipe.nullable().default(null).catch(null) });
 // Phase 2: before choosing shots the Director writes what the video means
 // (creative) and, per sentence, what the viewer should SEE (concepts). The
 // shots then show those concepts. Stored with the shots for later phases;
@@ -162,6 +170,7 @@ export const ModelShot = z.object({
   items: z.array(Item).nullable(),
   camera: z.enum(SHOT_INTENTS).nullable(),
   objects: z.array(ShotObject).nullable(),
+  recipe: SceneRecipe.nullable(),
 });
 export type ModelShot = z.infer<typeof ModelShot>;
 // A direction and its shots; its concepts (Phase 2) are read off the shots.
@@ -222,6 +231,7 @@ export const flatShot = (m: ModelShot) => ({
   items: m.items,
   camera: m.camera,
   objects: m.objects,
+  recipe: m.recipe ?? null,
 });
 // Phase 2 concepts read off the shots: where each idea is spoken, what is
 // seen, its hero and the object it carries over.
@@ -295,7 +305,7 @@ const rng = (seed: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-type ShotInput = Omit<Shot, "camera" | "objects"> & { camera?: ShotIntent | null; objects?: ShotObject[] | null };
+type ShotInput = Omit<Shot, "camera" | "objects" | "recipe"> & { camera?: ShotIntent | null; objects?: ShotObject[] | null; recipe?: SceneRecipe | null };
 
 // ── Phase 4: object continuity ──
 // Checks the objects' chain before anything is drawn. Errors are wrong
@@ -654,12 +664,20 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
   // After a full-frame line nothing is left to push, so it dissolves.)
   let lastLayout: string | null = null;
   let intent: ShotIntent | null = null; // the current shot's camera intent
+  // Scene Recipe state: the last recipe scene (its persistent objects by
+  // asset, its hero) and the transition it asked to leave with.
+  let pendingOut: RecipeTransition | null = null;
+  let prevRecipe: { heroId: string; persisted: Map<string, string> } | null = null;
   const scene = (cue: string, elements: SceneElement[], layout: string, style: string | null = null, transition?: "dissolve") => {
     const prev = beats[beats.length - 1];
     const dissolve = (layout !== lastLayout || prev?.text_layout === "display") && (transition ?? (prev?.action === "statement" || cut === "soft" ? "dissolve" : null));
-    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: intent ? INTENT_CAMERA[intent] : "static", transition: scenes === 0 ? "cut" : dissolve ? "dissolve" : push, backdrop: scenes === 0 ? "mesh" : null }));
+    // (After a recipe scene its transition_out decides how this one arrives.)
+    const out = pendingOut ? sceneTransition(pendingOut, scenes) : null;
+    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: intent ? INTENT_CAMERA[intent] : "static", transition: scenes === 0 ? "cut" : out ? out.transition : dissolve ? "dissolve" : push, backdrop: scenes === 0 ? "mesh" : null }));
     lastLayout = layout;
     scenes++;
+    pendingOut = null;
+    prevRecipe = null;
   };
   // swap: a word the accent flips to when the voice says it ("weeks" → "minutes").
   const swapOf = (s: Pick<Shot, "items">) => {
@@ -669,9 +687,196 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
   const caption = (cue: string, text: string, accent: string | null, mark: "strike" | "pill" | null, swap: string[] | null = null) =>
     beats.push(beat({ cue, action: "statement", text, accent: accent && text.toLowerCase().includes(accent.toLowerCase()) ? accent : null, style: mark, text_layout: "side", items: swap }));
 
+  // ── Scene Recipe → beats ──
+  // Where a cue is spoken (token index from `from` on), or -1.
+  const said = narration ? tokenize(narration) : null;
+  const cuePos = (cue: string | null | undefined, from = 0) => {
+    if (!said || !cue) return -1;
+    const want = tokenize(cue);
+    for (let i = from; want.length && i + want.length <= said.length; i++) if (want.every((w, k) => said[i + k] === w)) return i;
+    return -1;
+  };
+  // An asset reference a recipe names, as an element (null: not drawable).
+  // "card" (or a device / ui-plane hero of a ui shot) is the shot's own card.
+  const uiCard = (s: ShotInput) => {
+    const asked = (UI_CARDS as readonly string[]).includes(s.card ?? "") ? s.card! : "action-panel";
+    const tpl = s.action_cue && !BUTTON_CARDS.includes(asked) ? "action-panel" : asked;
+    return { tpl, content: content({ title: words(s.title, 4), note: words(s.input, 8), label: null, action: words(s.button, 3) ?? "Continue" }) };
+  };
+  const recipeElement = (s: ShotInput, eid: string, asset: string, type: string | null, hero: boolean): SceneElement | null => {
+    const ui = s.shot === "ui" ? uiCard(s) : null;
+    const dev = asset.startsWith("device:") ? asset.slice(7).split("/") : null;
+    if (dev || type === "device") {
+      const model = dev && (DEVICE_MODELS as readonly string[]).includes(dev[0]) ? dev[0] : "laptop";
+      const finish = dev?.[1] === "dark" ? "dark" : "light";
+      return { id: eid, asset: `device:${model}/${finish}`, label: null, screen: ui ? `card:${ui.tpl}/solid` : "card:dashboard-mini/solid", content: ui?.content ?? null };
+    }
+    if (ui && (asset === "card" || type === "ui-plane" || type === "product")) return el(eid, `card:${ui.tpl}/glass`, null, ui.content);
+    const ref = parseAsset(asset);
+    if (!ref) return null;
+    if (ref.kind === "icon" && hero) return null; // a plain icon never carries a scene
+    if (ref.kind === "text") return /\d/.test(ref.text) || ref.text.split(/\s+/).length <= 3 ? el(eid, asset) : null;
+    if (ref.kind === "card" || ref.kind === "logo" || ref.kind === "object" || ref.kind === "visual" || ref.kind === "shape") return el(eid, asset);
+    if (ref.kind === "icon") return el(eid, picture(asset, null).asset);
+    return null;
+  };
+  // Builds the shot as its recipe describes; false: the recipe cannot be
+  // drawn (its hero is not an asset) and the template is used instead.
+  const recipeShot = (s: ShotInput, r: SceneRecipe, si: number): boolean => {
+    const startAt = beats.length;
+    const persisted = prevRecipe?.persisted ?? new Map<string, string>();
+    // The hero: carried from the last scene when it is the same persistent thing.
+    const carriedHero = persisted.get(r.hero.asset);
+    const heroId = carriedHero ?? id("hero");
+    const heroEl = carriedHero ? ({ id: heroId, asset: null, label: null, screen: null, content: null } as SceneElement) : recipeElement(s, heroId, r.hero.asset, r.hero.type, true);
+    if (!heroEl) {
+      notes.push(`recipe ${r.scene_id}: hero "${r.hero.asset}" is not a drawable hero (an icon or an unknown asset): the shot template is used`);
+      return false;
+    }
+    const roles: CompiledRecipe["roles"] = { [heroId]: { role: "hero", layer: r.composition === "foreground-hero" ? LAYER.foreground : LAYER.hero, relation: null } };
+    // Supporting objects (at most 4); one that a reveal behavior brings in
+    // waits for its words instead of arriving with the scene.
+    const revealed = new Set(r.behaviors.filter((b) => b.type === "reveal").map((b) => b.from));
+    const support = new Map<string, SceneElement>(); // recipe id → element
+    const later: SceneElement[] = [];
+    for (const sp of r.supporting.slice(0, 4)) {
+      const carried = persisted.get(sp.asset);
+      const eid = carried ?? id("sup");
+      const e = carried ? ({ id: eid, asset: null, label: null, screen: null, content: null } as SceneElement) : recipeElement(s, eid, sp.asset, null, false);
+      if (!e) {
+        notes.push(`recipe ${r.scene_id}: supporting "${sp.id}" (${sp.asset}) is not drawable: left out`);
+        continue;
+      }
+      support.set(sp.id, e);
+      roles[eid] = { role: "support", layer: LAYER[sp.layer], relation: sp.relation };
+      if (revealed.has(sp.id) && !carried) later.push(e);
+    }
+    if (r.supporting.length > 4) notes.push(`recipe ${r.scene_id}: ${r.supporting.length - 4} supporting objects over the 4 allowed: left out`);
+    // object-transform from a different hero: the last scene's hero comes
+    // along and flows into the new one (merge) on the shot's last word.
+    const morphFrom = r.transition_in === "object-transform" && prevRecipe && !carriedHero && lastWord(s.cue) ? prevRecipe.heroId : null;
+    if (morphFrom) roles[morphFrom] = { role: "support", layer: LAYER.midground, relation: "feeds-hero" };
+    const tIn: RecipeTransition = scenes === 0 ? "cut" : r.transition_in;
+    const tr = sceneTransition(tIn, scenes);
+    if (RECIPE_MAPPED[tIn]) notes.push(`recipe ${r.scene_id}: transition ${tIn} → ${RECIPE_MAPPED[tIn]}`);
+    if (tIn === "object-transform" && !carriedHero && !morphFrom) notes.push(`recipe ${r.scene_id}: object-transform with nothing to carry (no persistent hero before it): dissolve`);
+    const compiled: CompiledRecipe = { id: r.scene_id, composition: r.composition, environment: r.environment, hero: heroId, heroType: r.hero.type, roles, text: { position: r.typography.position, scale: r.typography.scale }, camera: r.camera, flash: tr.flash, words: false };
+    const elements = [heroEl, ...[...support.values()].filter((e) => !later.includes(e)), ...(morphFrom ? [{ id: morphFrom, asset: null, label: null, screen: null, content: null } as SceneElement] : [])];
+    beats.push(beat({ cue: s.cue, action: "scene", elements, layout: "recipe", style: null, camera: "static", transition: tr.transition, backdrop: ENV_BACKDROP[r.environment] as SceneBeat["backdrop"], recipe: compiled }));
+    scenes++;
+    lastLayout = "recipe";
+    if (morphFrom) beats.push(beat({ cue: lastWord(s.cue)!, action: "merge", targets: [morphFrom], to: heroId }));
+    // The words, placed by the recipe (compile-scene.ts recipeText).
+    const line0 = words(s.line, 6);
+    const line = s.shot === "problem" || s.shot === "number" ? spoken(line0, narration) : line0;
+    const mark = r.typography.emphasis === "pill" ? "pill" : r.typography.emphasis === "strike" ? "strike" : null;
+    // (Words over a hero still travelling in from the last scene wait for its last word.)
+    compiled.words = !!line;
+    if (line) caption(s.line_cue ?? (carriedHero || morphFrom ? (lastWord(s.cue) ?? s.cue) : s.cue), line, r.typography.emphasis === "none" ? null : s.accent, mark, swapOf(s));
+    // The shot's own moments on the hero.
+    if (s.shot === "ui" && heroEl.asset) {
+      const ui = uiCard(s);
+      const isCard = heroEl.asset.startsWith("card:");
+      if (s.action_cue) beats.push(beat({ cue: s.action_cue, action: "click", targets: [heroId], content: isCard ? content({ ...ui.content, action: pressed(ui.content.action ?? "Continue") }) : null }));
+      const result = words(s.result, 4);
+      if (result && s.result_cue && isCard) beats.push(beat({ cue: s.result_cue, action: "update", targets: [heroId], content: content({ ...ui.content, title: result, action: "✓ Done" }) }));
+    }
+    if (s.shot === "number" && heroEl.asset?.startsWith("text:"))
+      for (const i of (s.items ?? []).slice(0, 3)) {
+        const next = numberText(i.asset);
+        if (next && i.cue) beats.push(beat({ cue: i.cue, action: "update", targets: [heroId], content: content({ value: next }) }));
+      }
+    // Behaviors: each one runs on its words, or is reported with why not.
+    const idOf = (name: string) => (name === "hero" ? heroId : (support.get(name)?.id ?? null));
+    const at0 = cuePos(s.cue);
+    const tell = (b: SceneRecipe["behaviors"][number], status: BehaviorReport["status"], reason: string | null) => report?.push({ shot: si, object: b.from, type: `recipe:${b.type}`, status, reason, cue: b.cue });
+    for (const b of r.behaviors) {
+      const from = idOf(b.from);
+      const to = b.to ? idOf(b.to) : null;
+      if (!from) {
+        tell(b, "dropped", "invalid-object");
+        continue;
+      }
+      if (said && (cuePos(b.cue, Math.max(0, at0)) < 0 || cuePos(b.cue, Math.max(0, at0)) <= at0)) {
+        tell(b, "dropped", "cue-not-spoken-after-scene");
+        continue;
+      }
+      const needsTo = ["move", "connect", "flow", "assemble", "merge", "transform"].includes(b.type);
+      if (needsTo && (!to || to === from)) {
+        tell(b, "dropped", "invalid-target");
+        continue;
+      }
+      switch (b.type) {
+        case "reveal": {
+          const e = later.find((x) => x.id === from);
+          if (!e) {
+            tell(b, "dropped", from === heroId ? "the hero arrives with the scene" : "already on screen");
+            break;
+          }
+          beats.push(beat({ cue: b.cue, action: "place", layout: "recipe", style: "rise", elements: [e] }));
+          tell(b, "applied", null);
+          break;
+        }
+        case "move":
+          beats.push(beat({ cue: b.cue, action: "move", targets: [from], to, style: "recipe" }));
+          tell(b, "applied", null);
+          break;
+        case "connect":
+        case "flow":
+          beats.push(beat({ cue: b.cue, action: b.type, targets: [from], to }));
+          tell(b, "applied", null);
+          break;
+        case "merge":
+        case "assemble":
+        case "transform":
+          beats.push(beat({ cue: b.cue, action: "merge", targets: [from], to }));
+          tell(b, "applied", b.type === "merge" ? null : `mapped to merge: it flies into ${b.to}, which grows (no piece assembly or shape morph)`);
+          break;
+        case "highlight":
+        case "expand":
+          beats.push(beat({ cue: b.cue, action: b.type, targets: [from] }));
+          tell(b, "applied", null);
+          break;
+        case "focus":
+          beats.push(beat({ cue: b.cue, action: "focus", targets: [from], style: "recipe" }));
+          tell(b, "applied", null);
+          break;
+        case "arrange":
+          tell(b, "dropped", "unsupported: arrange re-lays a scene in a grid, not in its composition");
+          break;
+      }
+    }
+    // A supporting object that orbits the hero circles it from the shot's last word.
+    const orbiters = r.supporting.filter((sp) => sp.relation === "orbits-hero" && support.has(sp.id) && !later.includes(support.get(sp.id)!));
+    if (orbiters.length && lastWord(s.cue)) beats.push(beat({ cue: lastWord(s.cue)!, action: "orbit", targets: orbiters.map((sp) => support.get(sp.id)!.id), to: heroId }));
+    else if (orbiters.length) notes.push(`recipe ${r.scene_id}: orbits-hero needs a cue of 2+ words to start on: placed beside the hero`);
+    // This shot's beats in spoken order (the scene first; its paired words next).
+    if (said) {
+      const mine = beats.splice(startAt);
+      const key = mine.map((b, k) => ({ b, k, at: k === 0 ? -1 : Math.max(at0, cuePos(b.cue, Math.max(0, at0))) }));
+      key.sort((x, y) => x.at - y.at || x.k - y.k);
+      beats.push(...key.map((x) => x.b));
+    }
+    // What the next scene may carry (persistent objects, by asset).
+    const keep = new Map<string, string>();
+    if (r.hero.persistence === "persistent") keep.set(r.hero.asset, heroId);
+    for (const sp of r.supporting) if (sp.persistence === "persistent" && support.has(sp.id)) keep.set(sp.asset, support.get(sp.id)!.id);
+    prevRecipe = { heroId, persisted: keep };
+    pendingOut = r.transition_out;
+    return true;
+  };
+
   const ranges: [number, number][] = []; // each shot's beats
+  const byRecipe = new Set<number>(); // shots built from their recipe (its behaviors replace the objects')
   for (const s of script.shots) {
     ranges.push([beats.length, beats.length]);
+    if (s.recipe && recipeShot(s, s.recipe, ranges.length - 1)) {
+      byRecipe.add(ranges.length - 1);
+      intent = null;
+      lastUi = s.shot === "ui" ? (beats.find((b, k) => k >= ranges[ranges.length - 1][0] && b.action === "scene")?.recipe?.hero ?? null) : null;
+      ranges[ranges.length - 1][1] = beats.length;
+      continue;
+    }
     intent = dna ? dnaCamera(dna, s.camera, !beats.length) : (s.camera ?? null);
     const items = (s.items ?? []).filter((i) => i.asset);
     switch (s.shot) {
@@ -811,7 +1016,8 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     }
     ranges[ranges.length - 1][1] = beats.length;
   }
-  if (script.shots.some((s) => s.objects?.length)) bindObjects(script.shots, beats, ranges, notes, narration, report);
+  const bound = script.shots.map((s, i) => (byRecipe.has(i) ? { ...s, objects: null } : s));
+  if (bound.some((s) => s.objects?.length)) bindObjects(bound, beats, ranges, notes, narration, report);
   return SceneScript.parse({ version: 2, theme: script.theme, pace: "calm", style: "explainer", beats, look });
 }
 

@@ -60,14 +60,17 @@ export function compositionCheck(
   const family = (l: string | null) => (l ?? "grid").replace(/-[a-z]$/, "");
   const heroes = scenes.filter((b) => family(b.layout).startsWith("hero")).length;
   // Shot stages (lib/shots.ts) repeat by design: the shots themselves vary.
-  const fams = scenes.map((b) => family(b.layout)).filter((f) => !f.startsWith("stage"));
+  // (So do recipe scenes: each composes its own picture, lib/scene-recipe.ts.)
+  const fams = scenes.map((b) => family(b.layout)).filter((f) => !f.startsWith("stage") && f !== "recipe");
   if (heroes > 2) add("same-layouts", `${heroes} of ${scenes.length} scenes use a hero layout`);
   else if (new Set(fams).size < fams.length) add("same-layouts", `layout families repeat: ${fams.join(", ")}`);
-  const bds = new Set(scenes.map((b) => b.backdrop).filter(Boolean));
+  // (A recipe scene's environment is chosen on purpose, not counted.)
+  const bds = new Set(scenes.filter((b) => !b.recipe).map((b) => b.backdrop).filter(Boolean));
   if (script.pace !== "lively" && bds.size > 1) add("busy-backdrop", `${bds.size} different backdrops: ${[...bds].join(", ")}`);
   const hubs = scenes.filter((b) => family(b.layout) === "hub" || (family(b.layout) === "single" && (b.elements ?? []).length > 1)).length + beats.filter((b) => b.action === "orbit").length;
   if (hubs > 1) add("hub-once", `${hubs} hub or orbit pictures`);
-  const kinds = new Set(scenes.slice(1).map((b) => b.transition).filter(Boolean));
+  // (A recipe scene's transition is its own intent, lib/scene-recipe.ts.)
+  const kinds = new Set(scenes.slice(1).filter((b) => !b.recipe).map((b) => b.transition).filter(Boolean));
   if (kinds.size > 3) add("transition-zoo", `${kinds.size} kinds of transition: ${[...kinds].join(", ")}`);
   const celebrates = beats.filter((b) => b.action === "celebrate").length;
   if (celebrates > 1) add("decor-beats", `${celebrates} beats are only a celebrate accent`);

@@ -152,6 +152,7 @@ if (render) {
   for (const name of FLOW_SCRIPT_NAMES) await pixelSection(`flow director script · ${name}`, `FlowScript-${name}`, {});
   // Director v2: scene fixtures, and every page of the card asset gallery.
   for (const name of SCENE_NAMES) await pixelSection(`scene director script · ${name}`, `SceneScript-${name}`, {});
+  await pixelSection("scene recipe demo (every scene composed by its recipe)", "SceneRecipe-demo", {});
   await pixelSection("card asset gallery (every template and device)", "CardGallery", {});
   await pixelSection("scene backdrop gallery (light)", "BackdropGallery", {});
   await pixelSection("scene backdrop gallery (dark)", "BackdropGallery", { theme: "midnight" });

@@ -145,13 +145,18 @@ export function ElementView({ s, frame, theme, calm, explainer, iconStyle = "til
   const amp = explainer ? 1.6 : calm ? 0.4 : 1; // the hero holds still while it is read (explainer: it breathes)
   const [fx, fy] = [Math.cos(ph * 0.8) * 3 * amp, Math.sin(ph) * 5 * amp];
   return (
-    <div style={{ position: "absolute", left: pos[0], top: pos[1], width: 0, height: 0, zIndex: node.z ?? 0, perspective: three ? 2400 : undefined }}>
+    <div style={{ position: "absolute", left: pos[0], top: pos[1], width: 0, height: 0, zIndex: node.z ?? 0 }}>
       <div
         style={{
           position: "absolute",
           left: 0,
           top: 0,
-          transform: `translate(calc(-50% + ${fx.toFixed(2)}px), calc(-50% + ${fy.toFixed(2)}px)) scale(${scale}) rotate(${rot}deg)${three ? ` rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg)` : ""}`,
+          // In 3D the perspective is part of the element's own transform (seen
+          // from its centre, as a parent's perspective would): the download
+          // renderer reads the transform, not a parent's perspective.
+          ...(three
+            ? { transformOrigin: "0 0", transform: `perspective(2400px) translate(${fx.toFixed(2)}px, ${fy.toFixed(2)}px) scale(${scale}) rotate(${rot}deg) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg) translate(-50%, -50%)` }
+            : { transform: `translate(calc(-50% + ${fx.toFixed(2)}px), calc(-50% + ${fy.toFixed(2)}px)) scale(${scale}) rotate(${rot}deg)` }),
           opacity: opacity * (1 - erase * 0.6),
           filter: blur + erase * 10 > 0.2 ? blurFilter(blur + erase * 10) : undefined,
           clipPath: erase > 0 ? `inset(0 0 0 ${erase * 100}%)` : undefined,

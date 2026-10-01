@@ -4,6 +4,7 @@ import { REAL_SHOT_VIDEOS } from "@/components/video/flow/fixtures/real-shots";
 import type { FlowPlan } from "@/components/video/flow/types";
 import { repairCues, SceneScript } from "@/lib/scene-script";
 import { expandShots, ShotScript, type Dna } from "@/lib/shots";
+import { recipeFixture } from "@/components/video/flow/fixtures/recipe";
 
 // The plans the parity check renders both ways: a real project's stored
 // scene (16a284e8, outline icons, ribbons) and a fixture video built under
@@ -26,5 +27,7 @@ export function parityPlans(root: string): { name: string; plan: FlowPlan }[] {
   return [
     { name: "real 16a284e8 (outline icons, ribbons)", plan: realPlan },
     { name: "fixture MotionBrief (solid icons, dots, 3D object)", plan: fixturePlan },
+    // Scene Recipe: backdrops, depth layers (parallax), a ui plane in 3D, panel wipe, flash.
+    { name: "scene recipe (environments, layers, 3D plane)", plan: recipeFixture().plan },
   ];
 }

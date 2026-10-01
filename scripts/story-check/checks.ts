@@ -37,6 +37,9 @@ import { flowEngineEnabled, usableFlow } from "@/lib/story-engine";
 import { planQuality, QUALITY_BAR, qualityProblems } from "@/components/video/flow/quality";
 import { SCENE_FIXTURES } from "@/components/video/flow/fixtures/scenes";
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
+import { RECIPE_SHOTS, RECIPE_SHOTS_LEGACY, recipeFixture } from "@/components/video/flow/fixtures/recipe";
+import { PARALLAX } from "@/lib/scene-recipe";
+
 import { CARD_TEMPLATES } from "@/components/video/flow/cards/templates";
 import { ASSET_COUNT } from "@/components/video/flow/cards/catalog";
 import { CARD_STYLES } from "@/components/video/flow/cards/types";
@@ -577,6 +580,7 @@ const toModelShot = (x: ShotScript["shots"][number]) => ({
   items: x.items,
   camera: x.camera,
   objects: x.objects,
+  recipe: x.recipe ?? null,
 });
 const fakeAnswer = (scripts: ShotScript[]) => ({ theme: scripts[0].theme, creative: scripts[0].creative ?? { message: "m", audience: "a", tone: "t", pace: "calm" as const }, variants: scripts.map((x) => ({ id: x.variant, dna: x.dna, direction: x.direction, shots: x.shots.map(toModelShot) })) });
 // The real Shot Director with a stand-in client: four directions; four
@@ -1049,6 +1053,68 @@ function simpleForm(): Check[] {
   return checks;
 }
 
+// Scene Recipe: every recipe field traced from the shot to the compiled plan
+// (and through computeStates, which is what the renderer draws).
+function sceneRecipeChecks(): Check[] {
+  const checks: Check[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ frame: 0, name, ok, level: "error", detail });
+  const { script, plan, notes, behaviors } = recipeFixture();
+  const scenes = script.beats.filter((b) => b.action === "scene");
+  const recipes = scenes.map((b) => b.recipe);
+  add("recipe A: every recipe shot becomes a recipe scene", recipes.length === RECIPE_SHOTS.shots.length && recipes.every(Boolean), `${recipes.filter(Boolean).length} of ${RECIPE_SHOTS.shots.length} scenes carry their recipe`);
+  add("recipe B: the compiled plan is valid and the resolve pass leaves nothing", validateFlowPlan(plan).length === 0 && (plan.resolved?.left.length ?? 0) === 0, `invalid: ${validateFlowPlan(plan).join("; ") || "none"} · left: ${plan.resolved?.left.join("; ") || "none"}`);
+  // environment → the backdrops behind each scene (one shared by two scenes continues)
+  const kinds = (plan.backdrops ?? []).map((b) => b.kind);
+  add("recipe C: environment → the scene's backdrop (studio, product-space, data-space, cinematic)", kinds.join(",") === "spotlight,horizon,data-stream,light-beams" && (plan.backdrops ?? []).every((b) => b.strength === 0.9), kinds.join(" → "));
+  // hero + supporting at their depth layers
+  const node = (id: string) => plan.nodes.find((n) => n.id === id);
+  const heroes = recipes.map((r) => node(r!.hero));
+  // (an object that is a support here and the hero of a later scene ends on the hero layer)
+  const heroIds = new Set(recipes.map((r) => r!.hero));
+  const supports = recipes.flatMap((r) => Object.entries(r!.roles).filter(([id, v]) => v.role === "support" && !heroIds.has(id)).map(([id, v]) => ({ n: node(id), layer: v.layer })));
+  add("recipe D: each hero is drawn on the hero layer, in front of its supporting objects", heroes.every((h) => h?.layer === 2 && (h.z ?? 0) >= 20), heroes.map((h) => `${h?.id}:${h?.el?.type}@L${h?.layer}`).join(" "));
+  add("recipe E: supporting objects are drawn on their layers (background, midground, foreground)", supports.every((x) => x.n?.layer === x.layer) && new Set(supports.map((x) => x.layer)).size === 3, supports.map((x) => `${x.n?.id}@L${x.n?.layer}`).join(" "));
+  // composition → where the hero stands
+  // When each scene starts: its first new element appears.
+  const sceneStart = (k: number) => Math.min(...(scenes[k].elements ?? []).filter((e) => e.asset !== null).map((e) => node(e.id)?.appear ?? Infinity));
+  const heroX = (k: number) => vec(heroes[k]!.pos, sceneStart(k) + 40)[0];
+  add("recipe F: composition places the hero (right, centred-wide, left, type-led right)", heroX(0) > 300 && heroX(3) < -300 && Math.abs(heroX(4)) < 100 && heroX(5) > 400, `hero x: ${[0, 3, 4, 5].map(heroX).join(", ")}`);
+  // depth → parallax in what the renderer draws
+  const f0 = scenes.length ? 30 : 0;
+  const st0 = computeStates(plan, f0);
+  const back = supports.find((x) => x.layer === 0)!.n!;
+  const raw = (n: typeof back, f: number) => n.pos.reduce((p, [k, v]) => (k <= f ? v : p), n.pos[0][1]);
+  const moved = Math.abs(st0.get(back.id)!.pos[0] - raw(back, f0)[0]) + Math.abs(st0.get(back.id)!.scale - 0);
+  const heroSt = st0.get(heroes[0]!.id)!;
+  add("recipe G: depth layers respond to the camera differently (parallax)", PARALLAX[0] < 1 && PARALLAX[3] > 1 && moved > 0 && Math.abs(heroSt.pos[0] - raw(heroes[0]!, f0)[0]) < 0.01, `background ${back.id} shifted ${(st0.get(back.id)!.pos[0] - raw(back, f0)[0]).toFixed(1)} px at frame ${f0}; hero unshifted`);
+  // typography → placed, not a centred caption
+  const t = plan.texts;
+  add("recipe H: the words go where the recipe puts them (left side, top-left, right aligned, top)", t[0].style === "side" && t[0].pos[0] === -800 && t[1].pos[1] === -300 && t[2].align === "right" && t[2].pos[0] === 800 && t[3].style === "headline" && t[3].pos[1] === -390, t.map((x) => `"${x.text}" ${x.style} [${x.pos}]${x.align ? " right" : ""}`).join(" · "));
+  // camera intent → the scene's camera move
+  const zoomAt = (f: number) => num(plan.camera.zoom, f, 1);
+  const s = scenes.map((_, k) => sceneStart(k));
+  add("recipe I: camera intent moves the camera (push-in closes in, pull-back opens up)", zoomAt(s[1] - 10) > zoomAt(s[0] + 15) + 0.05 && zoomAt(s[3] + 15) > zoomAt(s[4] - 15) + 0.05, `push-in ${zoomAt(s[0] + 15).toFixed(2)} → ${zoomAt(s[1] - 10).toFixed(2)} · pull-back ${zoomAt(s[3] + 15).toFixed(2)} → ${zoomAt(s[4] - 15).toFixed(2)}`);
+  // behaviors → executed (data flows, a merge, a reveal), none silently lost
+  const flows = plan.links.filter((l) => (l.packets?.length ?? 0) >= 3);
+  const coin = plan.nodes.find((n) => n.el?.type === "object" && n.el.object === "coin")!;
+  const revealed = plan.nodes.find((n) => n.el?.type === "object" && n.el.object === "check")!;
+  add("recipe J: behaviors run on their words (flow, merge, reveal) and every one is reported", behaviors.length === 7 && behaviors.every((b) => b.status === "applied") && flows.length === 2 && num(coin.opacity, plan.duration - 1, 1) < 0.05 && (revealed.appear ?? 0) > s[5] + 15 && !plan.skipped?.length, `${behaviors.map((b) => `${b.type}:${b.status}`).join(" ")} · ${flows.length} flows · coin merged · check revealed ${(((revealed.appear ?? 0) - s[5]) / 30).toFixed(1)} s into its scene`);
+  // transitions → panel wipe, iris (flash), object carried, zoom-through, push
+  const carried = scenes[3].elements?.some((e) => e.asset === null && e.id === recipes[3]!.hero);
+  add("recipe K: transitions are the recipe's (panel-wipe, iris → flash, object-transform carries the bars, morph-intent → zoom-through, push)", plan.panels?.length === 1 && (plan.flashes ?? []).some(([a, , soft]) => !!soft && Math.abs(a - s[2]) < 20) && !!carried && scenes.map((b) => b.transition).join(",") === "cut,panel-wipe,dissolve,dissolve,push-left,zoom-through" && notes.some((n) => n.includes("iris")) && notes.some((n) => n.includes("morph-intent")), scenes.map((b) => b.transition).join(" → "));
+  // the ui-plane hero is a plane in 3D
+  const ui = heroes[2]!;
+  add("recipe L: a ui-plane hero stays tilted in 3D", ui.el?.type === "card" && JSON.stringify(ui.tilt?.[ui.tilt.length - 1]?.[1]) === "[14,-20,2]", `tilt ${JSON.stringify(ui.tilt?.[ui.tilt.length - 1])}`);
+  // fallbacks
+  const legacy = recipeFixture(RECIPE_SHOTS_LEGACY);
+  add("recipe M: shots without a recipe keep the template composition", legacy.script.beats.every((b) => !b.recipe) && legacy.script.beats.filter((b) => b.action === "scene").every((b) => b.layout?.startsWith("stage")) && validateFlowPlan(legacy.plan).length === 0, legacy.script.beats.filter((b) => b.action === "scene").map((b) => b.layout).join(", "));
+  const stored = ShotScript.parse({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 0 ? { ...x, recipe: { scene_id: "x", environment: "moon" } } : x)) });
+  add("recipe N: a stored recipe that no longer parses is dropped, never a failed project", stored.shots[0].recipe === null && stored.shots[1].recipe !== null, `shot 1 recipe: ${stored.shots[0].recipe}`);
+  const odd = recipeFixture({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 0 ? { ...x, recipe: { ...x.recipe!, hero: { ...x.recipe!.hero, asset: "icon:mail" } } } : i === 1 ? { ...x, recipe: { ...x.recipe!, behaviors: [{ type: "arrange", from: "hero", to: null, cue: "to build" }] } } : x)) });
+  add("recipe O: an icon hero falls back to the template; an unsupported behavior is reported, not faked", odd.script.beats[0].layout !== "recipe" && odd.notes.some((n) => n.includes("not a drawable hero")) && odd.behaviors.some((b) => b.type === "recipe:arrange" && b.status === "dropped" && !!b.reason), `${odd.script.beats[0].layout} · ${odd.behaviors.filter((b) => b.status === "dropped").map((b) => `${b.type}: ${b.reason}`).join("; ")}`);
+  return checks;
+}
+
 export function runChecks(): Section[] {
   const sections: Section[] = [
     { name: "stored ProductBrief compatibility", checks: briefCompatibility() },
@@ -1062,6 +1128,7 @@ export function runChecks(): Section[] {
     { name: "flow director scripts", checks: flowDirector() },
     { name: "scene director (v2) scripts", checks: sceneDirector() },
     { name: "shot templates", checks: shotTemplates() },
+    { name: "scene recipe", checks: sceneRecipeChecks() },
   ];
   for (const f of FIXTURES) {
     const n = normalizeStory(f.story);

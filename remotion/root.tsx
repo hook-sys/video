@@ -11,6 +11,7 @@ import { FLOW_SCRIPT_FIXTURES } from "@/components/video/flow/fixtures/scripts";
 import { compileFlowScript } from "@/components/video/flow/compile";
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
 import { SCENE_FIXTURES } from "@/components/video/flow/fixtures/scenes";
+import { RECIPE_DURATION, recipeFixture } from "@/components/video/flow/fixtures/recipe";
 import { CARD_GALLERY_ID, CardGallery } from "@/components/video/flow/cards/gallery";
 import { BACKDROP_GALLERY_ID, BackdropGallery } from "@/components/video/flow/backdrop-gallery";
 import { GALLERY_CELL, GALLERY_COLS, LOTTIE_GALLERY_ID, LottieGallery, galleryRows } from "@/components/video/lottie/gallery";
@@ -101,6 +102,8 @@ export function RemotionRoot() {
         defaultProps={{ plan: compileSceneScript(fx.script, { narration: fx.narration, durationSeconds: fx.durationSeconds, words: fx.words, brand: fx.brand, screenshots: fx.screenshots }) } as FlowSceneProps}
       />
     ))}
+    {/* QA only: the Scene Recipe proof (every scene composed by its recipe). */}
+    <Composition id="SceneRecipe-demo" component={FlowScene} fps={FPS} width={1920} height={1080} durationInFrames={RECIPE_DURATION * FPS} defaultProps={{ plan: recipeFixture().plan } as FlowSceneProps} />
     {/* QA only: every card template (one style per page) and the device mockups. */}
     <Composition id={CARD_GALLERY_ID} component={CardGallery} fps={FPS} width={1920} height={1080} durationInFrames={90} defaultProps={{ page: 0, style: "glass" as const, theme: "teal" as const }} />
     {/* QA only: every scene backdrop, animated. */}
