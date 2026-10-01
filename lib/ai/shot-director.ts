@@ -16,7 +16,11 @@ import { tokenize } from "@/lib/voice-timing";
 
 const INSTRUCTIONS = `You are the editor of a calm explainer video for a software product (the style of Keka, Linear or Stripe explainers: one idea at a time, one subject always in focus). The narration is final and already recorded. You cut it into SHOTS and pick, for each, a tested shot template and its words. The engine draws every shot (sizes, places, motion, cursor, sound), so you only choose the shot and write its short texts.
 
-OUTPUT: { theme, shots[] }. Unused fields are null.
+OUTPUT: { theme, creative, concepts[], shots[] }. Unused fields are null. Think in this order:
+
+1. creative — read only the NARRATION: message (the one thing to remember), audience, tone, pace (calm | balanced | brisk).
+2. concepts[] — for each sentence or idea, answer "what should the viewer SEE to understand this?": cue (1–6 words where it is spoken), see (concrete objects and what happens to them, e.g. "scattered sheets pile up, then slide into one clear chart" — never a vague "show a dashboard"), hero (the one object in focus, written as an ASSET), persists (an object carried over from the previous idea, else null), avoid (what must not be shown, else null).
+3. shots[] — the shots that show those concepts: each concept's hero is that shot's subject or item; keep a persisting object as the subject of the next shot when the shot allows it.
 
 SHOTS (shot: what it shows — the fields it uses):
 ${shotCatalogText()}

@@ -46,8 +46,27 @@ const Shot = z.object({
   items: z.array(Item).nullable(),
 });
 export type Shot = z.infer<typeof Shot>;
-export const ShotScriptModel = z.object({ theme: z.enum(FLOW_THEMES), shots: z.array(Shot) });
-export const ShotScript = ShotScriptModel.extend({ version: z.literal(3).default(3) });
+// Phase 2: before choosing shots the Director writes what the video means
+// (creative) and, per sentence, what the viewer should SEE (concepts). The
+// shots then show those concepts. Stored with the shots for later phases;
+// scripts saved before this have neither (null).
+export const Creative = z.object({
+  message: z.string(), // the one thing the viewer should remember
+  audience: z.string(),
+  tone: z.string(), // e.g. calm and confident
+  pace: z.enum(["calm", "balanced", "brisk"]),
+});
+export const Concept = z.object({
+  cue: z.string(), // 1–6 narration words where this idea is spoken
+  see: z.string(), // what the viewer sees, concretely (objects and what happens to them)
+  hero: z.string(), // the one object in focus (an asset from ASSETS)
+  persists: z.string().nullable(), // an object carried from the previous idea, if any
+  avoid: z.string().nullable(), // what must not be shown here
+});
+export type Creative = z.infer<typeof Creative>;
+export type Concept = z.infer<typeof Concept>;
+export const ShotScriptModel = z.object({ theme: z.enum(FLOW_THEMES), creative: Creative, concepts: z.array(Concept), shots: z.array(Shot) });
+export const ShotScript = ShotScriptModel.extend({ version: z.literal(3).default(3), creative: Creative.nullable().default(null), concepts: z.array(Concept).nullable().default(null) });
 export type ShotScript = z.infer<typeof ShotScript>;
 
 // ── expansion ──
@@ -104,7 +123,7 @@ const rng = (seed: number) => () => {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 
-export function expandShots(script: ShotScript, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant): SceneScript {
+export function expandShots(script: Pick<ShotScript, "theme" | "shots"> & { version?: number }, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant): SceneScript {
   // (the seed is mixed first: neighbouring seeds give unrelated videos)
   const pick = variant ? rng(Math.imul(variant.seed ^ 0x9e3779b9, 0x85ebca6b)) : null;
   const choose = <T,>(fallback: T, options: readonly T[]) => (pick ? options[Math.floor(pick() * options.length)] : fallback);

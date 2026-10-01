@@ -454,7 +454,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // Shot templates first (lib/shots.ts): tested shots, the Director only picks
   // and fills them. The free-form scene Director is the fallback.
   const shot = await generateShotScript(input, addUsage, Math.min(budgetMs, 110_000));
-  console.info("shot director:", { projectId, outcome: shot.script ? "stored" : "none", attempts: shot.attempts, ms: shot.ms, shots: shot.shots?.shots.map((s) => `${s.shot}@${s.cue}`), problems: shot.errors.slice(0, 6) });
+  console.info("shot director:", { projectId, outcome: shot.script ? "stored" : "none", attempts: shot.attempts, ms: shot.ms, shots: shot.shots?.shots.map((s) => `${s.shot}@${s.cue}`), creative: shot.shots?.creative, concepts: shot.shots?.concepts?.map((c) => `${c.cue} → ${c.hero}: ${c.see}`), problems: shot.errors.slice(0, 6) });
   const v2 = shot.script || budgetMs - (Date.now() - started) < 60_000 ? shot : await generateSceneScript(input, addUsage, Math.min(budgetMs - (Date.now() - started), 130_000));
   console.info("scene director:", {
     projectId,

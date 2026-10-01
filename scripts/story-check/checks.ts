@@ -40,7 +40,7 @@ import { BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
-import { expandShots, ShotScript } from "@/lib/shots";
+import { expandShots, ShotScript, ShotScriptModel } from "@/lib/shots";
 import { REAL_SHOT_VIDEOS } from "@/components/video/flow/fixtures/real-shots";
 import { OBJECTS } from "@/components/video/flow/object-names";
 import { SHOT_FIXTURE, SHOT_NARRATION } from "@/components/video/flow/fixtures/shots";
@@ -592,6 +592,13 @@ function shotTemplates(): Check[] {
   ] }, [], swapNarr), { narration: swapNarr, durationSeconds: 6, brand: { name: "Acme", logo: "logo" } });
   const sw = swapPlan.texts.find((x) => x.swap);
   add("shots: a word swap lands when the voice says the new word (weeks → minutes)", !!sw && sw.swap!.word === "minutes" && sw.swap!.at > sw.start, sw ? `"${sw.text}" → ${sw.swap!.word} at frame ${sw.swap!.at}` : "no swap");
+  // Phase 2: the Director writes creative + concepts before the shots; scripts
+  // stored before that still parse (both null) and render the same.
+  const oldStored = ShotScript.safeParse(REAL_SHOT_VIDEOS[0].shots);
+  add("phase 2: shot scripts stored before concepts still parse", oldStored.success && oldStored.data.creative === null && oldStored.data.concepts === null, oldStored.success ? "creative = null, concepts = null" : "failed to parse");
+  const withConcepts = ShotScript.safeParse({ ...(REAL_SHOT_VIDEOS[0].shots as object), creative: { message: "Video in minutes", audience: "SaaS teams", tone: "calm", pace: "balanced" }, concepts: [{ cue: "Making a product video", see: "a filmstrip stalls under a pile of steps", hero: "visual:filmstrip", persists: null, avoid: "people" }] });
+  add("phase 2: creative + concepts are kept with the shots", withConcepts.success && withConcepts.data.concepts?.length === 1 && withConcepts.data.creative?.pace === "balanced", withConcepts.success ? "stored" : "failed to parse");
+  add("phase 2: the Director must write creative and concepts", !ShotScriptModel.safeParse(REAL_SHOT_VIDEOS[0].shots).success, "a model answer without them is rejected");
   // Every real video made so far must still render cleanly (regressions).
   const BAD = ["crowded", "no-hero", "lonely-icon", "stacked", "overlap-text", "empty-frame", "camera-swing", "busy-backdrop", "tiny-screens"];
   for (const v of REAL_SHOT_VIDEOS) {
