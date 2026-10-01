@@ -50,7 +50,9 @@ export function ObjectView({ name, label, w, h, t, frame, theme, labelPx }: { na
   const size = Math.min(w, label ? h - 60 : h);
   return (
     <div style={{ width: w, height: h, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
-      <svg width={size} height={size} viewBox="0 0 100 100" style={{ overflow: "visible", transform: `translateY(${bob}px) rotate(${sway}deg) scale(${pop})` }}>
+      {/* (drawn in a 130×130 box around the 100×100 shape: the in-browser
+          renderer clips an SVG to its box, and the floor shadow lies below it) */}
+      <svg width={size * 1.3} height={size * 1.3} viewBox="-15 -15 130 130" style={{ margin: -size * 0.15, transform: `translateY(${bob}px) rotate(${sway}deg) scale(${pop})` }}>
         <defs>
           <linearGradient id={`${id}-face`} x1="0.15" y1="0" x2="0.85" y2="1">
             <stop offset="0" stopColor={light} />

@@ -32,7 +32,7 @@ export function Device({ model, finish = "light", children }: { model: DeviceMod
   );
   if (model === "browser")
     return (
-      <div style={{ position: "relative", width: s.w, height: s.h + pt, borderRadius: s.radius, overflow: "hidden", background: finish === "dark" ? "#1B1D24" : "#FFFFFF", boxShadow: "0 40px 90px rgba(15,23,42,.22), inset 0 0 0 1px rgba(15,23,42,.08)" }}>
+      <div style={{ position: "relative", width: s.w, height: s.h + pt, borderRadius: s.radius, overflow: "hidden", background: finish === "dark" ? "#1B1D24" : "#FFFFFF", boxSizing: "border-box", border: "1px solid rgba(15,23,42,.08)", boxShadow: "0 40px 90px rgba(15,23,42,.22)" }}>
         <div style={{ position: "absolute", left: 0, top: 0, right: 0, height: pt, display: "flex", alignItems: "center", gap: 8, padding: "0 20px", background: finish === "dark" ? "#24262E" : "#F3F4F7" }}>
           {["#FF5F57", "#FEBC2E", "#28C840"].map((c) => <div key={c} style={{ width: 13, height: 13, borderRadius: 7, background: c }} />)}
           <div style={{ marginLeft: 18, height: 26, flex: 1, maxWidth: 420, borderRadius: 13, background: finish === "dark" ? "#16181E" : "#FFFFFF" }} />
@@ -42,7 +42,7 @@ export function Device({ model, finish = "light", children }: { model: DeviceMod
     );
   return (
     <div style={{ position: "relative", width: s.w + pl + pr, height: s.h + pt + pb + (model === "monitor" ? 90 : 0) }}>
-      <div style={{ position: "absolute", left: 0, top: 0, width: s.w + pl + pr, height: s.h + pt + pb, borderRadius: s.radius, background: frame, boxShadow: `0 40px 90px rgba(15,23,42,.25), inset 0 0 0 2px ${edge}` }} />
+      <div style={{ position: "absolute", left: 0, top: 0, width: s.w + pl + pr, height: s.h + pt + pb, borderRadius: s.radius, background: frame, boxSizing: "border-box", border: `2px solid ${edge}`, boxShadow: "0 40px 90px rgba(15,23,42,.25)" }} />
       {screen}
       {model === "phone" && <div style={{ position: "absolute", left: pl + s.w / 2 - 50, top: pt + 12, width: 100, height: 26, borderRadius: 13, background: "#0B0C10" }} />}
       {model === "laptop" && <div style={{ position: "absolute", left: -60, top: s.h + pt + pb - 14, width: s.w + pl + pr + 120, height: 20, borderRadius: "0 0 18px 18px", background: finish === "dark" ? "#1A1C22" : "#C9CDD6" }} />}

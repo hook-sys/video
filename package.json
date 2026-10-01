@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "check:story": "node scripts/story-check/run.mjs",
     "icons:build": "node scripts/icons/build.mjs",
-    "lottie:build": "node scripts/lottie/build.mjs"
+    "lottie:build": "node scripts/lottie/build.mjs",
+    "check:parity": "node scripts/parity/run.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",

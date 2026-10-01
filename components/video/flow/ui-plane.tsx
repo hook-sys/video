@@ -3,6 +3,7 @@ import { Icon } from "@/components/video/icons";
 import { clamp01, num, ramp, vec } from "./eval";
 import type { FlowTheme } from "./themes";
 import type { FlowNode, Track, Vec3 } from "./types";
+import { blurFilter } from "./blur";
 
 // A product UI as a plane in 3D space (the references' signature shot): a
 // screenshot or a procedural mock, tilted by keyframes. Callouts, lifted rows
@@ -33,11 +34,11 @@ export function UiPlane({ node, frame, theme, scale, opacity }: { node: FlowNode
   const click = ui.cursor?.clicks.reduce((k, c) => Math.max(k, frame >= c && frame < c + 24 ? 1 - (frame - c) / 24 : 0), 0) ?? 0;
   return (
     // Focus pull: the plane is blurred while it fades in or out.
-    <div style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, opacity, perspective: 2600, transform: `scale(${scale})`, filter: opacity < 0.99 ? `blur(${(1 - opacity) * 22}px)` : undefined }}>
+    <div style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, opacity, perspective: 2600, transform: `scale(${scale})`, filter: opacity < 0.99 ? blurFilter((1 - opacity) * 22) : undefined }}>
       <div style={{ position: "absolute", left: -w / 2, top: -h / 2, width: w, height: h, transformStyle: "preserve-3d", transform: `rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg)` }}>
         {/* soft contact shadow under the plane */}
         <div style={{ position: "absolute", inset: 0, borderRadius: 28, transform: "translateZ(-40px)", background: dark ? "rgba(0,0,0,.55)" : `${theme.glow}0.28)`, filter: "blur(40px)" }} />
-        <div style={{ position: "absolute", inset: 0, borderRadius: 28, overflow: "hidden", background: panel, boxShadow: dark ? "inset 0 0 0 1px rgba(255,255,255,.08)" : "inset 0 0 0 1px rgba(91,79,245,.10)" }}>
+        <div style={{ position: "absolute", inset: 0, borderRadius: 28, overflow: "hidden", background: panel, border: dark ? "1px solid rgba(255,255,255,.08)" : "1px solid rgba(91,79,245,.10)" }}>
           {ui.src ? (
             <Img src={ui.src} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (

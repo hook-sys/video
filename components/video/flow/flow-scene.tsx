@@ -14,6 +14,7 @@ import { Backdrop } from "./backdrops";
 import { isBackdrop } from "./backdrop-names";
 import { fitSize, labelWorldSize, splitLines, TYPE } from "./typography";
 import { MARK_DELAY, type FlowBrand, type FlowLink, type FlowList, type FlowNode, type FlowPanel, type FlowPlan, type FlowText, type ThemeName, type Vec } from "./types";
+import { blurFilter } from "./blur";
 
 // Renders a FlowPlan: a themed world, persistent nodes under one camera,
 // links with travelling packets, kinetic text and Lottie accents.
@@ -132,7 +133,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
         return isBackdrop(b.kind) && k > 0.001 ? <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={plan.calm ? k * 0.55 : k} /> : null;
       })}
       {dim < 0.999 && (
-        <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - dim, filter: `blur(${dim * 14}px)`, transform: `scale(${1 - 0.05 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
+        <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - dim, filter: blurFilter(dim * 14), transform: `scale(${1 - 0.05 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
       )}
       {irises.filter((i) => !i.done).map((i, n) => (
         <AbsoluteFill key={n} style={{ clipPath: i.k > 0 ? `circle(${i.r}px at ${i.x}px ${i.y}px)` : undefined }}>
@@ -275,17 +276,22 @@ function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone }
       <div style={{ position: "absolute", inset: 0, transform: flip < 0 ? "scaleX(-1)" : undefined }}>
         {decor === "ribbons" && (
           // Flowing colour ribbons along the bottom edge (Flike), never behind the subject.
-          <svg style={{ position: "absolute", left: px, top: py, overflow: "visible" }} width={1920} height={1080}>
+          <svg style={{ position: "absolute", left: 0, top: 0 }} width={1920} height={1080}>
+            {/* frame-sized box: the download renderer clips and misplaces SVGs that overhang the frame */}
+            <g transform={`translate(${px} ${py})`}>
             {[theme.primary, theme.accent, theme.primary2].map((c, k) => {
               const w = Math.sin(frame / (48 + k * 9) + k * 2) * 40;
               return <path key={k} d={`M-120 ${1010 + k * 26} C 420 ${900 + w + k * 30}, 980 ${1120 - w}, 2040 ${930 + k * 36 + w / 2}`} fill="none" stroke={c} strokeWidth={30 - k * 7} strokeLinecap="round" opacity={0.3 - k * 0.05} />;
             })}
             <path d={`M1480 -40 C 1640 ${60 + Math.sin(frame / 55) * 30}, 1820 ${40 - Math.sin(frame / 55) * 20}, 1990 150`} fill="none" stroke={theme.accent} strokeWidth={22} strokeLinecap="round" opacity={0.28} />
+            </g>
           </svg>
         )}
         {decor === "waves" && (
           // One quiet wave line with rings riding it (Desklog), plus outlined circles.
-          <svg style={{ position: "absolute", left: px, top: py, overflow: "visible" }} width={1920} height={1080}>
+          <svg style={{ position: "absolute", left: 0, top: 0 }} width={1920} height={1080}>
+            {/* frame-sized box: the download renderer clips and misplaces SVGs that overhang the frame */}
+            <g transform={`translate(${px} ${py})`}>
             <path d={wavePath(960, 34, 900, frame / 40)} fill="none" stroke={theme.primary} strokeOpacity={0.3} strokeWidth={3} />
             {[0, 1, 2].map((k) => {
               const x = ((frame * 2.2 + k * 700) % 2200) - 140;
@@ -294,6 +300,7 @@ function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone }
             })}
             <circle cx={150} cy={140} r={70} fill="none" stroke={theme.primary} strokeOpacity={0.22} strokeWidth={3} />
             <circle cx={250 + Math.sin(frame / 60) * 12} cy={250} r={26} fill="none" stroke={theme.accent} strokeOpacity={0.5} strokeWidth={3} />
+            </g>
           </svg>
         )}
         {decor === "glow" && (
@@ -305,13 +312,12 @@ function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone }
           </>
         )}
         {decor === "dots" && (<>
-        {/* one thick accent arc, half out of frame (bottom right) */}
-        <svg style={{ position: "absolute", left: 1990 + px * 2, top: 1150 + py * 2, overflow: "visible" }} width={10} height={10}>
-          <circle cx={0} cy={0} r={300} fill="none" stroke={theme.accent} strokeWidth={52} strokeLinecap="round" strokeDasharray="520 2400" transform={`rotate(${178 + arcSpin})`} opacity={0.85} />
-        </svg>
-        {/* a thin dashed curve (top left) */}
-        <svg style={{ position: "absolute", left: 40 + px, top: -40 + py, overflow: "visible" }} width={10} height={10}>
-          <path d="M0 40 C 180 60, 260 180, 240 360" fill="none" stroke={theme.sub} strokeOpacity={0.45} strokeWidth={2.5} strokeDasharray="6 10" strokeDashoffset={-frame * 0.6} />
+        {/* frame-sized box: the download renderer clips and misplaces SVGs that overhang the frame */}
+        <svg style={{ position: "absolute", left: 0, top: 0 }} width={1920} height={1080}>
+          {/* one thick accent arc, half out of frame (bottom right) */}
+          <circle cx={0} cy={0} r={300} fill="none" stroke={theme.accent} strokeWidth={52} strokeLinecap="round" strokeDasharray="520 2400" transform={`translate(${1990 + px * 2} ${1150 + py * 2}) rotate(${178 + arcSpin})`} opacity={0.85} />
+          {/* a thin dashed curve (top left) */}
+          <path d="M0 40 C 180 60, 260 180, 240 360" transform={`translate(${40 + px} ${-40 + py})`} fill="none" stroke={theme.sub} strokeOpacity={0.45} strokeWidth={2.5} strokeDasharray="6 10" strokeDashoffset={-frame * 0.6} />
         </svg>
         {dots(1560, 40, 9, 2, tint(theme.primary, 0.45))}
         {dots(90, 930, 7, 5, tint(theme.accent, 0.55))}
@@ -319,12 +325,14 @@ function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone }
       </div>
       {flash > 0.001 && (
         <div style={{ position: "absolute", left: "50%", top: "50%", width: 2400 * Math.min(1, flash * 1.2), height: 2400 * Math.min(1, flash * 1.2), transform: "translate(-50%, -50%)", borderRadius: "50%", background: `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`, opacity: Math.min(1, flash * 1.4) }}>
-          <svg style={{ position: "absolute", left: "50%", top: "50%", overflow: "visible" }} width={10} height={10}>
+          <svg style={{ position: "absolute", left: "50%", top: "50%", marginLeft: -960, marginTop: -540 }} width={1920} height={1080}>
+            <g transform="translate(960 540)">
             {/* rings ripple outward from the centre while the colour holds */}
             {[0, 1, 2].map((k) => {
               const ph = ((frame / 75 + k / 3) % 1 + 1) % 1;
               return <circle key={k} cx={0} cy={0} r={260 + ph * 900} fill="none" stroke="#FFFFFF" strokeOpacity={0.16 * (1 - ph)} strokeWidth={50 - ph * 30} />;
             })}
+            </g>
           </svg>
         </div>
       )}
@@ -561,7 +569,7 @@ function Kinetic({ t, frame, theme, explainer }: { t: FlowText; frame: number; t
           display: "inline-block",
           marginRight: last ? 0 : "0.26em",
           opacity: k,
-          filter: k < 0.99 ? `blur(${(1 - k) * 12}px)` : undefined,
+          filter: k < 0.99 ? blurFilter((1 - k) * 12) : undefined,
           transform: `translateY(${(1 - k) * 0.32}em)`,
           fontWeight: strong ? type.weight : Math.max(420, type.weight - 180),
           // Explainer: two-tone lines — the words in a light brand tint, the
@@ -587,7 +595,7 @@ function Kinetic({ t, frame, theme, explainer }: { t: FlowText; frame: number; t
         top: "50%",
         transform: `translate(${side ? (t.align === "right" ? "-100%" : "0") : "-50%"}, calc(-50% + ${t.pos[1] - exit * 36}px)) scale(${pillK})`,
         opacity: 1 - exit,
-        filter: exit > 0.01 ? `blur(${exit * 10}px)` : undefined,
+        filter: exit > 0.01 ? blurFilter(exit * 10) : undefined,
         fontSize: size,
         fontWeight: type.weight,
         letterSpacing: `${type.track}em`,
@@ -599,7 +607,8 @@ function Kinetic({ t, frame, theme, explainer }: { t: FlowText; frame: number; t
           padding: `${size * 0.36}px ${size * 0.7}px`,
           borderRadius: size,
           background: theme.dark ? "rgba(255,255,255,.08)" : "rgba(255,255,255,.78)",
-          boxShadow: `0 24px 60px ${theme.glow}0.2), inset 0 0 0 1.5px rgba(255,255,255,.95)`,
+          border: "1.5px solid rgba(255,255,255,.95)",
+          boxShadow: `0 24px 60px ${theme.glow}0.2)`,
           backdropFilter: "blur(18px)",
         }),
       }}
@@ -718,7 +727,7 @@ function RollingList({ list, frame, theme }: { list: FlowList; frame: number; th
               top: "50%",
               transform: `translate(-50%, calc(-50% + ${dj * gap}px)) scale(${0.86 + 0.14 * focus})`,
               opacity: 0.18 + 0.82 * focus,
-              filter: focus < 0.98 ? `blur(${(1 - focus) * 5}px)` : undefined,
+              filter: focus < 0.98 ? blurFilter((1 - focus) * 5) : undefined,
               display: "flex",
               alignItems: "center",
               gap: size * 0.4,
@@ -796,7 +805,7 @@ function BrandLockup({ brand, frame, theme }: { brand: FlowBrand; frame: number;
   const innerStyle = { transform: `scale(${0.4 + 0.6 * inner})`, opacity: clamp01(inner * 1.6) };
   return (
     <AbsoluteFill style={{ transform: `scale(${breathe})` }}>
-      <div style={{ position: "absolute", left: "50%", top: "46%", transform: `translate(calc(-50% + ${markX}px), calc(-50% + ${bob}px)) scale(${0.45 + 0.55 * pop}) rotate(${turn}deg)`, opacity: inK, filter: inK < 0.99 ? `blur(${(1 - inK) * 16}px)` : undefined }}>
+      <div style={{ position: "absolute", left: "50%", top: "46%", transform: `translate(calc(-50% + ${markX}px), calc(-50% + ${bob}px)) scale(${0.45 + 0.55 * pop}) rotate(${turn}deg)`, opacity: inK, filter: inK < 0.99 ? blurFilter((1 - inK) * 16) : undefined }}>
         {!wordmark && ring > 0 && ring < 1 && (
           <div style={{ position: "absolute", left: "50%", top: "50%", width: mark, height: mark, margin: -mark / 2, borderRadius: "50%", border: `4px solid ${theme.primary}`, boxShadow: `0 0 40px ${theme.glow}0.6)`, transform: `scale(${0.9 + ring * 1.3})`, opacity: (1 - ring) * 0.7 }} />
         )}
@@ -812,7 +821,7 @@ function BrandLockup({ brand, frame, theme }: { brand: FlowBrand; frame: number;
               {sweep}
             </div>
           ) : (
-            <div style={{ position: "relative", width: mark, height: mark, borderRadius: mark * 0.26, background: "rgba(255,255,255,.92)", boxShadow: `0 24px 60px ${theme.glow}0.25), inset 0 0 0 1.5px #fff`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+            <div style={{ position: "relative", width: mark, height: mark, borderRadius: mark * 0.26, background: "rgba(255,255,255,.92)", boxSizing: "border-box", border: "1.5px solid #fff", boxShadow: `0 24px 60px ${theme.glow}0.25)`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               <Img src={brand.logo} style={{ width: mark * 0.74, height: mark * 0.74, objectFit: "contain", ...innerStyle }} />
               {sweep}
             </div>
@@ -846,7 +855,7 @@ function BrandLockup({ brand, frame, theme }: { brand: FlowBrand; frame: number;
         </div>
       )}
       {brand.cta && (
-        <div style={{ position: "absolute", left: "50%", top: "62%", transform: `translate(-50%, ${(1 - cta) * 24}px)`, opacity: cta, filter: cta < 0.99 ? `blur(${(1 - cta) * 8}px)` : undefined, fontSize: 40, fontWeight: 650, letterSpacing: "-0.01em", color: "#FFFFFF", whiteSpace: "nowrap", padding: "18px 44px", borderRadius: 999, background: `linear-gradient(90deg, ${theme.primary}, ${theme.primary2})`, boxShadow: `0 18px 40px ${theme.glow}0.3)` }}>
+        <div style={{ position: "absolute", left: "50%", top: "62%", transform: `translate(-50%, ${(1 - cta) * 24}px)`, opacity: cta, filter: cta < 0.99 ? blurFilter((1 - cta) * 8) : undefined, fontSize: 40, fontWeight: 650, letterSpacing: "-0.01em", color: "#FFFFFF", whiteSpace: "nowrap", padding: "18px 44px", borderRadius: 999, background: `linear-gradient(90deg, ${theme.primary}, ${theme.primary2})`, boxShadow: `0 18px 40px ${theme.glow}0.3)` }}>
           {brand.cta}
         </div>
       )}

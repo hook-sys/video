@@ -11,6 +11,7 @@ import { num, ramp } from "./eval";
 import type { NodeState } from "./states";
 import type { FlowTheme } from "./themes";
 import { tint } from "./themes";
+import { blurFilter } from "./blur";
 import type { Track, Vec3 } from "./types";
 
 // Renders an element node ("el"): a card, device, screenshot crop, glass icon
@@ -73,7 +74,7 @@ export function ElementView({ s, frame, theme, calm, explainer, iconStyle = "til
     );
   } else if (el.type === "shot") {
     body = (
-      <div style={{ width: w, height: h, borderRadius: 22, overflow: "hidden", boxShadow: `0 30px 70px ${theme.glow}0.22), inset 0 0 0 1.5px rgba(255,255,255,.9)`, background: "#fff" }}>
+      <div style={{ width: w, height: h, borderRadius: 22, overflow: "hidden", boxSizing: "border-box", border: "1.5px solid rgba(255,255,255,.9)", boxShadow: `0 30px 70px ${theme.glow}0.22)`, background: "#fff" }}>
         <Crop src={el.src} crop={el.crop} w={w} h={h} />
       </div>
     );
@@ -82,23 +83,29 @@ export function ElementView({ s, frame, theme, calm, explainer, iconStyle = "til
     // white tile), solid (a brand-colour tile), soft (a tinted disc, no tile)
     // or outline (a thin brand ring).
     const style = explainer ? iconStyle : "tile";
-    const pulse = lit > 0.5 ? `0 0 0 ${(8 + 6 * Math.sin(frame / 9)) * lit}px ${theme.glow}${(0.16 * lit).toFixed(3)})` : "";
+    // The pulse halo is a ring drawn behind the holder (not a box-shadow spread,
+    // which the download renderer drops).
+    const halo = lit > 0.5 ? (8 + 6 * Math.sin(frame / 9)) * lit : 0;
     const brand = `linear-gradient(150deg, ${theme.primary}, ${theme.primary2})`;
     const holder: React.CSSProperties =
       style === "solid"
-        ? { borderRadius: w * 0.26, background: brand, boxShadow: [`0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.3)`, pulse].filter(Boolean).join(", ") }
+        ? { borderRadius: w * 0.26, background: brand, boxShadow: `0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.3)` }
         : style === "soft"
-          ? { borderRadius: "50%", background: tint(theme.primary, theme.dark ? 0.3 : 0.26), boxShadow: pulse || undefined }
+          ? { borderRadius: "50%", background: tint(theme.primary, theme.dark ? 0.3 : 0.26) }
           : style === "outline"
-            ? { borderRadius: "50%", background: "transparent", boxShadow: [`inset 0 0 0 ${Math.max(3, w * 0.025)}px ${theme.primary}`, pulse].filter(Boolean).join(", ") }
+            ? { borderRadius: "50%", background: "transparent", boxSizing: "border-box", border: `${Math.max(3, w * 0.025)}px solid ${theme.primary}` }
             : {
                 borderRadius: w * 0.26,
                 background: theme.dark ? "linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03))" : "linear-gradient(160deg, rgba(255,255,255,.96), rgba(255,255,255,.72))",
-                boxShadow: `0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.18), inset 0 0 0 1.5px rgba(255,255,255,.9)${pulse ? `, ${pulse}` : ""}`,
+                boxSizing: "border-box",
+                border: "1.5px solid rgba(255,255,255,.9)",
+                boxShadow: `0 ${w * 0.12}px ${w * 0.36}px ${theme.glow}0.18)`,
               };
     const white = style === "solid" || lit > 0.5;
     body = (
       <div style={{ width: w, display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+        <div style={{ position: "relative", width: w, height: w }}>
+        {halo > 0 && <div style={{ position: "absolute", inset: -halo, borderRadius: holder.borderRadius === "50%" ? "50%" : (w * 0.26) + halo, background: `${theme.glow}${(0.16 * lit).toFixed(3)})` }} />}
         <div style={{ position: "relative", width: w, height: w, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", ...holder }}>
           {/* Explainer: the step being talked about fills with the brand colour. */}
           {lit > 0.01 && style !== "solid" && <div style={{ position: "absolute", inset: 0, background: brand, opacity: lit }} />}
@@ -106,6 +113,7 @@ export function ElementView({ s, frame, theme, calm, explainer, iconStyle = "til
           <div style={{ position: "relative" }}>
             <Icon name={el.icon} size={w * 0.44} color={white ? "#FFFFFF" : theme.primary} strokeWidth={2} draw={ramp(t, 2, 16, "inOut")} fill={explainer ? (white ? "rgba(255,255,255,.28)" : tint(theme.accent, 0.55)) : undefined} />
           </div>
+        </div>
         </div>
         {el.label && <div style={{ fontSize: labelPx ?? Math.max(22, w * 0.2), fontWeight: 600, color: theme.ink, whiteSpace: "nowrap", opacity: ramp(t, 10, 12) }}>{el.label}</div>}
       </div>
@@ -122,7 +130,7 @@ export function ElementView({ s, frame, theme, calm, explainer, iconStyle = "til
     body = <ObjectView name={el.object as ObjectName} label={el.label} w={w} h={h} t={t} frame={frame} theme={theme} labelPx={labelPx} />;
   } else if (el.type === "logo") {
     body = (
-      <div style={{ width: w, height: h, borderRadius: Math.min(w, h) * 0.24, background: "rgba(255,255,255,.95)", boxShadow: `0 30px 70px ${theme.glow}0.25), inset 0 0 0 1.5px #fff`, display: "flex", alignItems: "center", justifyContent: "center", padding: 18, boxSizing: "border-box" }}>
+      <div style={{ width: w, height: h, borderRadius: Math.min(w, h) * 0.24, background: "rgba(255,255,255,.95)", border: "1.5px solid #fff", boxShadow: `0 30px 70px ${theme.glow}0.25)`, display: "flex", alignItems: "center", justifyContent: "center", padding: 18, boxSizing: "border-box" }}>
         {el.src ? <Img src={el.src} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <span style={{ fontSize: h * 0.34, fontWeight: 750, color: theme.primary, letterSpacing: "-0.03em" }}>{el.text}</span>}
       </div>
     );
@@ -145,7 +153,7 @@ export function ElementView({ s, frame, theme, calm, explainer, iconStyle = "til
           top: 0,
           transform: `translate(calc(-50% + ${fx.toFixed(2)}px), calc(-50% + ${fy.toFixed(2)}px)) scale(${scale}) rotate(${rot}deg)${three ? ` rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg)` : ""}`,
           opacity: opacity * (1 - erase * 0.6),
-          filter: blur + erase * 10 > 0.2 ? `blur(${blur + erase * 10}px)` : undefined,
+          filter: blur + erase * 10 > 0.2 ? blurFilter(blur + erase * 10) : undefined,
           clipPath: erase > 0 ? `inset(0 0 0 ${erase * 100}%)` : undefined,
         }}
       >
