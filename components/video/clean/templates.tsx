@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Img } from "remotion";
 import { Icon } from "../icons";
 import { count, IN_OUT, mix, money, OUT, pop, rise } from "./anim";
-import { Bars, BrowserBar, Button, Cursor, IconTile, Initial, Label, LineChart, Panel, Stat, Toast } from "./kit";
+import { Arrow, Bars, BrowserBar, Button, Cursor, IconTile, Initial, Label, LineChart, LottieAt, Panel, Stat, Toast } from "./kit";
 import type { Look, Palette } from "./looks";
 import { KLine, type KWord } from "./text";
 import type { Brand, Scene, Variant } from "./types";
@@ -41,12 +41,18 @@ export function Hook(c: Ctx) {
     const drift = Math.sin((f + i * 40) / 50) * 10;
     return abs(px, py + drift, <IconTile name={name} size={88} colors={look.accent} dark={pal.dark} style={{ transform: `rotate(${[-12, 9, 7, -8, 4, -5][i]}deg) scale(${0.8 + a * 0.2})` }} />, { opacity: a * 0.55 });
   });
+  const keyAt = (w.find((x) => x.key) ?? w[0]).at;
+  const lost = [
+    <Arrow key="a1" f={f} at={keyAt + 4} from={[290, 220]} to={[560, 120]} bend={0.3} color={look.accent[1]} broken width={4} />,
+    <Arrow key="a2" f={f} at={keyAt + 10} from={[1530, 830]} to={[1290, 900]} bend={-0.3} color={look.accent[1]} broken width={4} />,
+  ];
   if (v.hook === "word") {
     const key = w.find((x) => x.key) ?? w[0];
     const k = rise(f, key.at, 22);
     return (
       <>
         {scatter}
+        {lost}
         {abs(0, 250, <KLine words={w.map((x) => ({ ...x, key: false }))} f={f} s={{ ...ts, size: 54, weight: 600, align: "center" }} />, { width: W })}
         {abs(0, 400, (
           <div style={{ display: "flex", justifyContent: "center", fontSize: 230, fontWeight: 800, letterSpacing: "-0.05em", color: pal.ink }}>
@@ -63,6 +69,7 @@ export function Hook(c: Ctx) {
     return (
       <>
         {scatter}
+        {lost}
         {abs(170, 270, <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{lines.map((l, i) => <KLine key={i} words={l} f={f} s={{ ...ts, size: 116 }} />)}</div>)}
       </>
     );
@@ -77,6 +84,7 @@ export function Hook(c: Ctx) {
   return (
     <>
       {scatter}
+      {lost}
       {abs(230, 360, <KLine words={w} f={f} s={{ ...ts, size: 120, align: "center" }} style={{ width: 1460 }} />)}
     </>
   );
@@ -90,7 +98,7 @@ export function Trio(c: Ctx) {
     const k = pop(f, it.at, 18);
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 22, opacity: Math.min(1, k * 1.4), transform: `scale(${0.6 + 0.4 * k})` }}>
-        <IconTile name={it.icon} size={size} colors={[look.accent[i % 2], look.accent[(i + 1) % 2]]} dark={pal.dark} draw={rise(f, it.at + 4, 22)} />
+        <IconTile name={it.icon} size={size} colors={[look.accent[i % 2], look.accent[(i + 1) % 2]]} dark={pal.dark} draw={rise(f, it.at + 4, 22)} solid at={it.at} f={f} />
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 46, fontWeight: 700, color: pal.ink, letterSpacing: "-0.03em" }}>{it.label}</div>
           <div style={{ fontSize: 28, color: pal.sub, marginTop: 6 }}>{it.sub}</div>
@@ -105,7 +113,7 @@ export function Trio(c: Ctx) {
           const k = rise(f, it.at, 18);
           return (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 40, opacity: k, transform: `translateX(${(1 - k) * -80}px)` }}>
-              <IconTile name={it.icon} size={130} colors={look.accent} dark={pal.dark} draw={rise(f, it.at + 4, 22)} />
+              <IconTile name={it.icon} size={130} colors={look.accent} dark={pal.dark} draw={rise(f, it.at + 4, 22)} solid at={it.at} f={f} />
               <div style={{ fontSize: 92, fontWeight: 700, color: pal.ink, letterSpacing: "-0.04em" }}>{it.label}</div>
               <div style={{ fontSize: 50, color: pal.sub }}>{it.sub}</div>
             </div>
@@ -118,6 +126,8 @@ export function Trio(c: Ctx) {
     return (
       <>
         {items.map((it, i) => abs(pos[i][0], pos[i][1], <div style={{ transform: `rotate(${pos[i][2]}deg) translateY(${Math.sin((f + i * 30) / 40) * 8}px)` }}>{tile(it, i, 170)}</div>))}
+        <Arrow f={f} at={items[1]?.at ?? sc.from} from={[470, 260]} to={[1200, 210]} bend={-0.18} color={look.accent[1]} broken />
+        <Arrow f={f} at={items[2]?.at ?? sc.from} from={[1290, 420]} to={[960, 600]} bend={-0.25} color={look.accent[1]} broken />
       </>
     );
   }
@@ -130,6 +140,10 @@ export function Trio(c: Ctx) {
         {abs(W / 2 - 60, 470 - 60, <div style={{ width: 120, height: 120, borderRadius: 34, border: `3px dashed ${pal.sub}66`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 54, color: pal.sub, opacity: ring }}>?</div>)}
         {items.map((it, i) => {
           const a = ((-90 + i * 120 + turn) * Math.PI) / 180;
+          return <Arrow key={`ar${i}`} f={f} at={it.at + 8} from={[W / 2 + Math.cos(a) * 225, 470 + Math.sin(a) * 225]} to={[W / 2 + Math.cos(a) * 100, 470 + Math.sin(a) * 100]} bend={0.2} color={look.accent[1]} dashed width={4} />;
+        })}
+        {items.map((it, i) => {
+          const a = ((-90 + i * 120 + turn) * Math.PI) / 180;
           return abs(W / 2 + Math.cos(a) * 300 - 90, 470 + Math.sin(a) * 300 - 120, tile(it, i, 150));
         })}
       </>
@@ -138,17 +152,8 @@ export function Trio(c: Ctx) {
   // row: three, cut off from each other
   return (
     <>
-      {items.map((it, i) => abs(250 + i * 560, 300, tile(it, i, 180)))}
-      {[0, 1].map((i) => {
-        const k = rise(f, items[i + 1]?.at ?? sc.from, 20);
-        return abs(510 + i * 560, 380, (
-          <div style={{ display: "flex", alignItems: "center", gap: 18, opacity: k }}>
-            <div style={{ width: 120, borderTop: `4px dashed ${pal.sub}88` }} />
-            <Icon name="x" size={40} color={look.accent[1]} strokeWidth={3} />
-            <div style={{ width: 120, borderTop: `4px dashed ${pal.sub}88` }} />
-          </div>
-        ));
-      })}
+      {items.map((it, i) => abs(180 + i * 560, 300, <div style={{ width: 320, display: "flex", justifyContent: "center" }}>{tile(it, i, 180)}</div>))}
+      {[0, 1].map((i) => <Arrow key={i} f={f} at={items[i + 1]?.at ?? sc.from} from={[460 + i * 560, 390]} to={[780 + i * 560, 390]} bend={0.22} color={look.accent[1]} broken />)}
     </>
   );
 }
@@ -168,7 +173,11 @@ export function Reveal(c: Ctx) {
       <>
         {icons.map((ic, i) => {
           const sx = [-560, 0, 560][i], sy = [-80, -300, -80][i];
-          return abs(W / 2 - 60 + sx * (1 - m), 380 + sy * (1 - m), <IconTile name={ic} size={120} colors={look.accent} dark={pal.dark} />, { opacity: 1 - rise(f, at + 10, 8) });
+          return <div key={`t${i}`} style={{ opacity: 1 - rise(f, at + 14, 10) }}><Arrow f={f} at={at - 10} from={[W / 2 + sx, 440 + sy]} to={[W / 2 + sx * 0.18, 440 + sy * 0.18]} bend={0.12} color="#ffffff" width={4} dur={16} /></div>;
+        })}
+        {icons.map((ic, i) => {
+          const sx = [-560, 0, 560][i], sy = [-80, -300, -80][i];
+          return abs(W / 2 - 60 + sx * (1 - m), 380 + sy * (1 - m), <IconTile name={ic} size={120} colors={look.accent} dark={pal.dark} solid />, { opacity: 1 - rise(f, at + 10, 8) });
         })}
         {abs(W / 2 - 330, 300, <div style={{ display: "flex", alignItems: "center", gap: 40, transform: `scale(${k})`, opacity: Math.min(1, k * 2) }}><Mark brand={brand} size={180} look={look} />{name(rise(f, at + 18, 18))}</div>, { width: 900 })}
         {subLine}
@@ -268,6 +277,7 @@ export function Pay(c: Ctx) {
           </div>
         </Panel>
         {abs(500, -50, <Toast dark={dark} icon="credit-card" title="Payment received" sub="+ $1,240 · just now" accent="#12b76a" />, { opacity: rise(f, pay, 14), transform: `translateY(${(1 - rise(f, pay, 18)) * -40}px)` })}
+        <Arrow f={f} at={rev - 10} from={[610, 60]} to={[470, 140]} bend={0.35} color={accent} dur={14} />
       </>
     );
   } else if (v.pay === "phone") {
@@ -288,18 +298,14 @@ export function Pay(c: Ctx) {
             </div>
           </div>
         </div>
+        {abs(650, 230, <LottieAt name="payment-success" at={inst - 4} size={170} colors={{ primary: accent, accent: look.accent[1], success: "#12b76a" }} />)}
       </div>
     );
   } else if (v.pay === "cards") {
-    const flow = rise(f, pay + 6, 30, IN_OUT);
     visual = (
       <div style={{ position: "relative", width: 900, height: 600 }}>
         {abs(0, 150, <div style={{ transform: `scale(${0.85 + 0.15 * pop(f, pay, 16)})`, opacity: rise(f, pay, 12) }}><Panel dark={dark} w={380} pad={38}><Icon name="credit-card" size={56} color={accent} /><div style={{ fontSize: 26, opacity: 0.6, marginTop: 20 }}>New payment</div><div style={{ fontSize: 68, fontWeight: 700, letterSpacing: "-0.04em" }}>$1,240</div><div style={{ fontSize: 20, opacity: 0.55, marginTop: 6 }}>from Northwind · card</div></Panel></div>)}
-        {[0, 1, 2].map((i) => {
-          const t = Math.min(1, Math.max(0, flow * 1.3 - i * 0.15));
-          return abs(390 + t * 150, 300, <div style={{ width: 18, height: 18, borderRadius: 99, background: accent, opacity: t > 0 && t < 1 ? 1 : 0, boxShadow: `0 0 20px ${accent}` }} />);
-        })}
-        {abs(395, 309, <div style={{ width: 140, borderTop: `3px dashed ${accent}66` }} />)}
+        <Arrow f={f} at={pay + 6} from={[392, 300]} to={[540, 270]} bend={-0.3} color={accent} flow width={6} dur={18} />
         {abs(550, 40, <Panel dark={dark} w={420} pad={38}><Label dark={dark}>Revenue</Label><div style={{ fontSize: 72, fontWeight: 700, letterSpacing: "-0.04em", marginTop: 12 }}>{money(value)}</div><div style={{ marginTop: 18, fontSize: 21, fontWeight: 700, color: "#12b76a", opacity: live }}>● Updated just now</div><div style={{ marginTop: 26 }}><Bars values={[0.3, 0.45, 0.4, 0.6, f >= rev ? 0.95 : 0.55]} grow={[1, 1, 1, 1, 1]} w={344} h={190} colors={look.accent} /></div></Panel>)}
       </div>
     );
@@ -307,20 +313,23 @@ export function Pay(c: Ctx) {
     const rows = [["Acme Co.", "$860"], ["Northwind", "$2,140"], ["Globex", "$530"], ["Initech", "$1,005"]];
     const slide = rise(f, pay, 18);
     visual = (
-      <Panel dark={dark} w={760} pad={34}>
+      <div style={{ position: "relative" }}>
+        <Panel dark={dark} w={760} pad={34}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><div style={{ fontSize: 28, fontWeight: 700 }}>Payments</div><div style={{ fontSize: 18, fontWeight: 700, color: "#12b76a", opacity: live }}>⚡ 0.2 s</div></div>
         <div style={{ height: 76 * slide, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 18px", borderRadius: 16, background: `${accent}18`, fontSize: 24, fontWeight: 700 }}><span style={{ display: "flex", gap: 12, alignItems: "center" }}><Icon name="credit-card" size={26} color={accent} />New payment</span><span style={{ color: "#12b76a" }}>+$1,240</span></div>
         </div>
         {rows.map(([n, a]) => <div key={n} style={{ display: "flex", justifyContent: "space-between", padding: "16px 18px", fontSize: 22, opacity: 0.75, borderBottom: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(30,24,80,0.06)"}` }}><span>{n}</span><span>{a}</span></div>)}
         <div style={{ display: "flex", justifyContent: "space-between", marginTop: 22, fontSize: 26, fontWeight: 700 }}><span>Total revenue</span><span style={{ fontVariantNumeric: "tabular-nums" }}>{money(value)}</span></div>
-      </Panel>
+        </Panel>
+        <Arrow f={f} at={rev - 6} from={[770, 150]} to={[775, 470]} bend={-0.35} color={accent} dur={18} />
+      </div>
     );
   }
   return (
     <>
       <Headline c={c} x={textX} width={640} />
-      {abs(vx, 210, <div style={{ opacity: enter, transform: `translateY(${(1 - enter) * 60}px)` }}>{visual}</div>)}
+      {abs(vx, 210, <div style={{ position: "relative", opacity: enter, transform: `translateY(${(1 - enter) * 60}px)` }}>{visual}</div>)}
     </>
   );
 }
@@ -381,6 +390,8 @@ export function Growth(c: Ctx) {
             </div>
             {body}
             <div style={{ marginTop: 34 }}>{people}</div>
+            {(v.growth === "bars" || v.growth === "line") && <Arrow f={f} at={grow + 12} from={[70, 400]} to={[790, 120]} bend={0.1} color={look.accent[1]} width={7} dur={24} />}
+            {(v.growth === "tiles" || v.growth === "donut") && abs(560, 4, <LottieAt name="trend-up" at={grow} size={110} colors={{ primary: look.accent[0], accent: look.accent[1] }} />)}
           </Panel>
         </div>
       ))}
@@ -425,7 +436,7 @@ export function NoMore(c: Ctx) {
       </>
     );
   }
-  return abs(0, 300, <div style={{ display: "flex", flexDirection: "column", gap: 30, alignItems: "center" }}><KLine words={a} f={f} s={{ ...ts, size: 110, align: "center" }} /><KLine words={b} f={f} s={{ ...ts, size: 110, align: "center" }} /></div>, { width: W });
+  return abs(0, 300, <div style={{ display: "flex", flexDirection: "column", gap: 30, alignItems: "center" }}><KLine words={a} f={f} s={{ ...ts, size: 96, align: "center" }} /><KLine words={b} f={f} s={{ ...ts, size: 96, align: "center" }} /></div>, { width: W });
 }
 
 // ── 7. CTA: the logo, name, tagline, button, address; a click ────────────
@@ -441,12 +452,14 @@ export function Cta(c: Ctx) {
   const url = <div style={{ fontSize: 30, color: pal.sub, fontWeight: 600, opacity: rise(f, sc.from + 30, 18) }}>{brand.url}</div>;
   const btn = (size: number) => <div style={{ opacity: rise(f, sc.from + 22, 18), transform: `scale(${0.9 + 0.1 * rise(f, sc.from + 22, 18)})` }}><Button label={brand.cta} colors={look.accent} press={pressed} size={size} /></div>;
   const cursorAt = (x: number, y: number) => <Cursor x={mix(x + 340, x, cur)} y={mix(y + 220, y, cur)} press={press} opacity={rise(f, click - 30, 10)} />;
+  const point = (from: [number, number], to: [number, number], bend: number) => <Arrow f={f} at={sc.from + 34} from={from} to={to} bend={bend} color={look.accent[1]} width={5} dur={20} />;
   const tagLine = (size: number, align: "left" | "center") => <KLine words={tag} f={f} s={{ ink: pal.ink, accent: look.accent, keyword: v.keyword, size, weight: 600, align }} />;
   if (v.cta === "left")
     return (
       <>
         {abs(160, 250, <div style={{ display: "flex", flexDirection: "column", gap: 44 }}>{brandRow(120)}<div style={{ width: 760 }}>{tagLine(64, "left")}</div>{btn(30)}{url}</div>)}
         {abs(1120, 250, <div style={{ opacity: rise(f, sc.from + 14, 22), transform: `rotate(-4deg)` }}><Panel dark={cardDark(c)} w={620} pad={30}><BrowserBar dark={cardDark(c)} url={brand.url} /><Stat dark={cardDark(c)} label="Live dashboard" value="$49,450" delta="+2.6%" accent={look.accent[0]} /><div style={{ marginTop: 22 }}><LineChart points={[0.2, 0.4, 0.35, 0.6, 0.55, 0.85]} draw={rise(f, sc.from + 16, 30)} w={540} h={170} color={look.accent[0]} fill={look.accent[1]} /></div></Panel></div>)}
+        {point([720, 600], [545, 712], 0.3)}
         {cursorAt(470, 690)}
       </>
     );
@@ -454,6 +467,7 @@ export function Cta(c: Ctx) {
     return (
       <>
         {abs(W / 2 - 560, 170, <div style={{ opacity: k, transform: `scale(${0.94 + 0.06 * k})` }}><Panel dark={pal.dark} w={1120} pad={70} radius={44} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 40 }}>{brandRow(120)}{tagLine(58, "center")}{btn(30)}{url}</Panel></div>)}
+        {point([1380, 520], [1160, 610], 0.3)}
         {cursorAt(W / 2 + 40, 600)}
       </>
     );
@@ -461,12 +475,14 @@ export function Cta(c: Ctx) {
     return (
       <>
         {abs(0, 330, <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 36 }}><div style={{ fontSize: 210, fontWeight: 800, letterSpacing: "-0.06em", color: pal.ink, opacity: k }}>{brand.name}</div>{tagLine(54, "center")}<div style={{ display: "flex", alignItems: "center", gap: 30 }}>{btn(26)}{url}</div></div>, { width: W })}
+        {point([560, 640], [715, 735], -0.3)}
         {cursorAt(W / 2 - 60, 740)}
       </>
     );
   return (
     <>
       {abs(0, 220, <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 44 }}>{brandRow(130)}{tagLine(64, "center")}{btn(32)}{url}</div>, { width: W })}
+      {point([1340, 470], [1140, 560], 0.3)}
       {cursorAt(W / 2 + 50, 560)}
     </>
   );

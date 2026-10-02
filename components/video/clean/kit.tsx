@@ -1,5 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
+import { Sequence } from "remotion";
 import { Icon } from "../icons";
+import { LottieAnim, type LottieName } from "../lottie";
+import { OUT, rise } from "./anim";
 
 // The UI kit: small flat parts every card is built from (no screenshots
 // needed). `dark` picks the face for a dark or a light background.
@@ -91,24 +94,81 @@ export function LineChart({ points, draw, w, h, color, fill }: { points: number[
   );
 }
 
-export function IconTile({ name, size = 96, colors, dark, draw = 1, style }: { name: string; size?: number; colors: [string, string]; dark: boolean; draw?: number; style?: CSSProperties }) {
+// An icon on a tile. `solid`: the accent gradient with a white icon, a gloss
+// and a coloured glow (the subject); otherwise a frosted tile (the scenery).
+// `at`: the frame it appears — the line draws on and a ring pulses out.
+export function IconTile({ name, size = 96, colors, dark, draw = 1, style, solid, at, f }: { name: string; size?: number; colors: [string, string]; dark: boolean; draw?: number; style?: CSSProperties; solid?: boolean; at?: number; f?: number }) {
+  const ring = at !== undefined && f !== undefined ? rise(f, at, 24) : 1;
   return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.28,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: dark ? "rgba(255,255,255,0.07)" : "#ffffff",
-        border: `1px solid ${dark ? "rgba(255,255,255,0.12)" : "rgba(30,24,80,0.08)"}`,
-        boxShadow: dark ? `0 20px 50px rgba(0,0,0,0.45), 0 0 40px ${colors[0]}33` : `0 20px 50px ${colors[0]}2a`,
-        ...style,
-      }}
-    >
-      <Icon name={name} size={size * 0.5} color={colors[0]} fill={`${colors[1]}30`} strokeWidth={1.8} draw={draw} />
+    <div style={{ position: "relative", width: size, height: size, ...style }}>
+      {ring > 0 && ring < 1 && <div style={{ position: "absolute", inset: -size * 0.1, borderRadius: size * 0.36, border: `3px solid ${colors[0]}`, opacity: (1 - ring) * 0.8, transform: `scale(${1 + ring * 0.45})` }} />}
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size * 0.28,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          overflow: "hidden",
+          backgroundImage: solid ? `linear-gradient(140deg, ${colors[0]}, ${colors[1]})` : undefined,
+          background: solid ? undefined : dark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.92)",
+          border: `1px solid ${solid ? "rgba(255,255,255,0.35)" : dark ? "rgba(255,255,255,0.14)" : "rgba(30,24,80,0.08)"}`,
+          boxShadow: solid ? `0 ${size * 0.2}px ${size * 0.55}px ${colors[0]}66, inset 0 2px 0 rgba(255,255,255,0.35)` : dark ? `0 20px 50px rgba(0,0,0,0.45), 0 0 40px ${colors[0]}33` : `0 20px 50px ${colors[0]}2a`,
+        }}
+      >
+        <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: "50%", backgroundImage: `linear-gradient(180deg, rgba(255,255,255,${solid ? 0.3 : dark ? 0.08 : 0.5}), rgba(255,255,255,0))` }} />
+        <Icon name={name} size={size * 0.5} color={solid ? "#fff" : colors[0]} fill={solid ? "rgba(255,255,255,0.28)" : `${colors[1]}30`} strokeWidth={solid ? 2.1 : 1.8} draw={draw} style={{ position: "relative" }} />
+      </div>
     </div>
+  );
+}
+
+// A point on a quadratic curve.
+const qp = (a: number[], c: number[], b: number[], t: number) => [(1 - t) ** 2 * a[0] + 2 * (1 - t) * t * c[0] + t * t * b[0], (1 - t) ** 2 * a[1] + 2 * (1 - t) * t * c[1] + t * t * b[1]];
+
+// A curved arrow that draws itself from `from` to `to` (screen px inside its
+// parent) starting at frame `at`: a soft line, a head that lands at the end,
+// and light running along it (`flow`). `broken`: the line stops halfway at a ✕.
+export function Arrow({ f, at, from, to, bend = 0.25, color, dur = 22, width = 5, dashed, flow, broken }: { f: number; at: number; from: [number, number]; to: [number, number]; bend?: number; color: string; dur?: number; width?: number; dashed?: boolean; flow?: boolean; broken?: boolean }) {
+  const d = rise(f, at, dur, OUT);
+  if (d <= 0) return null;
+  const [x0, y0] = from, [x1, y1] = to;
+  const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+  const c = [mx - (y1 - y0) * bend, my + (x1 - x0) * bend];
+  const end = broken ? 0.5 : 1;
+  const tip = qp(from, c, to, end * d);
+  const back = qp(from, c, to, Math.max(0, end * d - 0.04));
+  const ang = Math.atan2(tip[1] - back[1], tip[0] - back[0]);
+  const head = rise(f, at + dur * 0.7, 10);
+  const h = width * 4.2;
+  const minX = Math.min(x0, x1, c[0]) - 60, minY = Math.min(y0, y1, c[1]) - 60;
+  const wv = Math.max(x0, x1, c[0]) - minX + 60, hv = Math.max(y0, y1, c[1]) - minY + 60;
+  const path = `M${x0 - minX} ${y0 - minY} Q${c[0] - minX} ${c[1] - minY} ${x1 - minX} ${y1 - minY}`;
+  return (
+    <svg width={wv} height={hv} style={{ position: "absolute", left: minX, top: minY, overflow: "visible", pointerEvents: "none" }}>
+      <path d={path} fill="none" stroke={color} strokeOpacity={0.9} strokeWidth={width} strokeLinecap="round" pathLength={1} strokeDasharray={dashed ? undefined : `${end * d} 1`} style={dashed ? { strokeDasharray: `${width * 2.4} ${width * 2.4}`, strokeDashoffset: -f * 1.5, clipPath: `inset(0 0 0 0)` } : undefined} opacity={dashed ? Math.min(1, d * 1.5) : 1} />
+      {flow && d >= 1 && [0, 1, 2].map((i) => {
+        const t = (((f - at) / 34 + i / 3) % 1) * end;
+        const p = qp(from, c, to, t);
+        return <circle key={i} cx={p[0] - minX} cy={p[1] - minY} r={width * 1.5} fill="#fff" stroke={color} strokeWidth={width * 0.8} opacity={Math.sin(Math.PI * (t / end))} />;
+      })}
+      {broken ? (
+        head > 0 && <g transform={`translate(${tip[0] - minX} ${tip[1] - minY}) scale(${head})`}><circle r={h * 1.25} fill={color} /><path d={`M${-h * 0.5} ${-h * 0.5} L${h * 0.5} ${h * 0.5} M${h * 0.5} ${-h * 0.5} L${-h * 0.5} ${h * 0.5}`} stroke="#fff" strokeWidth={width * 0.9} strokeLinecap="round" /></g>
+      ) : (
+        head > 0 && <path d={`M0 0 L${-h} ${-h * 0.62} L${-h * 0.72} 0 L${-h} ${h * 0.62} Z`} fill={color} transform={`translate(${tip[0] - minX} ${tip[1] - minY}) rotate(${(ang * 180) / Math.PI}) scale(${head})`} />
+      )}
+    </svg>
+  );
+}
+
+// A Lottie micro-animation that starts playing at frame `at`.
+export function LottieAt({ name, at, size, colors }: { name: LottieName; at: number; size: number; colors?: Record<string, string> }) {
+  return (
+    <Sequence from={Math.round(at)} layout="none">
+      <LottieAnim name={name} colors={colors} loop={false} style={{ width: size, height: size }} />
+    </Sequence>
   );
 }
 

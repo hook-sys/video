@@ -1,8 +1,9 @@
 import { useState, type CSSProperties } from "react";
-import { AbsoluteFill, Audio, continueRender, delayRender, interpolateColors, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Audio, continueRender, delayRender, interpolateColors, Sequence, staticFile, useCurrentFrame } from "remotion";
 import { IN_OUT, mix, OUT, rise } from "./anim";
 import { LOOKS, type Look, type Palette } from "./looks";
 import { H, Mark, TEMPLATES, W } from "./templates";
+import { planSfx, SFX_FILES } from "./sfx";
 import type { CleanPlan, CleanVideoProps, Scene, Variant } from "./types";
 
 let fontReady = false;
@@ -40,64 +41,95 @@ function paletteAt(plan: CleanPlan, look: Look, f: number): Palette {
   };
 }
 
-// The moving background: the act's gradient, three drifting light blobs and
-// the look's pattern sliding slowly.
-function Backdrop({ pal, look, f }: { pal: Palette; look: Look; f: number }) {
-  const line = pal.dark ? "rgba(255,255,255,0.07)" : "rgba(30,24,80,0.06)";
-  const shift = (f * 0.4) % 64;
+// The moving background: the act's gradient turning slowly, three large
+// light blobs drifting across, the look's pattern sliding against the camera
+// (parallax), dust rising and a sheen sweeping over at every cut.
+const SPECKS = Array.from({ length: 28 }, (_, i) => ({ x: (i * 397) % 1920, y: (i * 613) % 1080, r: 2 + (i % 4), s: 0.4 + ((i * 7) % 10) / 12, ph: i * 1.7 }));
+function Backdrop({ pal, look, f, pan, cuts }: { pal: Palette; look: Look; f: number; pan: number; cuts: number[] }) {
+  const line = pal.dark ? "rgba(255,255,255,0.08)" : "rgba(30,24,80,0.07)";
+  const sx = f * 1.1 - pan * 0.35, sy = f * 0.45;
   const pattern: Record<Look["pattern"], CSSProperties> = {
-    grid: { backgroundImage: `linear-gradient(${line} 1px, transparent 1px), linear-gradient(90deg, ${line} 1px, transparent 1px)`, backgroundSize: "64px 64px", backgroundPosition: `${shift}px ${shift}px` },
-    dots: { backgroundImage: `radial-gradient(${line} 2px, transparent 2.5px)`, backgroundSize: "36px 36px", backgroundPosition: `${shift}px 0` },
-    lines: { backgroundImage: `repeating-linear-gradient(120deg, ${line} 0 1px, transparent 1px 46px)`, backgroundPosition: `${shift}px 0` },
-    rings: { backgroundImage: `repeating-radial-gradient(circle at 50% 120%, ${line} 0 1px, transparent 1px 70px)`, backgroundSize: `100% ${100 + Math.sin(f / 60) * 2}%` },
+    grid: { backgroundImage: `linear-gradient(${line} 1px, transparent 1px), linear-gradient(90deg, ${line} 1px, transparent 1px)`, backgroundSize: "64px 64px", backgroundPosition: `${sx}px ${sy}px` },
+    dots: { backgroundImage: `radial-gradient(${line} 2px, transparent 2.5px)`, backgroundSize: "36px 36px", backgroundPosition: `${sx}px ${sy}px` },
+    lines: { backgroundImage: `repeating-linear-gradient(120deg, ${line} 0 1px, transparent 1px 46px)`, backgroundPosition: `${sx}px 0` },
+    rings: { backgroundImage: `repeating-radial-gradient(circle at ${50 + Math.sin(f / 90) * 8}% 120%, ${line} 0 1px, transparent 1px 70px)`, backgroundPosition: `${-pan * 0.2}px 0` },
   };
+  const cut = cuts.filter((c) => c <= f).pop() ?? -999;
+  const sweep = rise(f, cut, 34, IN_OUT);
   return (
-    <AbsoluteFill style={{ backgroundImage: `linear-gradient(160deg, ${pal.bg[0]}, ${pal.bg[1]})`, overflow: "hidden" }}>
+    <AbsoluteFill style={{ backgroundImage: `linear-gradient(${150 + Math.sin(f / 80) * 24}deg, ${pal.bg[0]}, ${pal.bg[1]})`, overflow: "hidden" }}>
       {pal.blobs.map((b, i) => (
         <div
           key={i}
           style={{
             position: "absolute",
-            width: 1100,
-            height: 1100,
+            width: 1200,
+            height: 1200,
             borderRadius: 9999,
-            left: [-200, 1100, 500][i] + Math.sin(f / (120 + i * 30) + i) * 160,
-            top: [-350, 300, 600][i] + Math.cos(f / (140 + i * 20) + i * 2) * 120,
-            background: `radial-gradient(circle, ${b}, transparent 65%)`,
-            opacity: pal.dark ? 0.55 : 0.7,
-            filter: "blur(40px)",
+            left: [-260, 1000, 420][i] + Math.sin(f / (62 + i * 17) + i) * 300 - pan * (0.15 + i * 0.08),
+            top: [-380, 260, 560][i] + Math.cos(f / (74 + i * 13) + i * 2) * 220,
+            background: `radial-gradient(circle, ${b}, transparent 64%)`,
+            opacity: pal.dark ? 0.62 : 0.75,
+            filter: "blur(36px)",
+            transform: `scale(${1 + Math.sin(f / 50 + i) * 0.12})`,
           }}
         />
       ))}
       <AbsoluteFill style={{ ...pattern[look.pattern], maskImage: "radial-gradient(ellipse at center, #000 30%, transparent 85%)", WebkitMaskImage: "radial-gradient(ellipse at center, #000 30%, transparent 85%)" }} />
+      {SPECKS.map((p, i) => {
+        const y = ((((p.y - f * p.s * 1.6) % 1140) + 1140) % 1140) - 30;
+        return <div key={i} style={{ position: "absolute", left: (((p.x - pan * 0.5 * p.s) % 1920) + 1920) % 1920, top: y, width: p.r * 2, height: p.r * 2, borderRadius: 99, background: pal.dark ? "#ffffff" : look.accent[0], opacity: (0.18 + 0.22 * Math.sin(f / 18 + p.ph)) * (pal.dark ? 0.9 : 0.6) }} />;
+      })}
+      {sweep > 0 && sweep < 1 && <div style={{ position: "absolute", top: -300, height: 1700, width: 520, left: -700 + sweep * 3400, transform: "rotate(18deg)", backgroundImage: `linear-gradient(90deg, transparent, ${pal.dark ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.55)"}, transparent)` }} />}
     </AbsoluteFill>
   );
 }
 
-// The camera over a scene: a slow move for the whole scene, a push on a
-// "zoom" cue, then the scene's way in and out.
-function frameStyle(sc: Scene, v: Variant, f: number, first: boolean, last: boolean): CSSProperties {
-  const len = sc.to - sc.from;
-  const p = Math.min(1, Math.max(0, (f - sc.from) / len));
-  const zoomCue = sc.cues.zoom !== undefined ? rise(f, sc.cues.zoom, 30, IN_OUT) * 0.1 : 0;
-  const ox = sc.template === "pay" || sc.template === "growth" ? (v.side === "left" ? "72%" : "28%") : "50%";
+// The camera over a scene: one clear move per scene (the variant's kind,
+// alternating direction scene by scene), a punch-in on each of the scene's
+// moments, a push on a "zoom" cue and a slight hand-held float; then the
+// scene's way in and out.
+const MOMENTS = ["pay", "rev", "inst", "grow", "team", "name", "click"];
+export function cameraOf(sc: Scene, v: Variant, f: number, index: number) {
+  const len = Math.max(1, sc.to - sc.from);
+  const p = IN_OUT(Math.min(1, Math.max(0, (f - sc.from) / len)));
+  const dir = index % 2 ? -1 : 1;
+  const punch = MOMENTS.reduce((acc, k) => (sc.cues[k] === undefined ? acc : acc + rise(f, sc.cues[k], 6) * (1 - rise(f, sc.cues[k] + 6, 18))), 0);
+  const zoom = sc.cues.zoom !== undefined ? rise(f, sc.cues.zoom, 30, IN_OUT) * 0.06 : 0;
+  const fx = Math.sin(f / 37) * 5, fy = Math.cos(f / 53) * 4, fr = Math.sin(f / 71) * 0.2;
+  const s = 1 + punch * 0.035 + zoom;
+  let pan = 0;
   let cam = "";
-  if (v.camera === "push") cam = `scale(${1 + p * 0.05 + zoomCue}) translateY(${(1 - p) * 10}px)`;
-  else if (v.camera === "tilt") {
-    const s = rise(f, sc.from, 40, OUT);
-    cam = `perspective(2200px) rotateX(${mix(14, 3, s)}deg) rotateY(${mix(v.side === "left" ? -16 : 16, v.side === "left" ? -4 : 4, s)}deg) scale(${mix(0.92, 1, s) + zoomCue})`;
-  } else if (v.camera === "drift") cam = `translateX(${mix(-36, 36, p)}px) scale(${1.03 + zoomCue})`;
-  else cam = `scale(${mix(0.94, 1.06, p) + zoomCue})`;
+  if (v.camera === "push") {
+    pan = dir * mix(-40, 40, p);
+    cam = `translate(${pan + fx}px, ${mix(14, -10, p) + fy}px) scale(${mix(0.98, 1.06, p) * s}) rotate(${fr}deg)`;
+  } else if (v.camera === "tilt") {
+    pan = dir * mix(30, -30, p);
+    cam = `perspective(1800px) translate(${pan + fx}px, ${fy}px) rotateY(${mix(dir * 18, dir * -5, p)}deg) rotateX(${mix(11, 2, p)}deg) scale(${mix(0.9, 1.0, p) * s})`;
+  } else if (v.camera === "drift") {
+    pan = dir * mix(60, -60, p);
+    cam = `translate(${pan + fx}px, ${mix(20, -20, p) + fy}px) rotate(${dir * mix(-1, 1, p) + fr}deg) scale(${0.98 * s})`;
+  } else {
+    pan = dir * mix(-24, 24, p);
+    cam = `translate(${pan + fx}px, ${fy}px) scale(${mix(0.9, 1.06, p) * s}) rotate(${dir * mix(-0.6, 0.6, p)}deg)`;
+  }
+  return { cam, pan };
+}
+
+function frameStyle(sc: Scene, v: Variant, f: number, index: number, last: boolean): CSSProperties {
+  const first = index === 0;
+  const ox = "50%";
+  const { cam } = cameraOf(sc, v, f, index);
   const kin = first ? 1 : rise(f, sc.from - LEAD_IN, IN, OUT);
   const kout = last ? 0 : rise(f, sc.to - OUTF, OUTF, IN_OUT);
   let t = "";
   let extra: CSSProperties = {};
   if (v.transition === "blur") extra = { opacity: kin * (1 - kout), filter: `blur(${(1 - kin) * 18 + kout * 18}px)` };
   else if (v.transition === "slide") {
-    t = `translateX(${(1 - kin) * 160 - kout * 160}px)`;
+    t = `translateX(${(1 - kin) * 220 - kout * 220}px)`;
     extra = { opacity: kin * (1 - kout) };
   } else if (v.transition === "zoom") {
-    t = `scale(${mix(1.14, 1, kin) * mix(1, 0.9, kout)})`;
+    t = `scale(${mix(1.18, 1, kin) * mix(1, 0.86, kout)})`;
     extra = { opacity: kin * (1 - kout) };
   } else extra = { clipPath: `inset(0 ${(1 - kin) * 100}% 0 ${kout * 100}%)` };
   return { transform: `${t} ${cam}`, transformOrigin: `${ox} 50%`, ...extra };
@@ -134,15 +166,18 @@ export function CleanVideo({ plan, audioUrl }: CleanVideoProps) {
   const chip = rise(f, revealAt + 40, 20);
   const cap = captionAt(plan, f);
   const inCta = plan.scenes.find((s) => s.template === "cta" && f >= s.from);
+  const ci = Math.max(0, plan.scenes.findLastIndex((s) => s.from <= f));
+  const pan = cameraOf(plan.scenes[ci], v, f, ci).pan;
+  const sfx = planSfx(plan);
   return (
     <AbsoluteFill style={{ fontFamily: look.font, background: "#000" }}>
-      <Backdrop pal={pal} look={look} f={f} />
+      <Backdrop pal={pal} look={look} f={f} pan={pan} cuts={plan.scenes.slice(1).map((s) => s.from)} />
       {plan.scenes.map((sc, i) => {
         if (f < sc.from - LEAD_IN || f > sc.to) return null;
         const T = TEMPLATES[sc.template];
         const scPal = look.acts[sc.act];
         return (
-          <AbsoluteFill key={i} style={frameStyle(sc, v, f, i === 0, i === plan.scenes.length - 1)}>
+          <AbsoluteFill key={i} style={frameStyle(sc, v, f, i, i === plan.scenes.length - 1)}>
             <T f={f} sc={sc} look={look} pal={scPal} v={v} brand={plan.brand} />
           </AbsoluteFill>
         );
@@ -168,6 +203,11 @@ export function CleanVideo({ plan, audioUrl }: CleanVideoProps) {
         </div>
       )}
       {audioUrl && <Audio src={audioUrl} />}
+      {sfx.map((c, i) => (
+        <Sequence key={i} from={c.frame} durationInFrames={45} layout="none">
+          <Audio src={staticFile(SFX_FILES[c.kind])} volume={c.volume} />
+        </Sequence>
+      ))}
     </AbsoluteFill>
   );
 }
