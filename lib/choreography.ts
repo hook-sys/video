@@ -23,6 +23,18 @@ export type ChoreoSfxKind = (typeof CHOREO_SFX_KINDS)[number];
 // back to impact, an unknown kind is dropped.
 export const ChoreoSfxCue = z.object({ phase: z.string(), kind: z.string() });
 
+// Camera response (Phase 3): the camera answers the event on its phases —
+// a subtle preparation on the anticipation, the move itself on the action,
+// a very small extra push on the impact, the return on the settle. Optional;
+// sizes are fixed per response and intensity (CAMERA_RESPONSE), never free.
+export const CAMERA_RESPONSES = ["push", "pull", "pan", "orbit", "rise", "fall"] as const;
+export type CameraResponse = (typeof CAMERA_RESPONSES)[number];
+export const CAMERA_INTENSITIES = ["low", "medium", "high"] as const;
+export type CameraIntensity = (typeof CAMERA_INTENSITIES)[number];
+// Loose on input, validated when normalized: an unknown response means no
+// camera response, an unknown intensity medium.
+export const ChoreoCameraCue = z.object({ response: z.string(), intensity: z.string().nullable() });
+
 // What the Director may write per behavior (seconds; null = default).
 export const Choreography = z.object({
   anticipation: z.number().nullable(),
@@ -30,9 +42,10 @@ export const Choreography = z.object({
   impact: z.number().nullable(),
   settle: z.number().nullable(),
   sfx: z.array(ChoreoSfxCue).nullable().optional(),
+  camera: ChoreoCameraCue.nullable().optional(),
 });
 // The Director's strict output: every key present (a missing sfx reads as null).
-export const ModelChoreography = Choreography.extend({ sfx: z.array(ChoreoSfxCue).nullable().default(null) });
+export const ModelChoreography = Choreography.extend({ sfx: z.array(ChoreoSfxCue).nullable().default(null), camera: ChoreoCameraCue.nullable().default(null) });
 export type Choreography = z.infer<typeof Choreography>;
 
 // Normalized phase lengths in frames (stored on the event's beat).
@@ -43,6 +56,8 @@ export const ChoreoFrames = z.object({
   impact: z.number().int(),
   settle: z.number().int(),
   sfx: z.array(z.object({ phase: z.enum(CHOREO_PHASES), kind: z.enum(CHOREO_SFX_KINDS) })).optional(),
+  // camera: the validated response (present only when there is one).
+  camera: z.object({ response: z.enum(CAMERA_RESPONSES), intensity: z.enum(CAMERA_INTENSITIES) }).optional(),
 });
 export type ChoreoFrames = z.infer<typeof ChoreoFrames>;
 
@@ -79,6 +94,8 @@ export function normalizeChoreography(c: Partial<Choreography> | null | undefine
   const out: ChoreoFrames = { anticipation, action, impact, settle };
   const sfx = normalizeSfx(c?.sfx);
   if (sfx.length) out.sfx = sfx;
+  const camera = normalizeCamera(c?.camera);
+  if (camera) out.camera = camera;
   const total = anticipation + action + impact + settle;
   if (total <= MAX_TOTAL) return out;
   // Too long: shrink the optional phases first, then the action, never below
@@ -113,6 +130,38 @@ export function normalizeSfx(cues: { phase?: unknown; kind?: unknown }[] | null 
   }
   return out;
 }
+
+export function normalizeCamera(c: { response?: unknown; intensity?: unknown } | null | undefined): ChoreoFrames["camera"] | null {
+  const response = CAMERA_RESPONSES.find((r) => r === c?.response);
+  if (!response) return null;
+  return { response, intensity: CAMERA_INTENSITIES.find((i) => i === c?.intensity) ?? "medium" };
+}
+
+// The camera's answer, as offsets from the scene's own camera at the
+// event's phase boundaries (world px for the centre, a factor for the zoom).
+// `toward`: the event's subject relative to the camera centre — a push and a
+// pan go toward it, an orbit arcs around it. Small by design: the zoom stays
+// within ±10 %, a shift within 120 px, no shake.
+const INTENSITY_K: Record<CameraIntensity, number> = { low: 0.5, medium: 1, high: 1.5 };
+export type CameraOffset = { center: [number, number]; zoom: number };
+export function cameraOffsets(cam: NonNullable<ChoreoFrames["camera"]>, toward: [number, number]): { anticipation: CameraOffset; action: CameraOffset; impact: CameraOffset } {
+  const k = INTENSITY_K[cam.intensity];
+  const cap = (v: number) => Math.max(-120, Math.min(120, v));
+  const dir = Math.sign(toward[0]) || 1;
+  const act: CameraOffset =
+    cam.response === "push" ? { center: [cap(toward[0] * 0.1 * k), cap(toward[1] * 0.1 * k)], zoom: 1 + 0.06 * k }
+    : cam.response === "pull" ? { center: [0, 0], zoom: 1 - 0.06 * k }
+    : cam.response === "pan" ? { center: [cap(dir * 60 * k), 0], zoom: 1 }
+    : cam.response === "orbit" ? { center: [cap(dir * 45 * k), -12 * k], zoom: 1 + 0.02 * k }
+    : cam.response === "rise" ? { center: [0, cap(-50 * k)], zoom: 1 }
+    : { center: [0, cap(50 * k)], zoom: 1 };
+  // the preparation: a small move the other way; the impact: a touch further in
+  const anticipation: CameraOffset = { center: [-act.center[0] * 0.15, -act.center[1] * 0.15], zoom: 1 - (act.zoom - 1) * 0.15 };
+  const impact: CameraOffset = { center: act.center, zoom: Math.min(1.1, act.zoom * (1 + 0.015 * k)) };
+  return { anticipation, action: act, impact };
+}
+// Without a settle the camera still comes back, over this many frames.
+export const CAMERA_RETURN = 12;
 
 // The event on the timeline, from its start frame.
 export type ChoreoTimeline = ChoreoFrames & {

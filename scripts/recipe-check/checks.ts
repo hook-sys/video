@@ -7,11 +7,12 @@ import type { FlowNode, Track, Vec } from "@/components/video/flow/types";
 import { resolveTheme } from "@/lib/projects";
 import { BACKDROP_ROLE, BACKDROPS, backdropStrength, ENV_APPROVED_BACKDROPS, REJECTED_BACKDROPS, renderableBackdrop } from "@/components/video/flow/backdrop-names";
 import { compileSceneScript, DECOR_ACCENT } from "@/components/video/flow/compile-scene";
-import { num } from "@/components/video/flow/eval";
+import { num, vec as vecOf } from "@/components/video/flow/eval";
 import { boundaryTransition, ENV_BACKDROP, ENV_WORLD, ENVIRONMENTS, type SceneRecipe } from "@/lib/scene-recipe";
 import { SceneScript } from "@/lib/scene-script";
 import { createHash } from "node:crypto";
-import { type Choreography, choreoTimeline, MAX_TOTAL, normalizeChoreography, normalizeSfx, PHASE_BOUNDS, sfxFrame } from "@/lib/choreography";
+import { CAMERA_RETURN, cameraOffsets, type Choreography, choreoTimeline, MAX_TOTAL, normalizeCamera, normalizeChoreography, normalizeSfx, PHASE_BOUNDS, sfxFrame } from "@/lib/choreography";
+
 import { zodTextFormat } from "openai/helpers/zod";
 import { type Dna, dnaMove, isFixableNote, type ShotScript, ShotScript as ShotScriptSchema, ShotScriptModel } from "@/lib/shots";
 
@@ -395,6 +396,63 @@ function choreoSfxChecks() {
   add("Director schema: choreography.sfx (phase, kind)", schema.includes("\"sfx\"") && schema.includes("\"phase\""), "ok");
 }
 
+// Camera fingerprints from before camera choreography existed (66a6b82).
+const PRE_CAMERA: Record<string, string> = { dnaOrbit: "093b1b3e1b249145", dnaPush: "8d53a92de7e6cb3e", recipeOrbitDna: "ea6e409b38595cfe", baseCamera: "239c0a100f5f066f" };
+function cameraChoreo() {
+  section = "15. camera choreography";
+  const FULL = { anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 };
+  const moveWith = (c: Choreography | null) => withRecipe(0, (r) => ({ ...r, behaviors: [{ type: "move", from: "sheet", to: "hero", cue: "ten different tools", ...(c ? { choreography: c } : {}) }] }));
+  const plain = recipeFixture(moveWith(null));
+  const plainB = plain.script.beats.find((x) => x.action === "move")!;
+  const cue = plain.plan.nodes.find((n) => n.id === plainB.targets![0])!.paths!.at(-1)!.start;
+  // the camera at a frame, after smoothing (what the renderer shows)
+  const camAt = (r: ReturnType<typeof recipeFixture>, f: number) => ({ c: vecOf(r.plan.camera.center, f), z: num(r.plan.camera.zoom, f, 1) });
+  const run = (response: string, intensity: string | null = "medium", extra: Partial<Choreography> = {}) => recipeFixture(moveWith({ ...FULL, ...extra, camera: { response, intensity } }));
+  // normalization
+  add("normalize: valid response kept, bad intensity → medium, unknown response → none", JSON.stringify(normalizeCamera({ response: "push", intensity: "high" })) === JSON.stringify({ response: "push", intensity: "high" }) && normalizeCamera({ response: "pan", intensity: "extreme" })?.intensity === "medium" && normalizeCamera({ response: "spin", intensity: "low" }) === null && normalizeCamera(null) === null, "push/high · pan/extreme→medium · spin→none");
+  const nc = normalizeChoreography({ ...FULL, camera: { response: "push", intensity: null } }, 26);
+  add("normalized choreography carries the camera (frames unchanged)", JSON.stringify(nc) === JSON.stringify({ anticipation: 6, action: 18, impact: 5, settle: 9, camera: { response: "push", intensity: "medium" } }), JSON.stringify(nc));
+  const tl = choreoTimeline(nc, cue);
+  const at = (r: ReturnType<typeof recipeFixture>, f: number) => camAt(r, f);
+  const d = (r: ReturnType<typeof recipeFixture>, f: number) => { const a = at(r, f), b = at(plain, f); return { dx: a.c[0] - b.c[0], dy: a.c[1] - b.c[1], dz: a.z / b.z }; };
+  // after smoothing the peak lags the anchor a little: look across the event
+  const peak = (r: ReturnType<typeof recipeFixture>, key: "dx" | "dy" | "dz") => { let best = key === "dz" ? 1 : 0; for (let f = tl.start; f <= tl.end + 20; f++) { const v = d(r, f)[key]; if (Math.abs(key === "dz" ? v - 1 : v) > Math.abs(key === "dz" ? best - 1 : best)) best = v; } return best; };
+  const push = run("push"), pull = run("pull"), pan = run("pan"), orbit = run("orbit"), rise = run("rise"), fall = run("fall");
+  add("push: the camera moves in (zoom up) toward the subject", peak(push, "dz") > 1.03, `peak zoom ×${peak(push, "dz").toFixed(3)}`);
+  add("pull: the camera moves out (zoom down)", peak(pull, "dz") < 0.98, `peak zoom ×${peak(pull, "dz").toFixed(3)}`);
+  add("pan: a lateral move, no zoom", Math.abs(peak(pan, "dx")) > 25 && Math.abs(peak(pan, "dz") - 1) < 0.005, `peak dx ${peak(pan, "dx").toFixed(1)} · zoom ×${peak(pan, "dz").toFixed(3)}`);
+  add("orbit: an arc (lateral + lift + slight zoom)", Math.abs(peak(orbit, "dx")) > 15 && peak(orbit, "dy") < -3 && peak(orbit, "dz") > 1.005, `dx ${peak(orbit, "dx").toFixed(1)} · dy ${peak(orbit, "dy").toFixed(1)} · zoom ×${peak(orbit, "dz").toFixed(3)}`);
+  add("rise / fall: up and down, opposite", peak(rise, "dy") < -20 && peak(fall, "dy") > 20, `rise dy ${peak(rise, "dy").toFixed(1)} · fall dy ${peak(fall, "dy").toFixed(1)}`);
+  // frame-aligned and returning: no change before the event, back after it
+  // (the renderer's camera smoothing spreads a move a few frames either way:
+  // well under a pixel 30 frames out)
+  const before = d(push, tl.start - 30), after = d(push, tl.end + 60);
+  let peakAt = tl.start;
+  for (let f = tl.start; f <= tl.end + 20; f++) if (d(push, f).dz > d(push, peakAt).dz) peakAt = f;
+  add("frame-aligned: the move peaks within the event; untouched before, back after", peakAt >= tl.actionAt && peakAt <= tl.end + 6 && Math.abs(before.dx) < 0.5 && Math.abs(before.dz - 1) < 0.001 && Math.abs(after.dx) < 0.5 && Math.abs(after.dz - 1) < 0.002, `peak at ${peakAt} (action ${tl.actionAt}, impact ${tl.impactAt}, end ${tl.end}) · before Δ ${before.dx.toFixed(2)}/${before.dz.toFixed(4)} · after Δ ${after.dx.toFixed(2)}/${after.dz.toFixed(4)}`);
+  const raw = (resp: string) => { const o = cameraOffsets({ response: resp as never, intensity: "high" }, [900, 600]); return Math.max(Math.abs(o.impact.center[0]), Math.abs(o.impact.center[1])); };
+  add("no excessive movement: shift ≤ 120 px, zoom within ±10 %", ["push", "pull", "pan", "orbit", "rise", "fall"].every((r) => raw(r) <= 120) && ["push", "pull", "orbit"].every((r) => { const o = cameraOffsets({ response: r as never, intensity: "high" }, [0, 0]); return [o.anticipation.zoom, o.action.zoom, o.impact.zoom].every((z) => z >= 0.9 && z <= 1.1); }), ["push", "pan", "orbit", "rise"].map((r) => `${r} ${raw(r)}px`).join(" · "));
+  // missing optional phases: action only → anchors start, impact, impact + CAMERA_RETURN
+  const actOnly = recipeFixture(moveWith({ anticipation: null, action: 0.5, impact: null, settle: null, camera: { response: "pan", intensity: "low" } }));
+  const tl2 = choreoTimeline(normalizeChoreography({ action: 0.5 }, 26), cue);
+  add("missing phases: the move on the action, back over 12 frames", Math.abs(d(actOnly, tl2.impactAt + CAMERA_RETURN + 40).dx) < 0.5 && Math.abs(d(actOnly, tl2.impactAt).dx) > 5, `Δx at impact ${d(actOnly, tl2.impactAt).dx.toFixed(1)} · after return ${d(actOnly, tl2.impactAt + CAMERA_RETURN + 40).dx.toFixed(2)}`);
+  // invalid → safe fallback
+  const bad = recipeFixture(moveWith({ ...FULL, camera: { response: "shake", intensity: "max" } }));
+  const badMove = bad.script.beats.find((x) => x.action === "move")!;
+  add("invalid response → no camera response (camera untouched)", !badMove.choreo?.camera && JSON.stringify(bad.plan.camera) === JSON.stringify(recipeFixture(moveWith(FULL)).plan.camera), "shake → none");
+  add("invalid intensity → medium (same as medium)", JSON.stringify(run("pan", "max").plan.camera) === JSON.stringify(run("pan", "medium").plan.camera), "max → medium");
+  // deterministic
+  add("deterministic camera output", JSON.stringify(run("orbit").plan.camera) === JSON.stringify(orbit.plan.camera), fingerprint(orbit.plan.camera));
+  // compatibility
+  const DNA0: Dna = { ...DNA, camera: "orbit" };
+  const fps = { dnaOrbit: fingerprint(recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: DNA0 }).plan), dnaPush: fingerprint(recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: { ...DNA0, camera: "push" } }).plan), recipeOrbitDna: fingerprint(recipeFixture({ ...RECIPE_SHOTS, dna: DNA0 }).plan), baseCamera: fingerprint(recipeFixture(RECIPE_SHOTS).plan.camera) };
+  add("choreography absent → camera output unchanged (fingerprints)", Object.entries(fps).every(([k, v]) => v === PRE_CAMERA[k]), Object.entries(fps).map(([k, v]) => `${k} ${v === PRE_CAMERA[k] ? "=" : "≠"}`).join(", "));
+  add("recipe camera unchanged without a camera response (choreography with SFX only)", JSON.stringify(recipeFixture(moveWith({ ...FULL, sfx: [{ phase: "impact", kind: "soft_pop" }] })).plan.camera) === JSON.stringify(plain.plan.camera), "same camera keys");
+  add("legacy / DNA orbit keeps its own orbit move", fps.dnaOrbit === PRE_CAMERA.dnaOrbit && recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: DNA0 }).script.beats.some((b) => b.camera === "orbit"), "DNA orbit → scene camera orbit");
+  const schema = JSON.stringify(zodTextFormat(ShotScriptModel, "s"));
+  add("Director schema: choreography.camera (response, intensity)", schema.includes("\"response\"") && schema.includes("\"intensity\""), "ok");
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
@@ -406,5 +464,6 @@ export async function runChecks(): Promise<Check[]> {
   worldStack();
   choreography();
   choreoSfxChecks();
+  cameraChoreo();
   return checks;
 }

@@ -1,6 +1,6 @@
 import { estimateWords } from "@/lib/flow-script";
 import { type BackdropSlot, backdropSlot, renderableBackdrop } from "./backdrop-names";
-import { choreoTimeline, type ChoreoTimeline, sfxFrame } from "@/lib/choreography";
+import { CAMERA_RETURN, type CameraOffset, cameraOffsets, choreoTimeline, type ChoreoTimeline, sfxFrame } from "@/lib/choreography";
 import { parseAsset, type SceneBeat, type SceneContent, type SceneElement, type SceneScript } from "@/lib/scene-script";
 import { spokenCueTimes, type WordTiming } from "@/lib/voice-timing";
 import { cardSize } from "./cards/card";
@@ -9,6 +9,7 @@ import { CARD_BY_ID } from "./cards/templates";
 import type { CardContent } from "./cards/types";
 import { resolvePlan } from "./resolve";
 import { brandStartFrame, type CompileBrand, ctaLine, smoothCamera, wordFrames } from "./compile";
+import { CURVES } from "./ease";
 import { num, vec } from "./eval";
 import { DEPTH, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES, type Slot } from "./layouts";
 import { animate as animateAfter, Flow, type FlowNodeHandle, put as putAfter } from "./patterns";
@@ -88,6 +89,40 @@ function put<T>(track: Track<T>, t: number, value: T, ease?: Ease) {
 
 // The canvas decor's level under a recipe environment: an edge accent only.
 export const DECOR_ACCENT = 0.35;
+
+// Phase 3: each event's camera response (lib/choreography.ts cameraOffsets)
+// as offsets on the scene's own camera between the event's phase frames:
+// start (none) → action start (preparation) → impact (the move) → settle
+// (a touch further) → end (back to the scene's camera). The scene's own keys
+// inside the window keep their place; only the offset is added. No cues:
+// the camera is untouched.
+function applyCameraResponses(plan: FlowPlan, cues: { c: ChoreoTimeline; subject: Vec }[]) {
+  for (const { c, subject } of cues) {
+    const cam = c.camera!;
+    const base = { center: plan.camera.center.map((k) => [...k]) as Track<Vec>, zoom: plan.camera.zoom.map((k) => [...k]) as Track<number> };
+    const centre0 = vec(base.center, c.start);
+    const off = cameraOffsets(cam, [subject[0] - centre0[0], subject[1] - centre0[1]]);
+    const none: CameraOffset = { center: [0, 0], zoom: 1 };
+    const anchors: [number, CameraOffset][] = [[c.start, none]];
+    if (c.anticipation) anchors.push([c.actionAt, off.anticipation]);
+    anchors.push([c.impactAt, off.action]);
+    if (c.impact) anchors.push([c.settleAt, off.impact]);
+    const end = c.settle ? c.end : anchors[anchors.length - 1][0] + CAMERA_RETURN;
+    anchors.push([end, none]);
+    const at = (fr: number): CameraOffset => {
+      const j = anchors.findIndex(([af]) => af >= fr);
+      if (j <= 0) return anchors[Math.max(0, j)][1];
+      const [f0, a] = anchors[j - 1];
+      const [f1, b] = anchors[j];
+      const k = CURVES.inOut(f1 === f0 ? 1 : (fr - f0) / (f1 - f0));
+      return { center: [a.center[0] + (b.center[0] - a.center[0]) * k, a.center[1] + (b.center[1] - a.center[1]) * k], zoom: a.zoom + (b.zoom - a.zoom) * k };
+    };
+    const frames = [...new Set([...anchors.map(([af]) => af), ...base.center.map(([kf]) => kf).filter((kf) => kf > c.start && kf < end), ...base.zoom.map(([kf]) => kf).filter((kf) => kf > c.start && kf < end)])].sort((x, y) => x - y);
+    const inside = (kf: number) => kf >= c.start && kf <= end;
+    plan.camera.center = [...base.center.filter(([kf]) => kf < c.start), ...frames.map((fr): [number, Vec, Ease] => { const v = vec(base.center, fr); const o = at(fr).center; return [fr, [v[0] + o[0], v[1] + o[1]], "inOut"]; }), ...base.center.filter(([kf]) => !inside(kf) && kf > end)];
+    plan.camera.zoom = [...base.zoom.filter(([kf]) => kf < c.start), ...frames.map((fr): [number, number, Ease] => [fr, num(base.zoom, fr, 1) * at(fr).zoom, "inOut"]), ...base.zoom.filter(([kf]) => !inside(kf) && kf > end)];
+  }
+}
 
 // Cards whose last block is a button (the cursor clicks it).
 const BUTTON_CARDS = new Set(["action-panel", "login", "checkout", "cta"]);
@@ -271,6 +306,12 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     if (!c?.sfx?.length) return false;
     for (const x of c.sfx) f.sfx(sfxFrame(c, x.phase), x.kind, true);
     return true;
+  };
+  // Phase 3: camera responses of choreographed events, laid over the scene's
+  // own camera once every beat is placed (applyCameraResponses).
+  const cameraCues: { c: ChoreoTimeline; subject: Vec }[] = [];
+  const cameraCue = (c: ChoreoTimeline | null, subject: Live | undefined) => {
+    if (c?.camera && subject) cameraCues.push({ c, subject: subject.pos });
   };
   const setBlur = (n: Live, t: number, v: number, dur = 12) => {
     const b = (n.h.spec.blur ??= [[0, num(n.h.spec.blur, t, 0)]]);
@@ -737,6 +778,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           if (c) anticipate(a, c);
           travel(a, c?.actionAt ?? t, c?.action ?? 26, [to.pos[0] + dir * ((to.w * to.fit) / 2 + (a.w * a.fit) / 2 + 24), to.pos[1] + 30], "arc");
           if (c) land(a, c);
+          cameraCue(c, to);
           if (!choreoSfx(c)) moveSfx(t);
           break;
         }
@@ -971,6 +1013,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
             animate(to.h.spec.scale!, t + 40, 8, to.fit * 1.07, "out");
             put(to.h.spec.scale!, t + 56, to.fit, "inOut");
           }
+          cameraCue(c, to);
           if (!choreoSfx(c)) {
             moveSfx(t);
             f.sfx(t + 22, "soft_pop");
@@ -1016,6 +1059,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           if (c) land(to, c);
           else bump(to, t + 32);
           for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
+          cameraCue(c, to);
           if (!choreoSfx(c)) {
             moveSfx(t);
             f.sfx(t + 24, "soft_pop");
@@ -1035,6 +1079,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         to.fit *= 1.1;
         if (c) land(to, c);
         else bump(to, t + 22);
+        cameraCue(c, to);
         if (!choreoSfx(c)) {
           moveSfx(t);
           f.sfx(t + 22, "subtle_impact");
@@ -1108,6 +1153,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           animate(n.h.spec.opacity!, c?.actionAt ?? t, c?.action ?? 8, 0.35);
           put(n.h.spec.opacity!, c ? Math.max(c.end, c.actionAt + 26) : t + 34, 1, "inOut");
         }
+        cameraCue(c, a);
         if (!choreoSfx(c)) f.sfx(t + 2, "soft_pop");
         // Pushed in on another element: pull back so the highlighted one is seen.
         framed = !!focusedOn && focusedOn !== a;
@@ -1296,6 +1342,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   if (decorLevel.length > 1) plan.decorLevel = decorLevel;
   // Elements that never appeared (skipped beats) are dropped.
   plan.nodes = plan.nodes.filter((n: FlowNode) => n.kind !== "el" || n.appear !== undefined);
+  applyCameraResponses(plan, cameraCues);
   const out = smoothCamera(plan);
   if (skipped.length) out.skipped = skipped;
   // Explainer: the rules are enforced on the finished plan, not only reported.
