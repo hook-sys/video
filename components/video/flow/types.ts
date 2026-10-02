@@ -3,6 +3,8 @@
 // Plain data (frames at 30 fps, world pixels with origin at the frame centre),
 // written by pattern builders (patterns.ts) and later by the Visual Director.
 
+import type { BgChoreo } from "@/lib/choreography";
+
 export type Ease = "linear" | "out" | "in" | "inOut" | "back" | "snap";
 export type Vec = [number, number];
 export type Vec3 = [number, number, number];
@@ -156,7 +158,9 @@ export type FlowPlan = {
   // shows from start until the next entry of its slot (or its end). Only
   // drawable backdrops; the plain canvas is no entry. strength: an explicit
   // override of the backdrop's own (backdropStrength).
-  backdrops?: { kind: string; start: number; end?: number; strength?: number; slot?: "environment" | "atmosphere"; source?: "recipe" | "shot" }[];
+  // enter / exit: how the entry arrives / leaves (background choreography,
+  // components/video/flow/world-transition.ts); absent = the default dissolve.
+  backdrops?: { kind: string; start: number; end?: number; strength?: number; slot?: "environment" | "atmosphere"; source?: "recipe" | "shot"; enter?: BgChoreo; exit?: BgChoreo }[];
   // Element nodes that overlap on purpose (a stack, a fan) during a window.
   overlaps?: { ids: string[]; start: number; end: number }[];
   brand?: FlowBrand;

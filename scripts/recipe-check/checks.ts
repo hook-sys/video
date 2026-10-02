@@ -7,13 +7,16 @@ import type { FlowNode, Track, Vec } from "@/components/video/flow/types";
 import { resolveTheme } from "@/lib/projects";
 import { BACKDROP_ROLE, BACKDROPS, backdropStrength, ENV_APPROVED_BACKDROPS, REJECTED_BACKDROPS, renderableBackdrop } from "@/components/video/flow/backdrop-names";
 import { compileSceneScript, DECOR_ACCENT } from "@/components/video/flow/compile-scene";
-import { num, vec as vecOf } from "@/components/video/flow/eval";
+import { num, ramp, vec as vecOf } from "@/components/video/flow/eval";
+const ramp24 = (f: number, start: number) => ramp(f, start, 24, "inOut");
 import { boundaryTransition, ENV_BACKDROP, ENV_WORLD, ENVIRONMENTS, type SceneRecipe } from "@/lib/scene-recipe";
 import { SceneScript } from "@/lib/scene-script";
 import { createHash } from "node:crypto";
-import { CAMERA_RETURN, cameraOffsets, type Choreography, choreoTimeline, MAX_TOTAL, normalizeCamera, normalizeChoreography, normalizeSfx, PHASE_BOUNDS, sfxFrame } from "@/lib/choreography";
+import { BG_DIRECTIONS, BG_TRANSITIONS, type BgChoreo, CAMERA_RETURN, cameraOffsets, type Choreography, choreoTimeline, MAX_TOTAL, normalizeBackground, normalizeCamera, normalizeChoreography, normalizeSfx, PHASE_BOUNDS, sfxFrame } from "@/lib/choreography";
 
 import { zodTextFormat } from "openai/helpers/zod";
+import { bgLength, type WorldEntry, worldContext, worldLayer } from "@/components/video/flow/world-transition";
+import { StoredSceneRecipe } from "@/lib/scene-recipe";
 import { type Dna, dnaMove, isFixableNote, type ShotScript, ShotScript as ShotScriptSchema, ShotScriptModel } from "@/lib/shots";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
@@ -463,6 +466,110 @@ function cameraChoreo() {
   add("Director schema: choreography.camera (response, intensity)", schema.includes("\"response\"") && schema.includes("\"intensity\""), "ok");
 }
 
+function backgroundChoreo() {
+  section = "16. background choreography";
+  // normalization
+  const n = (c: Parameters<typeof normalizeBackground>[0]) => JSON.stringify(normalizeBackground(c));
+  add("normalize: the four transitions, default direction left and intensity medium", BG_TRANSITIONS.every((t) => normalizeBackground({ transition: t })?.transition === t) && n({ transition: "push" }) === JSON.stringify({ transition: "push", direction: "left", intensity: "medium" }), n({ transition: "push" }));
+  add("normalize: direction / intensity kept when valid, unknown → default", n({ transition: "wipe", direction: "up", intensity: "strong" }) === JSON.stringify({ transition: "wipe", direction: "up", intensity: "strong" }) && n({ transition: "slide", direction: "diagonal", intensity: "max" }) === JSON.stringify({ transition: "slide", direction: "left", intensity: "medium" }) && n({ transition: "slide", direction: null, intensity: null }) === n({ transition: "slide" }), "up/strong kept · diagonal/max → left/medium");
+  add("missing / invalid transition → none (the default dissolve)", normalizeBackground(null) === null && normalizeBackground(undefined) === null && normalizeBackground({}) === null && normalizeBackground({ transition: "spin", direction: "up" }) === null && normalizeBackground({ transition: null }) === null, "null · {} · spin → none");
+
+  // The layers of one slot, A → B at frame 100, with a transition.
+  const AT = 100;
+  const pair = (c: BgChoreo | undefined): WorldEntry[] => [{ start: 0, end: AT, slot: "environment" }, { start: AT, slot: "environment", ...(c ? { enter: c } : {}) }];
+  const states = (es: WorldEntry[], f: number) => es.map((e, i) => worldLayer(e, worldContext(es, i), f));
+  // how much of the slot shows at a point (alpha over alpha), the clip in the
+  // layer's own box (it moves with the layer, as in CSS)
+  const cover = (es: WorldEntry[], f: number, x: number, y: number) =>
+    1 - states(es, f).reduce((acc, st) => {
+      const lx = x - st.shift[0], ly = y - st.shift[1];
+      const c = st.clip ?? [0, 0, 0, 0];
+      const inside = lx >= c[3] && lx <= 1 - c[1] && ly >= c[0] && ly <= 1 - c[2] && lx >= 0 && lx <= 1 && ly >= 0 && ly <= 1;
+      return acc * (1 - (inside ? st.opacity : 0));
+    }, 1);
+  const minCover = (es: WorldEntry[], a: number, b: number) => { let m = 1; for (let f = a; f <= b; f++) for (let gx = 0; gx < 20; gx++) for (let gy = 0; gy < 20; gy++) m = Math.min(m, cover(es, f, (gx + 0.5) / 20, (gy + 0.5) / 20)); return m; };
+  const mk = (transition: BgChoreo["transition"], direction: BgChoreo["direction"] = "left", intensity: BgChoreo["intensity"] = "medium"): BgChoreo => ({ transition, direction, intensity });
+  const mid = (c: BgChoreo) => AT + Math.round(bgLength(c) / 2);
+  const st = (c: BgChoreo, f: number) => states(pair(c), f);
+  // 1. the four transitions
+  const cf = st(mk("crossfade"), mid(mk("crossfade")));
+  add("crossfade: a dissolve (both partly visible, nothing moves)", cf.every((x) => x.opacity > 0.2 && x.opacity < 0.8 && !x.shift[0] && !x.shift[1] && !x.clip), cf.map((x) => x.opacity.toFixed(2)).join(" / "));
+  const sl = st(mk("slide"), mid(mk("slide")));
+  add("slide: the current world moves away (on top), the target is revealed in place", sl[0].shift[0] < -0.1 && sl[0].top && sl[0].opacity > 0 && sl[0].opacity < 1 && sl[1].opacity === 1 && !sl[1].shift[0] && !sl[1].clip, `old shift ${sl[0].shift[0].toFixed(2)} α ${sl[0].opacity.toFixed(2)} top · new α ${sl[1].opacity}`);
+  const pu = st(mk("push"), mid(mk("push")));
+  add("push: the target pushes the current world out (both travel one way, whole)", pu[0].shift[0] < -0.3 && pu[1].shift[0] > 0.3 && Math.abs(pu[1].shift[0] - pu[0].shift[0] - 1) < 1e-9 && pu.every((x) => x.opacity === 1), `old ${pu[0].shift[0].toFixed(2)} · new ${pu[1].shift[0].toFixed(2)}`);
+  const wp = st(mk("wipe"), mid(mk("wipe")));
+  add("wipe: the target revealed from an edge (complementary clips, nothing moves)", !!wp[0].clip && !!wp[1].clip && wp[1].clip[3] > 0 && Math.abs(wp[1].clip[3] - (1 - wp[0].clip[1])) < 1e-9 && wp.every((x) => x.opacity === 1 && !x.shift[0]), `new inset-left ${wp[1].clip?.[3].toFixed(2)} · old inset-right ${wp[0].clip?.[1].toFixed(2)}`);
+  // 2. direction and intensity
+  const dirs = BG_DIRECTIONS.map((d) => st(mk("push", d), mid(mk("push", d)))[1].shift);
+  add("direction: the target comes from the opposite side of each direction", JSON.stringify(dirs.map((v) => [Math.sign(v[0]), Math.sign(v[1])])) === JSON.stringify([[1, 0], [-1, 0], [0, 1], [0, -1]]), dirs.map((v, i) => `${BG_DIRECTIONS[i]} ${v.map((x) => x.toFixed(2)).join(",")}`).join(" · "));
+  const far = (i: BgChoreo["intensity"]) => -st(mk("slide", "left", i), AT + 23)[0].shift[0];
+  add("intensity: slide distance subtle < medium < strong; crossfade / push / wipe slower when subtle", far("subtle") < far("medium") && far("medium") < far("strong") && bgLength(mk("crossfade", "left", "subtle")) > bgLength(mk("crossfade")) && bgLength(mk("push", "left", "strong")) < bgLength(mk("push")) && bgLength(mk("wipe", "left", "subtle")) > bgLength(mk("wipe")), `slide ${far("subtle").toFixed(2)} < ${far("medium").toFixed(2)} < ${far("strong").toFixed(2)} · lengths ${["subtle", "medium", "strong"].map((i) => bgLength(mk("push", "left", i as BgChoreo["intensity"]))).join("/")}`);
+  // 3. no blank frame, the old world ends, the target is established
+  const all = BG_TRANSITIONS.flatMap((t) => BG_DIRECTIONS.flatMap((d) => (["subtle", "medium", "strong"] as const).map((i) => mk(t, d, i))));
+  const covers = all.map((c) => minCover(pair(c), AT - 4, AT + bgLength(c) + 4));
+  const base = minCover(pair(undefined), AT - 4, AT + 30);
+  add("no blank frame: the slot stays covered through every transition (≥ the default dissolve)", base > 0.7 && covers.every((v) => v >= base - 1e-9), `min cover ${Math.min(...covers).toFixed(3)} (default dissolve ${base.toFixed(3)}), ${all.length} variants`);
+  const done = all.every((c) => { const e = AT + bgLength(c); return [e, e + 1, e + 30].every((f) => { const [a, b] = st(c, f); return a.opacity === 0 && b.opacity === 1 && !b.shift[0] && !b.shift[1] && !b.clip; }); });
+  add("old world gone and target fully established when the transition ends", done, "every transition × direction × intensity");
+  const before = all.every((c) => { const [a, b] = st(c, AT - 1); return b.opacity === 0 && a.opacity === 1 && !a.shift[0] && !a.clip; });
+  add("target starts on the event frame (nothing before it)", before, `frame ${AT - 1}: old whole, new hidden`);
+  add("deterministic", JSON.stringify(all.map((c) => st(c, mid(c)))) === JSON.stringify(all.map((c) => st(c, mid(c)))), `${all.length} variants`);
+
+  // In the compiler: s4 data-space → dark-space with a background push: the
+  // grid (environment) leaves, aurora (atmosphere) arrives on the same event.
+  const withBg = (i: number, bg: SceneRecipe["background"], env?: SceneRecipe["environment"]) => recipeFixture(withRecipe(i, (r) => ({ ...r, ...(env ? { environment: env } : {}), background: bg })));
+  const dark = withBg(3, { transition: "push", direction: "left" }, "dark-space");
+  const darkPlain = recipeFixture(withRecipe(3, (r) => ({ ...r, environment: "dark-space" })));
+  const db = dark.plan.backdrops ?? [];
+  const sceneT = dark.script.beats.filter((b) => b.action === "scene")[3];
+  const grid = db.find((x) => x.kind === "perspective-grid" && x.exit);
+  const aur = db.find((x) => x.kind === "aurora" && x.enter);
+  const push = { transition: "push", direction: "left", intensity: "medium" };
+  add("one event drives both slots (environment exits, atmosphere enters)", !!grid && !!aur && grid.end === aur.start && JSON.stringify(grid.exit) === JSON.stringify(push) && JSON.stringify(aur.enter) === JSON.stringify(push) && JSON.stringify(sceneT.recipe?.background) === JSON.stringify(push), db.map((x) => `${x.slot}:${x.kind}@${x.start}${x.end ? `–${x.end}` : ""}${x.enter ? ` in:${x.enter.transition}` : ""}${x.exit ? ` out:${x.exit.transition}` : ""}`).join(" "));
+  const gi = db.indexOf(grid!), ai = db.indexOf(aur!);
+  const gEnd = grid!.end! + bgLength(grid!.exit);
+  add("old backdrop ends correctly (no leak into the new scene)", worldLayer(grid!, worldContext(db, gi), gEnd).opacity === 0 && worldLayer(grid!, worldContext(db, gi), gEnd + 60).opacity === 0 && worldLayer(grid!, worldContext(db, gi), grid!.end! - 1).opacity === 1, `grid gone at ${gEnd}`);
+  const aEst = worldLayer(aur!, worldContext(db, ai), aur!.start + bgLength(aur!.enter));
+  add("target starts on its scene and is fully established", aur!.start === (dark.plan.backdrops ?? []).find((x) => x.kind === "aurora")!.start && worldLayer(aur!, worldContext(db, ai), aur!.start - 1).opacity === 0 && aEst.opacity === 1 && !aEst.shift[0] && !aEst.clip, `aurora from ${aur!.start}`);
+  add("same world timeline as without choreography (only how it moves)", JSON.stringify(db.map((x) => { const r = { ...x }; delete r.enter; delete r.exit; return r; })) === JSON.stringify(darkPlain.plan.backdrops), `${db.length} entries`);
+  // slots kept: a background on a scene whose world does not change adds nothing
+  const sameEnv = withBg(4, { transition: "wipe", direction: "right", intensity: "strong" }); // s5 data-space after s4 data-space
+  add("environment slot preserved (unchanged world: no new entry, no transition)", fingerprint(sameEnv.plan) === PRE_CHOREO.base, fingerprint(sameEnv.plan));
+  const cine = withBg(5, { transition: "slide", direction: "up" }); // s6 cinematic: grid continues, aurora arrives
+  const cb = cine.plan.backdrops ?? [];
+  const baseB = recipeFixture(RECIPE_SHOTS).plan.backdrops ?? [];
+  add("atmosphere slot changes on its own; the environment layer is kept", cb.length === baseB.length && cb.filter((x) => x.slot === "environment").every((x) => !x.enter && !x.exit) && JSON.stringify(cb.find((x) => x.kind === "aurora")?.enter) === JSON.stringify({ transition: "slide", direction: "up", intensity: "medium" }), cb.map((x) => `${x.slot}:${x.kind}${x.enter ? ` in:${x.enter.transition}` : ""}`).join(" "));
+  // the rest of the scene untouched
+  const scenes = (r: ReturnType<typeof recipeFixture>) => r.script.beats.filter((b) => b.action === "scene").map((b) => b.transition).join(",");
+  add("recipe transitions unchanged (transition_in / out are not overridden)", scenes(dark) === scenes(darkPlain) && scenes(cine) === scenes(recipeFixture(RECIPE_SHOTS)), scenes(dark));
+  add("camera unchanged", JSON.stringify(dark.plan.camera) === JSON.stringify(darkPlain.plan.camera) && JSON.stringify(cine.plan.camera) === JSON.stringify(recipeFixture(RECIPE_SHOTS).plan.camera), "same camera keys");
+  add("SFX unchanged", JSON.stringify(dark.plan.sfx) === JSON.stringify(darkPlain.plan.sfx) && JSON.stringify(plannedSfx(cine.plan)) === JSON.stringify(plannedSfx(recipeFixture(RECIPE_SHOTS).plan)), `${(dark.plan.sfx ?? []).length} cues`);
+  add("objects unchanged", JSON.stringify(dark.plan.nodes) === JSON.stringify(darkPlain.plan.nodes) && JSON.stringify(cine.plan.nodes) === JSON.stringify(recipeFixture(RECIPE_SHOTS).plan.nodes), "same nodes");
+  // compatibility
+  const nul = recipeFixture({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x) => (x.recipe ? { ...x, recipe: { ...x.recipe, background: null } } : x)) });
+  const bad = recipeFixture({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x) => (x.recipe ? { ...x, recipe: { ...x.recipe, background: { transition: "spin" } } } : x)) });
+  const fps = { base: fingerprint(recipeFixture(RECIPE_SHOTS).plan), nul: fingerprint(nul.plan), bad: fingerprint(bad.plan), legacy: fingerprint(recipeFixture(RECIPE_SHOTS_LEGACY).plan) };
+  add("choreography absent → existing plan fingerprint unchanged", fps.base === PRE_CHOREO.base && fps.nul === PRE_CHOREO.base && fps.legacy === PRE_CHOREO.legacy, Object.entries(fps).filter(([k]) => k !== "bad").map(([k, v]) => `${k} ${v}`).join(" · "));
+  add("invalid transition → the default (same plan as none)", fps.bad === PRE_CHOREO.base && !bad.script.beats.some((b) => b.recipe?.background), "spin → none");
+  const DNA0: Dna = { ...DNA, camera: "orbit" };
+  const dnaFp = fingerprint(recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: DNA0 }).plan);
+  const gridDna = recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: { ...DNA, background: "grid" } }).plan.backdrops ?? [];
+  add("DNA / legacy backgrounds unchanged (no transition on shots)", dnaFp === PRE_CAMERA.dnaOrbit && gridDna.length > 0 && gridDna.every((x) => !x.enter && !x.exit), `dna ${dnaFp} · grid ${gridDna.length} entries`);
+  // the default render path: exactly the old cross-fade
+  const oldK = (es: WorldEntry[], i: number, f: number) => { const e = es[i]; const out = es.slice(i + 1).find((x) => (x.slot ?? "environment") === (e.slot ?? "environment"))?.start ?? e.end; return ramp24(f, e.start) * (out !== undefined ? 1 - ramp24(f, out) : 1); };
+  const plainB = recipeFixture(RECIPE_SHOTS).plan.backdrops ?? [];
+  let worst = 0;
+  for (let f = 0; f < 900; f += 3) plainB.forEach((_, i) => { const l = worldLayer(plainB[i], worldContext(plainB, i), f); worst = Math.max(worst, Math.abs(l.opacity - oldK(plainB, i, f)), Math.abs(l.shift[0]) + Math.abs(l.shift[1]), l.clip ? 1 : 0, l.top ? 1 : 0); });
+  add("without choreography the renderer draws exactly the old cross-fade", worst === 0, `max difference ${worst}`);
+  // stored / Director
+  const stored = StoredSceneRecipe.parse({ ...RECIPE_SHOTS.shots.find((x) => x.recipe)!.recipe, background: 42 });
+  const old = StoredSceneRecipe.parse(JSON.parse(JSON.stringify(RECIPE_SHOTS.shots.find((x) => x.recipe)!.recipe)));
+  add("stored recipes: none reloads as none, unreadable → none", old.background === undefined && stored.background === null, `old ${String(old.background)} · unreadable ${String(stored.background)}`);
+  const schema = JSON.stringify(zodTextFormat(ShotScriptModel, "s"));
+  add("Director schema: background (transition, direction, intensity)", schema.includes("\"background\"") && schema.includes("\"transition\"") && schema.includes("\"direction\""), "ok");
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
@@ -475,5 +582,6 @@ export async function runChecks(): Promise<Check[]> {
   choreography();
   choreoSfxChecks();
   cameraChoreo();
+  backgroundChoreo();
   return checks;
 }

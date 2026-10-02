@@ -4,7 +4,7 @@ import { FLOW_THEMES } from "@/lib/flow-script";
 import { CAMERA_MOVES, CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
 import { DEVICE_MODELS } from "@/components/video/flow/cards/device-data";
 import { type AssetSelection, applyAssetSelection } from "@/lib/asset-selection";
-import { normalizeChoreography } from "@/lib/choreography";
+import { normalizeBackground, normalizeChoreography } from "@/lib/choreography";
 import { boundaryTransition, type CompiledRecipe, ENV_BACKDROP, ModelSceneRecipe, LAYER, RECIPE_MAPPED, type RecipeTransition, SceneRecipe, sceneTransition, StoredSceneRecipe } from "@/lib/scene-recipe";
 import { tokenize } from "@/lib/voice-timing";
 
@@ -785,6 +785,9 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     if (RECIPE_MAPPED[tIn]) notes.push(`recipe ${r.scene_id}: ${MAPPED_NOTE} transition ${tIn} → ${RECIPE_MAPPED[tIn]}`);
     if (tIn === "object-transform" && boundary.source !== "out" && !carriedHero && !morphFrom) notes.push(`recipe ${r.scene_id}: object-transform with nothing to carry (no persistent hero before it): dissolve`);
     const compiled: CompiledRecipe = { id: r.scene_id, composition: r.composition, environment: r.environment, hero: heroId, heroType: r.hero.type, roles, text: { position: r.typography.position, scale: r.typography.scale }, camera: r.camera, flash: tr.flash, words: false };
+    // How the world arrives (only when the recipe asks: else nothing changes).
+    const bg = normalizeBackground(r.background);
+    if (bg) compiled.background = bg;
     const elements = [heroEl, ...[...support.values()].filter((e) => !later.includes(e)), ...(morphFrom ? [{ id: morphFrom, asset: null, label: null, screen: null, content: null } as SceneElement] : [])];
     beats.push(beat({ cue: s.cue, action: "scene", elements, layout: "recipe", style: null, camera: "static", transition: tr.transition, backdrop: ENV_BACKDROP[r.environment] as SceneBeat["backdrop"], recipe: compiled }));
     scenes++;

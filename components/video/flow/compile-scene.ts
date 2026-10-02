@@ -1,6 +1,6 @@
 import { estimateWords } from "@/lib/flow-script";
 import { type BackdropSlot, backdropSlot, renderableBackdrop } from "./backdrop-names";
-import { CAMERA_RETURN, type CameraOffset, cameraOffsets, choreoTimeline, type ChoreoTimeline, sfxFrame } from "@/lib/choreography";
+import { type BgChoreo, CAMERA_RETURN, type CameraOffset, cameraOffsets, choreoTimeline, type ChoreoTimeline, sfxFrame } from "@/lib/choreography";
 import { parseAsset, type SceneBeat, type SceneContent, type SceneElement, type SceneScript } from "@/lib/scene-script";
 import { spokenCueTimes, type WordTiming } from "@/lib/voice-timing";
 import { cardSize } from "./cards/card";
@@ -599,13 +599,17 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const backdrops: NonNullable<FlowPlan["backdrops"]> = [];
   // The world on screen: one entry open per slot (environment, atmosphere).
   const openSlot: Record<BackdropSlot, (typeof backdrops)[number] | null> = { environment: null, atmosphere: null };
-  const setWorld = (w: Record<BackdropSlot, string | null>, t: number, source: "recipe" | "shot") => {
+  // choreo: how the world arrives (a recipe scene's background, Phase 4) —
+  // one event drives both slots, each slot changing on its own: the new
+  // entry enters with it, an entry whose slot goes empty exits with it.
+  const setWorld = (w: Record<BackdropSlot, string | null>, t: number, source: "recipe" | "shot", choreo?: BgChoreo) => {
     for (const slot of ["environment", "atmosphere"] as const) {
       const k = w[slot];
       const cur = openSlot[slot];
       if ((cur?.kind ?? null) === k) continue;
       if (cur) cur.end = t;
-      openSlot[slot] = k ? { kind: k, start: t, slot, source } : null;
+      if (cur && choreo && !k) cur.exit = choreo;
+      openSlot[slot] = k ? { kind: k, start: t, slot, source, ...(choreo ? { enter: choreo } : {}) } : null;
       if (k) backdrops.push(openSlot[slot]!);
     }
   };
@@ -687,7 +691,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         // unless recipe scenes came before) → the shots' current world → the
         // plain canvas. A recipe scene's world is never inherited by a shot.
         if (sceneRecipe) {
-          setWorld(ENV_WORLD[sceneRecipe.environment], t, "recipe");
+          setWorld(ENV_WORLD[sceneRecipe.environment], t, "recipe", sceneRecipe.background);
           recipeSeen = true;
         } else {
           const explicit = b.backdrop && (!calm || shotWorld === null || recipeSeen) ? b.backdrop : null;

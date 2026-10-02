@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Choreography, ModelChoreography } from "@/lib/choreography";
+import { BackgroundChoreo, Choreography, ModelBackgroundChoreo, ModelChoreography, BgChoreo as BgChoreoSchema, type BgChoreo } from "@/lib/choreography";
 import type { EnvBackdrop } from "@/components/video/flow/backdrop-names";
 import type { Vec } from "@/components/video/flow/types";
 
@@ -72,17 +72,22 @@ export const SceneRecipe = z.object({
   transition_out: z.enum(RECIPE_TRANSITIONS).nullable(),
   // What the scene's assets must be (null: the assets named above as they are).
   assets: z.array(AssetRequirement).nullable(),
+  // How the scene's world arrives (lib/choreography.ts normalizeBackground):
+  // crossfade, slide, push or wipe, with a direction and intensity; absent or
+  // null = the world's default dissolve.
+  background: BackgroundChoreo.nullable().optional(),
 });
 export type SceneRecipe = z.infer<typeof SceneRecipe>;
 // A stored recipe: ones saved before asset requirements have none, and an
 // unreadable list is dropped (the recipe itself is kept).
 // What the Director writes (structured output: every key present; a missing
 // choreography reads as null).
-export const ModelSceneRecipe = SceneRecipe.extend({ behaviors: z.array(RecipeBehavior.extend({ choreography: ModelChoreography.nullable().default(null) })) });
+export const ModelSceneRecipe = SceneRecipe.extend({ behaviors: z.array(RecipeBehavior.extend({ choreography: ModelChoreography.nullable().default(null) })), background: ModelBackgroundChoreo.nullable().default(null) });
 // Behaviors saved before choreography have none; an unreadable one is null.
 export const StoredSceneRecipe = SceneRecipe.extend({
   assets: z.array(AssetRequirement).nullable().default(null).catch(null),
   behaviors: z.array(RecipeBehavior.extend({ choreography: Choreography.nullable().optional().catch(null) })),
+  background: BackgroundChoreo.nullable().optional().catch(null),
 });
 
 // Depth layers (z order, size and camera response). The hero layer is the
@@ -130,6 +135,7 @@ export type CompiledRecipe = {
   camera: { intent: (typeof RECIPE_CAMERAS)[number]; intensity: "low" | "medium" | "high" };
   flash: boolean; // a brand-colour circle sweeps the canvas as the scene arrives
   words: boolean; // the scene has a line of words (else the picture takes their room)
+  background?: BgChoreo; // how the scene's world arrives (absent: the default dissolve)
 };
 export const CompiledRecipeSchema = z.object({
   id: z.string(),
@@ -142,6 +148,7 @@ export const CompiledRecipeSchema = z.object({
   camera: z.object({ intent: z.enum(RECIPE_CAMERAS), intensity: z.enum(["low", "medium", "high"]) }),
   flash: z.boolean(),
   words: z.boolean().default(true),
+  background: BgChoreoSchema.optional().catch(undefined),
 });
 
 // Transitions without an exact renderer form, and what they become.

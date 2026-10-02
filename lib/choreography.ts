@@ -187,3 +187,24 @@ export function choreoTimeline(c: ChoreoFrames, start: number): ChoreoTimeline {
 export function sfxFrame(tl: ChoreoTimeline, phase: ChoreoPhase): number {
   return phase === "anticipation" ? tl.start : phase === "action" ? tl.actionAt : phase === "impact" ? tl.impactAt : tl.settleAt;
 }
+
+// Background / environment choreography (Phase 4): how a scene's world
+// arrives — crossfade (dissolve), slide (the current world moves away and
+// reveals the new one), push (the new world pushes the current one out),
+// wipe (the new world is revealed from an edge). Loose on input; normalized
+// by normalizeBackground (components/video/flow/world-transition.ts plays it).
+export const BG_TRANSITIONS = ["crossfade", "slide", "push", "wipe"] as const;
+export const BG_DIRECTIONS = ["left", "right", "up", "down"] as const;
+export const BG_INTENSITIES = ["subtle", "medium", "strong"] as const;
+export const BackgroundChoreo = z.object({ transition: z.string().nullable().optional(), direction: z.string().nullable().optional(), intensity: z.string().nullable().optional() });
+// The Director's strict output: every key present (null = default).
+export const ModelBackgroundChoreo = z.object({ transition: z.string().nullable(), direction: z.string().nullable().default(null), intensity: z.string().nullable().default(null) });
+export const BgChoreo = z.object({ transition: z.enum(BG_TRANSITIONS), direction: z.enum(BG_DIRECTIONS), intensity: z.enum(BG_INTENSITIES) });
+export type BgChoreo = z.infer<typeof BgChoreo>;
+// An unknown transition means none (the world's default dissolve); the
+// direction defaults to left, the intensity to medium.
+export function normalizeBackground(c: { transition?: unknown; direction?: unknown; intensity?: unknown } | null | undefined): BgChoreo | null {
+  const transition = BG_TRANSITIONS.find((x) => x === c?.transition);
+  if (!transition) return null;
+  return { transition, direction: BG_DIRECTIONS.find((x) => x === c?.direction) ?? "left", intensity: BG_INTENSITIES.find((x) => x === c?.intensity) ?? "medium" };
+}

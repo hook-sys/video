@@ -11,6 +11,7 @@ import { computeStates, type NodeState } from "./states";
 import { UiPlane } from "./ui-plane";
 import { ElementView } from "./element";
 import { Backdrop } from "./backdrops";
+import { worldContext, worldLayer } from "./world-transition";
 import { backdropStrength, isBackdrop } from "./backdrop-names";
 import { fitSize, labelWorldSize, splitLines, TYPE } from "./typography";
 import { MARK_DELAY, type FlowBrand, type FlowLink, type FlowList, type FlowNode, type FlowPanel, type FlowPlan, type FlowText, type ThemeName, type Vec } from "./types";
@@ -131,14 +132,28 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
         .map((b, i, all) => {
           // Cross-fade 24 frames into each backdrop; it fades as the next one
           // of its slot arrives (or at its end) and clears for the brand lockup.
+          // A choreographed world (enter / exit) moves as its transition says
+          // (world-transition.ts); without one this is the plain cross-fade.
           const slot = b.slot ?? "environment";
-          const out = all.slice(i + 1).find((x) => (x.slot ?? "environment") === slot)?.start ?? b.end;
-          const k = ramp(frame, b.start, 24, "inOut") * (out !== undefined ? 1 - ramp(frame, out, 24, "inOut") : 1) * (plan.brand ? 1 - ramp(frame, plan.brand.start - 6, 14, "inOut") : 1);
-          return { b, i, k, slot };
+          const layer = worldLayer(b, worldContext(all, i), frame);
+          const k = layer.opacity * (plan.brand ? 1 - ramp(frame, plan.brand.start - 6, 14, "inOut") : 1);
+          return { b, i, k, slot, layer };
         })
-        // (the environment under its atmosphere)
-        .sort((x, y) => (x.slot === y.slot ? x.i - y.i : x.slot === "environment" ? -1 : 1))
-        .map(({ b, i, k }) => (isBackdrop(b.kind) && k > 0.001 ? <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={(b.strength ?? backdropStrength(b.kind)) * k} /> : null))}
+        // (the environment under its atmosphere; a world sliding away over the
+        // one it reveals)
+        .sort((x, y) => (x.slot === y.slot ? Number(x.layer.top) - Number(y.layer.top) || x.i - y.i : x.slot === "environment" ? -1 : 1))
+        .map(({ b, i, k, layer }) => {
+          if (!isBackdrop(b.kind) || k <= 0.001) return null;
+          const el = <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={(b.strength ?? backdropStrength(b.kind)) * k} />;
+          if (!b.enter && !b.exit && !layer.shift[0] && !layer.shift[1] && !layer.clip) return el;
+          const [sx, sy] = layer.shift;
+          const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
+          return (
+            <AbsoluteFill key={i} style={{ transform: sx || sy ? `translate(${pct(sx)}, ${pct(sy)})` : undefined, clipPath: layer.clip ? `inset(${layer.clip.map(pct).join(" ")})` : undefined }}>
+              {el}
+            </AbsoluteFill>
+          );
+        })}
       {dim < 0.999 && (
         <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - dim, filter: blurFilter(dim * 14), transform: `scale(${1 - 0.05 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
       )}
