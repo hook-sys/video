@@ -1,6 +1,6 @@
 // Scene Recipe execution: assemble / transform / arrange run on screen,
 // the scene boundary transition contract, and the palette precedence.
-import { RECIPE_DURATION, RECIPE_NARRATION as RECIPE_NARRATION_, recipeFixture, RECIPE_SHOTS, RECIPE_SHOTS_LEGACY } from "@/components/video/flow/fixtures/recipe";
+import { RECIPE_BRAND, RECIPE_DURATION, RECIPE_NARRATION as RECIPE_NARRATION_, recipeFixture, RECIPE_SHOTS, RECIPE_SHOTS_LEGACY } from "@/components/video/flow/fixtures/recipe";
 import { THEMES, withBrandColor } from "@/components/video/flow/themes";
 import { plannedSfx } from "@/components/video/flow/flow-scene";
 import type { FlowNode, Track, Vec } from "@/components/video/flow/types";
@@ -18,7 +18,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { bgLength, type WorldEntry, worldContext, worldLayer } from "@/components/video/flow/world-transition";
 import { StoredSceneRecipe } from "@/lib/scene-recipe";
 import { fitRelationshipBudget, sceneChains } from "@/lib/relationship-budget";
-import { budgetDirections, INSTRUCTIONS } from "@/lib/ai/shot-director";
+import { budgetDirections, compilerMeasure, INSTRUCTIONS } from "@/lib/ai/shot-director";
 import { estimateWords } from "@/lib/flow-script";
 import { type Dna, dnaMove, isFixableNote, type ShotScript, ShotScript as ShotScriptSchema, ShotScriptModel } from "@/lib/shots";
 
@@ -865,6 +865,67 @@ function directorBudget() {
   add("deterministic", JSON.stringify(fitRelationshipBudget(budgetFive(), words)) === JSON.stringify(b), `${b.notes.length} notes`);
 }
 
+// Timing parity: the Director's budget measured by the compiler itself.
+function timingParity() {
+  section = "21. relationship timing parity";
+  const words = estimateWords(RECIPE_NARRATION_, RECIPE_DURATION);
+  const measure = compilerMeasure({ narration: RECIPE_NARRATION_, durationSeconds: RECIPE_DURATION, brand: RECIPE_BRAND });
+  const extra = (r: SceneRecipe) => [...r.supporting, { id: "chip", asset: "icon:cpu", role: "a step", layer: "background", relation: "behind-hero", persistence: "scene" }, { id: "p2", asset: "icon:chart-line", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" }] as SceneRecipe["supporting"];
+  const chain5 = (cues: string[]): Bh20[] => [
+    { type: "flow", from: "db", to: "hero", cue: cues[0], id: "a" },
+    { type: "merge", from: "chip", to: "hero", cue: cues[1], id: "b", relationship: { after: "a", offset: 4 } },
+    { type: "highlight", from: "hero", to: null, cue: cues[2], id: "c", relationship: { after: "b", offset: 4 } },
+    { type: "move", from: "p2", to: "hero", cue: cues[3], id: "d", relationship: { after: "c", offset: 4 } },
+    { type: "highlight", from: "hero", to: null, cue: cues[4], id: "e", relationship: { after: "d", offset: 4 } },
+  ];
+  // Scenario 2: a reveal of the scene comes before the chain's cause (it starts the cause later)
+  const scen2 = withRecipe(2, (r) => ({ ...r, supporting: extra(r), behaviors: [{ type: "reveal", from: "bars", to: null, cue: "every", id: "r" }, ...chain5(["source", "into", "one", "live", "dashboard"])] }));
+  // Scenario 3: the last scene — its chain runs into the stage's end (the brand lockup)
+  const scen3 = withRecipe(5, (r) => ({ ...r, behaviors: [
+    { type: "reveal", from: "ok", to: null, cue: "Every", id: "a" },
+    { type: "highlight", from: "hero", to: null, cue: "answer.", id: "b", relationship: { after: "a", offset: 4 } },
+    { type: "highlight", from: "ok", to: null, cue: "Start", id: "c", relationship: { after: "b", offset: 4 } },
+    { type: "highlight", from: "hero", to: null, cue: "free", id: "d", relationship: { after: "c", offset: 4 } },
+    { type: "highlight", from: "ok", to: null, cue: "with", id: "e", relationship: { after: "d", offset: 4 } },
+  ] }));
+  const available = (notes: string[]) => [...new Set(notes.map((n) => Number(/, (\d+) available/.exec(n)?.[1])))];
+  const overflow = (sh: ShotScript) => recipeFixture(sh).plan.relationWarnings?.find((w) => w.code === "RELATIONSHIP_SCENE_OVERFLOW");
+  const cases: [string, ShotScript, number][] = [["Case B", budgetFive(), 95], ["Scenario 2 (a reveal before the cause)", scen2, 79], ["Scenario 3 (last scene, stage end)", scen3, 96]];
+  for (const [label, sh, oldEstimate] of cases) {
+    const comp = overflow(sh)!;
+    const m = fitRelationshipBudget(sh, words, measure);
+    const e = fitRelationshipBudget(sh, words);
+    add(`${label}: Director available = compiler available`, !!comp && JSON.stringify(available(m.notes)) === JSON.stringify([comp.availableFrames]) && JSON.stringify(available(e.notes)) === JSON.stringify([oldEstimate]), `compiler ${comp?.availableFrames} · Director ${available(m.notes).join("/")} (word-time estimate alone: ${available(e.notes).join("/")})`);
+    add(`${label}: no overflow left after the fit`, !recipeFixture(m.shots).plan.relationWarnings, `${m.notes.length} drop${m.notes.length === 1 ? "" : "s"}`);
+  }
+  add("Case B: compiler available 87", overflow(budgetFive())?.availableFrames === 87, `${overflow(budgetFive())?.availableFrames}`);
+  // same priority, cause kept, same order of drops
+  const mB = fitRelationshipBudget(budgetFive(), words, measure);
+  const ids = (sh: ShotScript, i: number) => sh.shots[i].recipe!.behaviors.map((b) => `${b.id}${b.relationship?.after ? `<${b.relationship.after}` : ""}`).join(" ");
+  add("drop priority, cause protection and order unchanged", ids(mB.shots, 2) === "a e<a r" && mB.notes.map((n) => /dropped "(\w)"/.exec(n)?.[1]).join("") === "dbc", `${ids(mB.shots, 2)}`);
+  // measurement only for directions with relationships
+  let calls = 0;
+  const counted: typeof measure = (sh) => { calls++; return measure(sh); };
+  budgetDirections([RECIPE_SHOTS, RECIPE_SHOTS_LEGACY], words, counted);
+  const none = calls;
+  budgetDirections([budgetFive()], words, counted);
+  add("no relationships → no measurement (0 compiles); with relationships → measured", none === 0 && calls > 0, `without: ${none} · with: ${calls - none}`);
+  // what cannot fit: kept, and the compiler still warns
+  const s1Chain = withRecipe(0, (r) => ({ ...r, supporting: [
+    { id: "sheet", asset: "icon:file-spreadsheet", role: "a card", layer: "midground", relation: "feeds-hero", persistence: "scene" },
+    { id: "chart", asset: "visual:bars", role: "the chart", layer: "foreground", relation: "beside-hero", persistence: "scene" },
+    { id: "p1", asset: "icon:database", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" },
+    { id: "p2", asset: "icon:chart-line", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" }], behaviors: [
+    { type: "move", from: "sheet", to: "hero", cue: "ten different tools", id: "a" },
+    { type: "assemble", from: "p1", to: "chart", cue: "different tools", id: "b", relationship: { after: "a", offset: 6 } },
+    { type: "highlight", from: "chart", to: null, cue: "tools", id: "c", relationship: { after: "b", offset: 4 } },
+  ] }));
+  const k = fitRelationshipBudget(s1Chain, words, measure);
+  add("still too long: kept (cause + one effect); the compiler's overflow guard stays", ids(k.shots, 0) === "a b<a" && k.notes.some((n) => n.includes("kept")) && !!overflow(k.shots), `${ids(k.shots, 0)} · ${JSON.stringify(overflow(k.shots))}`);
+  add("relationship-free: unchanged, fingerprints unchanged", fitRelationshipBudget(RECIPE_SHOTS, words, measure).shots === RECIPE_SHOTS && fingerprint(recipeFixture(RECIPE_SHOTS).plan) === PRE_CHOREO.base, "base");
+  add("deterministic", JSON.stringify(fitRelationshipBudget(scen2, words, measure)) === JSON.stringify(fitRelationshipBudget(scen2, words, measure)), "scenario 2 twice");
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
@@ -882,5 +943,6 @@ export async function runChecks(): Promise<Check[]> {
   relationships();
   relationGuards();
   directorBudget();
+  timingParity();
   return checks;
 }

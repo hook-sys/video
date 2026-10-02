@@ -13,8 +13,10 @@ import { spokenCueTimes, type WordTiming } from "@/lib/voice-timing";
 // only the cause and one effect are left. Choreography phases, sounds and
 // camera responses are never shortened. A chain that still does not fit is
 // kept as it is: the compiler reports it (RELATIONSHIP_SCENE_OVERFLOW).
-// Timings are the compiler's own: the narration's word times (or their
-// estimate) and each event's length to rest (compile-scene.ts eventLength).
+// Timings are the compiler's own: given a `measure`, its warnings decide
+// (the scheduler's real start of the cause, the next scene's words or the
+// stage's end); without one, the narration's word times (or their estimate)
+// and each event's length to rest (compile-scene.ts eventLength).
 
 const FPS = 30;
 const LEAD = 3; // the compiler starts a beat this many frames before its word
@@ -86,7 +88,81 @@ function budgets(shots: ShotScript, words: WordTiming[]): { at: (cue: string) =>
   });
 }
 
-export function fitRelationshipBudget(shots: ShotScript, words: WordTiming[]): { shots: ShotScript; notes: string[] } {
+// One step of the simplification: the least important event after the
+// cause (ties: the later one) leaves the chain; its followers follow the
+// event it followed.
+function dropOne(behaviors: Behavior[], chain: Chain): { behaviors: Behavior[]; victim: Behavior; parent: string } {
+  const victim = chain.members.filter((i) => i !== chain.root).sort((a, b) => worth(behaviors[a], a === chain.last) - worth(behaviors[b], b === chain.last) || b - a)[0];
+  const v = behaviors[victim];
+  const parent = v.relationship!.after!;
+  return { victim: v, parent, behaviors: behaviors.filter((_, i) => i !== victim).map((b) => (b.relationship?.after?.trim() === v.id?.trim() ? { ...b, relationship: { ...b.relationship, after: parent } } : b)) };
+}
+
+// The compiler's own verdict on a script (compile-scene.ts
+// RELATIONSHIP_SCENE_OVERFLOW warnings: per chain its scene, its events'
+// keys "<scene_id>#<behavior index>", requiredFrames and availableFrames),
+// or null when it could not be compiled. The authoritative timing: where
+// the scheduler really starts the cause (after the beats before it) and
+// where the next scene's words (or the stage's end) are.
+export type Overflow = { scene: string; chain: string[]; requiredFrames: number; availableFrames: number };
+export type Measure = (shots: ShotScript) => Overflow[] | null;
+
+export function fitRelationshipBudget(shots: ShotScript, words: WordTiming[], measure?: Measure): { shots: ShotScript; notes: string[] } {
+  if (!shots.shots.some((s) => s.recipe?.behaviors.some((b) => b.relationship?.after))) return { shots, notes: [] };
+  return measure ? fitMeasured(shots, words, measure) : fitEstimated(shots, words);
+}
+
+// With the compiler's timing: measure, simplify each overflowing chain until
+// its estimate fits the compiler's available frames, measure again — until
+// the compiler reports no overflow but chains already down to the cause and
+// one effect. (A script that does not compile: the estimate alone.)
+function fitMeasured(shots: ShotScript, words: WordTiming[], measure: Measure): { shots: ShotScript; notes: string[] } {
+  const notes: string[] = [];
+  const kept = new Set<string>(); // "<scene_id>#<cause id>": chains left as they are
+  let cur = shots;
+  for (let pass = 0; pass < 16; pass++) {
+    const warned = measure(cur);
+    if (!warned) {
+      const est = fitEstimated(cur, words);
+      return { shots: est.shots, notes: [...notes, ...est.notes] };
+    }
+    let progressed = false;
+    for (const w of warned) {
+      const si = cur.shots.findIndex((x) => x.recipe?.scene_id === w.scene);
+      const r = cur.shots[si]?.recipe;
+      const root = Number(w.chain[0]?.split("#").pop());
+      if (!r || !Number.isInteger(root) || !r.behaviors[root]) continue;
+      const tag = `${w.scene}#${r.behaviors[root].id ?? root}`;
+      if (kept.has(tag)) continue;
+      let behaviors = r.behaviors;
+      let chain = sceneChains(behaviors).find((c) => c.root === root);
+      if (!chain) continue;
+      const name = (b: Behavior[], i: number) => `"${b[i].id}"`;
+      if (chain.members.length <= 2) {
+        notes.push(`shot ${si + 1} (${r.scene_id}): relationship budget: ${chain.members.map((i) => name(behaviors, i)).join(" → ")} needs ${w.requiredFrames} frames, ${w.availableFrames} available — kept (the cause and one effect; the compiler reports the overflow)`);
+        kept.add(tag);
+        continue;
+      }
+      // the compiler's numbers first; then the estimate against the same available frames
+      let needs = w.requiredFrames;
+      while (chain && chain.members.length > 2 && needs > w.availableFrames) {
+        const d = dropOne(behaviors, chain);
+        notes.push(`shot ${si + 1} (${r.scene_id}): relationship budget: chain needs ${needs} frames, ${w.availableFrames} available — dropped "${d.victim.id}" (${d.victim.type} ${d.victim.from}); its followers now follow "${d.parent}"`);
+        behaviors = d.behaviors;
+        chain = sceneChains(behaviors).find((c) => c.root === root);
+        needs = chain?.frames ?? 0;
+      }
+      cur = { ...cur, shots: cur.shots.map((x, k) => (k === si ? { ...x, recipe: { ...r, behaviors } } : x)) };
+      progressed = true;
+      break; // measure again (indices of the other warnings may have moved)
+    }
+    if (!progressed) break;
+  }
+  return { shots: cur, notes };
+}
+
+// Without a compiler at hand: the narration's word times alone.
+function fitEstimated(shots: ShotScript, words: WordTiming[]): { shots: ShotScript; notes: string[] } {
   const notes: string[] = [];
   const room = budgets(shots, words);
   let changed = false;
@@ -108,12 +184,9 @@ export function fitRelationshipBudget(shots: ShotScript, words: WordTiming[]): {
         kept.add(behaviors[over.root].id ?? "");
         continue;
       }
-      // the least important event after the cause (ties: the later one)
-      const victim = over.members.filter((i) => i !== over.root).sort((a, b) => worth(behaviors[a], a === over.last) - worth(behaviors[b], b === over.last) || b - a)[0];
-      const v = behaviors[victim];
-      const parent = v.relationship!.after!;
-      notes.push(`shot ${si + 1} (${r.scene_id}): relationship budget: chain needs ${over.frames} frames, ${available} available — dropped ${name(victim)} (${v.type} ${v.from}); its followers now follow "${parent}"`);
-      behaviors = behaviors.filter((_, i) => i !== victim).map((b) => (b.relationship?.after?.trim() === v.id?.trim() ? { ...b, relationship: { ...b.relationship, after: parent } } : b));
+      const d = dropOne(behaviors, over);
+      notes.push(`shot ${si + 1} (${r.scene_id}): relationship budget: chain needs ${over.frames} frames, ${available} available — dropped "${d.victim.id}" (${d.victim.type} ${d.victim.from}); its followers now follow "${d.parent}"`);
+      behaviors = d.behaviors;
       changed = true;
     }
     return behaviors === r.behaviors ? shot : { ...shot, recipe: { ...r, behaviors } };

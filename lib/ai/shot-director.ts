@@ -10,7 +10,10 @@ import type { SceneScript } from "@/lib/scene-script";
 import { continuityCheck, type Direction, directionScripts, type Dna, expandShots, isFixableNote, shotCatalogText, type ShotScript, ShotScriptModel } from "@/lib/shots";
 import { tokenize, type WordTiming } from "@/lib/voice-timing";
 import { estimateWords } from "@/lib/flow-script";
-import { fitRelationshipBudget } from "@/lib/relationship-budget";
+import { fitRelationshipBudget, type Measure } from "@/lib/relationship-budget";
+import { compileSceneScript } from "@/components/video/flow/compile-scene";
+import type { CompileBrand } from "@/components/video/flow/compile";
+import { repairCues } from "@/lib/scene-script";
 
 // Shot Director: picks a tested shot template (lib/shots.ts) for each moment
 // of the narration and fills in its words. Sizes, places, motion, cursor and
@@ -91,14 +94,31 @@ export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | nul
 // The Director's timing budget for relationships (lib/relationship-budget.ts):
 // every direction's chains fitted to its scenes' narration time before it is
 // compiled; what was dropped is reported in the notes.
-export function budgetDirections(scripts: ShotScript[], timeline: WordTiming[]): { scripts: ShotScript[]; notes: string[] } {
+// `measure`: the compiler's verdict (see compilerMeasure), run only for a
+// direction with relationships.
+export function budgetDirections(scripts: ShotScript[], timeline: WordTiming[], measure?: Measure): { scripts: ShotScript[]; notes: string[] } {
   const notes: string[] = [];
   const out = scripts.map((sh) => {
-    const fit = fitRelationshipBudget(sh, timeline);
+    const fit = fitRelationshipBudget(sh, timeline, measure);
     notes.push(...fit.notes.map((n) => `direction ${sh.variant}: ${n}`));
     return fit.shots;
   });
   return { scripts: out, notes };
+}
+
+// The compiler's own timing for the budget: the direction expanded, its
+// cues matched to the voice and compiled as the search compiles it
+// (lib/shot-search.ts), read for RELATIONSHIP_SCENE_OVERFLOW.
+export function compilerMeasure(ctx: { narration: string; words?: WordTiming[] | null; durationSeconds: number; brand?: CompileBrand }): Measure {
+  return (shots) => {
+    try {
+      const fixed = repairCues(expandShots(shots, [], ctx.narration), ctx.narration, ctx.words ?? null, ctx.durationSeconds);
+      const plan = compileSceneScript(fixed.script, { narration: ctx.narration, words: ctx.words ?? undefined, durationSeconds: ctx.durationSeconds, brand: ctx.brand });
+      return (plan.relationWarnings ?? []).filter((w) => w.code === "RELATIONSHIP_SCENE_OVERFLOW");
+    } catch {
+      return null;
+    }
+  };
 }
 
 export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000, client?: Pick<OpenAI, "responses">, wanted: DirectionMode = directionMode()): Promise<ShotDirectorResult> {
@@ -115,11 +135,12 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   const seed = input.seed ?? seedFrom(input.narration);
   // the narration's word times (or their estimate, as the compiler uses them)
   const timeline = input.words?.length ? input.words : estimateWords(input.narration, input.duration_seconds);
+  const measure = compilerMeasure({ narration: input.narration, words: input.words, durationSeconds: input.duration_seconds, brand: { name: input.product_name ?? "", logo: "logo" } });
   const check = (raw: unknown) => {
     if (!raw) return { shots: null, script: null, problems: ["no structured output"], ...none };
     // Phase 6.5: one shot script per creative direction (A–D).
     // (each direction's relationship chains fitted to its scenes' narration time)
-    const { scripts, notes: budgetNotes } = budgetDirections(directionScripts(ShotScriptModel.parse(raw)), timeline);
+    const { scripts, notes: budgetNotes } = budgetDirections(directionScripts(ShotScriptModel.parse(raw)), timeline, measure);
     if (!scripts.length) return { shots: null, script: null, problems: ["no creative directions"], ...none };
     const expandNotes: string[] = [...budgetNotes];
     const assetsOf = new Map<string | null, AssetDiagnostics[]>(); // per direction
