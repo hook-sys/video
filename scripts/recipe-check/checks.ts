@@ -616,6 +616,12 @@ function worldEnds() {
   add("plans unchanged (fingerprints)", fingerprint(recipeFixture(RECIPE_SHOTS).plan) === PRE_CHOREO.base && fingerprint(recipeFixture(RECIPE_SHOTS_LEGACY).plan) === PRE_CHOREO.legacy && fingerprint(recipeFixture(RECIPE_SHOTS).plan.camera) === PRE_CAMERA.baseCamera, "base · legacy · camera");
 }
 
+// s3 with a flow, a highlight related to it (+4) and the reveal of the bars: fits before s4's words.
+const fitsS3 = (rel: boolean) => withRecipe(2, (r) => ({ ...r, behaviors: [
+  { type: "flow", from: "db", to: "hero", cue: "every source", id: "f" },
+  { type: "highlight", from: "hero", to: null, cue: "into one", id: "h", ...(rel ? { relationship: { after: "f", offset: 4 } } : {}) },
+  { type: "reveal", from: "bars", to: null, cue: "one live dashboard", id: "r" },
+] }));
 // Object relationships (Phase 5): event B after event A starts when A ends (+ offset).
 function relationships() {
   section = "18. object relationships";
@@ -699,11 +705,12 @@ function relationships() {
   let peakAt = tl.start, peak = 0;
   for (let f = tl.start - 20; f <= tl.end + 20; f++) { const d = camAt(chB, f) / camAt(noCam, f); if (d > peak) { peak = d; peakAt = f; } }
   add("camera response follows the placed event's phases (and only them)", peak > 1.02 && peakAt >= tl.actionAt && peakAt <= tl.end + 6 && Math.abs(camAt(chB, tl.start - 30) / camAt(noCam, tl.start - 30) - 1) < 0.001, `peak ×${peak.toFixed(3)} at ${peakAt} (event ${tl.start}–${tl.end})`);
-  // a chain that fits its scene: background, scene timing, camera before it untouched
-  const fit = run([A(), C({ relationship: { after: "a", offset: 0 } })]);
-  const fitPlain = run([A(), C()]);
+  // a chain that fits its scene (s3: flow, then highlight +4, all before s4's words): background, scene timing, camera before it untouched
+  // (s1 was used here before the timing guards: its A → C chain ends at 144, after s2's words at 132 — it never fitted)
+  const fit = recipeFixture(fitsS3(true));
+  const fitPlain = recipeFixture(fitsS3(false));
   const scenes = (r: ReturnType<typeof run>) => r.plan.backdrops?.map((b) => `${b.kind}@${b.start}`).join(" ");
-  const aStart = start(fit, "move/recipe").n.paths!.at(-1)!.start;
+  const aStart = fit.plan.relations![0].dependencyEnd! - 20;
   let camSame = true;
   for (let f = 0; f < aStart - 20; f++) camSame &&= camAt(fit, f) === camAt(fitPlain, f) && JSON.stringify(vecOf(fit.plan.camera.center, f)) === JSON.stringify(vecOf(fitPlain.plan.camera.center, f));
   add("background timing unchanged (a chain within its scene)", scenes(fit) === scenes(fitPlain) && JSON.stringify(fit.plan.backdrops) === JSON.stringify(fitPlain.plan.backdrops), scenes(fit) ?? "-");
@@ -714,6 +721,70 @@ function relationships() {
   add("deterministic compilation", fingerprint(chain.plan) === fingerprint(run([A(), B({ relationship: { after: "a", offset: 6 } }), C({ relationship: { after: "b", offset: 4 } })]).plan), fingerprint(chain.plan));
   const schema = JSON.stringify(zodTextFormat(ShotScriptModel, "s"));
   add("Director schema: behavior id + relationship (after, offset)", schema.includes("\"relationship\"") && schema.includes("\"after\"") && schema.includes("\"offset\""), "ok");
+}
+
+// Relationship timing guards: the voice is authoritative.
+function relationGuards() {
+  section = "19. relationship timing guards";
+  type Bh = SceneRecipe["behaviors"][number];
+  const s1 = (behaviors: Bh[]) => withRecipe(0, (r) => ({ ...r,
+    supporting: [
+      { id: "sheet", asset: "icon:file-spreadsheet", role: "a card", layer: "midground", relation: "feeds-hero", persistence: "scene" },
+      { id: "chart", asset: "visual:bars", role: "the chart", layer: "foreground", relation: "beside-hero", persistence: "scene" },
+      { id: "p1", asset: "icon:database", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" },
+      { id: "p2", asset: "icon:chart-line", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" },
+    ],
+    behaviors }));
+  const A: Bh = { type: "move", from: "sheet", to: "hero", cue: "ten different tools", id: "a" };
+  const B: Bh = { type: "assemble", from: "p1", to: "chart", cue: "different tools", id: "b" };
+  const C: Bh = { type: "highlight", from: "chart", to: null, cue: "tools", id: "c" };
+  const chainOf = (extra: Partial<Bh> = {}) => [A, { ...B, relationship: { after: "a", offset: 6 } }, { ...C, ...extra, relationship: { after: "b", offset: 4 } }];
+  // 1. fits → no warning
+  const fit = recipeFixture(fitsS3(true));
+  add("chain fits its scene's words → no warning", !fit.plan.relationWarnings && fit.plan.relations?.[0].status === "applied", JSON.stringify(fit.plan.relations?.[0]));
+  // 2 – 4. exceeds → overflow, with the chain's full span (its last event's settle included)
+  const over = recipeFixture(s1(chainOf()));
+  const w = over.plan.relationWarnings ?? [];
+  const ov = w.find((x) => x.code === "RELATIONSHIP_SCENE_OVERFLOW")!;
+  const rel = over.plan.relations!;
+  const aStart = rel[0].dependencyEnd! - 26; // A: the 26-frame move
+  const cEnd = rel[1].start + 34; // C: a highlight is at rest 34 frames in
+  add("chain exceeds its scene's words → RELATIONSHIP_SCENE_OVERFLOW", !!ov && ov.scene === "s1" && JSON.stringify(ov.chain) === JSON.stringify(["s1#0", "s1#1", "s1#2"]), JSON.stringify(ov));
+  add("required duration = first event's start → last event at rest (A 26 + 6 + B 56 + 4 + C 34)", ov.requiredFrames === cEnd - aStart && ov.requiredFrames === 26 + 6 + 56 + 4 + 34 && ov.availableFrames < ov.requiredFrames, `required ${ov.requiredFrames} · available ${ov.availableFrames}`);
+  const chC = recipeFixture(s1(chainOf({ choreography: { anticipation: 0.2, action: 0.4, impact: 0.15, settle: 0.6 } })));
+  const ovC = chC.plan.relationWarnings!.find((x) => x.code === "RELATIONSHIP_SCENE_OVERFLOW")!;
+  const cc = chC.script.beats.find((b) => b.action === "highlight" && b.after)!.choreo!;
+  const ctl = choreoTimeline(cc, chC.plan.relations![1].start);
+  add("final event's settle counted (choreographed: anticipation + action + impact + settle)", ovC.requiredFrames === Math.max(ctl.end, ctl.actionAt + 26) - aStart && ctl.settle === 18, `C ${ctl.start}→${ctl.end} (settle ${ctl.settle}) · required ${ovC.requiredFrames}`);
+  // 5. the next scene never cuts the final event: held until it is at rest, and the delay against the words reported
+  const ext = w.find((x) => x.code === "RELATIONSHIP_BOUNDARY_EXTENDED")!;
+  // s2 arrives with a panel wipe that starts on its scene's first frame
+  const s2Start = over.plan.panels?.[0]?.start;
+  const plainS2 = recipeFixture(s1([A, B, C])).plan.panels?.[0]?.start;
+  // the chart (C's subject) is not taken off screen before C is at rest
+  const chartGone = (over.plan.nodes.find((n) => n.id === over.script.beats.find((b) => b.action === "highlight" && b.after)!.targets![0])!.opacity ?? []).find(([f, v]) => f >= rel[1].start && v === 0)?.[0];
+  add("scene boundary held until the final event is at rest (never cut mid-settle)", !!ext && ext.extendedTo === cEnd && ext.boundary! < cEnd && s2Start === cEnd && (chartGone === undefined || chartGone >= cEnd), `boundary ${ext.boundary} → ${ext.extendedTo} · s2 panel wipe at ${s2Start} (without relationships ${plainS2}) · chart leaves ${chartGone}`);
+  add("…and the voice conflict is reported, not hidden (voiceDelayFrames)", ext.voiceDelayFrames === ext.extendedTo! - (ov.availableFrames + aStart) && ext.voiceDelayFrames! > 0, `${ext.voiceDelayFrames} frames behind its words`);
+  // 6 – 8. phases, SFX and camera keep their own timing in an overflowing chain
+  const FULL = { anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 };
+  const ch = recipeFixture(s1([A, { ...B, choreography: { ...FULL, sfx: [{ phase: "impact", kind: "subtle_impact" }], camera: { response: "push", intensity: "medium" } }, relationship: { after: "a", offset: 6 } }, { ...C, relationship: { after: "b", offset: 4 } }]));
+  const bb = ch.script.beats.find((b) => b.style === "assemble")!;
+  const btl = choreoTimeline(bb.choreo!, ch.plan.relations![0].start);
+  add("choreography phases unchanged (no compression)", JSON.stringify(bb.choreo) === JSON.stringify(normalizeChoreography({ ...FULL, sfx: [{ phase: "impact", kind: "subtle_impact" }], camera: { response: "push", intensity: "medium" } }, 40)) && !!ch.plan.relationWarnings, JSON.stringify(bb.choreo));
+  add("SFX on its phase (impact of the placed event)", (ch.plan.sfx ?? []).some((x) => x.choreo && x.kind === "subtle_impact" && x.frame === sfxFrame(btl, "impact")), `impact ${sfxFrame(btl, "impact")}`);
+  const noCam = recipeFixture(s1([A, { ...B, choreography: { ...FULL, sfx: [{ phase: "impact", kind: "subtle_impact" }] }, relationship: { after: "a", offset: 6 } }, { ...C, relationship: { after: "b", offset: 4 } }]));
+  let peakAt = 0, peak = 0;
+  for (let f = btl.start - 20; f <= btl.end + 20; f++) { const d = num(ch.plan.camera.zoom, f, 1) / num(noCam.plan.camera.zoom, f, 1); if (d > peak) { peak = d; peakAt = f; } }
+  add("camera response on the placed event's phases", peak > 1.02 && peakAt >= btl.actionAt && peakAt <= btl.end + 6, `peak ×${peak.toFixed(3)} at ${peakAt} (${btl.start}–${btl.end})`);
+  // 9. background: entries still start with their scenes (a held scene takes its world along)
+  const grid = (over.plan.backdrops ?? []).find((x) => x.kind === "perspective-grid")!.start; // s3's world arrives with s3
+  add("background unchanged where the chain fits; follows its scene where held", JSON.stringify(fit.plan.backdrops) === JSON.stringify(recipeFixture(fitsS3(false)).plan.backdrops) && grid > 212, `fits: ${fit.plan.backdrops?.map((x) => x.start).join(",")} · held: grid from ${grid} (was 212)`);
+  // 10 / 12. without relationships: exactly as before
+  add("relationship-free fingerprints unchanged", fingerprint(recipeFixture(RECIPE_SHOTS).plan) === PRE_CHOREO.base && fingerprint(recipeFixture(RECIPE_SHOTS_LEGACY).plan) === PRE_CHOREO.legacy && fingerprint(recipeFixture(RECIPE_SHOTS).plan.camera) === PRE_CAMERA.baseCamera, "base · legacy · camera");
+  const plain = recipeFixture(s1([A, B, C]));
+  add("scheduler without relationships unchanged (no warnings, no relations, events on their words)", !plain.plan.relationWarnings && !plain.plan.relations && fingerprint(recipeFixture(fitsS3(false)).plan) === fingerprint(recipeFixture(withRecipe(2, (r) => ({ ...r, behaviors: [{ type: "flow", from: "db", to: "hero", cue: "every source" }, { type: "highlight", from: "hero", to: null, cue: "into one" }, { type: "reveal", from: "bars", to: null, cue: "one live dashboard" }] }))).plan), "ids alone change nothing");
+  // 11. deterministic
+  add("deterministic warnings / result", JSON.stringify(recipeFixture(s1(chainOf())).plan.relationWarnings) === JSON.stringify(w) && fingerprint(recipeFixture(s1(chainOf())).plan) === fingerprint(over.plan), fingerprint(over.plan));
 }
 
 export async function runChecks(): Promise<Check[]> {
@@ -731,5 +802,6 @@ export async function runChecks(): Promise<Check[]> {
   backgroundChoreo();
   worldEnds();
   relationships();
+  relationGuards();
   return checks;
 }

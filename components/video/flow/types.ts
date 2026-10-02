@@ -164,6 +164,12 @@ export type FlowPlan = {
   // its start and that event's end; status applied (end + offset), delayed
   // (the beat before it needed longer) or fallback (the event it follows is
   // not in the video: timed on its words).
+  // Timing guards for related events: a chain that runs past the next
+  // scene's words (OVERFLOW: requiredFrames from its first event's start to
+  // its last event at rest, availableFrames to the next scene's words), and
+  // a next scene held back so the chain's last event can settle (EXTENDED:
+  // from boundary to extendedTo, voiceDelayFrames behind its words).
+  relationWarnings?: { code: "RELATIONSHIP_SCENE_OVERFLOW" | "RELATIONSHIP_BOUNDARY_EXTENDED"; scene: string; chain: string[]; requiredFrames: number; availableFrames: number; boundary?: number; extendedTo?: number; voiceDelayFrames?: number }[];
   relations?: { event: string; after: string; offset: number; start: number; dependencyEnd?: number; status: "applied" | "delayed" | "fallback" }[];
   backdrops?: { kind: string; start: number; end?: number; strength?: number; slot?: "environment" | "atmosphere"; source?: "recipe" | "shot"; enter?: BgChoreo; exit?: BgChoreo }[];
   // Element nodes that overlap on purpose (a stack, a fan) during a window.

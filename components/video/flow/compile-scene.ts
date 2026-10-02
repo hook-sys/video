@@ -198,6 +198,29 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   // choreography runs from there unchanged.
   const events = new Map<string, { start: number; end: number }>();
   const relations: NonNullable<FlowPlan["relations"]> = [];
+  // Chains (related events, by their first event): their span on the
+  // timeline. The voice is authoritative: a chain that runs past the next
+  // scene's words is reported (RELATIONSHIP_SCENE_OVERFLOW), never hidden
+  // or compressed; a next scene that would cut the chain's last event before
+  // it has settled starts when it has (RELATIONSHIP_BOUNDARY_EXTENDED, with
+  // how late that leaves it against its words).
+  const chains = new Map<string, { scene: string; events: string[]; start: number; end: number }>();
+  const rootOf = new Map<string, string>();
+  const warnings: NonNullable<FlowPlan["relationWarnings"]> = [];
+  const closeChains = (voiceAt: number, boundary: number | null): number | null => {
+    let to = boundary;
+    for (const c of chains.values()) {
+      const base = { scene: c.scene, chain: c.events, requiredFrames: c.end - c.start, availableFrames: voiceAt - c.start };
+      if (c.end > voiceAt) warnings.push({ code: "RELATIONSHIP_SCENE_OVERFLOW", ...base });
+      if (to !== null && c.end > to) {
+        const ext = Math.min(c.end, stageEnd - 24);
+        warnings.push({ code: "RELATIONSHIP_BOUNDARY_EXTENDED", ...base, boundary: to, extendedTo: ext, voiceDelayFrames: ext - voiceAt });
+        to = Math.max(to, ext);
+      }
+    }
+    chains.clear();
+    return to;
+  };
   script.beats.forEach((b, i) => {
     if (paired.has(b) && beats[beats.length - 1] === script.beats[i - 1]) {
       beats.push(b);
@@ -209,15 +232,29 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     const cue = dep ? dep.end + b.after!.offset : times[i] === null ? last + MIN_GAP : Math.round(times[i]! * FPS) - LEAD;
     const prev = beats[beats.length - 1];
     const earliest = prev ? starts[starts.length - 1] + MIN_FRAMES[prev.action] : 0;
-    const t = Math.min(stageEnd - 24, Math.max(0, cue, earliest));
+    let t = Math.min(stageEnd - 24, Math.max(0, cue, earliest));
+    // a new scene closes the chains before it (its words: `cue`)
+    if (b.action === "scene" && chains.size) t = closeChains(cue, t)!;
     if (MINOR.has(b.action) && t - cue > 20) return void skipped.push({ cue: b.cue, action: b.action, reason: `a minor accent ${t - cue} frames late` });
     if (prev && t - starts[starts.length - 1] < MIN_GAP) return void skipped.push({ cue: b.cue, action: b.action, reason: `${t - starts[starts.length - 1]} frames after the ${prev.action} before it` });
     beats.push(b);
     starts.push(t);
     last = t;
     if (b.event) events.set(b.event, { start: t, end: t + eventLength(b) });
+    if (b.event && (b.after ? dep : true)) {
+      const root = (dep && rootOf.get(b.after!.event)) || b.event;
+      rootOf.set(b.event, root);
+      const end = t + eventLength(b);
+      const c = chains.get(root);
+      if (c) {
+        c.events.push(b.event);
+        c.end = Math.max(c.end, end);
+      } else if (dep) chains.set(root, { scene: root.split("#")[0], events: [root, b.event], start: events.get(root)!.start, end: Math.max(events.get(root)!.end, end) });
+    }
     if (b.after) relations.push({ event: b.event ?? `${b.action}:${b.cue}`, after: b.after.event, offset: b.after.offset, start: t, ...(dep ? { dependencyEnd: dep.end } : {}), status: !dep ? "fallback" : t === cue ? "applied" : "delayed" });
   });
+  // chains of the last scene: against the end of the words
+  if (chains.size) closeChains(stageEnd, null);
 
   const f = new Flow(theme ?? script.theme, total, { center: [0, 0], zoom: 0.9 });
   // A travelling element whooshes only at the lively pace; calm keeps whooshes for scene changes.
@@ -1379,6 +1416,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   if (rings.length) plan.rings = [...(plan.rings ?? []), ...rings];
   if (backdrops.length) plan.backdrops = backdrops;
   if (relations.length) plan.relations = relations;
+  if (warnings.length) plan.relationWarnings = warnings;
   if (decorLevel.length > 1) plan.decorLevel = decorLevel;
   // Elements that never appeared (skipped beats) are dropped.
   plan.nodes = plan.nodes.filter((n: FlowNode) => n.kind !== "el" || n.appear !== undefined);
