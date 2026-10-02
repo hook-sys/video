@@ -570,6 +570,52 @@ function backgroundChoreo() {
   add("Director schema: background (transition, direction, intensity)", schema.includes("\"background\"") && schema.includes("\"transition\"") && schema.includes("\"direction\""), "ok");
 }
 
+// Visual validation (Phase 4A): without choreography a layer whose slot went
+// empty stayed on screen until the slot's next entry (the grid 339 → 451, the
+// aurora 451 → 595 with s4 dark-space). An entry's own end is authoritative.
+const CHOREO_LAYERS = "b1447f50bdb918be"; // before this fix (11337e6)
+function worldEnds() {
+  section = "17. world entries end at their end";
+  const plan = recipeFixture(withRecipe(3, (r) => ({ ...r, environment: "dark-space" }))).plan;
+  const bd = plan.backdrops ?? [];
+  const show = bd.map((x) => `${x.slot}:${x.kind}@${x.start}${x.end ? `–${x.end}` : ""}`).join(" ");
+  const op = (es: WorldEntry[], i: number, f: number) => worldLayer(es[i], worldContext(es, i), f).opacity;
+  const gi = bd.findIndex((x) => x.kind === "perspective-grid" && x.end !== undefined);
+  const ai = bd.findIndex((x) => x.kind === "aurora" && x.end !== undefined);
+  const g = bd[gi], a = bd[ai];
+  const laterG = bd.find((x, i) => i > gi && x.slot === g.slot)!, laterA = bd.find((x, i) => i > ai && x.slot === a.slot)!;
+  add("the case: both slots empty for a while, then a later entry", g.slot === "environment" && a.slot === "atmosphere" && laterG.start > g.end! && laterA.start > a.end! && !bd.some((x) => x.kind === "mesh"), show);
+  // explicit end, next entry later than it: gone 24 frames after its end
+  add("environment: an ended layer is gone after its end (no leak until the next entry)", op(bd, gi, g.end! + 24) === 0 && op(bd, gi, Math.round((g.end! + laterG.start) / 2)) === 0 && op(bd, gi, laterG.start - 1) === 0, `grid at ${g.end! + 24}: ${op(bd, gi, g.end! + 24).toFixed(2)} · at ${laterG.start - 1}: ${op(bd, gi, laterG.start - 1).toFixed(2)}`);
+  add("atmosphere: an ended layer is gone after its end (no leak until the next entry)", op(bd, ai, a.end! + 24) === 0 && op(bd, ai, laterA.start - 1) === 0, `aurora at ${a.end! + 24}: ${op(bd, ai, a.end! + 24).toFixed(2)} · at ${laterA.start - 1}: ${op(bd, ai, laterA.start - 1).toFixed(2)}`);
+  // active entries: fully in from start + 24 until their end; the same 24-frame fade out
+  const active = [gi, ai].every((i) => { const e = bd[i]; let ok = true; for (let f = e.start + 24; f <= e.end!; f++) ok &&= op(bd, i, f) === 1; return ok && op(bd, i, e.end! + 12) > 0 && op(bd, i, e.end! + 12) < 1; });
+  add("active entries stay fully visible until their end, then the usual 24-frame fade", active, "grid + aurora");
+  // missing end: the last entry of a slot stays (until the brand lockup, drawn elsewhere)
+  const open = bd.map((x, i) => [x, i] as const).filter(([x]) => x.end === undefined);
+  add("missing end: a slot's last entry stays visible", open.length === 2 && open.every(([x, i]) => op(bd, i, x.start + 30) === 1 && op(bd, i, x.start + 200) === 1), open.map(([x]) => `${x.slot}:${x.kind}@${x.start}`).join(" "));
+  // the next entry arrives as before; an entry replaced in its slot leaves as its successor arrives
+  const later = [bd.indexOf(laterG), bd.indexOf(laterA)];
+  add("the next entry's arrival is unchanged (24-frame fade in from its start)", later.every((i) => op(bd, i, bd[i].start - 1) === 0 && op(bd, i, bd[i].start + 12) > 0 && op(bd, i, bd[i].start + 24) === 1), later.map((i) => `${bd[i].kind}@${bd[i].start}`).join(" "));
+  const swap: WorldEntry[] = [{ start: 0, end: 100, slot: "environment" }, { start: 100, slot: "environment" }];
+  const ramp24k = (f: number) => ramp24(f, 100);
+  let sw = 0;
+  for (let f = 90; f <= 130; f++) sw = Math.max(sw, Math.abs(op(swap, 0, f) - (1 - ramp24k(f))), Math.abs(op(swap, 1, f) - ramp24k(f)));
+  add("replaced in its slot (end = next start): the same cross-fade as before", sw === 0, `max difference ${sw}`);
+  const noEnd: WorldEntry[] = [{ start: 0, slot: "atmosphere" }, { start: 100, slot: "atmosphere" }];
+  add("no end but a next entry: leaves as the next one arrives", op(noEnd, 0, 99) === 1 && op(noEnd, 0, 124) === 0, "start of the next entry");
+  // no blank frame: at an empty slot's end only the base canvas is left (no layer flicker)
+  let blink = false;
+  for (let f = g.end! - 2; f <= g.end! + 30; f++) if (op(bd, gi, f) > op(bd, gi, f - 1) + 1e-9) blink = true;
+  add("no flicker: an ended layer only fades out", !blink, `${g.end}–${g.end! + 30}`);
+  // choreography present: unchanged
+  const ch = recipeFixture(withRecipe(3, (r) => ({ ...r, environment: "dark-space", background: { transition: "push", direction: "left" } }))).plan.backdrops ?? [];
+  const layers = fingerprint(ch.map((_, i) => [0, 200, 339, 345, 351, 363, 451, 460, 470, 500, 595, 610, 700].map((f) => worldLayer(ch[i], worldContext(ch, i), f))));
+  add("choreography present: layers unchanged", layers === CHOREO_LAYERS, layers);
+  // plan / camera / objects / SFX untouched (the renderer only)
+  add("plans unchanged (fingerprints)", fingerprint(recipeFixture(RECIPE_SHOTS).plan) === PRE_CHOREO.base && fingerprint(recipeFixture(RECIPE_SHOTS_LEGACY).plan) === PRE_CHOREO.legacy && fingerprint(recipeFixture(RECIPE_SHOTS).plan.camera) === PRE_CAMERA.baseCamera, "base · legacy · camera");
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
@@ -583,5 +629,6 @@ export async function runChecks(): Promise<Check[]> {
   choreoSfxChecks();
   cameraChoreo();
   backgroundChoreo();
+  worldEnds();
   return checks;
 }

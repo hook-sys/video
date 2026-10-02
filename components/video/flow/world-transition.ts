@@ -52,10 +52,10 @@ const reveal = ([dx, dy]: [number, number], v: number, from: boolean): [number, 
 
 export function worldLayer(e: WorldEntry, ctx: WorldContext, frame: number): LayerState {
   const leave = e.exit ?? ctx.next; // how this entry leaves (its own exit, else the next one's arrival)
-  // No choreography either way: exactly the default dissolve (until the
-  // slot's next entry, else its end).
+  // No choreography either way: the default dissolve, out at the entry's own
+  // end (else as the slot's next entry arrives).
   if (!e.enter && !leave) {
-    const leaveAt = ctx.out ?? e.end;
+    const leaveAt = e.end ?? ctx.out;
     const k = ease(frame, e.start, BG_DEFAULT_FADE) * (leaveAt !== undefined ? 1 - ease(frame, leaveAt, BG_DEFAULT_FADE) : 1);
     return { opacity: k, shift: [0, 0], clip: null, top: false };
   }
