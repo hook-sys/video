@@ -181,7 +181,7 @@ export function Reveal(c: Ctx) {
       <>
         {[0, 1, 2].map((i) => {
           const r = rise(f, at + i * 6, 40);
-          return abs(W / 2 - 400, 360 - 400, <div style={{ width: 800, height: 800, borderRadius: 999, border: `3px solid ${pal.ink}`, opacity: (1 - r) * 0.5, transform: `scale(${0.2 + r})` }} />);
+          return abs(W / 2 - 400, 360 - 400, <div style={{ width: 800, height: 800, borderRadius: 999, border: `3px solid ${pal.ink}`, opacity: r > 0 ? (1 - r) * 0.5 : 0, transform: `scale(${0.2 + r})` }} />);
         })}
         {abs(W / 2 - 110, 250, <div style={{ transform: `scale(${k})` }}><Mark brand={brand} size={220} look={look} /></div>)}
         {abs(0, 500, <div style={{ display: "flex", justifyContent: "center" }}>{name(rise(f, at + 14, 18), 130)}</div>, { width: W })}
@@ -343,7 +343,7 @@ export function Growth(c: Ctx) {
   );
   let body: ReactNode;
   if (v.growth === "bars") body = <Bars values={[0.28, 0.4, 0.36, 0.55, 0.62, 0.8, 0.95]} grow={[0, 1, 2, 3, 4, 5, 6].map((i) => Math.min(1, Math.max(0.15, g * 1.6 - i * 0.1)))} w={720} h={300} colors={look.accent} />;
-  else if (v.growth === "line") body = <LineChart points={[0.15, 0.25, 0.22, 0.4, 0.5, 0.48, 0.7, 0.92]} draw={g} w={720} h={300} color={look.accent[0]} fill={look.accent[1]} />;
+  else if (v.growth === "line") body = <LineChart points={[0.15, 0.25, 0.22, 0.4, 0.5, 0.48, 0.7, 0.92]} draw={Math.max(0.18, g)} w={720} h={300} color={look.accent[0]} fill={look.accent[1]} />;
   else if (v.growth === "tiles")
     body = (
       <div style={{ display: "flex", gap: 18 }}>

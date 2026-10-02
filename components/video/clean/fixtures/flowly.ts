@@ -40,16 +40,19 @@ const b = {
   nomore: at("No more switching"),
   just: at("Just one"),
 };
-const OV = 6; // scenes overlap a little at their cuts
+// The cuts between scenes: just before each sentence's first word (the
+// next scene is in when its words begin).
+const LEAD = 8;
+const cut = { trio: b.sales - LEAD, reveal: b.flowly - LEAD - 4, pay: b.when1 - LEAD, growth: b.when2 - LEAD, nomore: b.nomore - LEAD, cta: b.just - LEAD };
 
 function scenes(): Scene[] {
   return [
-    { template: "hook", act: "problem", from: 0, to: b.sales + OV, cues: {}, data: { words: kw("Every team starts with data scattered across different tools.", ["scattered"]) } },
+    { template: "hook", act: "problem", from: 0, to: cut.trio, cues: {}, data: { words: kw("Every team starts with data scattered across different tools.", ["scattered"]) } },
     {
       template: "trio",
       act: "problem",
-      from: b.sales - OV,
-      to: b.flowly + OV,
+      from: cut.trio,
+      to: cut.reveal,
       cues: {},
       data: {
         items: [
@@ -62,36 +65,36 @@ function scenes(): Scene[] {
     {
       template: "reveal",
       act: "reveal",
-      from: b.flowly - OV - 6,
-      to: b.when1 + OV,
+      from: cut.reveal,
+      to: cut.pay,
       cues: { name: b.flowly },
       data: { icons: ["chart-line", "credit-card", "file-text"], sub: kw("brings everything into one live dashboard.", ["dashboard."]) },
     },
     {
       template: "pay",
       act: "solution",
-      from: b.when1 - OV,
-      to: b.when2 + OV,
-      cues: { pay: at("payment arrives") , rev: at("revenue updates"), inst: at("instantly") },
+      from: cut.pay,
+      to: cut.growth,
+      cues: { pay: at("payment arrives"), rev: at("revenue updates"), inst: at("instantly") },
       data: { eyebrow: "When a payment arrives,", title: kw("revenue updates instantly.", ["instantly."]) },
     },
     {
       template: "growth",
       act: "solution",
-      from: b.when2 - OV,
-      to: b.nomore + OV,
+      from: cut.growth,
+      to: cut.nomore,
       cues: { grow: at("grow"), team: at("entire team"), zoom: at("in one view") },
       data: { eyebrow: "When sales grow,", title: kw("the entire team sees the change in one view.", ["view."]) },
     },
     {
       template: "nomore",
       act: "problem",
-      from: b.nomore - OV,
-      to: b.just + OV,
+      from: cut.nomore,
+      to: cut.cta,
       cues: {},
       data: { a: kw("No more switching between tools.", ["switching"], { switching: at("between tools") }), b: kw("No more waiting for reports.", ["waiting"], { waiting: at("for reports") }, 21) },
     },
-    { template: "cta", act: "cta", from: b.just - OV, to: DURATION, cues: { click: END + 20 }, data: { tagline: kw("Just one live dashboard with every answer you need.", ["answer"]) } },
+    { template: "cta", act: "cta", from: cut.cta, to: DURATION, cues: { click: END + 20 }, data: { tagline: kw("Just one live dashboard with every answer you need.", ["answer"]) } },
   ];
 }
 

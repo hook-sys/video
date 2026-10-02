@@ -20,8 +20,9 @@ function useCleanFont() {
   });
 }
 
-const IN = 14; // frames a scene takes to come in
-const OUTF = 10; // and to go
+const IN = 10; // frames a scene takes to come in (from just before its cut)
+const LEAD_IN = 2;
+const OUTF = 6; // and to go (ending on the next cut): one at a time, never both half-seen
 
 // The palette at a frame: each scene's act, blended in over its first frames.
 function paletteAt(plan: CleanPlan, look: Look, f: number): Palette {
@@ -87,7 +88,7 @@ function frameStyle(sc: Scene, v: Variant, f: number, first: boolean, last: bool
     cam = `perspective(2200px) rotateX(${mix(14, 3, s)}deg) rotateY(${mix(v.side === "left" ? -16 : 16, v.side === "left" ? -4 : 4, s)}deg) scale(${mix(0.92, 1, s) + zoomCue})`;
   } else if (v.camera === "drift") cam = `translateX(${mix(-36, 36, p)}px) scale(${1.03 + zoomCue})`;
   else cam = `scale(${mix(0.94, 1.06, p) + zoomCue})`;
-  const kin = first ? 1 : rise(f, sc.from, IN, OUT);
+  const kin = first ? 1 : rise(f, sc.from - LEAD_IN, IN, OUT);
   const kout = last ? 0 : rise(f, sc.to - OUTF, OUTF, IN_OUT);
   let t = "";
   let extra: CSSProperties = {};
@@ -108,7 +109,10 @@ function captionAt(plan: CleanPlan, f: number) {
   const groups: { start: number; end: number; words: string[] }[] = [];
   let cur: typeof groups[number] | null = null;
   for (const w of plan.words) {
-    if (/^[.,!?]+$/.test(w.text)) continue;
+    if (/^[.,!?]+$/.test(w.text)) {
+      cur = null; // a stop ends the caption
+      continue;
+    }
     if (!cur || cur.words.length >= 4) groups.push((cur = { start: w.start, end: w.end, words: [] }));
     cur.words.push(w.text);
     cur.end = w.end;
@@ -134,7 +138,7 @@ export function CleanVideo({ plan, audioUrl }: CleanVideoProps) {
     <AbsoluteFill style={{ fontFamily: look.font, background: "#000" }}>
       <Backdrop pal={pal} look={look} f={f} />
       {plan.scenes.map((sc, i) => {
-        if (f < sc.from || f > sc.to) return null;
+        if (f < sc.from - LEAD_IN || f > sc.to) return null;
         const T = TEMPLATES[sc.template];
         const scPal = look.acts[sc.act];
         return (
