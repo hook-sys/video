@@ -1,11 +1,11 @@
 // Scene Recipe execution: assemble / transform / arrange run on screen,
 // the scene boundary transition contract, and the palette precedence.
-import { recipeFixture, RECIPE_SHOTS } from "@/components/video/flow/fixtures/recipe";
+import { recipeFixture, RECIPE_SHOTS, RECIPE_SHOTS_LEGACY } from "@/components/video/flow/fixtures/recipe";
 import { THEMES, withBrandColor } from "@/components/video/flow/themes";
 import type { FlowNode, Track, Vec } from "@/components/video/flow/types";
 import { resolveTheme } from "@/lib/projects";
 import { boundaryTransition, type SceneRecipe } from "@/lib/scene-recipe";
-import type { ShotScript } from "@/lib/shots";
+import { type Dna, dnaMove, type ShotScript } from "@/lib/shots";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 const checks: Check[] = [];
@@ -133,11 +133,46 @@ function palette() {
   add("no brand colour: the theme as it is", withBrandColor(t, null) === t, "same object");
 }
 
+const DNA: Dna = { composition: "object-story", cards: "accent", icons: "outline", typography: "editorial", transitions: "push", motion: "transform", camera: "push", background: "open" };
+function dnaMappings() {
+  section = "7. DNA mappings (shots without a recipe)";
+  const run = (d: Partial<Dna>, shots: ShotScript = RECIPE_SHOTS_LEGACY) => recipeFixture({ ...shots, dna: { ...DNA, ...d } });
+  const scenes = (r: ReturnType<typeof run>) => r.script.beats.filter((b) => b.action === "scene");
+  const grid = run({ background: "grid" });
+  add("DNA grid → perspective-grid backdrop (not ribbons)", scenes(grid).every((b) => b.backdrop === "perspective-grid") && (grid.plan.backdrops ?? []).every((x) => x.kind === "perspective-grid") && (grid.plan.backdrops ?? []).length > 0 && grid.script.look?.decor !== "ribbons", `scene backdrops ${scenes(grid).map((b) => b.backdrop).join(", ")} · plan ${(grid.plan.backdrops ?? []).map((x) => x.kind).join(", ")} · decor ${grid.script.look?.decor}`);
+  const open = run({ background: "open" });
+  add("other backgrounds keep the plain canvas", scenes(open)[0].backdrop === "mesh" && scenes(open).slice(1).every((b) => b.backdrop === null), scenes(open).map((b) => b.backdrop).join(", "));
+  // Mixed: recipe scenes first, then shots without one — those show the DNA grid.
+  const mixed = run({ background: "grid" }, { ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 4 ? { ...x, recipe: null } : x)) });
+  const kinds = (mixed.plan.backdrops ?? []).map((x) => `${x.kind}${x.strength ? "" : "*"}`);
+  add("after recipe scenes a DNA-grid shot keeps the grid (* = non-recipe)", kinds.includes("perspective-grid*"), kinds.join(", "));
+  const panel = run({ transitions: "panel" });
+  const handovers = scenes(panel).slice(1).map((b) => b.transition);
+  add("DNA panel → panel-wipe handovers (never push-up)", handovers.includes("panel-wipe") && !handovers.includes("push-up") && handovers.every((x) => x === "panel-wipe" || x === "dissolve"), handovers.join(", "));
+  add("the panel wipe is drawn (a panel in the plan)", (panel.plan.panels ?? []).length > 0, `${(panel.plan.panels ?? []).length} panel wipes`);
+  const orbit = run({ camera: "orbit" });
+  const cams = scenes(orbit).map((b) => b.camera);
+  add("DNA orbit → the orbit camera on moving shots (holds, openings, reveals stay)", cams.includes("orbit") && !cams.includes("pull-back") && dnaMove({ ...DNA, camera: "orbit" }, "hold") === "hold" && dnaMove({ ...DNA, camera: "orbit" }, "pull_back") === "orbit" && dnaMove({ ...DNA, camera: "orbit" }, "establish") === "drift", cams.join(", "));
+  const turned = orbit.plan.nodes.filter((n) => (n.tilt ?? []).some(([, v]) => Math.abs(v[1]) === 14));
+  add("the orbit turns the shot's subject in 3D (recipe orbit-intent camera)", turned.length >= 1, `${turned.length} subjects turn ±14°`);
+  add("without DNA orbit nothing changes", dnaMove({ ...DNA, camera: "push" }, "pull_back") === "pull-back" && dnaMove(null, "follow") === "pan-right", "push / none → the intent's own move");
+
+  section = "8. recipe camera / transition unchanged";
+  const all = { background: "grid", transitions: "panel", camera: "orbit" } as const;
+  const base = recipeFixture(RECIPE_SHOTS);
+  const withDna = run(all, RECIPE_SHOTS);
+  const key = (r: typeof base) => r.script.beats.filter((b) => b.action === "scene" && b.recipe).map((b) => `${b.transition}|${b.camera}|${b.backdrop}|${b.recipe?.camera.intent}`).join(" · ");
+  add("recipe scenes keep their transition, camera and environment under any DNA", key(base) === key(withDna) && key(base).length > 0, key(withDna));
+  const camKeys = (r: typeof base) => JSON.stringify(r.plan.camera);
+  add("the recipe camera path is identical", camKeys(base) === camKeys(withDna), `${base.plan.camera.center.length} camera keys`);
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
   arrange();
   transitions();
   palette();
+  dnaMappings();
   return checks;
 }

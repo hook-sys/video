@@ -561,14 +561,17 @@ function bindObjects(shots: ShotInput[], beats: SceneBeat[], ranges: [number, nu
 // ── Visual DNA → the look and the camera (deterministic) ──
 // Background, icons and hand-over follow the direction's DNA, not the seed
 // (the seed still varies the side and the entrances).
-const DNA_BACKGROUND: Record<Dna["background"], { decor: (typeof DECORS)[number]; tone: (typeof TONES)[number] }> = {
+// (backdrop: the renderer's own backdrop for the non-recipe scenes, else the plain canvas.)
+const DNA_BACKGROUND: Record<Dna["background"], { decor: (typeof DECORS)[number]; tone: (typeof TONES)[number]; backdrop?: "perspective-grid" }> = {
   open: { decor: "dots", tone: "white" },
-  grid: { decor: "ribbons", tone: "tint" },
+  grid: { decor: "dots", tone: "tint", backdrop: "perspective-grid" },
   "bold-field": { decor: "glow", tone: "deep" },
   environment: { decor: "waves", tone: "tint" },
 };
 const DNA_ICONS: Record<Dna["icons"], (typeof ICON_STYLES)[number]> = { outline: "outline", solid: "solid", minimal: "soft" };
-const DNA_CUT: Record<Dna["transitions"], (typeof CUTS)[number]> = { push: "slide", panel: "rise", type: "soft", object: "zoom" };
+const DNA_CUT: Record<Dna["transitions"], (typeof CUTS)[number]> = { push: "slide", panel: "slide", type: "soft", object: "zoom" };
+// A DNA transition with its own renderer handover (instead of the cut's push).
+const DNA_HANDOVER: Partial<Record<Dna["transitions"], "panel-wipe">> = { panel: "panel-wipe" };
 // The camera intents each camera language allows (any shot may still open
 // wide, reveal the product or hold to be read); others become its main one.
 const DNA_CAMERA: Record<Dna["camera"], { main: ShotIntent; allow: ShotIntent[] }> = {
@@ -577,12 +580,17 @@ const DNA_CAMERA: Record<Dna["camera"], { main: ShotIntent; allow: ShotIntent[] 
   static: { main: "hold", allow: [] },
   orbit: { main: "pull_back", allow: ["pull_back", "overhead", "transition"] },
 };
+// The camera move a shot intent becomes; the orbit language turns its moving
+// intents into the compiler's orbit (the recipe's orbit-intent camera: a
+// lateral arc while the subject turns in 3D). Holds, openings and reveals stay.
+export const dnaMove = (dna: Dna | null, intent: ShotIntent): (typeof CAMERA_MOVES)[number] =>
+  dna?.camera === "orbit" && !["establish", "reveal", "hold"].includes(intent) ? "orbit" : INTENT_CAMERA[intent];
 export const dnaCamera = (dna: Dna, intent: ShotIntent | null | undefined, first: boolean): ShotIntent => {
   const c = DNA_CAMERA[dna.camera];
   if (intent && (["establish", "reveal", "hold"].includes(intent) || c.allow.includes(intent))) return intent;
   return first ? "establish" : c.main;
 };
-export const dnaLook = (dna: Dna) => ({ ...DNA_BACKGROUND[dna.background], icons: DNA_ICONS[dna.icons], cut: DNA_CUT[dna.transitions] });
+export const dnaLook = (dna: Dna) => ({ ...DNA_BACKGROUND[dna.background], icons: DNA_ICONS[dna.icons], cut: DNA_CUT[dna.transitions], handover: DNA_HANDOVER[dna.transitions] ?? null });
 
 // Whether the shots follow their DNA (composition, cards, typography,
 // motion). Each problem is named; the search counts them against the
@@ -645,7 +653,7 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
   // or zoom (through the old shot into the new).
   const cut0 = choose("slide", CUTS);
   const cut = fromDna?.cut ?? cut0;
-  const push = ({ slide: "push-left", rise: "push-up", soft: "push-left", zoom: "zoom-through" } as const)[cut];
+  const push = fromDna?.handover ?? ({ slide: "push-left", rise: "push-up", soft: "push-left", zoom: "zoom-through" } as const)[cut];
   // Which side a subject with words beside it stands on (the words take the other).
   const beside = choose("stage-right", ["stage-right", "stage-left"]);
   const look = variant ? { decor, tone, icons, cut, side: beside === "stage-left" ? ("left" as const) : ("right" as const), seed: variant.seed } : null;
@@ -682,7 +690,7 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     // (After a recipe scene its transition_out decides how this one arrives.)
     const chosen = boundaryTransition({ first: scenes === 0, out: pendingOut, into: null, canCarry: false }).transition;
     const out = chosen && scenes > 0 ? sceneTransition(chosen, scenes) : null;
-    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: intent ? INTENT_CAMERA[intent] : "static", transition: scenes === 0 ? "cut" : out ? out.transition : dissolve ? "dissolve" : push, backdrop: scenes === 0 ? "mesh" : null }));
+    beats.push(beat({ cue, action: "scene", elements, layout, style, camera: intent ? dnaMove(dna, intent) : "static", transition: scenes === 0 ? "cut" : out ? out.transition : dissolve ? "dissolve" : push, backdrop: fromDna?.backdrop ?? (scenes === 0 ? "mesh" : null) }));
     lastLayout = layout;
     scenes++;
     pendingOut = null;

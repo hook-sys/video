@@ -442,11 +442,14 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       const len = (next >= 0 ? starts[next] : stageEnd) - t;
       // (The look's seed decides whether the first shot pushes in or out.)
       const k = (sceneIdx + (script.look?.seed ?? 0)) % 2 ? -1 : 1;
-      if (move === "scene:recipe" && sceneRecipe) {
+      // (The DNA orbit of a non-recipe shot is the same camera as the
+      // recipe's orbit-intent, on the shot's subject.)
+      const orbit = move === "scene:orbit" ? { camera: { intent: "orbit-intent", intensity: "medium" } as const } : null;
+      if ((move === "scene:recipe" && sceneRecipe) || orbit) {
         // The recipe's camera intent, aimed at its hero (lib/scene-recipe.ts);
         // a focus behavior later in the scene pushes on to its object then.
-        const hero = live.get(sceneRecipe.hero);
-        const cam = recipeCamera(sceneRecipe, hero?.pos ?? [0, 0]);
+        const hero = orbit ? focus?.[0] : live.get(sceneRecipe!.hero);
+        const cam = recipeCamera(orbit ?? sceneRecipe!, hero?.pos ?? [0, 0]);
         const settle = Math.min(12, Math.max(1, len - 6));
         f.camera(t, sceneIdx === 0 ? 1 : settle, cam.from, cam.z0);
         const fk = beats.findIndex((x, j) => starts[j] > t && starts[j] < t + len && x.action === "focus" && x.style === "recipe");
@@ -569,7 +572,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         // Calm: the first scene's backdrop stays for the whole video.
         // (A recipe scene's environment is its own; one shared with the scene
         // before simply continues, so the world stays one place.)
-        const kind = sceneRecipe ? (b.backdrop ?? "mesh") : calm && backdrops.length ? backdrops[0].kind : b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh");
+        // (After recipe scenes, a shot that names its backdrop — the DNA's — keeps it.)
+        const kind = sceneRecipe ? (b.backdrop ?? "mesh") : calm && backdrops.length ? (b.backdrop && backdrops.some((x) => x.strength) ? b.backdrop : backdrops[0].kind) : b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh");
         if (backdrops[backdrops.length - 1]?.kind !== kind) backdrops.push(sceneRecipe ? { kind, start: t, strength: 0.9 } : { kind, start: t });
         // A flash / iris transition: a brand-colour circle sweeps the canvas as the scene arrives.
         if (sceneRecipe?.flash && explainer) flashes.push([t - 6, t + 40, 22]);
@@ -591,7 +595,9 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         if (sceneIdx > 0) f.sfx(t, "whoosh");
         // A group popping in: one pop per element (five logos = five pops).
         if (b.style === "pop" && entered.length > 1) for (const at of entered) f.sfx(at, "soft_pop");
-        shoot(t, span, explainer ? (sceneRecipe ? "scene:recipe" : `scene:${b.camera ?? "static"}`) : sceneMove);
+        // (An orbit turns the scene's biggest element, its subject.)
+        const subject = b.camera === "orbit" ? (b.elements ?? []).map((e) => live.get(e.id)).filter((n): n is Live => !!n).sort((a, c) => c.w * c.h0 * c.fit - a.w * a.h0 * a.fit)[0] : undefined;
+        shoot(t, span, explainer ? (sceneRecipe ? "scene:recipe" : `scene:${b.camera ?? "static"}`) : sceneMove, subject ? [subject] : undefined);
         framed = false;
         break;
       }

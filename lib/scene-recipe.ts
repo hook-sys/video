@@ -251,7 +251,7 @@ export function recipeText(r: CompiledRecipe): RecipeText {
 // Camera intent → a deterministic move for the whole scene: [from centre,
 // from zoom, to centre, to zoom], aimed at the hero; how far by intensity.
 // (Kept within ±150 px and zoom 1.04–1.32 so the composition stays framed.)
-export function recipeCamera(r: CompiledRecipe, hero: Vec): { from: Vec; z0: number; to: Vec; z1: number; tilt?: [number, number] } {
+export function recipeCamera(r: Pick<CompiledRecipe, "camera">, hero: Vec): { from: Vec; z0: number; to: Vec; z1: number; tilt?: [number, number] } {
   const k = { low: 0.5, medium: 1, high: 1.5 }[r.camera.intensity];
   const cap = (v: number) => Math.max(-150, Math.min(150, v));
   const toward = (f: number): Vec => [cap(hero[0] * f), cap(hero[1] * f)];
