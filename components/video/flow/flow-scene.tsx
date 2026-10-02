@@ -11,7 +11,7 @@ import { computeStates, type NodeState } from "./states";
 import { UiPlane } from "./ui-plane";
 import { ElementView } from "./element";
 import { Backdrop } from "./backdrops";
-import { isBackdrop } from "./backdrop-names";
+import { backdropStrength, isBackdrop } from "./backdrop-names";
 import { fitSize, labelWorldSize, splitLines, TYPE } from "./typography";
 import { MARK_DELAY, type FlowBrand, type FlowLink, type FlowList, type FlowNode, type FlowPanel, type FlowPlan, type FlowText, type ThemeName, type Vec } from "./types";
 import { blurFilter } from "./blur";
@@ -125,13 +125,18 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
   return (
     <AbsoluteFill style={{ fontFamily: plan.explainer ? EXPLAINER_FONT : FLOW_FONT, overflow: "hidden" }}>
       <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} decor={plan.decor} tone={plan.tone} decorLevel={num(plan.decorLevel, frame, 1)} />
-      {(plan.backdrops ?? []).map((b, i, all) => {
-        // Cross-fade 24 frames into each backdrop; it fades as the next arrives
-        // and clears for the brand lockup.
-        const next = all[i + 1];
-        const k = ramp(frame, b.start, 24, "inOut") * (next ? 1 - ramp(frame, next.start, 24, "inOut") : 1) * (plan.brand ? 1 - ramp(frame, plan.brand.start - 6, 14, "inOut") : 1);
-        return isBackdrop(b.kind) && k > 0.001 ? <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={(b.strength ?? (plan.calm ? 0.55 : 1)) * k} /> : null;
-      })}
+      {(plan.backdrops ?? [])
+        .map((b, i, all) => {
+          // Cross-fade 24 frames into each backdrop; it fades as the next one
+          // of its slot arrives (or at its end) and clears for the brand lockup.
+          const slot = b.slot ?? "environment";
+          const out = all.slice(i + 1).find((x) => (x.slot ?? "environment") === slot)?.start ?? b.end;
+          const k = ramp(frame, b.start, 24, "inOut") * (out !== undefined ? 1 - ramp(frame, out, 24, "inOut") : 1) * (plan.brand ? 1 - ramp(frame, plan.brand.start - 6, 14, "inOut") : 1);
+          return { b, i, k, slot };
+        })
+        // (the environment under its atmosphere)
+        .sort((x, y) => (x.slot === y.slot ? x.i - y.i : x.slot === "environment" ? -1 : 1))
+        .map(({ b, i, k }) => (isBackdrop(b.kind) && k > 0.001 ? <Backdrop key={i} kind={b.kind} frame={frame} theme={theme} camera={[cx, cy]} opacity={(b.strength ?? backdropStrength(b.kind)) * k} /> : null))}
       {dim < 0.999 && (
         <AbsoluteFill style={dim > 0.001 ? { opacity: 1 - dim, filter: blurFilter(dim * 14), transform: `scale(${1 - 0.05 * dim})` } : undefined}>{content((id) => !member.has(id), true)}</AbsoluteFill>
       )}

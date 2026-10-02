@@ -44,7 +44,7 @@ import { CARD_TEMPLATES } from "@/components/video/flow/cards/templates";
 import { ASSET_COUNT } from "@/components/video/flow/cards/catalog";
 import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { DEPTH, LAYOUT_PRESETS, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES } from "@/components/video/flow/layouts";
-import { BACKDROPS } from "@/components/video/flow/backdrop-names";
+import { backdropStrength, BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { CAMERA_MOVES, ENTER_STYLES, parseAsset, repairCues, repairSceneScript, type SceneBeat, SceneScript, sceneScriptBlockers, TRANSITIONS } from "@/lib/scene-script";
 import { usableScene } from "@/lib/story-engine";
 import { compositionCheck } from "@/components/video/flow/composition-check";
@@ -1094,7 +1094,7 @@ function singleDirection(): Check[] {
   const scene = SceneScript.parse(storedJson.scene);
   const shots = ShotScript.parse(storedJson.shots);
   const plan = compileSceneScript(scene, { narration: RECIPE_NARRATION, durationSeconds: RECIPE_DURATION, brand: { name: "Flowly", cta: "Start free" } });
-  add("single D: stored and reloaded, the recipes survive and the video compiles from them", /\.\.\.\(variants\.length > 1 \? \{ variants \} : \{\}\)/.test(actionsSrc) && !("variants" in storedJson) && scene.beats.filter((b) => b.recipe).length === recipeBeats && shots.shots.filter((x) => x.recipe).length === RECIPE_SHOTS.shots.length && validateFlowPlan(plan).length === 0 && (plan.backdrops ?? []).length === 4 && plan.nodes.some((n) => n.layer === 0) && plan.nodes.some((n) => n.layer === 3), `stored keys: ${Object.keys(storedJson).join(", ")} · ${scene.beats.filter((b) => b.recipe).length} recipe scenes reloaded · backdrops ${(plan.backdrops ?? []).map((b) => b.kind).join(", ")}`);
+  add("single D: stored and reloaded, the recipes survive and the video compiles from them", /\.\.\.\(variants\.length > 1 \? \{ variants \} : \{\}\)/.test(actionsSrc) && !("variants" in storedJson) && scene.beats.filter((b) => b.recipe).length === recipeBeats && shots.shots.filter((x) => x.recipe).length === RECIPE_SHOTS.shots.length && validateFlowPlan(plan).length === 0 && (plan.backdrops ?? []).length === 2 && plan.nodes.some((n) => n.layer === 0) && plan.nodes.some((n) => n.layer === 3), `stored keys: ${Object.keys(storedJson).join(", ")} · ${scene.beats.filter((b) => b.recipe).length} recipe scenes reloaded · backdrops ${(plan.backdrops ?? []).map((b) => b.kind).join(", ")}`);
   add("single G: a mapped-intent note is reported but never triggers a revision; a real problem does", r.errors.some((e) => e.includes("transition iris")) && !isFixableNote(r.errors.find((e) => e.includes("transition iris"))!) && isFixableNote("direction A: recipe s1: hero \"icon:mail\" is not a drawable hero"), r.errors.filter((e) => !isFixableNote(e)).length + " mapped notes reported");
   const rv = SINGLE_RUNS.revised;
   add("single E: a flawed answer gets one revision, still one direction", !!rv.script && rv.calls.length === 2 && rv.calls.every((c) => c.single) && rv.revised && rv.diagnostics?.status === "ok", `calls: ${rv.calls.map((c) => (c.single ? "one" : "four")).join(" → ")} · revised ${rv.revised}`);
@@ -1115,8 +1115,8 @@ function sceneRecipeChecks(): Check[] {
   add("recipe B: the compiled plan is valid and the resolve pass leaves nothing", validateFlowPlan(plan).length === 0 && (plan.resolved?.left.length ?? 0) === 0, `invalid: ${validateFlowPlan(plan).join("; ") || "none"} · left: ${plan.resolved?.left.join("; ") || "none"}`);
   // environment → the backdrops behind each scene (one shared by two scenes continues)
   const kinds = (plan.backdrops ?? []).map((b) => b.kind);
-  // (approved backdrops only: studio → mesh, product-space → aurora, data-space → perspective-grid, cinematic → aurora)
-  add("recipe C: environment → the scene's backdrop (studio, product-space, data-space, cinematic)", kinds.join(",") === "mesh,aurora,perspective-grid,aurora" && (plan.backdrops ?? []).every((b) => b.strength === 0.9), kinds.join(" → "));
+  // (approved worlds: studio → the plain canvas (no layer), product-space and data-space → the perspective-grid floor (it continues), cinematic → + aurora over it)
+  add("recipe C: environment → the scene's backdrop (studio, product-space, data-space, cinematic)", kinds.join(",") === "perspective-grid,aurora" && (plan.backdrops ?? []).every((b) => b.source === "recipe" && b.strength === undefined && backdropStrength(b.kind) === 0.9), kinds.join(" → "));
   // hero + supporting at their depth layers
   const node = (id: string) => plan.nodes.find((n) => n.id === id);
   const heroes = recipes.map((r) => node(r!.hero));

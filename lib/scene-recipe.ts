@@ -80,20 +80,28 @@ export type Layer = 0 | 1 | 2 | 3;
 // amounts, so the scene has depth (components/video/flow/states.ts).
 export const PARALLAX: Record<Layer, number> = { 0: 0.55, 1: 0.82, 2: 1, 3: 1.3 };
 
-// Environment → the approved backdrop it is drawn with (backdrops.tsx), over
-// the explainer canvas, cross-faded scene to scene. Only production-approved
-// backdrops (ENV_APPROVED_BACKDROPS); the audit rejected the old studio
-// spotlight and data-space data-stream, and the horizon / light-beams / glow
-// plates (70–72) are not premium either.
-export const ENV_BACKDROP: Record<Environment, EnvBackdrop> = {
-  open: "mesh", // the plain canvas and its edge decor
-  studio: "mesh", // a clean, neutral studio (was spotlight: rejected)
-  "dark-space": "aurora", // colour drifting in a deep space (was glow)
-  "grid-space": "perspective-grid",
-  "product-space": "aurora", // soft light rising behind the product (was horizon)
-  "data-space": "perspective-grid", // the spatial data floor (was data-stream: rejected)
-  cinematic: "aurora", // curtains of light (was light-beams)
+// Environment → its world: an approved environment backdrop (the place) and
+// an approved atmosphere (light over it), either may be none (the plain
+// canvas). Only production-approved backdrops (ENV_APPROVED_BACKDROPS): the
+// audit rejected the studio spotlight and the data-space data-stream, and
+// horizon / light-beams / glow (70–72) are not premium. With one approved
+// environment (perspective-grid) and one atmosphere (aurora) some
+// environments still share a look until environment plates exist; dark-space,
+// product-space and cinematic are three different worlds.
+export type EnvWorld = { environment: "perspective-grid" | null; atmosphere: "aurora" | null };
+export const ENV_WORLD: Record<Environment, EnvWorld> = {
+  open: { environment: null, atmosphere: null }, // the plain canvas and its edge decor
+  studio: { environment: null, atmosphere: null }, // a clean, neutral studio (was spotlight: rejected)
+  "dark-space": { environment: null, atmosphere: "aurora" }, // colour drifting in a deep space
+  "grid-space": { environment: "perspective-grid", atmosphere: null },
+  "product-space": { environment: "perspective-grid", atmosphere: null }, // a floor the product stands on
+  "data-space": { environment: "perspective-grid", atmosphere: null }, // the spatial data floor (was data-stream: rejected)
+  cinematic: { environment: "perspective-grid", atmosphere: "aurora" }, // a stage under curtains of light
 };
+// The one backdrop a recipe scene beat names (its world's main layer; mesh = none).
+export const ENV_BACKDROP: Record<Environment, EnvBackdrop> = Object.fromEntries(
+  Object.entries(ENV_WORLD).map(([e, w]) => [e, w.environment ?? w.atmosphere ?? "mesh"]),
+) as Record<Environment, EnvBackdrop>;
 
 // What the compiler needs of a recipe scene (stored on its scene beat).
 export type CompiledRecipe = {

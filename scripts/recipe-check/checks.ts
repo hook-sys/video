@@ -4,10 +4,10 @@ import { RECIPE_NARRATION as RECIPE_NARRATION_, recipeFixture, RECIPE_SHOTS, REC
 import { THEMES, withBrandColor } from "@/components/video/flow/themes";
 import type { FlowNode, Track, Vec } from "@/components/video/flow/types";
 import { resolveTheme } from "@/lib/projects";
-import { BACKDROPS, ENV_APPROVED_BACKDROPS, REJECTED_BACKDROPS, renderableBackdrop } from "@/components/video/flow/backdrop-names";
+import { BACKDROP_ROLE, BACKDROPS, backdropStrength, ENV_APPROVED_BACKDROPS, REJECTED_BACKDROPS, renderableBackdrop } from "@/components/video/flow/backdrop-names";
 import { compileSceneScript, DECOR_ACCENT } from "@/components/video/flow/compile-scene";
 import { num } from "@/components/video/flow/eval";
-import { boundaryTransition, ENV_BACKDROP, ENVIRONMENTS, type SceneRecipe } from "@/lib/scene-recipe";
+import { boundaryTransition, ENV_BACKDROP, ENV_WORLD, ENVIRONMENTS, type SceneRecipe } from "@/lib/scene-recipe";
 import { SceneScript } from "@/lib/scene-script";
 import { type Dna, dnaMove, type ShotScript } from "@/lib/shots";
 
@@ -149,7 +149,7 @@ function dnaMappings() {
   // Mixed: recipe scenes first, then shots without one — those show the DNA grid.
   // (shot 2 follows a studio scene, so the grid is a change of world there)
   const mixed = run({ background: "grid" }, { ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 1 ? { ...x, recipe: null } : x)) });
-  const kinds = (mixed.plan.backdrops ?? []).map((x) => `${x.kind}${x.strength ? "" : "*"}`);
+  const kinds = (mixed.plan.backdrops ?? []).map((x) => `${x.kind}${x.source === "recipe" ? "" : "*"}`);
   add("after recipe scenes a DNA-grid shot keeps the grid (* = non-recipe)", kinds.includes("perspective-grid*"), kinds.join(", "));
   const panel = run({ transitions: "panel" });
   const handovers = scenes(panel).slice(1).map((b) => b.transition);
@@ -190,27 +190,55 @@ function environments() {
   section = "10. recipe world precedence";
   const base = recipeFixture(RECIPE_SHOTS);
   const envs = (r: typeof base) => r.script.beats.filter((b) => b.action === "scene" && b.recipe).map((b) => b.backdrop).join(",");
-  const stack = (r: typeof base) => (r.plan.backdrops ?? []).map((x) => `${x.kind}@${x.start}:${x.strength}`).join(" ");
+  const stack = (r: typeof base) => (r.plan.backdrops ?? []).map((x) => `${x.slot}:${x.kind}@${x.start}${x.end ? `–${x.end}` : ""}(${x.source})`).join(" ");
   const withDna = recipeFixture({ ...RECIPE_SHOTS, dna: { ...DNA, background: "grid" } });
   const withBold = recipeFixture({ ...RECIPE_SHOTS, dna: { ...DNA, background: "bold-field" } });
   add("recipe backdrops are not overridden by a DNA background", envs(base) === envs(withDna) && stack(base) === stack(withDna) && stack(base) === stack(withBold), stack(withDna));
   add("plan backdrop stack: approved kinds only", (base.plan.backdrops ?? []).every((x) => (ENV_APPROVED_BACKDROPS as readonly string[]).includes(x.kind)), stack(base));
   // One world: under a recipe environment the canvas decor is an accent only.
   const lvl = (r: typeof base, f: number) => num(r.plan.decorLevel, f, 1);
-  const firstRecipe = (base.plan.backdrops ?? [])[0]?.start ?? 0;
+  const firstRecipe = base.script.beats.length ? 5 : 0; // the first scene starts at frame 5
   add("recipe scenes turn the decor down to an accent", Math.abs(lvl(base, firstRecipe + 30) - DECOR_ACCENT) < 1e-6, `decor level ${lvl(base, firstRecipe + 30)} (accent ${DECOR_ACCENT})`);
   const glow = recipeFixture({ ...RECIPE_SHOTS, dna: { ...DNA, background: "bold-field" } });
   add("the glow decor (an atmosphere itself) goes entirely", glow.script.look?.decor === "glow" && lvl(glow, firstRecipe + 30) === 0, `decor ${glow.script.look?.decor}: level ${lvl(glow, firstRecipe + 30)}`);
   const mixed = recipeFixture({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 4 ? { ...x, recipe: null } : x)) });
   const sc = mixed.script.beats.map((b, i) => [b, i] as const).filter(([b]) => b.action === "scene");
-  const plain = (mixed.plan.backdrops ?? []).find((x) => !x.strength);
-  add("a shot without a recipe brings the full decor back", !!plain && lvl(mixed, plain.start + 30) === 1, `non-recipe scene at ${plain?.start}: level ${plain ? lvl(mixed, plain.start + 30) : "-"} (${sc.length} scenes)`);
+  // (the shot without a recipe starts where the recipe world's open layer ends)
+  const plainAt = (mixed.plan.backdrops ?? []).find((x) => x.source === "recipe" && x.end !== undefined)?.end;
+  add("a shot without a recipe brings the full decor back", plainAt !== undefined && lvl(mixed, plainAt + 30) === 1, `non-recipe scene at ${plainAt}: level ${plainAt !== undefined ? lvl(mixed, plainAt + 30) : "-"} (${sc.length} scenes)`);
 
   section = "11. legacy DNA shots unchanged";
   const legacy = recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: { ...DNA, background: "environment" } });
-  add("no recipe: no decor change, no recipe backdrop", legacy.plan.decorLevel === undefined && !(legacy.plan.backdrops ?? []).some((x) => x.strength), `decorLevel ${legacy.plan.decorLevel ? "set" : "none"} · backdrops ${(legacy.plan.backdrops ?? []).map((x) => x.kind).join(", ") || "mesh"} · decor ${legacy.script.look?.decor}`);
+  add("no recipe: no decor change, no recipe backdrop", legacy.plan.decorLevel === undefined && !(legacy.plan.backdrops ?? []).some((x) => x.source === "recipe"), `decorLevel ${legacy.plan.decorLevel ? "set" : "none"} · backdrops ${(legacy.plan.backdrops ?? []).map((x) => x.kind).join(", ") || "mesh"} · decor ${legacy.script.look?.decor}`);
   const g = recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: { ...DNA, background: "grid" } });
   add("DNA grid shots keep their perspective-grid", (g.plan.backdrops ?? []).map((x) => x.kind).join() === "perspective-grid" && g.plan.decorLevel === undefined, (g.plan.backdrops ?? []).map((x) => x.kind).join());
+}
+
+function worldStack() {
+  section = "12. world stack";
+  const base = recipeFixture(RECIPE_SHOTS);
+  const bd = base.plan.backdrops ?? [];
+  const show = bd.map((x) => `${x.slot}:${x.kind}@${x.start}${x.end ? `–${x.end}` : ""}`).join(" ");
+  add("mesh is never a timeline entry", !bd.some((x) => x.kind === "mesh") && !recipeFixture(RECIPE_SHOTS_LEGACY).plan.backdrops, show || "none");
+  // s1–s2 studio (canvas) · s3 product-space (grid) · s4–s5 data-space (grid continues) · s6 cinematic (grid + aurora)
+  add("only drawable layers, in their slots, in time order", show.replace(/@\d+/g, "@") === "environment:perspective-grid@ atmosphere:aurora@" && bd.every((x, i) => i === 0 || x.start >= bd[i - 1].start) && bd.every((x) => BACKDROP_ROLE[x.kind as keyof typeof BACKDROP_ROLE] !== "base"), show);
+  // A world back to the canvas ends the layer (no lingering backdrop).
+  const back = recipeFixture({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 3 ? { ...x, recipe: { ...x.recipe!, environment: "studio" } } : x)) });
+  const g = (back.plan.backdrops ?? []).find((x) => x.kind === "perspective-grid");
+  add("going back to the plain canvas ends the open layer", !!g?.end && (back.plan.backdrops ?? []).filter((x) => x.kind === "perspective-grid").length === 2, (back.plan.backdrops ?? []).map((x) => `${x.kind}@${x.start}${x.end ? `–${x.end}` : ""}`).join(" "));
+  add("dark-space, product-space and cinematic are three different worlds", new Set(["dark-space", "product-space", "cinematic"].map((e) => JSON.stringify(ENV_WORLD[e as keyof typeof ENV_WORLD]))).size === 3, ["dark-space", "product-space", "cinematic"].map((e) => `${e}: ${JSON.stringify(ENV_WORLD[e as keyof typeof ENV_WORLD])}`).join(" · "));
+  add("environment and atmosphere roles are explicit", ENVIRONMENTS.every((e) => (!ENV_WORLD[e].environment || BACKDROP_ROLE[ENV_WORLD[e].environment!] === "environment") && (!ENV_WORLD[e].atmosphere || BACKDROP_ROLE[ENV_WORLD[e].atmosphere!] === "atmosphere")) && BACKDROP_ROLE.aurora === "atmosphere" && BACKDROP_ROLE["perspective-grid"] === "environment", "aurora = atmosphere · perspective-grid = environment");
+  // One strength per backdrop, whatever the source or pace.
+  const calmGrid = recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: { ...DNA, background: "grid" } });
+  const pg = [...bd, ...(calmGrid.plan.backdrops ?? [])].filter((x) => x.kind === "perspective-grid");
+  add("same backdrop, same default strength (recipe, calm shot, lively)", pg.length >= 2 && pg.every((x) => x.strength === undefined) && backdropStrength("perspective-grid") === 0.9 && backdropStrength("aurora") === 0.9 && backdropStrength("particles") === 0.55, `perspective-grid ${backdropStrength("perspective-grid")} from ${[...new Set(pg.map((x) => x.source))].join(" + ")}; overrides: ${pg.filter((x) => x.strength !== undefined).length}`);
+  // recipe (grid) → a shot with no backdrop: the plain canvas, never the first scene's world.
+  const mixed = recipeFixture({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 4 ? { ...x, recipe: null } : x)) });
+  const mb = mixed.plan.backdrops ?? [];
+  const at = (f: number) => mb.filter((x) => x.start <= f && (x.end === undefined || x.end > f) && !mb.some((y) => y.slot === x.slot && y.start > x.start && y.start <= f)).map((x) => x.kind);
+  const shotScene = mixed.script.beats.filter((b) => b.action === "scene")[4];
+  const gEnd = mb.find((x) => x.kind === "perspective-grid")?.end;
+  add("recipe → shot: no stale backdrop inherited (plain canvas)", gEnd !== undefined && at(gEnd + 30).length === 0 && !shotScene.recipe, `shot scene from ${gEnd}: ${gEnd !== undefined ? at(gEnd + 30).join("+") || "canvas" : "-"} · ${mb.map((x) => `${x.kind}@${x.start}${x.end ? `–${x.end}` : ""}(${x.source})`).join(" ")}`);
 }
 
 export async function runChecks(): Promise<Check[]> {
@@ -221,5 +249,6 @@ export async function runChecks(): Promise<Check[]> {
   palette();
   dnaMappings();
   environments();
+  worldStack();
   return checks;
 }

@@ -152,7 +152,11 @@ export type FlowPlan = {
   panels?: FlowPanel[];
   // Scene backdrops (particles, grid …) from their start frame, cross-faded.
   // strength: its opacity (default: 0.55 at the calm pace, else 1).
-  backdrops?: { kind: string; start: number; strength?: number }[];
+  // Two slots (environment, atmosphere), each its own timeline: an entry
+  // shows from start until the next entry of its slot (or its end). Only
+  // drawable backdrops; the plain canvas is no entry. strength: an explicit
+  // override of the backdrop's own (backdropStrength).
+  backdrops?: { kind: string; start: number; end?: number; strength?: number; slot?: "environment" | "atmosphere"; source?: "recipe" | "shot" }[];
   // Element nodes that overlap on purpose (a stack, a fan) during a window.
   overlaps?: { ids: string[]; start: number; end: number }[];
   brand?: FlowBrand;

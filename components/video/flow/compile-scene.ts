@@ -1,5 +1,5 @@
 import { estimateWords } from "@/lib/flow-script";
-import { renderableBackdrop } from "./backdrop-names";
+import { type BackdropSlot, backdropSlot, renderableBackdrop } from "./backdrop-names";
 import { parseAsset, type SceneBeat, type SceneContent, type SceneElement, type SceneScript } from "@/lib/scene-script";
 import { spokenCueTimes, type WordTiming } from "@/lib/voice-timing";
 import { cardSize } from "./cards/card";
@@ -13,7 +13,7 @@ import { DEPTH, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES, type Slot } fro
 import { animate as animateAfter, Flow, type FlowNodeHandle, put as putAfter } from "./patterns";
 import { MARK_DELAY, type Ease, type FlowElement, type FlowLink, type FlowNode, type FlowPlan, type FlowText, type ThemeName, type Track, type Vec, type Vec3 } from "./types";
 import { EXPLAINER_TYPE, fitSize } from "./typography";
-import { type CompiledRecipe, type Layer, recipeCamera, recipeSlots, recipeText } from "@/lib/scene-recipe";
+import { type CompiledRecipe, ENV_WORLD, type Layer, recipeCamera, recipeSlots, recipeText } from "@/lib/scene-recipe";
 
 // SceneScript (Director v2) → FlowPlan. Scenes are arrangements of product
 // elements on one continuous canvas; beats are motion verbs on spoken words.
@@ -513,7 +513,28 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const orbiting: { ids: string[]; start: number; end: number }[] = [];
   const rings: NonNullable<FlowPlan["rings"]> = []; // dashed orbit paths
   const ghosts: { live: Live; end: number }[] = []; // running orbits, for framing
-  const backdrops: { kind: string; start: number; strength?: number }[] = [];
+  const backdrops: NonNullable<FlowPlan["backdrops"]> = [];
+  // The world on screen: one entry open per slot (environment, atmosphere).
+  const openSlot: Record<BackdropSlot, (typeof backdrops)[number] | null> = { environment: null, atmosphere: null };
+  const setWorld = (w: Record<BackdropSlot, string | null>, t: number, source: "recipe" | "shot") => {
+    for (const slot of ["environment", "atmosphere"] as const) {
+      const k = w[slot];
+      const cur = openSlot[slot];
+      if ((cur?.kind ?? null) === k) continue;
+      if (cur) cur.end = t;
+      openSlot[slot] = k ? { kind: k, start: t, slot, source } : null;
+      if (k) backdrops.push(openSlot[slot]!);
+    }
+  };
+  // A single named backdrop as a world (mesh: the plain canvas, no layer).
+  const worldOf = (k: string): Record<BackdropSlot, string | null> => {
+    const r = renderableBackdrop(k);
+    return r === "mesh" ? { environment: null, atmosphere: null } : backdropSlot(r) === "environment" ? { environment: r, atmosphere: null } : { environment: null, atmosphere: r };
+  };
+  // The shots' own world (never a recipe scene's): a shot without a backdrop
+  // keeps it, else the plain canvas.
+  let shotWorld: string | null = null;
+  let recipeSeen = false;
   const decorLevel: Track<number> = [[0, 1]]; // how much of the canvas decor shows (1 = all)
   let focusedOn: Live | null = null; // the camera is pushed in on this element
   const flashes: [number, number, number?][] = [];
@@ -578,8 +599,18 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         // (A recipe scene's environment is its own; one shared with the scene
         // before simply continues, so the world stays one place.)
         // (After recipe scenes, a shot that names its backdrop — the DNA's — keeps it.)
-        const kind = renderableBackdrop(sceneRecipe ? (b.backdrop ?? "mesh") : calm && backdrops.length ? (b.backdrop && backdrops.some((x) => x.strength) ? b.backdrop : backdrops[0].kind) : b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh"));
-        if (backdrops[backdrops.length - 1]?.kind !== kind) backdrops.push(sceneRecipe ? { kind, start: t, strength: 0.9 } : { kind, start: t });
+        // Recipe scene: its environment's world (lib/scene-recipe.ts ENV_WORLD).
+        // A shot: its own backdrop (calm: only the first shot's names one,
+        // unless recipe scenes came before) → the shots' current world → the
+        // plain canvas. A recipe scene's world is never inherited by a shot.
+        if (sceneRecipe) {
+          setWorld(ENV_WORLD[sceneRecipe.environment], t, "recipe");
+          recipeSeen = true;
+        } else {
+          const explicit = b.backdrop && (!calm || shotWorld === null || recipeSeen) ? b.backdrop : null;
+          shotWorld = explicit ?? shotWorld ?? "mesh";
+          setWorld(worldOf(shotWorld), t, "shot");
+        }
         // One world at a time: in a recipe scene its environment is the world
         // and the canvas decor steps back to a quiet edge accent (the glow
         // decor, itself an atmosphere, goes); elsewhere the decor is full.
@@ -1143,7 +1174,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       }
     }
     // A backdrop named on any later beat changes the atmosphere from there.
-    if (!calm && b.action !== "scene" && b.backdrop && backdrops.length && backdrops[backdrops.length - 1].kind !== renderableBackdrop(b.backdrop)) backdrops.push({ kind: renderableBackdrop(b.backdrop), start: t });
+    if (!calm && b.action !== "scene" && b.backdrop && !sceneRecipe) {
+      shotWorld = b.backdrop;
+      setWorld(worldOf(b.backdrop), t, "shot");
+    }
     // Before a caption arrives the camera already makes room for it.
     if (framed || (b.action !== "scene" && b.action !== "statement" && planned.some((l) => l.start > t && l.start <= t + 45))) shoot(t, span, b.action === "scene" ? sceneMove : "drift");
   });
@@ -1188,7 +1222,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   if (brand?.color) plan.brandColor = brand.color;
   if (overlaps.length || orbiting.length) plan.overlaps = [...overlaps, ...orbiting];
   if (rings.length) plan.rings = [...(plan.rings ?? []), ...rings];
-  if (backdrops.some((x) => x.kind !== "mesh")) plan.backdrops = backdrops;
+  if (backdrops.length) plan.backdrops = backdrops;
   if (decorLevel.length > 1) plan.decorLevel = decorLevel;
   // Elements that never appeared (skipped beats) are dropped.
   plan.nodes = plan.nodes.filter((n: FlowNode) => n.kind !== "el" || n.appear !== undefined);
