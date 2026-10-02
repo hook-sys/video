@@ -5,6 +5,9 @@ import { REFERENCE_NARRATION, REFERENCE_STORY } from "@/components/video/engine/
 import { STORY_WORLD_ID, StoryWorld, type StoryWorldProps } from "@/components/video/engine/story-world";
 import { Storyboard } from "@/components/video/storyboard";
 import { FLOW_SCENE_ID, FlowScene, type FlowSceneProps } from "@/components/video/flow/flow-scene";
+import { CleanVideo } from "@/components/video/clean/clean-video";
+import { CLEAN_ID, type CleanVideoProps } from "@/components/video/clean/types";
+import { flowlyPlan } from "@/components/video/clean/fixtures/flowly";
 import { ecommercePlan } from "@/components/video/flow/fixtures/ecommerce";
 import { paymentsHubPlan } from "@/components/video/flow/fixtures/payments-hub";
 import { FLOW_SCRIPT_FIXTURES } from "@/components/video/flow/fixtures/scripts";
@@ -55,6 +58,27 @@ export function RemotionRoot() {
       durationInFrames={450}
       defaultProps={{ story: REFERENCE_STORY, narration: REFERENCE_NARRATION, durationSeconds: 15 } as StoryWorldProps}
       calculateMetadata={({ props }) => ({ durationInFrames: Math.max(1, Math.round(props.durationSeconds * FPS)) })}
+    />
+    {/* The clean explainer (flat UI, kinetic type, story-coloured background). */}
+    <Composition
+      id={CLEAN_ID}
+      component={CleanVideo}
+      fps={30}
+      width={1920}
+      height={1080}
+      durationInFrames={900}
+      defaultProps={{ plan: flowlyPlan(0) } as CleanVideoProps}
+      calculateMetadata={({ props }) => ({ durationInFrames: props.plan.duration })}
+    />
+    {/* Proof: the Flowly script in variant 0–3. */}
+    <Composition
+      id="CleanVideoProof"
+      component={({ variantIndex }: { variantIndex: number }) => <CleanVideo plan={flowlyPlan(variantIndex)} />}
+      fps={30}
+      width={1920}
+      height={1080}
+      durationInFrames={flowlyPlan(0).duration}
+      defaultProps={{ variantIndex: 0 }}
     />
     {/* Flow engine: pattern-built continuous motion graphics (reference: e-commerce). */}
     <Composition
