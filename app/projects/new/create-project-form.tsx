@@ -31,25 +31,13 @@ const input =
 const area =
   "w-full resize-y rounded-2xl border border-foreground/12 bg-background p-4 text-base leading-relaxed transition placeholder:text-foreground/35 focus:border-violet-500 focus:outline-none focus:ring-4 focus:ring-violet-500/15";
 
-// The customer picks one style; the Directors decide the story, motion,
-// density, shots, camera and objects from the script.
-const STYLE_INFO: Record<StylePreset, string> = {
-  Auto: "We pick what fits your script",
-  Clean: "Light, minimal, airy",
-  Cinematic: "Dark, deep, glowing",
-  Bold: "Your colours, big and bright",
-};
-const STYLE_BG: Record<StylePreset, string> = {
-  Auto: "linear-gradient(135deg, #e0e7ff, #f5d0fe 50%, #0f172a 50.5%, #312e81)",
-  Clean: "radial-gradient(80% 90% at 20% 20%, #ede9fe, transparent), radial-gradient(70% 80% at 90% 90%, #cffafe, transparent), #f8fafc",
-  Cinematic: "radial-gradient(60% 70% at 70% 30%, #6d28d955, transparent), radial-gradient(120% 90% at 50% 40%, #1e1b4b, #020617)",
-  Bold: "radial-gradient(70% 80% at 25% 25%, #7C3AED66, transparent), radial-gradient(70% 80% at 85% 85%, #f9731655, transparent), #fff7ed",
-};
+// No style to pick: every project gets four videos in four different styles.
+const STYLE: StylePreset = "Auto";
+const AUTO_BG = "linear-gradient(135deg, #e0e7ff, #f5d0fe 50%, #0f172a 50.5%, #312e81)";
 
 export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: number; waiting: { plan: FlowPlan; captions: HeroCaption[] } }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState("");
-  const [style, setStyle] = useState<StylePreset>("Auto");
   const [format, setFormat] = useState<string>(FORMATS[0]);
   const [logo, setLogo] = useState<{ name: string; url: string; size: number } | null>(null);
   const [logoError, setLogoError] = useState<string>();
@@ -75,8 +63,8 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
     <>
       {pending && <WaitingScreen plan={waiting.plan} captions={waiting.captions} />}
       <form action={action} className={`grid gap-6 pb-28 lg:grid-cols-[minmax(0,1fr)_300px] lg:pb-0 ${pending ? "hidden" : ""}`}>
-        <input type="hidden" name="direction" value={directionFor(script, style)} />
-        <input type="hidden" name="visual_style" value={STYLE_PRESETS[style].visual_style} />
+        <input type="hidden" name="direction" value={directionFor(script, STYLE)} />
+        <input type="hidden" name="visual_style" value={STYLE_PRESETS[STYLE].visual_style} />
         <input type="hidden" name="format" value={format} />
         {/* Voice style isn't offered to customers; keep the existing default. */}
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
@@ -161,25 +149,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
             </div>
           </Step>
 
-          <Step n={4} title="Style">
-            <fieldset className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <legend className="sr-only">Style</legend>
-              {(Object.keys(STYLE_PRESETS) as StylePreset[]).map((p) => (
-                <label key={p} className="cursor-pointer">
-                  <input type="radio" name="style" value={p} checked={style === p} onChange={() => setStyle(p)} className="peer sr-only" />
-                  <span className="flex h-full flex-col gap-2 rounded-2xl border border-foreground/12 p-2 transition hover:border-foreground/30 peer-checked:border-violet-500 peer-checked:ring-4 peer-checked:ring-violet-500/15 peer-focus-visible:ring-4 peer-focus-visible:ring-violet-500/30">
-                    <span className="relative flex aspect-[4/3] items-center justify-center overflow-hidden rounded-xl text-2xl text-white drop-shadow" style={{ background: STYLE_BG[p] }}>
-                      {p === "Auto" ? "✦" : ""}
-                    </span>
-                    <span className="px-1 text-sm font-medium">{p === "Auto" ? "Auto ✨" : p}</span>
-                    <span className="px-1 pb-1 text-[11px] leading-snug text-foreground/50">{STYLE_INFO[p]}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-          </Step>
-
-          <Step n={5} title="Voice">
+          <Step n={4} title="Voice">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field title="Language">
                 <select name="voice_language" required className={input}>
@@ -192,7 +162,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
             </div>
           </Step>
 
-          <Step n={6} title="Format">
+          <Step n={5} title="Format">
             <fieldset className="flex flex-col gap-2">
               <legend className="sr-only">Format</legend>
               <div className="grid grid-cols-3 gap-3">
@@ -224,13 +194,12 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
         {/* Summary: a sticky side card on desktop, a bottom bar on mobile. */}
         <aside className="hidden lg:block">
           <div className="sticky top-24 flex flex-col gap-4 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
-            <span className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl text-3xl text-white drop-shadow" style={{ background: STYLE_BG[style] }}>
-              {style === "Auto" ? "✦" : ""}
+            <span className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl text-3xl text-white drop-shadow" style={{ background: AUTO_BG }}>
+              ✦
             </span>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Summary k="Length" v={seconds ? `≈ ${seconds} s` : "—"} />
               <Summary k="Format" v={format} />
-              <Summary k="Style" v={style} />
             </dl>
             <ul className="flex flex-col gap-1.5 text-xs text-foreground/60">
               <Check ok={!!script.trim()}>Voice-over</Check>
