@@ -66,7 +66,7 @@ const MINOR = new Set<SceneBeat["action"]>(["celebrate", "highlight", "disconnec
 // fuse at 56, a transform's bump at 50, a highlight's neighbours come back at
 // 34. Any other verb: the time it needs to read.
 const EVENT_REST: Partial<Record<string, number>> = { "move/recipe": 26, merge: 40, "merge/assemble": 56, "merge/transform": 50, highlight: 34 };
-function eventLength(b: SceneBeat): number {
+export function eventLength(b: SceneBeat): number {
   const key = b.style === "recipe" || b.style === "assemble" || b.style === "transform" ? `${b.action}/${b.style}` : b.action;
   if (b.choreo && (b.action === "merge" || b.action === "highlight" || key === "move/recipe")) {
     const c = choreoTimeline(b.style === "transform" ? { ...b.choreo, action: Math.max(b.choreo.action, 22) } : b.choreo, 0);

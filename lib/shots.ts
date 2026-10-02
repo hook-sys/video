@@ -256,7 +256,7 @@ export const directionScripts = (model: z.infer<typeof ShotScriptModel>): ShotSc
 // ── expansion ──
 // The recipe behaviors the compiler choreographs, with their own action
 // length in frames (the fixed timing they keep without choreography).
-const CHOREO_ACTION: Partial<Record<SceneRecipe["behaviors"][number]["type"], number>> = { move: 26, merge: 20, assemble: 40, transform: 32, highlight: 8 };
+export const CHOREO_ACTION: Partial<Record<SceneRecipe["behaviors"][number]["type"], number>> = { move: 26, merge: 20, assemble: 40, transform: 32, highlight: 8 };
 // Marks a note that only says how an intent was drawn (a recipe transition
 // mapped to its closest renderer form): reported, never a reason to revise.
 export const MAPPED_NOTE = "mapped:";

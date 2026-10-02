@@ -1,6 +1,6 @@
 // Scene Recipe execution: assemble / transform / arrange run on screen,
 // the scene boundary transition contract, and the palette precedence.
-import { RECIPE_NARRATION as RECIPE_NARRATION_, recipeFixture, RECIPE_SHOTS, RECIPE_SHOTS_LEGACY } from "@/components/video/flow/fixtures/recipe";
+import { RECIPE_DURATION, RECIPE_NARRATION as RECIPE_NARRATION_, recipeFixture, RECIPE_SHOTS, RECIPE_SHOTS_LEGACY } from "@/components/video/flow/fixtures/recipe";
 import { THEMES, withBrandColor } from "@/components/video/flow/themes";
 import { plannedSfx } from "@/components/video/flow/flow-scene";
 import type { FlowNode, Track, Vec } from "@/components/video/flow/types";
@@ -17,6 +17,9 @@ import { BG_DIRECTIONS, BG_TRANSITIONS, type BgChoreo, CAMERA_RETURN, cameraOffs
 import { zodTextFormat } from "openai/helpers/zod";
 import { bgLength, type WorldEntry, worldContext, worldLayer } from "@/components/video/flow/world-transition";
 import { StoredSceneRecipe } from "@/lib/scene-recipe";
+import { fitRelationshipBudget, sceneChains } from "@/lib/relationship-budget";
+import { budgetDirections, INSTRUCTIONS } from "@/lib/ai/shot-director";
+import { estimateWords } from "@/lib/flow-script";
 import { type Dna, dnaMove, isFixableNote, type ShotScript, ShotScript as ShotScriptSchema, ShotScriptModel } from "@/lib/shots";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
@@ -787,6 +790,81 @@ function relationGuards() {
   add("deterministic warnings / result", JSON.stringify(recipeFixture(s1(chainOf())).plan.relationWarnings) === JSON.stringify(w) && fingerprint(recipeFixture(s1(chainOf())).plan) === fingerprint(over.plan), fingerprint(over.plan));
 }
 
+// Director timing budget: chains planned within the scene's narration time.
+type Bh20 = SceneRecipe["behaviors"][number];
+// Case A — enough time (s5): the rocket moves to the number, a coin flows in, the number is highlighted.
+const budgetFits = withRecipe(4, (r) => ({ ...r, supporting: [...r.supporting, { id: "coin", asset: "object:coin", role: "a sale", layer: "midground", relation: "feeds-hero", persistence: "scene" }], behaviors: [
+  { type: "move", from: "rocket", to: "hero", cue: "up 40%", id: "a" },
+  { type: "flow", from: "coin", to: "hero", cue: "up 40%", id: "b", relationship: { after: "a", offset: 4 } },
+  { type: "highlight", from: "hero", to: null, cue: "first month", id: "c", relationship: { after: "b", offset: 4 } },
+] }));
+// Case B — not enough time (s3): five events in one chain, then the dashboard is revealed.
+const budgetFive = (e: Partial<Bh20> = {}) => withRecipe(2, (r) => ({ ...r, supporting: [...r.supporting,
+  { id: "chip", asset: "icon:cpu", role: "a step", layer: "background", relation: "behind-hero", persistence: "scene" },
+  { id: "p2", asset: "icon:chart-line", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" }], behaviors: [
+  { type: "flow", from: "db", to: "hero", cue: "every", id: "a" },
+  { type: "merge", from: "chip", to: "hero", cue: "source", id: "b", relationship: { after: "a", offset: 4 } },
+  { type: "highlight", from: "hero", to: null, cue: "into", id: "c", relationship: { after: "b", offset: 4 } },
+  { type: "move", from: "p2", to: "hero", cue: "one", id: "d", relationship: { after: "c", offset: 4 } },
+  { type: "highlight", from: "hero", to: null, cue: "live", id: "e", relationship: { after: "d", offset: 4 }, ...e },
+  { type: "reveal", from: "bars", to: null, cue: "dashboard", id: "r" },
+] }));
+function directorBudget() {
+  section = "20. director timing budget";
+  const words = estimateWords(RECIPE_NARRATION_, RECIPE_DURATION);
+  const ids = (sh: ShotScript, i: number) => sh.shots[i].recipe!.behaviors.map((b) => `${b.id}${b.relationship?.after ? `<${b.relationship.after}` : ""}`).join(" ");
+  // 1. fits → unchanged
+  const a = fitRelationshipBudget(budgetFits, words);
+  const aPlan = recipeFixture(a.shots).plan;
+  add("chain fits the narration → unchanged (same recipe, no warning)", a.shots === budgetFits && !a.notes.length && !aPlan.relationWarnings && aPlan.relations?.every((x) => x.status === "applied") === true, `${ids(a.shots, 4)} · chain ${sceneChains(budgetFits.shots[4].recipe!.behaviors)[0].frames} frames`);
+  // 2. the Director is told; its answer is fitted before it is compiled
+  const told = ["plan a chain within the scene's narration time", "prefer fewer meaningful events over many rushed ones", "never shorten choreography phases"].every((x) => INSTRUCTIONS.includes(x));
+  const dir = budgetDirections([budgetFive()], words);
+  add("chain exceeds → the Director's instruction exists and its answer is fitted", told && dir.notes.length > 0 && dir.notes.every((n) => n.startsWith("direction A: ")) && ids(dir.scripts[0], 2) !== ids(budgetFive(), 2), dir.notes[0] ?? "-");
+  // 3. fewer meaningful events: the cause and the final emphasis kept, the least important dropped first
+  const b = fitRelationshipBudget(budgetFive(), words);
+  const rawB = recipeFixture(budgetFive()).plan, fitB = recipeFixture(b.shots).plan;
+  const dropped = b.notes.map((n) => /dropped "(\w)"/.exec(n)?.[1]).join("");
+  add("fewer meaningful events: a → b → c → d → e becomes a → e (d, then b, then c dropped)", ids(b.shots, 2) === "a e<a r" && dropped === "dbc" && !resolveRelationships(b.shots.shots[2].recipe!.behaviors).errors.length, `${ids(b.shots, 2)} · dropped in order ${dropped}`);
+  add("…and the simplified chain fits the voice (the raw one overflowed)", !!rawB.relationWarnings?.some((w) => w.code === "RELATIONSHIP_SCENE_OVERFLOW") && !fitB.relationWarnings, `raw: ${JSON.stringify(rawB.relationWarnings?.[0])} · fitted: none`);
+  // 4 – 6. choreography, SFX and camera of the kept events untouched
+  const FULL = { anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3, sfx: [{ phase: "impact", kind: "soft_pop" }], camera: { response: "push", intensity: "medium" } };
+  const c = fitRelationshipBudget(budgetFive({ choreography: FULL }), words);
+  const eKept = c.shots.shots[2].recipe!.behaviors.find((x) => x.id === "e")!;
+  const cPlan = recipeFixture(c.shots);
+  const eBeat = cPlan.script.beats.find((x) => x.action === "highlight" && x.after)!;
+  const eRel = cPlan.plan.relations!.find((x) => x.event === eBeat.event)!;
+  const etl = choreoTimeline(eBeat.choreo!, eRel.start);
+  add("choreography never compressed (kept event's phases as written)", JSON.stringify(eKept.choreography) === JSON.stringify(FULL) && JSON.stringify(eBeat.choreo) === JSON.stringify(normalizeChoreography(FULL, 8)), JSON.stringify(eBeat.choreo));
+  add("SFX on its phase (unchanged length and place)", (cPlan.plan.sfx ?? []).some((x) => x.choreo && x.kind === "soft_pop" && x.frame === sfxFrame(etl, "impact")), `impact ${sfxFrame(etl, "impact")}`);
+  const noCamPlan = recipeFixture(fitRelationshipBudget(budgetFive({ choreography: { ...FULL, camera: null } }), words).shots).plan;
+  let peak = 0, peakAt = 0;
+  for (let f = etl.start - 10; f <= etl.end + 20; f++) { const d = num(cPlan.plan.camera.zoom, f, 1) / num(noCamPlan.camera.zoom, f, 1); if (d > peak) { peak = d; peakAt = f; } }
+  add("camera choreography unchanged (the response on the kept event's phases)", peak > 1.02 && peakAt >= etl.actionAt && peakAt <= etl.end + 6, `peak ×${peak.toFixed(3)} at ${peakAt} (${etl.start}–${etl.end})`);
+  // 7. background: a fitted chain leaves the scenes (and their worlds) on their words
+  add("background unchanged (fitted chain: the worlds as without relationships)", JSON.stringify(fitB.backdrops) === JSON.stringify(recipeFixture(RECIPE_SHOTS).plan.backdrops), `fitted ${fitB.backdrops?.map((x) => x.start).join(",")} (s4 continues s3's world, so even the raw overflow keeps ${rawB.backdrops?.map((x) => x.start).join(",")})`);
+  // 8. relationship-free: nothing touched
+  const base = fitRelationshipBudget(RECIPE_SHOTS, words), legacy = fitRelationshipBudget(RECIPE_SHOTS_LEGACY, words);
+  add("relationship-free scripts untouched; fingerprints unchanged", base.shots === RECIPE_SHOTS && legacy.shots === RECIPE_SHOTS_LEGACY && !base.notes.length && fingerprint(recipeFixture(base.shots).plan) === PRE_CHOREO.base && fingerprint(recipeFixture(legacy.shots).plan) === PRE_CHOREO.legacy, "base · legacy");
+  // 9. schema
+  const schema = JSON.stringify(zodTextFormat(ShotScriptModel, "s"));
+  add("Director output schema valid (relationship kept; fitted scripts parse)", schema.includes("\"relationship\"") && ShotScriptSchema.safeParse(JSON.parse(JSON.stringify(b.shots))).success, "ok");
+  // 10. what the Director cannot fit: kept, and the compiler still warns
+  const s1Chain = withRecipe(0, (r) => ({ ...r, supporting: [
+    { id: "sheet", asset: "icon:file-spreadsheet", role: "a card", layer: "midground", relation: "feeds-hero", persistence: "scene" },
+    { id: "chart", asset: "visual:bars", role: "the chart", layer: "foreground", relation: "beside-hero", persistence: "scene" },
+    { id: "p1", asset: "icon:database", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" },
+    { id: "p2", asset: "icon:chart-line", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" }], behaviors: [
+    { type: "move", from: "sheet", to: "hero", cue: "ten different tools", id: "a" },
+    { type: "assemble", from: "p1", to: "chart", cue: "different tools", id: "b", relationship: { after: "a", offset: 6 } },
+    { type: "highlight", from: "chart", to: null, cue: "tools", id: "c", relationship: { after: "b", offset: 4 } },
+  ] }));
+  const d = fitRelationshipBudget(s1Chain, words);
+  const dPlan = recipeFixture(d.shots).plan;
+  add("still too long after simplifying: kept (cause + one effect), compiler overflow warning as fallback", ids(d.shots, 0) === "a b<a" && d.notes.some((n) => n.includes("kept")) && !!dPlan.relationWarnings?.some((w) => w.code === "RELATIONSHIP_SCENE_OVERFLOW"), `${ids(d.shots, 0)} · ${JSON.stringify(dPlan.relationWarnings?.[0])}`);
+  add("deterministic", JSON.stringify(fitRelationshipBudget(budgetFive(), words)) === JSON.stringify(b), `${b.notes.length} notes`);
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
@@ -803,5 +881,6 @@ export async function runChecks(): Promise<Check[]> {
   worldEnds();
   relationships();
   relationGuards();
+  directorBudget();
   return checks;
 }

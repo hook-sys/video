@@ -8,14 +8,16 @@ import { compositionCheck, violationNote } from "@/components/video/flow/composi
 import { type DirectionDiagnostics, searchCreative, seedFrom } from "@/lib/shot-search";
 import type { SceneScript } from "@/lib/scene-script";
 import { continuityCheck, type Direction, directionScripts, type Dna, expandShots, isFixableNote, shotCatalogText, type ShotScript, ShotScriptModel } from "@/lib/shots";
-import { tokenize } from "@/lib/voice-timing";
+import { tokenize, type WordTiming } from "@/lib/voice-timing";
+import { estimateWords } from "@/lib/flow-script";
+import { fitRelationshipBudget } from "@/lib/relationship-budget";
 
 // Shot Director: picks a tested shot template (lib/shots.ts) for each moment
 // of the narration and fills in its words. Sizes, places, motion, cursor and
 // sound come from the templates, so the Director cannot make a crowded,
 // tiny or off-frame picture. One call, at most one revision; never throws.
 
-const INSTRUCTIONS = `You are the editor of a calm explainer video for a software product (the style of Keka, Linear or Stripe explainers: one idea at a time, one subject always in focus). The narration is final and already recorded. You cut it into SHOTS and pick, for each, a tested shot template and its words. The engine draws every shot (sizes, places, motion, cursor, sound), so you only choose the shot and write its short texts.
+export const INSTRUCTIONS = `You are the editor of a calm explainer video for a software product (the style of Keka, Linear or Stripe explainers: one idea at a time, one subject always in focus). The narration is final and already recorded. You cut it into SHOTS and pick, for each, a tested shot template and its words. The engine draws every shot (sizes, places, motion, cursor, sound), so you only choose the shot and write its short texts.
 
 OUTPUT (JSON only, no prose; unused fields null): { theme, creative, variants[] }.
 - creative (shared): message, audience, tone, pace (calm | balanced | brisk).
@@ -36,7 +38,7 @@ SCENE RECIPE (recipe — how the scene visually exists, a premium motion-design 
 - composition: hero-right | hero-left | hero-center | asymmetric | depth-stack | foreground-hero | cinematic-wide | split-depth | typography-led | full-frame. Vary it; never hero-center for every scene.
 - typography: { position: auto | left | right | top-left | top | bottom | bottom-left (never on the hero's side), scale: hero | supporting, emphasis: word-highlight | pill | strike | none } — the shot's line (text) is placed there, word by word on the voice.
 - camera: { intent: static | push-in | pull-back | lateral | focus-hero | reveal | orbit-intent, intensity: low | medium | high } (this replaces the shot's camera).
-- behaviors: what the objects DO on their words: { type: reveal (a supporting object arrives on its words) | move | connect | flow (data runs from → to) | merge | assemble | transform | highlight | expand | focus (the camera pushes on it, the rest blurs), from ("hero" or a supporting id), to (an id or null), cue (1–6 narration words spoken after the shot's cue, in order), choreography (null: the engine times it; for a key moment { anticipation, action, impact, settle } in seconds, any null — e.g. a strong landing 0.2, 0.6, 0.15, 0.3; a subtle one null, 0.5, null, 0.3 — and sfx: null, or up to 2 [{ phase: impact (the usual one) | anticipation | action | settle, kind: whoosh | soft_pop | click | reveal | success_chime | subtle_impact }], and camera: null, or { response: push | pull | pan | orbit | rise | fall, intensity: low | medium | high } for the camera to answer the moment), id (a short name for the event, or null) and relationship (null, or { after: the id of an earlier behavior of this scene, offset: frames between its end and this start, e.g. 6 } when this event is caused by that one — it then starts when that one ends, not on its words) }. At least one where the narration says something happens.
+- behaviors: what the objects DO on their words: { type: reveal (a supporting object arrives on its words) | move | connect | flow (data runs from → to) | merge | assemble | transform | highlight | expand | focus (the camera pushes on it, the rest blurs), from ("hero" or a supporting id), to (an id or null), cue (1–6 narration words spoken after the shot's cue, in order), choreography (null: the engine times it; for a key moment { anticipation, action, impact, settle } in seconds, any null — e.g. a strong landing 0.2, 0.6, 0.15, 0.3; a subtle one null, 0.5, null, 0.3 — and sfx: null, or up to 2 [{ phase: impact (the usual one) | anticipation | action | settle, kind: whoosh | soft_pop | click | reveal | success_chime | subtle_impact }], and camera: null, or { response: push | pull | pan | orbit | rise | fall, intensity: low | medium | high } for the camera to answer the moment), id (a short name for the event, or null) and relationship (null, or { after: the id of an earlier behavior of this scene, offset: frames between its end and this start, e.g. 6 } when this event is caused by that one — it then starts when that one ends, not on its words; plan a chain within the scene's narration time, about move 0.9 s, merge 1.3 s, assemble 1.9 s, transform 1.7 s, highlight 1.1 s each plus its offset: prefer fewer meaningful events over many rushed ones, and never shorten choreography phases to make a chain fit) }. At least one where the narration says something happens.
 - transition_in: cut | push | panel-wipe | iris | flash | object-transform (a persistent hero carries into this scene) | morph-intent | dissolve; transition_out: the same, or null (how the next scene arrives; it wins over the next scene's transition_in, except an object-transform that carries this scene's hero). Never all the same.
 - background: how the scene's world (its environment) arrives: null (the usual dissolve), or { transition: crossfade | slide (the old world moves away, revealing this one) | push (this world pushes the old one out) | wipe (revealed from an edge), direction: left | right | up | down | null, intensity: subtle | medium | strong | null } — only where the world change is a moment.
 - assets: what the scene's assets must be, as requirements instead of a description (the engine picks only approved, premium assets; one it cannot match keeps the asset you named above): [{ category: hero | supporting | accent, concept: payment-card | money | chart | growth | dashboard | security-lock | security-shield | ai-chip | document | chat | email | goal | success | award | idea | question | speed | other, role: primary (the hero) | secondary (a supporting object) | accent, visual_need (3–8 words: what it must show), preferred_asset_id (an asset you would like, e.g. object:shield, else null), fallback_allowed (true when a related approved asset may stand in), slot ("hero", a supporting id, or null) }] — one for the hero and one per supporting object that matters; null when the named assets are exactly right.
@@ -86,6 +88,19 @@ export type ShotDirectorDiagnostics = { mode: "four" | "single"; status: string;
 export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null; variants: ShotVariantOut[]; diagnostics: ShotDirectorDiagnostics | null };
 
 // `client` is for tests (a stand-in for the OpenAI client).
+// The Director's timing budget for relationships (lib/relationship-budget.ts):
+// every direction's chains fitted to its scenes' narration time before it is
+// compiled; what was dropped is reported in the notes.
+export function budgetDirections(scripts: ShotScript[], timeline: WordTiming[]): { scripts: ShotScript[]; notes: string[] } {
+  const notes: string[] = [];
+  const out = scripts.map((sh) => {
+    const fit = fitRelationshipBudget(sh, timeline);
+    notes.push(...fit.notes.map((n) => `direction ${sh.variant}: ${n}`));
+    return fit.shots;
+  });
+  return { scripts: out, notes };
+}
+
 export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000, client?: Pick<OpenAI, "responses">, wanted: DirectionMode = directionMode()): Promise<ShotDirectorResult> {
   const started = Date.now();
   const timing = input.words?.length ? "voice" : "estimated";
@@ -98,12 +113,15 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   // cleanest kept, and the directions that are truly different are offered
   // (lib/shot-search.ts searchCreative); the seed comes from the project.
   const seed = input.seed ?? seedFrom(input.narration);
+  // the narration's word times (or their estimate, as the compiler uses them)
+  const timeline = input.words?.length ? input.words : estimateWords(input.narration, input.duration_seconds);
   const check = (raw: unknown) => {
     if (!raw) return { shots: null, script: null, problems: ["no structured output"], ...none };
     // Phase 6.5: one shot script per creative direction (A–D).
-    const scripts = directionScripts(ShotScriptModel.parse(raw));
+    // (each direction's relationship chains fitted to its scenes' narration time)
+    const { scripts, notes: budgetNotes } = budgetDirections(directionScripts(ShotScriptModel.parse(raw)), timeline);
     if (!scripts.length) return { shots: null, script: null, problems: ["no creative directions"], ...none };
-    const expandNotes: string[] = [];
+    const expandNotes: string[] = [...budgetNotes];
     const assetsOf = new Map<string | null, AssetDiagnostics[]>(); // per direction
     for (const shots of scripts) {
       // Phase 4: object continuity (errors reach the revision through the expand notes).
