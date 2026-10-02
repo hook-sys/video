@@ -1,8 +1,11 @@
 import { AbsoluteFill, interpolate } from "remotion";
 import { Icon } from "../../icons";
-import { count, IN_OUT, mix, money, OUT, pop, rise } from "../anim";
-import { abs, Area, AppWindow, at, BarsV, Check, Comet, float, FlowMark, Glass, Kpi, LIGHT_APP, Logo, Person, Shot, Token, W, Words } from "./common";
-import { kw, T } from "./timing";
+import { count, IN_OUT, mix, money, OUT, rise } from "../anim";
+import { abs, appear, Area, AppWindow, at, BarsV, Check, Comet, float, FlowMark, Glass, grow, Kpi, LIGHT_APP, Logo, Person, Shot, soft, Token, W, Words } from "./common";
+
+// Cards, icons and pills ease in from slightly smaller (never from nothing).
+const pop = grow;
+import { type Beats, type Moments } from "./beats";
 
 // Film 1 — "Glow" (reference: an AI-product explainer on deep green): a
 // green field under large glowing light arcs, comet lines with bright heads,
@@ -17,7 +20,7 @@ const APP = LIGHT_APP("#0f9e6e", "#3ad69c");
 
 // The field: a green gradient, two great arcs of light (top and bottom) whose
 // shape changes from shot to shot, soft orbs drifting, a slow light pass.
-const KEYS: { f: number; top: number; bot: number; tilt: number; hue: number }[] = [
+const keysOf = (T: Moments): { f: number; top: number; bot: number; tilt: number; hue: number }[] => [
   { f: 0, top: -1180, bot: 1240, tilt: -4, hue: 0 },
   { f: T.sales - 8, top: -1260, bot: 980, tilt: 5, hue: 1 },
   { f: T.flowly - 10, top: -1040, bot: 1300, tilt: 0, hue: 2 },
@@ -26,7 +29,8 @@ const KEYS: { f: number; top: number; bot: number; tilt: number; hue: number }[]
   { f: T.no1 - 8, top: -1200, bot: 1200, tilt: 7, hue: 2 },
   { f: T.just - 8, top: -1080, bot: 1020, tilt: -3, hue: 1 },
 ];
-function GlowBg({ f }: { f: number }) {
+function GlowBg({ f, T }: { f: number; T: Moments }) {
+  const KEYS = keysOf(T);
   const fr = KEYS.map((k) => k.f);
   const v = (key: "top" | "bot" | "tilt" | "hue") => interpolate(f, fr.flatMap((x, i) => (i ? [x - 4, x + 18] : [x])), KEYS.flatMap((k, i) => (i ? [KEYS[i - 1][key], k[key]] : [k[key]])), { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: IN_OUT });
   const top = v("top"), bot = v("bot"), tilt = v("tilt"), hue = v("hue");
@@ -50,18 +54,20 @@ function GlowBg({ f }: { f: number }) {
 const white = (sz: number, extra = {}) => ({ size: sz, ink: "#effff8", weight: 650, ...extra });
 const pillKey = () => (_: unknown, k: number) => ({ color: "#04261b", padding: "0 0.28em", margin: "0 0.08em", borderRadius: 14, background: `rgba(70,242,176,${0.4 + 0.6 * k})`, boxShadow: `0 0 ${40 * k}px rgba(70,242,176,0.6)` });
 
-export function GlowFilm({ f }: { f: number }) {
-  const cut = { data: T.data - 4, trio: T.sales - 8, logo: T.flowly - 10, cards: T.into - 6, app: T.when1 - 8, bars: T.when2 - 8, team: T.entire - 6, nomore: T.no1 - 8, slot: T.just - 8, check: T.every2 - 10, end: T.end + 6, dur: T.duration };
+export function GlowFilm({ f, b }: { f: number; b: Beats }) {
+  const T = b.t;
+  const L = b.line;
+  const cut = { data: T.data - 4, trio: T.sales - 4, logo: T.flowly - 10, cards: T.into - 6, app: T.when1 - 4, bars: T.when2 - 4, team: T.entire - 6, nomore: T.no1 - 4, slot: T.just - 4, check: T.every2 - 6, end: T.end + 6, dur: T.duration };
   return (
     <AbsoluteFill style={{ fontFamily: "InterClean, system-ui, sans-serif" }}>
-      <GlowBg f={f} />
+      <GlowBg f={f} T={T} />
 
       {/* 1. Comet lines cross the words */}
       <Shot f={f} from={0} to={cut.data} enter="none" cam={(p, f) => `${float(f)} scale(${mix(1.06, 1, p)})`}>
         <Comet f={f} at={-6} dur={50} pts={[[-100, 300], [500, 120], [900, 820], [1500, 760]]} color={MINT} width={6} big />
         <Comet f={f} at={2} dur={46} pts={[[200, 1000], [700, 640], [1300, 260], [2000, 380]]} color="#f5d27a" width={4} />
         <Comet f={f} at={8} dur={44} pts={[[2000, 900], [1500, 760], [900, 760], [400, 860]]} color="#d9fff0" width={4} />
-        {at(W / 2, 540, <Words f={f} words={kw("Every team starts with")} s={white(96)} />)}
+        {at(W / 2, 540, <Words f={f} words={L.hookA} s={white(96)} />)}
       </Shot>
 
       {/* 2. "Data" — flat tokens orbit, then scatter on "scattered" */}
@@ -72,29 +78,28 @@ export function GlowFilm({ f }: { f: number }) {
           return icons.map((ic, i) => {
             const a = (i / icons.length) * Math.PI * 2 + f / 90;
             const r = mix(300, 620, sc);
-            const k = pop(f, T.data + 2 + i * 3, 16);
+            const k = soft(f, T.data + 2 + i * 3, 22);
             const x = W / 2 + Math.cos(a) * r * 1.25;
             const y = 520 + Math.sin(a) * r * 0.6;
-            return at(x, y, <Token icon={ic} size={mix(140, 104, sc)} bg="#f4fff9" color="#0b6b4b" ring="rgba(120,255,200,0.35)" style={{ transform: `scale(${k}) rotate(${sc * (i % 2 ? 28 : -28)}deg)` }} />, { opacity: 1 - sc * 0.35, filter: `blur(${sc * (i % 3 === 0 ? 4 : 0)}px)` });
+            return at(x, y, <Token icon={ic} size={mix(140, 104, sc)} bg="#f4fff9" color="#0b6b4b" ring="rgba(120,255,200,0.35)" style={{ transform: `scale(${mix(0.6, 1, k)}) rotate(${sc * (i % 2 ? 28 : -28)}deg)` }} />, { opacity: k * (1 - sc * 0.35), filter: `blur(${sc * (i % 3 === 0 ? 4 : 0)}px)` });
           });
         })()}
         {at(W / 2, 440, <div style={{ fontSize: 210, fontWeight: 700, letterSpacing: "-0.05em", backgroundImage: `linear-gradient(180deg, #ffffff, ${MINT})`, WebkitBackgroundClip: "text", color: "transparent", opacity: rise(f, T.data - 2, 12), filter: `blur(${(1 - rise(f, T.data - 2, 12)) * 16}px)` }}>Data</div>)}
-        {at(W / 2, 640, <Words f={f} words={kw("scattered across different tools.", ["scattered"])} s={white(54, { key: pillKey() })} />)}
+        {at(W / 2, 640, <Words f={f} words={L.hookB} s={white(54, { key: pillKey() })} />)}
       </Shot>
 
       {/* 3. Sales / Payments / Reports: tilted glass slabs, a "?" in a glass notch */}
       <Shot f={f} from={cut.trio} to={cut.logo} enter="slide" cam={(p, f) => `${float(f)} translateX(${mix(40, -40, p)}px) rotateY(${mix(-4, 3, p)}deg)`}>
         <div style={{ position: "absolute", left: 1330, top: -60, width: 900, height: 1200, borderRadius: 120, background: "linear-gradient(180deg, rgba(160,255,220,0.10), rgba(160,255,220,0.03))", borderLeft: "2px solid rgba(160,255,220,0.35)", boxShadow: "inset 30px 0 80px -30px rgba(70,242,176,0.4)" }} />
-        {at(1400, 520, <div style={{ width: 128, height: 128, borderRadius: 999, background: "radial-gradient(circle at 40% 35%, #c8ffe9, #3ad69c 60%, #0e8c63)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 70, fontWeight: 700, color: "#fff", boxShadow: "0 0 80px rgba(70,242,176,0.7), inset 0 2px 0 rgba(255,255,255,0.6)", transform: `scale(${pop(f, cut.trio + 6, 18)})` }}>?</div>)}
+        {at(1400, 520, <div style={{ width: 128, height: 128, borderRadius: 999, background: "radial-gradient(circle at 40% 35%, #c8ffe9, #3ad69c 60%, #0e8c63)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 70, fontWeight: 700, color: "#fff", boxShadow: "0 0 80px rgba(70,242,176,0.7), inset 0 2px 0 rgba(255,255,255,0.6)", transform: `scale(${pop(f, cut.trio + 6, 18)})`, opacity: soft(f, cut.trio + 6, 20) }}>?</div>)}
         {[
-          { t: "Sales", s: "in one place", c: T.sales, x: 720, y: 290, r: -9, z: 1 },
-          { t: "Payments", s: "in another", c: T.payments, x: 600, y: 520, r: 6, z: 1.18 },
-          { t: "Reports", s: "somewhere else", c: T.reports, x: 760, y: 760, r: -7, z: 0.96 },
+          { t: b.trio[0].label, s: b.trio[0].sub, c: T.sales, x: 720, y: 290, r: -9, z: 1 },
+          { t: b.trio[1].label, s: b.trio[1].sub, c: T.payments, x: 600, y: 520, r: 6, z: 1.18 },
+          { t: b.trio[2].label, s: b.trio[2].sub, c: T.reports, x: 760, y: 760, r: -7, z: 0.96 },
         ].map((it) => {
-          const k = rise(f, it.c - 3, 16, OUT);
-          const shake = Math.sin((f - it.c) / 6) * (1 - rise(f, it.c, 30)) * 6;
+          const k = soft(f, it.c - 3, 22);
           return at(
-            it.x + (1 - k) * -160 + shake,
+            it.x + (1 - k) * -120,
             it.y,
             <div style={{ transform: `rotate(${it.r}deg) scale(${it.z})`, display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
               <Glass dark tint="#bfffe6" radius={14} pad="18px 48px" style={{ fontSize: 66, fontWeight: 700, color: "#ffffff", letterSpacing: "-0.02em" }}>
@@ -117,7 +122,7 @@ export function GlowFilm({ f }: { f: number }) {
             <>
               <div style={{ position: "absolute", left: 0, top: 530, width: W, height: 6, background: `linear-gradient(90deg, transparent, rgba(220,255,240,${flare}), transparent)`, filter: "blur(2px)", boxShadow: `0 0 80px rgba(160,255,220,${flare})` }} />
               {at(W / 2, 530, <Logo size={150} ink="#ffffff" colors={[MINT, EMER]} k={k} />, { filter: `drop-shadow(0 0 ${40 * flare}px rgba(160,255,220,0.8))` })}
-              {at(W / 2, 700, <Words f={f} words={kw("brings everything")} s={white(48, { weight: 500 })} />)}
+              {at(W / 2, 700, <Words f={f} words={L.revealA} s={white(48, { weight: 500 })} />)}
             </>
           );
         })()}
@@ -149,28 +154,28 @@ export function GlowFilm({ f }: { f: number }) {
                   return <circle key={i} cx={mix(560, 1360, t)} cy={470} r={5} fill="#fff" opacity={0.9} />;
                 })}
               </svg>
-              {cards.map((c, i) => at(c.x + (c.x - 960) * 0.5, c.y + (c.y - 500) * 0.5 + 110, <div style={{ padding: 6, borderRadius: 22, background: "rgba(200,255,235,0.18)", border: "1px solid rgba(200,255,235,0.4)", boxShadow: "0 30px 80px rgba(0,0,0,0.35)" }}>{c.el}</div>, { opacity: rise(f, T.into - 4 + i * 6, 14), transform: `translate(-50%, -50%) translateY(${(1 - rise(f, T.into - 4 + i * 6, 18)) * 60}px) scale(1.45)` }))}
-              {at(W / 2, 110, <Glass dark tint="#bfffe6" pad="16px 38px" glow={MINT} style={{ fontSize: 40, fontWeight: 650, color: "#fff", transform: `scale(${pop(f, T.live - 2, 16)})` }}><Icon name="activity" size={36} color={MINT} strokeWidth={2.4} />One live dashboard</Glass>, { opacity: rise(f, T.live - 2, 10) })}
+              {cards.map((c, i) => at(c.x + (c.x - 960) * 0.5, c.y + (c.y - 500) * 0.5 + 110, <div style={{ padding: 6, borderRadius: 22, background: "rgba(200,255,235,0.18)", border: "1px solid rgba(200,255,235,0.4)", boxShadow: "0 30px 80px rgba(0,0,0,0.35)" }}>{c.el}</div>, appear(f, T.into - 4 + i * 6, 24, "up", "translate(-50%, -50%) scale(1.45)")))}
+              {at(W / 2, 110, <Glass dark tint="#bfffe6" pad="16px 38px" glow={MINT} style={{ fontSize: 40, fontWeight: 650, color: "#fff", transform: `scale(${pop(f, T.live - 2, 16)})` }}><Icon name="activity" size={36} color={MINT} strokeWidth={2.4} />{b.label}</Glass>, { opacity: rise(f, T.live - 2, 10) })}
             </>
           );
         })()}
       </Shot>
 
       {/* 6. A payment arrives: the tilted app, revenue updates instantly */}
-      <Shot f={f} from={cut.app} to={cut.bars} enter="push" cam={(p, f) => `${float(f)} translateX(${mix(60, -40, p)}px) scale(${mix(0.96, 1.06, p)})`}>
+      <Shot f={f} from={cut.app} to={cut.bars} enter="push" inDur={22} outDur={20} cam={(p, f) => `${float(f)} translateX(${mix(60, -40, p)}px) scale(${mix(0.96, 1.06, p)})`}>
         {abs(250, 300, (
           <div style={{ transform: `perspective(2200px) rotateY(${mix(-16, -8, rise(f, cut.app, 90, IN_OUT))}deg) rotateX(9deg)`, transformOrigin: "30% 50%" }}>
-            <AppWindow w={1420} h={820} tone={APP} active={2} title="Payments">
-              <PayBoard f={f} />
+            <AppWindow w={1420} h={820} tone={APP} active={2} title={b.trio[1]?.label ?? "Payments"}>
+              <PayBoard f={f} T={T} />
             </AppWindow>
           </div>
         ))}
-        {abs(160, 120, <Words f={f} words={kw("When a payment arrives,")} s={white(56, { align: "left" })} />)}
-        {abs(1000, 120, <Words f={f} words={kw("revenue updates instantly.", ["instantly."])} s={white(56, { align: "left", key: pillKey() })} />)}
+        {abs(160, 120, <Words f={f} words={L.payA} s={white(56, { align: "left" })} />)}
+        {abs(1000, 120, <Words f={f} words={L.payB} s={white(56, { align: "left", key: pillKey() })} />)}
       </Shot>
 
       {/* 7. Sales grow: a big bar card, the camera pushes in */}
-      <Shot f={f} from={cut.bars} to={cut.team} enter="zoom" cam={(p, f) => `${float(f)} translateY(${mix(40, 0, p)}px) scale(${mix(0.92, 1.1, p)})`}>
+      <Shot f={f} from={cut.bars} to={cut.team} enter="zoom" inDur={22} outDur={20} cam={(p, f) => `${float(f)} translateY(${mix(40, 0, p)}px) scale(${mix(0.92, 1.1, p)})`}>
         {abs(420, 250, (
           <div style={{ width: 1080, height: 640, borderRadius: 36, padding: 46, background: "linear-gradient(180deg, #ffffff, #effcf6)", boxShadow: "0 0 0 10px rgba(200,255,235,0.18), 0 60px 140px rgba(0,0,0,0.4)", transform: "rotateY(-10deg) rotateX(6deg)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
@@ -183,7 +188,7 @@ export function GlowFilm({ f }: { f: number }) {
             </div>
           </div>
         ))}
-        {abs(260, 120, <Words f={f} words={kw("When sales grow,", ["grow,"])} s={white(60, { align: "left", key: pillKey() })} />)}
+        {abs(260, 120, <Words f={f} words={L.growA} s={white(60, { align: "left", key: pillKey() })} />)}
       </Shot>
 
       {/* 8. The entire team: a toggle that brings everyone in, one view */}
@@ -209,7 +214,7 @@ export function GlowFilm({ f }: { f: number }) {
                   </div>
                 </div>
               ))}
-              {at(W / 2, 690, <Words f={f} words={kw("the entire team sees the change in one view.", ["view."])} s={white(64, { key: pillKey() })} />)}
+              {at(W / 2, 690, <Words f={f} words={L.growB} s={white(64, { key: pillKey() })} />)}
             </>
           );
         })()}
@@ -221,8 +226,8 @@ export function GlowFilm({ f }: { f: number }) {
           const sw = rise(f, T.no2 - 6, 14, IN_OUT);
           return (
             <>
-              {at(W / 2, 540 - sw * 90, <Words f={f} words={kw("No more switching between tools.", ["switching"])} s={white(72, { key: pillKey() })} />, { opacity: 1 - sw, filter: `blur(${sw * 14}px)` })}
-              {sw > 0 && at(W / 2, 540 + (1 - sw) * 90, <Words f={f} words={kw("No more waiting for reports.", ["waiting"], {}, 21)} s={white(72, { key: pillKey() })} />)}
+              {at(W / 2, 540 - sw * 90, <Words f={f} words={L.noA} s={white(72, { key: pillKey() })} />, { opacity: 1 - sw, filter: `blur(${sw * 14}px)` })}
+              {sw > 0 && at(W / 2, 540 + (1 - sw) * 90, <Words f={f} words={L.noB} s={white(72, { key: pillKey() })} />)}
             </>
           );
         })()}
@@ -234,21 +239,21 @@ export function GlowFilm({ f }: { f: number }) {
           <path d="M-20 560 L640 560 C760 560 760 760 960 760 C1160 760 1160 560 1280 560 L1940 560 L1940 1100 L-20 1100 Z" fill="rgba(200,255,235,0.10)" stroke="rgba(200,255,235,0.6)" strokeWidth={3} style={{ filter: "drop-shadow(0 0 20px rgba(70,242,176,0.6))" }} />
         </svg>
         {at(W / 2, mix(420, 600, rise(f, cut.slot + 4, 26, OUT)), <div style={{ padding: 18, borderRadius: 999, background: "radial-gradient(circle, rgba(200,255,235,0.3), rgba(200,255,235,0.05))", boxShadow: "0 0 90px rgba(70,242,176,0.55)" }}><div style={{ width: 170, height: 170, borderRadius: 999, background: "#eafff6", display: "flex", alignItems: "center", justifyContent: "center" }}><FlowMark size={120} colors={[EMER, "#0a7d58"]} /></div></div>, { clipPath: "inset(0 0 0 0 round 999px)" })}
-        {at(W / 2, 250, <Words f={f} words={kw("Just one live dashboard", ["live"])} s={white(80, { key: pillKey() })} />)}
+        {at(W / 2, 250, <Words f={f} words={L.ctaA} s={white(80, { key: pillKey() })} />)}
       </Shot>
 
       {/* 11. Every answer you need: a flat glowing check, a glass toggle */}
       <Shot f={f} from={cut.check} to={cut.end} enter="zoom" cam={(p, f) => `${float(f)} scale(${mix(0.95, 1.05, p)})`}>
         {at(640, 520, (
-          <div style={{ width: 300, height: 300, borderRadius: 999, background: `radial-gradient(circle at 40% 30%, #8dffd2, ${EMER} 65%, #0a7d58)`, boxShadow: "0 0 0 26px rgba(70,242,176,0.12), 0 0 140px rgba(70,242,176,0.6)", display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${pop(f, cut.check + 2, 18)})` }}>
+          <div style={{ width: 300, height: 300, borderRadius: 999, background: `radial-gradient(circle at 40% 30%, #8dffd2, ${EMER} 65%, #0a7d58)`, boxShadow: "0 0 0 26px rgba(70,242,176,0.12), 0 0 140px rgba(70,242,176,0.6)", display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${pop(f, cut.check + 2, 18)})`, opacity: soft(f, cut.check + 2, 20) }}>
             <svg width={170} height={170} viewBox="0 0 24 24"><path d="M5 12.5 L10 17 L19 7" stroke="#fff" strokeWidth={2.8} fill="none" strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={`${rise(f, T.every2, 16)} 1`} /></svg>
           </div>
         ))}
-        {abs(900, 380, <Words f={f} words={kw("with every answer you need.", ["answer"])} s={white(70, { align: "left", key: pillKey() })} style={{ width: 860 }} />)}
+        {abs(900, 380, <Words f={f} words={L.ctaB} s={white(70, { align: "left", key: pillKey() })} style={{ width: 860 }} />)}
         {abs(900, 590, (
           <Glass dark tint="#bfffe6" pad="14px 34px 14px 14px" glow={MINT} style={{ opacity: rise(f, T.need, 12), transform: `scale(${pop(f, T.need, 16)})` }}>
             <div style={{ width: 70, height: 70, borderRadius: 99, background: EMER, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 30 }}><Icon name="sparkles" size={36} color="#fff" /></div>
-            <span style={{ fontSize: 34, fontWeight: 650, color: "#fff", lineHeight: 1.1 }}>Every answer,<br />live</span>
+            <span style={{ fontSize: 34, fontWeight: 650, color: "#fff", lineHeight: 1.1 }}>{b.brand.tagline}</span>
           </Glass>
         ))}
       </Shot>
@@ -257,9 +262,9 @@ export function GlowFilm({ f }: { f: number }) {
       <Shot f={f} from={cut.end} to={cut.dur} last enter="blur" cam={(p, f) => `${float(f, 0.5)} scale(${mix(1.04, 1, p)})`}>
         <Comet f={f} at={cut.end - 4} dur={30} pts={[[-100, 900], [500, 980], [1300, 860], [2050, 600]]} color={MINT} width={5} />
         {at(W / 2, 420, <Logo size={180} ink="#ffffff" colors={[MINT, EMER]} k={rise(f, cut.end, 26, OUT)} />)}
-        {at(W / 2, 560, <div style={{ fontSize: 50, color: "#c9f7e6", fontWeight: 500, opacity: rise(f, cut.end + 14, 14) }}>Every answer you need</div>)}
-        {at(W / 2, 690, <Glass dark tint="#bfffe6" glow={MINT} pad="22px 52px" style={{ fontSize: 42, fontWeight: 700, color: "#fff", transform: `scale(${pop(f, cut.end + 22, 16)})` }}>Try Flowly free<Icon name="arrow-right" size={32} color={MINT} strokeWidth={2.6} /></Glass>, { opacity: rise(f, cut.end + 22, 10) })}
-        {at(W / 2, 800, <div style={{ fontSize: 34, color: "#9fe3c9", letterSpacing: "0.04em", opacity: rise(f, cut.end + 30, 14) }}>flowly.app</div>)}
+        {at(W / 2, 560, <div style={{ fontSize: 50, color: "#c9f7e6", fontWeight: 500, opacity: rise(f, cut.end + 14, 14) }}>{b.brand.tagline}</div>)}
+        {at(W / 2, 690, <Glass dark tint="#bfffe6" glow={MINT} pad="22px 52px" style={{ fontSize: 42, fontWeight: 700, color: "#fff", transform: `scale(${pop(f, cut.end + 22, 16)})` }}>{b.brand.cta}<Icon name="arrow-right" size={32} color={MINT} strokeWidth={2.6} /></Glass>, { opacity: rise(f, cut.end + 22, 10) })}
+        {at(W / 2, 800, <div style={{ fontSize: 34, color: "#9fe3c9", letterSpacing: "0.04em", opacity: rise(f, cut.end + 30, 14) }}>{b.brand.url}</div>)}
       </Shot>
     </AbsoluteFill>
   );
@@ -288,7 +293,7 @@ function MiniPie({ f, at: a }: { f: number; at: number }) {
 }
 
 // The app's payments board: a new payment slides in, revenue counts up.
-function PayBoard({ f }: { f: number }) {
+function PayBoard({ f, T }: { f: number; T: Moments }) {
   const row = rise(f, T.payment, 16, OUT);
   const hi = rise(f, T.updates, 10) * (1 - rise(f, T.instantly + 20, 20));
   const rows = [

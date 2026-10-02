@@ -7,7 +7,9 @@ import { Storyboard } from "@/components/video/storyboard";
 import { FLOW_SCENE_ID, FlowScene, type FlowSceneProps } from "@/components/video/flow/flow-scene";
 import { CleanVideo } from "@/components/video/clean/clean-video";
 import { CLEAN_ID, type CleanVideoProps } from "@/components/video/clean/types";
-import { REF_DURATION, REF_ID, RefFilm } from "@/components/video/clean/refs";
+import { Film, FILM_ID, FILM_IDS, type FilmId, REF_DURATION, REF_ID, RefFilm } from "@/components/video/clean/refs";
+import { shopnestPlan } from "@/components/video/clean/fixtures/sample";
+import type { CleanPlan } from "@/components/video/clean/types";
 import { flowlyPlan } from "@/components/video/clean/fixtures/flowly";
 import { ecommercePlan } from "@/components/video/flow/fixtures/ecommerce";
 import { paymentsHubPlan } from "@/components/video/flow/fixtures/payments-hub";
@@ -83,6 +85,19 @@ export function RemotionRoot() {
     />
     {/* Proof: the Flowly script as four reference-style films (0–3). */}
     <Composition id={REF_ID} component={RefFilm} fps={30} width={1920} height={1080} durationInFrames={REF_DURATION} defaultProps={{ film: 0 }} />
+    {/* The film templates on any seven-part plan (glow / dusk / fly / connect). */}
+    <Composition
+      id={FILM_ID}
+      component={Film}
+      fps={30}
+      width={1920}
+      height={1080}
+      durationInFrames={REF_DURATION}
+      defaultProps={{ plan: flowlyPlan(0), film: "glow" as FilmId } as { plan: CleanPlan; film: FilmId }}
+      calculateMetadata={({ props }) => ({ durationInFrames: props.plan.duration })}
+    />
+    {/* Proof: a second script (Shopnest) in the film templates (0–3). */}
+    <Composition id="CleanFilmSample" component={({ film }: { film: number }) => <Film plan={shopnestPlan()} film={FILM_IDS[film] ?? "glow"} />} fps={30} width={1920} height={1080} durationInFrames={shopnestPlan().duration} defaultProps={{ film: 0 }} />
     {/* Flow engine: pattern-built continuous motion graphics (reference: e-commerce). */}
     <Composition
       id={FLOW_SCENE_ID}

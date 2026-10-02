@@ -1,31 +1,34 @@
-import type { CSSProperties, ReactNode } from "react";
-import { AbsoluteFill } from "remotion";
+import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
+import { AbsoluteFill, Easing, Img } from "remotion";
 import { Icon } from "../../icons";
-import { IN_OUT, mix, OUT, rise } from "../anim";
+import { IN_OUT, mix, rise } from "../anim";
 import type { KWord } from "../text";
 
 // Shared parts of the four reference-style films (Glow, Dusk, Fly, Connect):
 // shots with their own camera, kinetic and typed words, comet curves, glass
-// pills, the Flowly mark and a flat app window. Everything is drawn in code
+// pills, the brand mark and a flat app window. Everything is drawn in code
 // (no 3D objects, no faces: a person is an initial).
 
 export const W = 1920;
 export const H = 1080;
-export const IN = 10;
-export const OUTF = 6;
+export const IN = 16;
+export const OUTF = 12;
 
 // ── shots ─────────────────────────────────────────────────────────────────
 // A shot is seen from `from` to `to` (one at a time: it goes in its last
-// OUTF frames, the next comes in over IN frames from just before its cut).
+// OUTF frames — blurring and moving on, never just vanishing — and the next
+// comes in over IN frames from just before its cut).
 // `cam(p, f)` is the camera over the shot (p 0..1 eased through it).
 export type Enter = "blur" | "zoom" | "push" | "slide" | "rise" | "none";
-export function Shot({ f, from, to, enter = "blur", exit = "blur", cam, last, children, style }: { f: number; from: number; to: number; enter?: Enter; exit?: Enter; cam?: (p: number, f: number) => string; last?: boolean; children: ReactNode; style?: CSSProperties }) {
+// `inDur` / `outDur` lengthen the way in / out (big bright panels on a dark
+// field need longer, so the frame never flashes).
+export function Shot({ f, from, to, enter = "blur", exit = "blur", cam, last, children, style, inDur = IN, outDur = OUTF }: { f: number; from: number; to: number; enter?: Enter; exit?: Enter; cam?: (p: number, f: number) => string; last?: boolean; children: ReactNode; style?: CSSProperties; inDur?: number; outDur?: number }) {
   if (f < from - 2 || f > to) return null;
-  const kin = enter === "none" ? 1 : rise(f, from - 2, IN, OUT);
-  const kout = last || exit === "none" ? 0 : rise(f, to - OUTF, OUTF, IN_OUT);
+  const kin = enter === "none" ? 1 : rise(f, from - 2, inDur, IN_OUT);
+  const kout = last || exit === "none" ? 0 : rise(f, to - outDur, outDur, IN_OUT);
   const p = IN_OUT(Math.min(1, Math.max(0, (f - from) / Math.max(1, to - from))));
   const fx: Record<Enter, (k: number, out: boolean) => { t: string; filter?: string; o: number }> = {
-    blur: (k) => ({ t: "", filter: `blur(${(1 - k) * 22}px)`, o: k }),
+    blur: (k, out) => ({ t: `scale(${out ? mix(1.06, 1, k) : mix(0.97, 1, k)})`, filter: `blur(${(1 - k) * 18}px)`, o: k }),
     zoom: (k, out) => ({ t: `scale(${out ? mix(1.25, 1, k) : mix(0.82, 1, k)})`, filter: `blur(${(1 - k) * 10}px)`, o: k }),
     push: (k, out) => ({ t: `scale(${out ? mix(0.8, 1, k) : mix(1.3, 1, k)})`, filter: `blur(${(1 - k) * 14}px)`, o: k }),
     slide: (k, out) => ({ t: `translateX(${(1 - k) * (out ? -260 : 260)}px)`, filter: `blur(${(1 - k) * 12}px)`, o: k }),
@@ -43,6 +46,19 @@ export function Shot({ f, from, to, enter = "blur", exit = "blur", cam, last, ch
     </AbsoluteFill>
   );
 }
+
+// A gentle ease (no overshoot): what every card, icon and pill comes in on.
+export const SOFT = Easing.bezier(0.22, 1, 0.36, 1);
+export const soft = (f: number, at: number, dur = 20) => rise(f, at, dur, SOFT);
+// A card / icon / pill coming in: fades up from a slightly smaller, blurred
+// state over `dur` frames — never from nothing, never with a bounce.
+export function appear(f: number, at: number, dur = 20, from: "scale" | "up" | "left" | "right" = "scale", extra = ""): CSSProperties {
+  const k = soft(f, at, dur);
+  const move = from === "up" ? `translateY(${(1 - k) * 46}px)` : from === "left" ? `translateX(${(1 - k) * -90}px)` : from === "right" ? `translateX(${(1 - k) * 90}px)` : "";
+  return { opacity: k, filter: k < 1 ? `blur(${(1 - k) * 10}px)` : undefined, transform: `${extra} ${move} scale(${mix(0.86, 1, k)})` };
+}
+// A scale that eases in from 0.86 (pair it with an opacity).
+export const grow = (f: number, at: number, dur = 20) => mix(0.86, 1, soft(f, at, dur));
 
 // A slight hand-held float added to every camera.
 export const float = (f: number, k = 1) => `translate(${Math.sin(f / 41) * 6 * k}px, ${Math.cos(f / 57) * 5 * k}px)`;
@@ -161,11 +177,36 @@ export function Token({ icon, size = 110, bg = "#ffffff", color = "#111", ring, 
   );
 }
 
-// ── the Flowly mark ───────────────────────────────────────────────────────
-// A drawn "F" of two flowing strokes on a gradient tile (made here: the
-// project has no uploaded icon). `draw` 0..1 draws the strokes on.
+// ── the brand ─────────────────────────────────────────────────────────────
+// The film's brand (name, uploaded icon, tagline, call to action, address),
+// given once by the film and read by the mark, the logo and the app window.
+export type FilmBrand = { name: string; icon?: string | null; tagline: string; cta: string; url: string; things: { label: string; icon: string }[] };
+export const BrandCtx = createContext<FilmBrand>({ name: "Brand", tagline: "", cta: "", url: "", things: [] });
+export const useBrand = () => useContext(BrandCtx);
+
+// The brand's mark: the uploaded icon when there is one; otherwise a
+// gradient tile with its initial — an "F" is drawn as two flowing strokes.
+// `draw` 0..1 draws it on.
 export function FlowMark({ size, colors, draw = 1, plain, ink = "#fff" }: { size: number; colors: [string, string]; draw?: number; plain?: boolean; ink?: string }) {
+  const brand = useBrand();
   const id = `fm${colors[0].slice(1)}${plain ? "p" : ""}`;
+  if (brand.icon) return <Img src={brand.icon} style={{ width: size, height: size, objectFit: "contain", opacity: Math.min(1, draw * 1.5) }} />;
+  const letter = (brand.name.trim()[0] ?? "B").toUpperCase();
+  if (letter !== "F")
+    return (
+      <svg width={size} height={size} viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor={colors[0]} />
+            <stop offset="1" stopColor={colors[1]} />
+          </linearGradient>
+        </defs>
+        {!plain && <rect x="2" y="2" width="96" height="96" rx="28" fill={`url(#${id})`} />}
+        <text x="50" y="52" textAnchor="middle" dominantBaseline="central" fontSize="62" fontWeight="800" fontFamily="InterClean, system-ui, sans-serif" fill={plain ? `url(#${id})` : ink} opacity={Math.min(1, draw * 1.5)}>
+          {letter}
+        </text>
+      </svg>
+    );
   return (
     <svg width={size} height={size} viewBox="0 0 100 100">
       <defs>
@@ -181,12 +222,12 @@ export function FlowMark({ size, colors, draw = 1, plain, ink = "#fff" }: { size
   );
 }
 
-export function Logo({ size, ink, colors, plain, k = 1, f = 0 }: { size: number; ink: string; colors: [string, string]; plain?: boolean; k?: number; f?: number }) {
-  void f;
+export function Logo({ size, ink, colors, plain, k = 1 }: { size: number; ink: string; colors: [string, string]; plain?: boolean; k?: number }) {
+  const brand = useBrand();
   return (
     <div style={{ display: "flex", alignItems: "center", gap: size * 0.22 }}>
       <FlowMark size={size} colors={colors} draw={Math.min(1, k * 1.3)} plain={plain} ink="#fff" />
-      <div style={{ fontSize: size * 0.82, fontWeight: 700, letterSpacing: "-0.045em", color: ink, clipPath: `inset(-20% ${(1 - Math.min(1, Math.max(0, k * 1.6 - 0.5))) * 100}% -20% 0)` }}>Flowly</div>
+      <div style={{ fontSize: size * 0.82, fontWeight: 700, letterSpacing: "-0.045em", color: ink, clipPath: `inset(-20% ${(1 - Math.min(1, Math.max(0, k * 1.6 - 0.5))) * 100}% -20% 0)` }}>{brand.name}</div>
     </div>
   );
 }
@@ -197,7 +238,7 @@ export const Person = ({ letter, size = 56, color, ring }: { letter: string; siz
 );
 
 export const Check = ({ size = 34, color, k = 1, bg }: { size?: number; color: string; k?: number; bg?: string }) => (
-  <div style={{ width: size, height: size, borderRadius: 999, background: bg ?? color, display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${k})`, flexShrink: 0 }}>
+  <div style={{ width: size, height: size, borderRadius: 999, background: bg ?? color, display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${mix(0.6, 1, k)})`, opacity: Math.min(1, k * 2), flexShrink: 0 }}>
     <svg width={size * 0.6} height={size * 0.6} viewBox="0 0 24 24">
       <path d="M5 12.5 L10 17 L19 7" stroke="#fff" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={`${Math.min(1, k)} 1`} />
     </svg>
@@ -208,21 +249,24 @@ export const Check = ({ size = 34, color, k = 1, bg }: { size?: number; color: s
 export type AppTone = { bg: string; side: string; ink: string; sub: string; line: string; accent: string; accent2: string; card: string };
 export const LIGHT_APP = (accent: string, accent2: string): AppTone => ({ bg: "#ffffff", side: "#f6f6fb", ink: "#16172b", sub: "#8a8ca6", line: "#ececf4", accent, accent2, card: "#ffffff" });
 
-export function AppWindow({ w, h, tone, title = "Dashboard", children, nav = ["Home", "Sales", "Payments", "Reports", "Team"], active = 0, style }: { w: number; h: number; tone: AppTone; title?: string; children: ReactNode; nav?: string[]; active?: number; style?: CSSProperties }) {
-  const icons = ["house", "chart-line", "credit-card", "file-text", "users"];
+export function AppWindow({ w, h, tone, title = "Dashboard", children, nav: navIn, active = 0, style }: { w: number; h: number; tone: AppTone; title?: string; children: ReactNode; nav?: string[]; active?: number; style?: CSSProperties }) {
+  const brand = useBrand();
+  const nav = navIn ?? ["Home", ...brand.things.map((x) => x.label), "Team"];
+  const icons = ["house", ...brand.things.map((x) => x.icon), "users"];
+  const host = brand.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "") || "app";
   return (
     <div style={{ width: w, height: h, borderRadius: 26, background: tone.bg, overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 60px 140px rgba(20,20,60,0.28), 0 0 0 1px rgba(0,0,0,0.04)", color: tone.ink, ...style }}>
       <div style={{ height: 52, display: "flex", alignItems: "center", gap: 10, padding: "0 22px", borderBottom: `1px solid ${tone.line}`, flexShrink: 0 }}>
         {["#ff5f57", "#febc2e", "#28c840"].map((c) => (
           <span key={c} style={{ width: 13, height: 13, borderRadius: 99, background: c }} />
         ))}
-        <span style={{ marginLeft: 20, height: 28, width: 360, borderRadius: 9, background: tone.side, fontSize: 14, color: tone.sub, display: "flex", alignItems: "center", paddingLeft: 12 }}>app.flowly.app/{title.toLowerCase()}</span>
+        <span style={{ marginLeft: 20, height: 28, width: 360, borderRadius: 9, background: tone.side, fontSize: 14, color: tone.sub, display: "flex", alignItems: "center", paddingLeft: 12 }}>app.{host}/{title.toLowerCase()}</span>
       </div>
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         <div style={{ width: 230, background: tone.side, padding: "26px 18px", display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 22, paddingLeft: 6 }}>
             <FlowMark size={30} colors={[tone.accent, tone.accent2]} />
-            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.03em" }}>Flowly</span>
+            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.03em" }}>{brand.name}</span>
           </div>
           {nav.map((n, i) => (
             <div key={n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10, fontSize: 16, fontWeight: i === active ? 650 : 500, color: i === active ? tone.ink : tone.sub, background: i === active ? tone.bg : "transparent", boxShadow: i === active ? "0 2px 8px rgba(20,20,60,0.06)" : undefined }}>

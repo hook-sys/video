@@ -3,7 +3,10 @@
 // timings. Rules kept only by review are listed, not checked.
 import { cameraOf, captionGroups, IN, LEAD_IN, OUTF } from "@/components/video/clean/clean-video";
 import { FLOWLY_VARIANTS, flowlyPlan, WORDS } from "@/components/video/clean/fixtures/flowly";
-import { T } from "@/components/video/clean/refs/timing";
+import { shopnestPlan } from "@/components/video/clean/fixtures/sample";
+import { beatsFromPlan } from "@/components/video/clean/refs/beats";
+import { FILM_TEMPLATES } from "@/components/video/clean/refs/catalog";
+import { FILM_IDS } from "@/components/video/clean/refs";
 import { CLEAN_RULES } from "@/components/video/clean/rules";
 import type { KWord } from "@/components/video/clean/text";
 import { FPS } from "@/components/video/clean/types";
@@ -71,8 +74,21 @@ export async function runChecks(): Promise<Check[]> {
     }
     add(`variant ${i + 1} words and cues on the voice`, !bad.length, bad.join(", ") || "all words on their spoken frame, cues inside their scenes");
   }
-  const order = [T.every, T.sales, T.flowly, T.when1, T.when2, T.no1, T.no2, T.just, T.end, T.duration];
-  add("reference films: sentence moments in order", order.every((v, k) => !k || v > order[k - 1]), order.join(" < "));
+
+  section = "film templates";
+  add("every film has a catalog entry", FILM_IDS.every((id) => FILM_TEMPLATES.some((t) => t.id === id)) && FILM_TEMPLATES.length === FILM_IDS.length, FILM_IDS.join(", "));
+  for (const [name, plan] of [["Flowly", plans[0]], ["Shopnest", shopnestPlan()]] as const) {
+    const b = beatsFromPlan(plan);
+    const T = b.t;
+    const order = [T.every, T.sales, T.flowly, T.when1, T.when2, T.no1, T.no2, T.just, T.end, T.duration];
+    add(`${name}: sentence moments in order`, order.every((v, k) => !k || v > order[k - 1]), order.join(" < "));
+    const empty = Object.entries(b.line).filter(([, v]) => (Array.isArray(v) ? !v.length : !v?.t)).map(([k]) => k);
+    add(`${name}: every line the films show has words`, !empty.length, empty.join(", ") || `${Object.keys(b.line).length} lines`);
+    const bad = Object.entries(T).filter(([, v]) => !Number.isFinite(v) || v < 0 || v > plan.duration).map(([k]) => k);
+    add(`${name}: every moment inside the video`, !bad.length, bad.join(", ") || `${Object.keys(T).length} moments`);
+    add(`${name}: three things`, b.trio.length === 3 && b.trio.every((x) => x.label && x.at > 0), b.trio.map((x) => x.label).join(", "));
+    add(`${name}: big word is not a small word`, !/^(a|an|the|in|on|of|to|for|with|and|or|your|at|by)$/i.test(b.line.hookBig.t), `"${b.line.hookBig.t}"`);
+  }
 
   section = "split-voice-words";
   const split = [

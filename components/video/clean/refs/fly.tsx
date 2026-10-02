@@ -3,7 +3,8 @@ import { AbsoluteFill, interpolate } from "remotion";
 import { Icon } from "../../icons";
 import { count, IN_OUT, mix, money, OUT, pop, rise } from "../anim";
 import { Area, at, Check, float, FlowMark, glide, Logo, Person, Pointer, press, Shot, W, Words } from "./common";
-import { kw, T } from "./timing";
+import type { KWord } from "../text";
+import { type Beats, type Moments, plainW } from "./beats";
 
 // Film 3 — "Fly" (reference: a SaaS dashboard film on cool white): one large
 // product canvas the camera flies over — from the numbers to the chart to the
@@ -26,7 +27,7 @@ function FlyBg({ f }: { f: number }) {
 }
 
 // Blue words over black words, each on its spoken frame.
-function TwoTone({ f, a, b, size = 64 }: { f: number; a: ReturnType<typeof kw>; b: ReturnType<typeof kw>; size?: number }) {
+function TwoTone({ f, a, b, size = 64 }: { f: number; a: KWord[]; b: KWord[]; size?: number }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
       <Words f={f} words={a} s={{ size, ink: BLUE, weight: 500 }} from="up" />
@@ -59,7 +60,8 @@ function ToolWin({ title, icon, color, children, w = 520, h = 340 }: { title: st
 // ── the product canvas (world coordinates) ────────────────────────────────
 const CW = 2400;
 const CH = 1500;
-function Canvas({ f }: { f: number }) {
+function Canvas({ f, b }: { f: number; b: Beats }) {
+  const T = b.t;
   const row = rise(f, T.payment, 16, OUT);
   const hi = rise(f, T.updates, 10) * (1 - rise(f, T.instantly + 26, 20));
   const chart = rise(f, T.when2 - 6, 30, OUT);
@@ -84,9 +86,9 @@ function Canvas({ f }: { f: number }) {
       <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 280, background: "#f3f5fa", padding: "40px 26px", boxSizing: "border-box" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 40 }}>
           <FlowMark size={44} colors={["#60a5fa", BLUE]} />
-          <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em" }}>Flowly</span>
+          <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em" }}>{b.brand.name}</span>
         </div>
-        {[["house", "Overview"], ["chart-line", "Sales"], ["credit-card", "Payments"], ["file-text", "Reports"], ["users", "Team"]].map(([ic, t], i) => (
+        {[["house", "Overview"], ...b.trio.map((x) => [x.icon, x.label]), ["users", "Team"]].map(([ic, t], i) => (
           <div key={t} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, fontSize: 22, fontWeight: i ? 500 : 650, color: i ? SUB : INK, background: i ? undefined : "#fff" }}>
             <Icon name={ic} size={24} color={i ? SUB : BLUE} />
             {t}
@@ -158,7 +160,7 @@ function PRow({ n, a, s, c }: { n: string; a: string; s: string; c?: string }) {
 
 // The flight: [frame, world x, world y, scale, tiltX, tiltY, screen y].
 type Key = [number, number, number, number, number, number, number];
-const FLIGHT: Key[] = [
+const flightOf = (T: Moments): Key[] => [
   [T.when1 - 10, 1200, 760, 0.6, 16, -12, 600],
   [T.when1 + 6, 790, 560, 1.1, 5, -5, 540],
   [T.revenue - 2, 760, 520, 1.15, 4, -3, 540],
@@ -173,15 +175,18 @@ const FLIGHT: Key[] = [
   [T.just + 4, 1200, 760, 0.6, 18, -8, 710],
   [T.end + 6, 1180, 740, 0.64, 14, 6, 710],
 ];
-function camera(f: number) {
+function camera(f: number, T: Moments) {
+  const FLIGHT = flightOf(T);
   const fr = FLIGHT.map((k) => k[0]);
   const v = (i: number) => interpolate(f, fr, FLIGHT.map((k) => k[i]), { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: IN_OUT });
   return { x: v(1), y: v(2), s: v(3), rx: v(4), ry: v(5), sy: v(6) };
 }
 
-export function FlyFilm({ f }: { f: number }) {
+export function FlyFilm({ f, b }: { f: number; b: Beats }) {
+  const T = b.t;
+  const L = b.line;
   const cut = { trio: T.sales - 8, reveal: T.flowly - 10, fly: T.when1 - 8, end: T.end + 6, dur: T.duration };
-  const c = camera(f);
+  const c = camera(f, T);
   const headK = (a: number) => rise(f, a, 14);
   return (
     <AbsoluteFill style={{ fontFamily: "InterClean, system-ui, sans-serif" }}>
@@ -204,16 +209,16 @@ export function FlyFilm({ f }: { f: number }) {
             </div>
           );
         })}
-        {at(W / 2, 220, <TwoTone f={f} a={kw("Every team starts with")} b={kw("data scattered across different tools.")} size={70} />)}
+        {at(W / 2, 220, <TwoTone f={f} a={L.hookA} b={L.hookTail} size={70} />)}
       </Shot>
 
       {/* 2. Three tools, a dot cursor hops from one to the next */}
       <Shot f={f} from={cut.trio} to={cut.reveal} enter="slide" cam={(p, f) => `${float(f)} translateX(${mix(120, -120, p)}px) rotateY(${mix(10, -10, p)}deg)`}>
         {(() => {
           const tools = [
-            { t: "Sales", s: "in one place", i: "chart-line", c: "#16a34a", x: 90, cue: T.sales },
-            { t: "Payments", s: "in another", i: "credit-card", c: "#2563eb", x: 700, cue: T.payments },
-            { t: "Reports", s: "somewhere else", i: "file-text", c: "#9333ea", x: 1310, cue: T.reports },
+            { t: b.trio[0].label, s: b.trio[0].sub, i: b.trio[0].icon, c: "#16a34a", x: 90, cue: T.sales },
+            { t: b.trio[1].label, s: b.trio[1].sub, i: b.trio[1].icon, c: "#2563eb", x: 700, cue: T.payments },
+            { t: b.trio[2].label, s: b.trio[2].sub, i: b.trio[2].icon, c: "#9333ea", x: 1310, cue: T.reports },
           ];
           const [px, py] = glide(f, [[T.sales - 6, 300, 760], [T.payments - 8, 330, 640], [T.payments + 4, 940, 640], [T.reports - 6, 960, 640], [T.reports + 6, 1560, 640]]);
           return (
@@ -230,7 +235,7 @@ export function FlyFilm({ f }: { f: number }) {
                 );
               })}
               <Pointer x={px} y={py} dot press={press(f, [T.payments, T.reports])} />
-              {at(W / 2, 200, <Words f={f} words={kw("Sales in one place. Payments in another. Reports somewhere else.", ["Sales", "Payments", "Reports"])} s={{ size: 52, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} from="up" />)}
+              {at(W / 2, 200, <Words f={f} words={L.trio} s={{ size: 52, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} from="up" />)}
             </>
           );
         })()}
@@ -243,10 +248,10 @@ export function FlyFilm({ f }: { f: number }) {
           return (
             <>
               {at(W / 2, mix(500, 140, up), <div style={{ transform: `scale(${mix(1, 0.55, up)})` }}><Logo size={170} ink={INK} colors={["#60a5fa", BLUE]} k={rise(f, T.flowly - 4, 26, OUT)} /></div>)}
-              {at(W / 2, mix(680, 270, up), <Words f={f} words={kw("brings everything into one live dashboard.", ["dashboard."])} s={{ size: 58, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} from="up" />)}
+              {at(W / 2, mix(680, 270, up), <Words f={f} words={L.reveal} s={{ size: 58, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} from="up" />)}
               <div style={{ position: "absolute", left: W / 2, top: mix(1300, 640, up), transformStyle: "preserve-3d" }}>
                 <div style={{ position: "absolute", left: 0, top: 0, transform: `rotateX(${mix(40, 18, up)}deg) scale(0.52) translate(-1200px, 0)`, transformOrigin: "0 0" }}>
-                  <Canvas f={f} />
+                  <Canvas f={f} b={b} />
                 </div>
               </div>
             </>
@@ -258,7 +263,7 @@ export function FlyFilm({ f }: { f: number }) {
       <Shot f={f} from={cut.fly} to={cut.end} enter="blur" exit="blur">
         <div style={{ position: "absolute", left: 0, top: 0, width: W, height: 1080, perspective: 2000 }}>
           <div style={{ position: "absolute", left: 0, top: 0, transformOrigin: "0 0", transformStyle: "preserve-3d", transform: `${float(f, 0.6)} translate(${W / 2}px, ${c.sy}px) rotateX(${c.rx}deg) rotateY(${c.ry}deg) scale(${c.s}) translate(${-c.x}px, ${-c.y}px)` }}>
-            <Canvas f={f} />
+            <Canvas f={f} b={b} />
             <Pointer
               dot
               {...(() => {
@@ -271,24 +276,24 @@ export function FlyFilm({ f }: { f: number }) {
         </div>
         {/* headlines over the far views (a white veil keeps them clear) */}
         <div style={{ position: "absolute", left: 0, top: 0, width: W, height: 360, background: "linear-gradient(180deg, rgba(244,247,252,0.96) 55%, rgba(244,247,252,0))", opacity: headK(T.no1 - 8) }} />
-        {f < T.no2 - 4 && at(W / 2, 170, <TwoTone f={f} a={kw("No more switching")} b={kw("between tools.")} size={68} />, { opacity: 1 - rise(f, T.no2 - 8, 6) })}
-        {f >= T.no2 - 8 && f < T.just - 4 && at(W / 2, 170, <TwoTone f={f} a={kw("No more waiting", [], {}, 21)} b={kw("for reports.", [], {}, 21)} size={68} />, { opacity: 1 - rise(f, T.just - 8, 6) })}
-        {f >= T.just - 8 && at(W / 2, 170, <TwoTone f={f} a={kw("Just one live dashboard")} b={kw("with every answer you need.")} size={68} />)}
+        {f < T.no2 - 4 && at(W / 2, 170, <TwoTone f={f} a={L.noA1} b={L.noA2} size={68} />, { opacity: 1 - rise(f, T.no2 - 8, 6) })}
+        {f >= T.no2 - 8 && f < T.just - 4 && at(W / 2, 170, <TwoTone f={f} a={L.noB1} b={L.noB2} size={68} />, { opacity: 1 - rise(f, T.just - 8, 6) })}
+        {f >= T.just - 8 && at(W / 2, 170, <TwoTone f={f} a={plainW(L.ctaA)} b={plainW(L.ctaB)} size={68} />)}
       </Shot>
 
       {/* 5. End card */}
       <Shot f={f} from={cut.end} to={cut.dur} last enter="zoom" cam={(p, f) => `${float(f, 0.4)} scale(${mix(1.03, 1, p)})`}>
         {at(W / 2, 450, <Logo size={180} ink={INK} colors={["#60a5fa", BLUE]} k={rise(f, cut.end, 28, OUT)} />)}
-        {at(W / 2, 590, <div style={{ fontSize: 46, color: BLUE, fontWeight: 500, opacity: rise(f, cut.end + 14, 14) }}>Every answer you need</div>)}
-        {at(W / 2, 720, <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "20px 44px", borderRadius: 16, background: INK, color: "#fff", fontSize: 36, fontWeight: 600, transform: `scale(${pop(f, cut.end + 22, 16)})` }}>Try Flowly free<Icon name="arrow-right" size={32} color="#fff" /></div>, { opacity: rise(f, cut.end + 22, 10) })}
-        {at(W / 2, 830, <div style={{ fontSize: 32, color: SUB, opacity: rise(f, cut.end + 30, 12) }}>flowly.app</div>)}
+        {at(W / 2, 590, <div style={{ fontSize: 46, color: BLUE, fontWeight: 500, opacity: rise(f, cut.end + 14, 14) }}>{b.brand.tagline}</div>)}
+        {at(W / 2, 720, <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "20px 44px", borderRadius: 16, background: INK, color: "#fff", fontSize: 36, fontWeight: 600, transform: `scale(${pop(f, cut.end + 22, 16)})` }}>{b.brand.cta}<Icon name="arrow-right" size={32} color="#fff" /></div>, { opacity: rise(f, cut.end + 22, 10) })}
+        {at(W / 2, 830, <div style={{ fontSize: 32, color: SUB, opacity: rise(f, cut.end + 30, 12) }}>{b.brand.url}</div>)}
       </Shot>
 
       {/* the brand badge (after the reveal), as the reference's corner badge */}
       {f > T.flowly + 30 && f < cut.end && (
         <div style={{ position: "absolute", left: 40, top: 34, display: "flex", alignItems: "center", gap: 10, padding: "10px 18px 10px 12px", borderRadius: 14, background: INK, color: "#fff", fontSize: 24, fontWeight: 700, opacity: rise(f, T.flowly + 30, 12) }}>
           <FlowMark size={34} colors={["#60a5fa", BLUE]} />
-          Flowly
+          {b.brand.name}
         </div>
       )}
     </AbsoluteFill>

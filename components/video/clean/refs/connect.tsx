@@ -1,8 +1,8 @@
 import { AbsoluteFill } from "remotion";
 import { Icon } from "../../icons";
 import { count, IN_OUT, mix, money, OUT, pop, rise } from "../anim";
-import { Area, at, Check, float, FlowMark, glide, Logo, Person, Pointer, press, Shot, W, Words } from "./common";
-import { kw, T } from "./timing";
+import { Area, at, Check, float, FlowMark, glide, Logo, Person, Pointer, press, Shot, useBrand, W, Words } from "./common";
+import { type Beats, plainW } from "./beats";
 
 // Film 4 — "Connect" (reference: a creator-platform film on soft lavender
 // white): depth-of-field tag pills around a question, a profile-style card
@@ -56,14 +56,16 @@ function PCard({ l, n, r, c, f, tick }: { l: string; n: string; r: string; c: st
 
 // The app frame used tilted (a table of tools/rows), drawn flat.
 function Board({ f, title, rows, live }: { f: number; title: string; rows: { n: string; s: string; c: string; at?: number; st?: string }[]; live?: number }) {
+  const brand = useBrand();
+  const name = brand.name;
   return (
     <div style={{ width: 1600, height: 960, borderRadius: 32, background: "#fff", boxShadow: "0 60px 160px rgba(50,50,140,0.22), 0 0 0 10px rgba(255,255,255,0.6)", display: "flex", overflow: "hidden", color: INK }}>
       <div style={{ width: 280, background: "#f6f7fb", padding: "34px 24px", boxSizing: "border-box" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 34 }}>
           <FlowMark size={40} colors={["#6b7bff", IND]} />
-          <span style={{ fontSize: 26, fontWeight: 700 }}>Flowly</span>
+          <span style={{ fontSize: 26, fontWeight: 700 }}>{name}</span>
         </div>
-        {[["house", "Overview"], ["chart-line", "Sales"], ["credit-card", "Payments"], ["file-text", "Reports"], ["users", "Team"], ["plug", "Integrations"]].map(([ic, t], i) => (
+        {[["house", "Overview"], ...brand.things.map((x) => [x.icon, x.label]), ["users", "Team"], ["plug", "Integrations"]].map(([ic, t], i) => (
           <div key={t} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, fontSize: 20, color: i ? SUB : INK, fontWeight: i ? 500 : 650, background: i ? undefined : "#fff" }}>
             <Icon name={ic} size={22} color={i ? SUB : IND} />
             {t}
@@ -96,7 +98,9 @@ function Board({ f, title, rows, live }: { f: number; title: string; rows: { n: 
   );
 }
 
-export function ConnectFilm({ f }: { f: number }) {
+export function ConnectFilm({ f, b }: { f: number; b: Beats }) {
+  const T = b.t;
+  const L = b.line;
   const cut = { tools: T.sales - 8, reveal: T.flowly - 10, wall: T.when1 - 8, live: T.when2 - 8, board: T.no1 - 8, end: T.end + 6, dur: T.duration };
   const people = [
     ["A", "Ava Brooks", "Sales lead", "#3b82f6"],
@@ -121,15 +125,15 @@ export function ConnectFilm({ f }: { f: number }) {
         <Tag f={f} at={T.scattered} t="Exports" icon="download" x={1280} y={760} z={1.35} />
         <Tag f={f} at={T.scattered + 4} t="Chat" icon="message-square" x={720} y={840} z={0.6} />
         <Tag f={f} at={T.tools} t="Reports" icon="file-text" x={150} y={460} z={0.55} />
-        {at(W / 2, 520, <Words f={f} words={kw("Every team starts with data scattered across different tools.", ["scattered"])} s={{ size: 70, ink: INK, weight: 500, key: () => ({ color: IND }) }} style={{ maxWidth: 1300 }} />)}
+        {at(W / 2, 520, <Words f={f} words={L.hook} s={{ size: 70, ink: INK, weight: 500, key: () => ({ color: IND }) }} style={{ maxWidth: 1300 }} />)}
       </Shot>
 
       {/* 2. Three tool cards, each with an indigo header, zooming on its word */}
       <Shot f={f} from={cut.tools} to={cut.reveal} enter="push" cam={(p, f) => `${float(f)} translateX(${mix(60, -60, p)}px)`}>
         {[
-          { t: "Sales", s: "in one place", i: "chart-line", cue: T.sales, x: 360, c: "#2563eb" },
-          { t: "Payments", s: "in another", i: "credit-card", cue: T.payments, x: 960, c: "#7c3aed" },
-          { t: "Reports", s: "somewhere else", i: "file-text", cue: T.reports, x: 1560, c: "#0d9488" },
+          { t: b.trio[0].label, s: b.trio[0].sub, i: b.trio[0].icon, cue: T.sales, x: 360, c: "#2563eb" },
+          { t: b.trio[1].label, s: b.trio[1].sub, i: b.trio[1].icon, cue: T.payments, x: 960, c: "#7c3aed" },
+          { t: b.trio[2].label, s: b.trio[2].sub, i: b.trio[2].icon, cue: T.reports, x: 1560, c: "#0d9488" },
         ].map((w, i, all) => {
           const k = rise(f, w.cue - 6, 16, OUT);
           const next = all[i + 1]?.cue ?? 99999;
@@ -158,7 +162,7 @@ export function ConnectFilm({ f }: { f: number }) {
           <div style={{ width: 1100, borderRadius: 30, background: "#fff", overflow: "hidden", boxShadow: "0 60px 140px rgba(50,50,140,0.22)" }}>
             <div style={{ height: 230, background: `linear-gradient(110deg, #20237a, ${IND} 55%, #6b7bff)`, position: "relative", padding: "40px 50px", boxSizing: "border-box" }}>
               <div style={{ color: "#fff", fontSize: 44, fontWeight: 600 }}>
-                <Words f={f} words={kw("brings everything into one live dashboard.", ["dashboard."])} s={{ size: 44, ink: "#fff", weight: 600, align: "left", key: () => ({ color: "#c7ccff" }) }} />
+                <Words f={f} words={L.reveal} s={{ size: 44, ink: "#fff", weight: 600, align: "left", key: () => ({ color: "#c7ccff" }) }} />
               </div>
               <div style={{ position: "absolute", left: 50, bottom: -70, width: 140, height: 140, borderRadius: 34, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 16px 40px rgba(30,30,100,0.25)", transform: `scale(${pop(f, T.flowly - 4, 18)})` }}>
                 <FlowMark size={112} colors={["#6b7bff", IND]} draw={rise(f, T.flowly - 4, 20)} />
@@ -166,13 +170,13 @@ export function ConnectFilm({ f }: { f: number }) {
             </div>
             <div style={{ padding: "90px 50px 44px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <span style={{ fontSize: 48, fontWeight: 700, color: INK, letterSpacing: "-0.03em", opacity: rise(f, T.flowly, 10) }}>Flowly</span>
+                <span style={{ fontSize: 48, fontWeight: 700, color: INK, letterSpacing: "-0.03em", opacity: rise(f, T.flowly, 10) }}>{b.brand.name}</span>
                 {[["Live", "#16a34a"], ["All your tools", IND]].map(([t, c], i) => (
                   <span key={t} style={{ fontSize: 20, fontWeight: 650, color: c, background: `${c}16`, padding: "6px 14px", borderRadius: 8, opacity: rise(f, T.brings + i * 8, 10) }}>{t}</span>
                 ))}
               </div>
               <div style={{ display: "flex", gap: 24, marginTop: 30 }}>
-                {[["Sales", "chart-line"], ["Payments", "credit-card"], ["Reports", "file-text"]].map(([t, ic], i) => {
+                {b.trio.map(({ label: t, icon: ic }, i) => {
                   const k = rise(f, T.everything + i * 5, 14);
                   return (
                     <div key={t} style={{ flex: 1, padding: "18px 22px", borderRadius: 16, border: `1px solid ${LINE}`, display: "flex", alignItems: "center", gap: 14, opacity: k, transform: `translateY(${(1 - k) * 30}px)` }}>
@@ -199,13 +203,13 @@ export function ConnectFilm({ f }: { f: number }) {
               {people.map(([l, n, r, c], i) =>
                 at(pos[i][0], pos[i][1], <PCard l={l} n={n} r={r} c={c} f={f} tick={T.updates + 4 + i * 2} />, { opacity: rise(f, cut.wall + i * 2, 12), filter: `blur(${i === 0 || i === 3 || i === 4 || i === 7 ? 1.5 : 0}px)` }),
               )}
-              {at(W / 2, 420, <Words f={f} words={kw("When a payment arrives,")} s={{ size: 52, ink: INK, weight: 500 }} />)}
+              {at(W / 2, 420, <Words f={f} words={L.payA} s={{ size: 52, ink: INK, weight: 500 }} />)}
               {at(W / 2, 560, (
                 <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "24px 50px", borderRadius: 16, background: sent > 0.5 ? IND : INK, color: "#fff", fontSize: 38, fontWeight: 600, boxShadow: "0 24px 60px rgba(30,30,100,0.3)", transform: `scale(${pop(f, T.payment, 16) * (1 - press(f, [T.revenue]) * 0.06)})` }}>
                   {sent > 0.5 ? <>Revenue updated<Check size={36} color="#22c55e" /></> : <>New payment · $2,400<Icon name="send" size={32} color="#fff" /></>}
                 </div>
               ), { opacity: rise(f, T.payment - 2, 8) })}
-              {at(W / 2, 680, <Words f={f} words={kw("revenue updates instantly.", ["instantly."])} s={{ size: 48, ink: INK, weight: 500, key: () => ({ color: IND }) }} />)}
+              {at(W / 2, 680, <Words f={f} words={L.payB} s={{ size: 48, ink: INK, weight: 500, key: () => ({ color: IND }) }} />)}
               <Pointer x={px} y={py} dot press={press(f, [T.revenue])} />
             </>
           );
@@ -214,7 +218,7 @@ export function ConnectFilm({ f }: { f: number }) {
 
       {/* 5. A "live" card: sales grow; the whole team sees it */}
       <Shot f={f} from={cut.live} to={cut.board} enter="rise" cam={(p, f) => `${float(f)} scale(${mix(0.96, 1.04, p)})`}>
-        {at(W / 2, 150, <Words f={f} words={kw("When sales grow,", ["grow,"])} s={{ size: 66, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} />)}
+        {at(W / 2, 150, <Words f={f} words={L.growA} s={{ size: 66, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} />)}
         {at(W / 2, 520, (
           <div style={{ width: 1180, borderRadius: 28, background: "#fff", padding: "36px 44px", boxSizing: "border-box", boxShadow: "0 50px 120px rgba(50,50,140,0.18)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -232,7 +236,7 @@ export function ConnectFilm({ f }: { f: number }) {
                   <div key={l} style={{ marginLeft: i ? -14 : 0, opacity: rise(f, T.entire + i * 3, 10), transform: `scale(${pop(f, T.entire + i * 3, 14)})` }}><Person letter={l} size={58} color={c} ring="#fff" /></div>
                 ))}
               </div>
-              <Words f={f} words={kw("the entire team sees the change in one view.", ["view."])} s={{ size: 34, ink: INK, weight: 500, align: "left", key: () => ({ color: BLUE }) }} />
+              <Words f={f} words={L.growB} s={{ size: 34, ink: INK, weight: 500, align: "left", key: () => ({ color: BLUE }) }} />
             </div>
           </div>
         ))}
@@ -247,21 +251,21 @@ export function ConnectFilm({ f }: { f: number }) {
               title="All tools, one place"
               live={cut.board}
               rows={[
-                { n: "Sales", s: "Synced from CRM", c: "#2563eb", at: T.switching + 4, st: f >= T.switching + 4 ? "Live" : undefined },
-                { n: "Payments", s: "Synced from billing", c: "#7c3aed", at: T.between + 2, st: f >= T.between + 2 ? "Live" : undefined },
-                { n: "Reports", s: "Built automatically", c: "#0d9488", at: T.waiting + 4, st: f >= T.waiting + 4 ? "Live" : undefined },
+                { n: b.trio[0].label, s: "Synced automatically", c: "#2563eb", at: T.switching + 4, st: f >= T.switching + 4 ? "Live" : undefined },
+                { n: b.trio[1].label, s: "Synced automatically", c: "#7c3aed", at: T.between + 2, st: f >= T.between + 2 ? "Live" : undefined },
+                { n: b.trio[2].label, s: "Built automatically", c: "#0d9488", at: T.waiting + 4, st: f >= T.waiting + 4 ? "Live" : undefined },
                 { n: "Team", s: "Everyone sees the same view", c: "#f59e0b", at: T.reports2 + 4, st: f >= T.reports2 + 4 ? "Live" : undefined },
               ]}
             />
           </div>
         ))}
         <div style={{ position: "absolute", left: 0, top: 0, width: W, height: 330, background: "linear-gradient(180deg, rgba(246,246,252,0.97) 60%, rgba(246,246,252,0))" }} />
-        {f < T.no2 - 4 && at(W / 2, 150, <Words f={f} words={kw("No more switching between tools.", ["switching"])} s={{ size: 70, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} />, { opacity: 1 - rise(f, T.no2 - 8, 6) })}
-        {f >= T.no2 - 8 && f < T.just - 4 && at(W / 2, 150, <Words f={f} words={kw("No more waiting for reports.", ["waiting"], {}, 21)} s={{ size: 70, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} />, { opacity: 1 - rise(f, T.just - 8, 6) })}
+        {f < T.no2 - 4 && at(W / 2, 150, <Words f={f} words={L.noA} s={{ size: 70, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} />, { opacity: 1 - rise(f, T.no2 - 8, 6) })}
+        {f >= T.no2 - 8 && f < T.just - 4 && at(W / 2, 150, <Words f={f} words={L.noB} s={{ size: 70, ink: INK, weight: 500, key: () => ({ color: BLUE }) }} />, { opacity: 1 - rise(f, T.just - 8, 6) })}
         {f >= T.just - 8 && at(W / 2, 150, (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <Words f={f} words={kw("Just one live dashboard")} s={{ size: 64, ink: BLUE, weight: 500 }} />
-            <Words f={f} words={kw("with every answer you need.")} s={{ size: 64, ink: INK, weight: 500 }} />
+            <Words f={f} words={plainW(L.ctaA)} s={{ size: 64, ink: BLUE, weight: 500 }} />
+            <Words f={f} words={plainW(L.ctaB)} s={{ size: 64, ink: INK, weight: 500 }} />
           </div>
         ))}
       </Shot>
@@ -269,15 +273,15 @@ export function ConnectFilm({ f }: { f: number }) {
       {/* 7. End card */}
       <Shot f={f} from={cut.end} to={cut.dur} last enter="zoom" cam={(p, f) => `${float(f, 0.4)} scale(${mix(1.03, 1, p)})`}>
         {at(W / 2, 450, <Logo size={180} ink={INK} colors={["#6b7bff", IND]} k={rise(f, cut.end, 28, OUT)} />)}
-        {at(W / 2, 590, <div style={{ fontSize: 46, color: BLUE, fontWeight: 500, opacity: rise(f, cut.end + 14, 14) }}>Every answer you need</div>)}
-        {at(W / 2, 720, <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "20px 44px", borderRadius: 16, background: IND, color: "#fff", fontSize: 36, fontWeight: 600, transform: `scale(${pop(f, cut.end + 22, 16)})` }}>Try Flowly free<Icon name="arrow-right" size={32} color="#fff" /></div>, { opacity: rise(f, cut.end + 22, 10) })}
-        {at(W / 2, 830, <div style={{ fontSize: 32, color: SUB, opacity: rise(f, cut.end + 30, 12) }}>flowly.app</div>)}
+        {at(W / 2, 590, <div style={{ fontSize: 46, color: BLUE, fontWeight: 500, opacity: rise(f, cut.end + 14, 14) }}>{b.brand.tagline}</div>)}
+        {at(W / 2, 720, <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "20px 44px", borderRadius: 16, background: IND, color: "#fff", fontSize: 36, fontWeight: 600, transform: `scale(${pop(f, cut.end + 22, 16)})` }}>{b.brand.cta}<Icon name="arrow-right" size={32} color="#fff" /></div>, { opacity: rise(f, cut.end + 22, 10) })}
+        {at(W / 2, 830, <div style={{ fontSize: 32, color: SUB, opacity: rise(f, cut.end + 30, 12) }}>{b.brand.url}</div>)}
       </Shot>
 
       {f > T.flowly + 30 && f < cut.end && (
         <div style={{ position: "absolute", left: 40, top: 34, display: "flex", alignItems: "center", gap: 10, padding: "10px 18px 10px 12px", borderRadius: 14, background: INK, color: "#fff", fontSize: 24, fontWeight: 700, opacity: rise(f, T.flowly + 30, 12) }}>
           <FlowMark size={34} colors={["#6b7bff", IND]} />
-          Flowly
+          {b.brand.name}
         </div>
       )}
     </AbsoluteFill>
