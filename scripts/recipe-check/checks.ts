@@ -430,6 +430,16 @@ function cameraChoreo() {
   let peakAt = tl.start;
   for (let f = tl.start; f <= tl.end + 20; f++) if (d(push, f).dz > d(push, peakAt).dz) peakAt = f;
   add("frame-aligned: the move peaks within the event; untouched before, back after", peakAt >= tl.actionAt && peakAt <= tl.end + 6 && Math.abs(before.dx) < 0.5 && Math.abs(before.dz - 1) < 0.001 && Math.abs(after.dx) < 0.5 && Math.abs(after.dz - 1) < 0.002, `peak at ${peakAt} (action ${tl.actionAt}, impact ${tl.impactAt}, end ${tl.end}) · before Δ ${before.dx.toFixed(2)}/${before.dz.toFixed(4)} · after Δ ${after.dx.toFixed(2)}/${after.dz.toFixed(4)}`);
+  // Visual review (e684e7b): the response's extra keys re-eased the scene's
+  // own long camera moves, so the camera drifted for seconds before and
+  // after the event (3.5 px, 0.7 % zoom, 40 frames early). Now the scene's
+  // camera is kept frame for frame and only the offset is added.
+  const drift = (r: ReturnType<typeof recipeFixture>, a: number, b: number) => { let m = 0, mz = 0; for (let f = a; f <= b; f++) { const x = d(r, f); m = Math.max(m, Math.abs(x.dx), Math.abs(x.dy)); mz = Math.max(mz, Math.abs(x.dz - 1)); } return { m, mz }; };
+  const early = drift(pan, tl.start - 60, tl.start - 15);
+  add("no drift before the event (the scene's own camera is kept)", early.m < 1 && early.mz < 0.002, `max Δ ${early.m.toFixed(2)} px · ${(early.mz * 100).toFixed(3)} % zoom, 60–15 frames before`);
+  let fastest = 0, fastestBase = 0;
+  for (let f = tl.start - 10; f <= tl.end + 40; f++) { const a = camAt(pan, f).c, b = camAt(pan, f + 1).c, p0 = camAt(plain, f).c, p1 = camAt(plain, f + 1).c; fastest = Math.max(fastest, Math.hypot(b[0] - a[0], b[1] - a[1])); fastestBase = Math.max(fastestBase, Math.hypot(p1[0] - p0[0], p1[1] - p0[1])); }
+  add("the response moves at the camera's own pace (no snap)", fastest <= 4, `fastest ${fastest.toFixed(2)} px/frame (scene camera ${fastestBase.toFixed(2)})`);
   const raw = (resp: string) => { const o = cameraOffsets({ response: resp as never, intensity: "high" }, [900, 600]); return Math.max(Math.abs(o.impact.center[0]), Math.abs(o.impact.center[1])); };
   add("no excessive movement: shift ≤ 120 px, zoom within ±10 %", ["push", "pull", "pan", "orbit", "rise", "fall"].every((r) => raw(r) <= 120) && ["push", "pull", "orbit"].every((r) => { const o = cameraOffsets({ response: r as never, intensity: "high" }, [0, 0]); return [o.anticipation.zoom, o.action.zoom, o.impact.zoom].every((z) => z >= 0.9 && z <= 1.1); }), ["push", "pan", "orbit", "rise"].map((r) => `${r} ${raw(r)}px`).join(" · "));
   // missing optional phases: action only → anchors start, impact, impact + CAMERA_RETURN

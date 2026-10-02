@@ -93,14 +93,16 @@ export const DECOR_ACCENT = 0.35;
 // Phase 3: each event's camera response (lib/choreography.ts cameraOffsets)
 // as offsets on the scene's own camera between the event's phase frames:
 // start (none) → action start (preparation) → impact (the move) → settle
-// (a touch further) → end (back to the scene's camera). The scene's own keys
-// inside the window keep their place; only the offset is added. No cues:
-// the camera is untouched.
+// (a touch further) → end (back to the scene's camera), eased. The scene's
+// camera is sampled frame by frame over the span its neighbouring keys
+// cover, so its own path stays exactly as it was (extra keys must not
+// re-ease its long moves) and the offset is added on top; the usual camera
+// smoothing then gives the response the same pace and acceleration limits
+// as every other camera move. No cues: the camera is untouched.
 function applyCameraResponses(plan: FlowPlan, cues: { c: ChoreoTimeline; subject: Vec }[]) {
   for (const { c, subject } of cues) {
     const cam = c.camera!;
-    const base = { center: plan.camera.center.map((k) => [...k]) as Track<Vec>, zoom: plan.camera.zoom.map((k) => [...k]) as Track<number> };
-    const centre0 = vec(base.center, c.start);
+    const centre0 = vec(plan.camera.center, c.start);
     const off = cameraOffsets(cam, [subject[0] - centre0[0], subject[1] - centre0[1]]);
     const none: CameraOffset = { center: [0, 0], zoom: 1 };
     const anchors: [number, CameraOffset][] = [[c.start, none]];
@@ -110,17 +112,25 @@ function applyCameraResponses(plan: FlowPlan, cues: { c: ChoreoTimeline; subject
     const end = c.settle ? c.end : anchors[anchors.length - 1][0] + CAMERA_RETURN;
     anchors.push([end, none]);
     const at = (fr: number): CameraOffset => {
+      if (fr <= c.start || fr >= end) return none;
       const j = anchors.findIndex(([af]) => af >= fr);
-      if (j <= 0) return anchors[Math.max(0, j)][1];
       const [f0, a] = anchors[j - 1];
       const [f1, b] = anchors[j];
       const k = CURVES.inOut(f1 === f0 ? 1 : (fr - f0) / (f1 - f0));
       return { center: [a.center[0] + (b.center[0] - a.center[0]) * k, a.center[1] + (b.center[1] - a.center[1]) * k], zoom: a.zoom + (b.zoom - a.zoom) * k };
     };
-    const frames = [...new Set([...anchors.map(([af]) => af), ...base.center.map(([kf]) => kf).filter((kf) => kf > c.start && kf < end), ...base.zoom.map(([kf]) => kf).filter((kf) => kf > c.start && kf < end)])].sort((x, y) => x - y);
-    const inside = (kf: number) => kf >= c.start && kf <= end;
-    plan.camera.center = [...base.center.filter(([kf]) => kf < c.start), ...frames.map((fr): [number, Vec, Ease] => { const v = vec(base.center, fr); const o = at(fr).center; return [fr, [v[0] + o[0], v[1] + o[1]], "inOut"]; }), ...base.center.filter(([kf]) => !inside(kf) && kf > end)];
-    plan.camera.zoom = [...base.zoom.filter(([kf]) => kf < c.start), ...frames.map((fr): [number, number, Ease] => [fr, num(base.zoom, fr, 1) * at(fr).zoom, "inOut"]), ...base.zoom.filter(([kf]) => !inside(kf) && kf > end)];
+    // per frame over [the key before the event, the key after it]
+    const dense = <T,>(track: Track<T>, sample: (fr: number) => T, add: (v: T, o: CameraOffset) => T): Track<T> => {
+      const lo = Math.min(c.start, ...track.filter(([kf]) => kf <= c.start).map(([kf]) => kf).slice(-1));
+      const hiKeys = track.filter(([kf]) => kf >= end).map(([kf]) => kf);
+      const hi = hiKeys.length ? hiKeys[0] : end;
+      const span: Track<T> = [];
+      for (let fr = lo; fr <= hi; fr++) span.push([fr, add(sample(fr), at(fr)), "linear"]);
+      return [...track.filter(([kf]) => kf < lo), ...span, ...track.filter(([kf]) => kf > hi)];
+    };
+    const base = { center: plan.camera.center, zoom: plan.camera.zoom };
+    plan.camera.center = dense(base.center, (fr) => vec(base.center, fr), (v, o) => [v[0] + o.center[0], v[1] + o.center[1]]);
+    plan.camera.zoom = dense(base.zoom, (fr) => num(base.zoom, fr, 1), (v, o) => v * o.zoom);
   }
 }
 
