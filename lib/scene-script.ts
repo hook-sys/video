@@ -102,7 +102,9 @@ const Beat = z.object({
 // A stored beat may carry its scene's recipe (lib/scene-recipe.ts; scene
 // beats expanded from a shot that has one). Not part of the model's schema.
 // It may also carry its event's choreography (lib/choreography.ts, frames).
-const StoredBeat = Beat.extend({ recipe: CompiledRecipeSchema.nullable().optional(), choreo: ChoreoFrames.nullable().optional() });
+// event / after (Phase 5): the event's key, and the event it starts after
+// (offset: frames after that event's end); set only for related events.
+const StoredBeat = Beat.extend({ recipe: CompiledRecipeSchema.nullable().optional(), choreo: ChoreoFrames.nullable().optional(), event: z.string().optional(), after: z.object({ event: z.string(), offset: z.number().int() }).optional() });
 export type SceneBeat = z.infer<typeof StoredBeat>;
 
 export const SceneScriptModel = z.object({ theme: z.enum(FLOW_THEMES), beats: z.array(Beat) });

@@ -12,7 +12,7 @@ const ramp24 = (f: number, start: number) => ramp(f, start, 24, "inOut");
 import { boundaryTransition, ENV_BACKDROP, ENV_WORLD, ENVIRONMENTS, type SceneRecipe } from "@/lib/scene-recipe";
 import { SceneScript } from "@/lib/scene-script";
 import { createHash } from "node:crypto";
-import { BG_DIRECTIONS, BG_TRANSITIONS, type BgChoreo, CAMERA_RETURN, cameraOffsets, type Choreography, choreoTimeline, MAX_TOTAL, normalizeBackground, normalizeCamera, normalizeChoreography, normalizeSfx, PHASE_BOUNDS, sfxFrame } from "@/lib/choreography";
+import { BG_DIRECTIONS, BG_TRANSITIONS, type BgChoreo, CAMERA_RETURN, cameraOffsets, type Choreography, choreoTimeline, MAX_TOTAL, normalizeBackground, normalizeCamera, normalizeChoreography, normalizeOffset, resolveRelationships, normalizeSfx, PHASE_BOUNDS, sfxFrame } from "@/lib/choreography";
 
 import { zodTextFormat } from "openai/helpers/zod";
 import { bgLength, type WorldEntry, worldContext, worldLayer } from "@/components/video/flow/world-transition";
@@ -616,6 +616,106 @@ function worldEnds() {
   add("plans unchanged (fingerprints)", fingerprint(recipeFixture(RECIPE_SHOTS).plan) === PRE_CHOREO.base && fingerprint(recipeFixture(RECIPE_SHOTS_LEGACY).plan) === PRE_CHOREO.legacy && fingerprint(recipeFixture(RECIPE_SHOTS).plan.camera) === PRE_CAMERA.baseCamera, "base · legacy · camera");
 }
 
+// Object relationships (Phase 5): event B after event A starts when A ends (+ offset).
+function relationships() {
+  section = "18. object relationships";
+  type Bh = SceneRecipe["behaviors"][number];
+  // s1 rebuilt: a card (sheet) moves to the hero, two pieces assemble into the chart, the chart is highlighted
+  const scene = (behaviors: Bh[]) => withRecipe(0, (r) => ({ ...r,
+    supporting: [
+      { id: "sheet", asset: "icon:file-spreadsheet", role: "a card", layer: "midground", relation: "feeds-hero", persistence: "scene" },
+      { id: "chart", asset: "visual:bars", role: "the chart", layer: "foreground", relation: "beside-hero", persistence: "scene" },
+      { id: "p1", asset: "icon:database", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" },
+      { id: "p2", asset: "icon:chart-line", role: "a piece", layer: "background", relation: "behind-hero", persistence: "scene" },
+    ],
+    behaviors }));
+  const A = (x: Partial<Bh> = {}): Bh => ({ type: "move", from: "sheet", to: "hero", cue: "ten different tools", id: "a", ...x });
+  const B = (x: Partial<Bh> = {}): Bh => ({ type: "assemble", from: "p1", to: "chart", cue: "different tools", id: "b", ...x });
+  const C = (x: Partial<Bh> = {}): Bh => ({ type: "highlight", from: "chart", to: null, cue: "tools", id: "c", ...x });
+  const run = (bs: Bh[]) => recipeFixture(scene(bs));
+  const rel = (r: ReturnType<typeof run>, ev: string) => r.plan.relations?.find((x) => x.event === ev);
+  const start = (r: ReturnType<typeof run>, kind: string) => { const b = r.script.beats.find((x) => (x.style ? `${x.action}/${x.style}` : x.action) === kind)!; const n = r.plan.nodes.find((x) => x.id === b.targets![0])!; return { b, n }; };
+  const moveEnd = (r: ReturnType<typeof run>) => start(r, "move/recipe").n.paths!.at(-1)!.end;
+  // the chain A → B (+6) → C (+4)
+  const chain = run([A(), B({ relationship: { after: "a", offset: 6 } }), C({ relationship: { after: "b", offset: 4 } })]);
+  const plain = run([A(), B(), C()]);
+  const rb = rel(chain, "s1#1")!, rc = rel(chain, "s1#2")!;
+  const aEnd = moveEnd(chain);
+  add("single after + offset: B starts 6 frames after A ends (A's own 26-frame move)", rb.status === "applied" && rb.dependencyEnd === aEnd && rb.start === aEnd + 6 && aEnd - start(chain, "move/recipe").n.paths!.at(-1)!.start === 26, `A ends ${aEnd} · B ${rb.start}`);
+  add("chained A → B → C: C starts 4 frames after B ends", rc.status === "applied" && rc.start === rc.dependencyEnd! + 4 && rc.dependencyEnd === rb.start + 56, `B ${rb.start}–${rc.dependencyEnd} · C ${rc.start}`);
+  // the dependency's duration is what it really runs: the pieces are fused and the chart at rest before C
+  const asm = start(chain, "merge/assemble").b;
+  const pieces = chain.plan.nodes.filter((n) => asm.targets!.includes(n.id) && n.id !== asm.to);
+  const chartScale = start(chain, "highlight").n.scale ?? [];
+  // each piece's fade to nothing (its first 0-opacity key after B starts)
+  const lastPiece = Math.max(...pieces.map((n) => (n.opacity ?? []).find(([f, v]) => f >= rb.start && v === 0)?.[0] ?? Infinity));
+  const chartRest = Math.max(...chartScale.filter(([f]) => f < rc.start).map(([f]) => f));
+  add("dependency duration respected: B fully done (pieces gone, chart at rest) before C", lastPiece <= rc.start && chartRest <= rc.dependencyEnd! && chartScale.some(([f]) => f === rc.start + 2), `pieces gone ${lastPiece} · chart at rest ${chartRest} · C bump ${rc.start + 2}`);
+  // without the relationship the same events crowd on their words
+  const pb = plain.script.beats.find((x) => x.style === "assemble")!;
+  add("without relationships: the same events on their words (overlapping)", !plain.plan.relations && !pb.after && !pb.event && moveEnd(plain) === aEnd, `no relations · A ends ${moveEnd(plain)}`);
+  // zero offset, negative offset
+  const zero = rel(run([A(), B({ relationship: { after: "a", offset: 0 } })]), "s1#1")!;
+  const neg = rel(run([A(), B({ relationship: { after: "a", offset: -12 } })]), "s1#1")!;
+  add("zero offset: B starts the frame A ends", zero.start === zero.dependencyEnd && zero.offset === 0, `${zero.dependencyEnd} → ${zero.start}`);
+  add("negative offset normalized to 0 (never before A ends); too long capped", neg.offset === 0 && neg.start === neg.dependencyEnd && normalizeOffset(-3) === 0 && normalizeOffset(500) === 90 && normalizeOffset(4.6) === 5 && normalizeOffset(Number.NaN) === 0 && normalizeOffset(null) === 0, `-12 → ${neg.offset}`);
+  // missing dependency, circular dependency, self, forward
+  const missing = run([A(), B({ relationship: { after: "nope", offset: 6 } }), C()]);
+  add("missing dependency: reported, B timed on its words (the same plan as none)", missing.notes.some((n) => n.includes('after unknown event "nope"')) && fingerprint(missing.plan) === fingerprint(plain.plan), missing.notes.find((n) => n.includes("nope")) ?? "-");
+  const circ = run([A({ relationship: { after: "b", offset: 2 } }), B({ relationship: { after: "a", offset: 6 } }), C()]);
+  add("circular dependency: reported, both timed on their words (the same plan as none)", circ.notes.some((n) => n.includes("circular dependency")) && fingerprint(circ.plan) === fingerprint(plain.plan), circ.notes.find((n) => n.includes("circular")) ?? "-");
+  const r3 = resolveRelationships([{ id: "x", relationship: { after: "z" } }, { id: "y", relationship: { after: "x" } }, { id: "z", relationship: { after: "y" } }, { id: "w", relationship: { after: "w" } }, { id: "x" }, { id: "v", relationship: { after: "q" } }]);
+  add("resolver: 3-cycle, self, duplicate id, forward reference — all reported and dropped", r3.relations.every((x) => x === null) && r3.errors.some((e) => e.includes('"x" → "z" → "y" → "x"') || e.includes("circular")) && r3.errors.some((e) => e.includes("after itself")) && r3.errors.some((e) => e.includes("duplicate id")) && r3.errors.length === 4, r3.errors.join(" · "));
+  const fwd = resolveRelationships([{ id: "a", relationship: { after: "b" } }, { id: "b" }]);
+  add("after an event later in the list: reported, timed on its words", fwd.relations[0] === null && fwd.errors[0]?.includes("later in the list"), fwd.errors[0] ?? "-");
+  const dropped = run([A({ from: "nobody" }), B({ relationship: { after: "a", offset: 6 } })]);
+  add("dependency not in the video (dropped event): fallback on its words, exposed", rel(dropped, "s1#1")?.status === "fallback", JSON.stringify(rel(dropped, "s1#1")));
+  // compatibility: relationship absent → old fingerprints
+  const nul = recipeFixture({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x) => (x.recipe ? { ...x, recipe: { ...x.recipe, behaviors: x.recipe.behaviors.map((b) => ({ ...b, id: null, relationship: null })) } } : x)) });
+  add("relationship absent → old plan fingerprints", fingerprint(recipeFixture(RECIPE_SHOTS).plan) === PRE_CHOREO.base && fingerprint(nul.plan) === PRE_CHOREO.base && fingerprint(recipeFixture(RECIPE_SHOTS_LEGACY).plan) === PRE_CHOREO.legacy, "base · ids/relationships null · legacy");
+  const R0 = (i: number, f: (r: SceneRecipe) => SceneRecipe) => withRecipe(i, f);
+  const old: Record<string, ShotScript> = {
+    assemble: R0(0, (r) => ({ ...r, supporting: [...r.supporting, { id: "chart", asset: "icon:chart-line", role: "x", layer: "midground", relation: "feeds-hero", persistence: "scene" }], behaviors: [{ type: "assemble", from: "sheet", to: "hero", cue: "ten different tools", id: "only" }] })),
+    transform: R0(3, (r) => ({ ...r, behaviors: [{ type: "transform", from: "coin", to: "hero", cue: "a sale happens", id: "t" }] })),
+    move: R0(0, (r) => ({ ...r, behaviors: [{ type: "move", from: "sheet", to: "hero", cue: "ten different tools", id: "m", relationship: null }] })),
+  };
+  const ofp = Object.entries(old).map(([k, v]) => [k, fingerprint(recipeFixture(v).plan)] as const);
+  add("move / merge / assemble / transform / highlight without relationships unchanged (ids alone change nothing)", ofp.every(([k, h]) => h === PRE_CHOREO[k]), ofp.map(([k, h]) => `${k} ${h === PRE_CHOREO[k] ? "=" : "≠"}`).join(", ") + " · merge, highlight: base");
+  // choreography + relationship: B's phases unchanged, just placed later
+  const FULL = { anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 };
+  const chB = run([A(), B({ choreography: { ...FULL, sfx: [{ phase: "impact", kind: "subtle_impact" }], camera: { response: "push", intensity: "medium" } }, relationship: { after: "a", offset: 6 } })]);
+  const chPlain = run([A(), B({ choreography: { ...FULL, sfx: [{ phase: "impact", kind: "subtle_impact" }], camera: { response: "push", intensity: "medium" } } })]);
+  const bb = chB.script.beats.find((x) => x.style === "assemble")!, bp = chPlain.script.beats.find((x) => x.style === "assemble")!;
+  const rB = rel(chB, "s1#1")!;
+  const tl = choreoTimeline(bb.choreo!, rB.start);
+  const pieceStart = (r: ReturnType<typeof run>, b: typeof bb, from: number) => Math.min(...r.plan.nodes.filter((n) => b.targets!.includes(n.id) && n.id !== b.to).flatMap((n) => (n.paths ?? []).filter((p) => p.start >= from).map((p) => p.start)));
+  // where B sits without the relationship (on its words): from its impact sound (impact = start + anticipation + action)
+  const impP = (chPlain.plan.sfx ?? []).find((x) => x.choreo && x.kind === "subtle_impact")!.frame;
+  const tlP = choreoTimeline(bp.choreo!, impP - bp.choreo!.anticipation - bp.choreo!.action);
+  add("choreography + relationship: phases identical, the event placed after A", JSON.stringify(bb.choreo) === JSON.stringify(bp.choreo) && rB.start === rB.dependencyEnd! + 6 && pieceStart(chB, bb, rB.start) - tl.actionAt === pieceStart(chPlain, bp, tlP.start) - tlP.actionAt, `phases ${JSON.stringify(bb.choreo)} · B ${rB.start} · action at ${tl.actionAt} · pieces fly at ${pieceStart(chB, bb, rB.start)} (on its words: action ${tlP.actionAt}, fly ${pieceStart(chPlain, bp, tlP.start)})`);
+  add("SFX stays on the choreography phase (impact of the placed event)", (chB.plan.sfx ?? []).some((x) => x.choreo && x.kind === "subtle_impact" && x.frame === sfxFrame(tl, "impact")), `impact sound at ${sfxFrame(tl, "impact")}`);
+  const camAt = (r: ReturnType<typeof run>, f: number) => num(r.plan.camera.zoom, f, 1);
+  const noCam = run([A(), B({ choreography: { ...FULL, sfx: [{ phase: "impact", kind: "subtle_impact" }] }, relationship: { after: "a", offset: 6 } })]);
+  let peakAt = tl.start, peak = 0;
+  for (let f = tl.start - 20; f <= tl.end + 20; f++) { const d = camAt(chB, f) / camAt(noCam, f); if (d > peak) { peak = d; peakAt = f; } }
+  add("camera response follows the placed event's phases (and only them)", peak > 1.02 && peakAt >= tl.actionAt && peakAt <= tl.end + 6 && Math.abs(camAt(chB, tl.start - 30) / camAt(noCam, tl.start - 30) - 1) < 0.001, `peak ×${peak.toFixed(3)} at ${peakAt} (event ${tl.start}–${tl.end})`);
+  // a chain that fits its scene: background, scene timing, camera before it untouched
+  const fit = run([A(), C({ relationship: { after: "a", offset: 0 } })]);
+  const fitPlain = run([A(), C()]);
+  const scenes = (r: ReturnType<typeof run>) => r.plan.backdrops?.map((b) => `${b.kind}@${b.start}`).join(" ");
+  const aStart = start(fit, "move/recipe").n.paths!.at(-1)!.start;
+  let camSame = true;
+  for (let f = 0; f < aStart - 20; f++) camSame &&= camAt(fit, f) === camAt(fitPlain, f) && JSON.stringify(vecOf(fit.plan.camera.center, f)) === JSON.stringify(vecOf(fitPlain.plan.camera.center, f));
+  add("background timing unchanged (a chain within its scene)", scenes(fit) === scenes(fitPlain) && JSON.stringify(fit.plan.backdrops) === JSON.stringify(fitPlain.plan.backdrops), scenes(fit) ?? "-");
+  add("camera unchanged up to the related events", camSame, `frames 0–${aStart - 20}`);
+  // identity
+  const ids = (r: ReturnType<typeof run>) => r.plan.nodes.map((n) => n.id).sort().join(",");
+  add("object identity preserved (same nodes, same ids)", ids(chain) === ids(plain) && ids(fit) === ids(fitPlain), `${chain.plan.nodes.length} nodes`);
+  add("deterministic compilation", fingerprint(chain.plan) === fingerprint(run([A(), B({ relationship: { after: "a", offset: 6 } }), C({ relationship: { after: "b", offset: 4 } })]).plan), fingerprint(chain.plan));
+  const schema = JSON.stringify(zodTextFormat(ShotScriptModel, "s"));
+  add("Director schema: behavior id + relationship (after, offset)", schema.includes("\"relationship\"") && schema.includes("\"after\"") && schema.includes("\"offset\""), "ok");
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
@@ -630,5 +730,6 @@ export async function runChecks(): Promise<Check[]> {
   cameraChoreo();
   backgroundChoreo();
   worldEnds();
+  relationships();
   return checks;
 }

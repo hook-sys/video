@@ -58,6 +58,22 @@ const MIN_FRAMES: Record<SceneBeat["action"], number> = {
 // focus style → the part of the element to zoom into (offsets as a share of its size).
 const DETAIL: Record<string, Vec> = { center: [0, 0], top: [0, -0.25], bottom: [0, 0.25], left: [-0.25, 0], right: [0.25, 0], "top-left": [-0.25, -0.25], "top-right": [0.25, -0.25], "bottom-left": [-0.25, 0.25], "bottom-right": [0.25, 0.25] };
 const MINOR = new Set<SceneBeat["action"]>(["celebrate", "highlight", "disconnect"]);
+// How long an event runs (frames), for the events that follow it: until its
+// motion is at rest. Choreographed: to the end of its settle (a transform's
+// action keeps its 16-frame turn; a highlight's dimmed neighbours come back
+// at least 26 frames into the action). Otherwise each event's own timing
+// below: the move lands at 26, a merge's bump settles at 40, an assemble's
+// fuse at 56, a transform's bump at 50, a highlight's neighbours come back at
+// 34. Any other verb: the time it needs to read.
+const EVENT_REST: Partial<Record<string, number>> = { "move/recipe": 26, merge: 40, "merge/assemble": 56, "merge/transform": 50, highlight: 34 };
+function eventLength(b: SceneBeat): number {
+  const key = b.style === "recipe" || b.style === "assemble" || b.style === "transform" ? `${b.action}/${b.style}` : b.action;
+  if (b.choreo && (b.action === "merge" || b.action === "highlight" || key === "move/recipe")) {
+    const c = choreoTimeline(b.style === "transform" ? { ...b.choreo, action: Math.max(b.choreo.action, 22) } : b.choreo, 0);
+    return b.action === "highlight" ? Math.max(c.end, c.actionAt + 26) : c.end;
+  }
+  return EVENT_REST[key] ?? MIN_FRAMES[b.action];
+}
 
 export type SceneCompileOptions = {
   narration: string;
@@ -176,6 +192,12 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const starts: number[] = [];
   const skipped: NonNullable<FlowPlan["skipped"]> = [];
   let last = -MIN_GAP;
+  // Relationships (Phase 5): an event after another starts when that one
+  // ends (+ offset) instead of on its words — never before the beat ahead
+  // of it may give way (then it is late, and reported). The events'
+  // choreography runs from there unchanged.
+  const events = new Map<string, { start: number; end: number }>();
+  const relations: NonNullable<FlowPlan["relations"]> = [];
   script.beats.forEach((b, i) => {
     if (paired.has(b) && beats[beats.length - 1] === script.beats[i - 1]) {
       beats.push(b);
@@ -183,7 +205,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       last = starts[starts.length - 1];
       return;
     }
-    const cue = times[i] === null ? last + MIN_GAP : Math.round(times[i]! * FPS) - LEAD;
+    const dep = b.after ? events.get(b.after.event) : undefined;
+    const cue = dep ? dep.end + b.after!.offset : times[i] === null ? last + MIN_GAP : Math.round(times[i]! * FPS) - LEAD;
     const prev = beats[beats.length - 1];
     const earliest = prev ? starts[starts.length - 1] + MIN_FRAMES[prev.action] : 0;
     const t = Math.min(stageEnd - 24, Math.max(0, cue, earliest));
@@ -192,6 +215,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     beats.push(b);
     starts.push(t);
     last = t;
+    if (b.event) events.set(b.event, { start: t, end: t + eventLength(b) });
+    if (b.after) relations.push({ event: b.event ?? `${b.action}:${b.cue}`, after: b.after.event, offset: b.after.offset, start: t, ...(dep ? { dependencyEnd: dep.end } : {}), status: !dep ? "fallback" : t === cue ? "applied" : "delayed" });
   });
 
   const f = new Flow(theme ?? script.theme, total, { center: [0, 0], zoom: 0.9 });
@@ -1353,6 +1378,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   if (overlaps.length || orbiting.length) plan.overlaps = [...overlaps, ...orbiting];
   if (rings.length) plan.rings = [...(plan.rings ?? []), ...rings];
   if (backdrops.length) plan.backdrops = backdrops;
+  if (relations.length) plan.relations = relations;
   if (decorLevel.length > 1) plan.decorLevel = decorLevel;
   // Elements that never appeared (skipped beats) are dropped.
   plan.nodes = plan.nodes.filter((n: FlowNode) => n.kind !== "el" || n.appear !== undefined);

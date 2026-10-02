@@ -160,6 +160,11 @@ export type FlowPlan = {
   // override of the backdrop's own (backdropStrength).
   // enter / exit: how the entry arrives / leaves (background choreography,
   // components/video/flow/world-transition.ts); absent = the default dissolve.
+  // Related events (Phase 5) as scheduled: the event, the one it follows,
+  // its start and that event's end; status applied (end + offset), delayed
+  // (the beat before it needed longer) or fallback (the event it follows is
+  // not in the video: timed on its words).
+  relations?: { event: string; after: string; offset: number; start: number; dependencyEnd?: number; status: "applied" | "delayed" | "fallback" }[];
   backdrops?: { kind: string; start: number; end?: number; strength?: number; slot?: "environment" | "atmosphere"; source?: "recipe" | "shot"; enter?: BgChoreo; exit?: BgChoreo }[];
   // Element nodes that overlap on purpose (a stack, a fan) during a window.
   overlaps?: { ids: string[]; start: number; end: number }[];

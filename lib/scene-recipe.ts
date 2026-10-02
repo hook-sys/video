@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BackgroundChoreo, Choreography, ModelBackgroundChoreo, ModelChoreography, BgChoreo as BgChoreoSchema, type BgChoreo } from "@/lib/choreography";
+import { BackgroundChoreo, Choreography, ModelBackgroundChoreo, ModelChoreography, ModelRelationship, Relationship, BgChoreo as BgChoreoSchema, type BgChoreo } from "@/lib/choreography";
 import type { EnvBackdrop } from "@/components/video/flow/backdrop-names";
 import type { Vec } from "@/components/video/flow/types";
 
@@ -51,7 +51,9 @@ export type RecipeTransition = (typeof RECIPE_TRANSITIONS)[number];
 
 // (choreography is optional here; the Director's strict output schema,
 // ModelSceneRecipe, asks for it as null or a value)
-export const RecipeBehavior = z.object({ type: z.enum(RECIPE_BEHAVIORS), from: z.string(), to: z.string().nullable(), cue: z.string(), choreography: Choreography.nullable().optional() });
+// id / relationship (Phase 5, optional): the event's name, and the event of
+// the scene it follows (lib/choreography.ts resolveRelationships).
+export const RecipeBehavior = z.object({ type: z.enum(RECIPE_BEHAVIORS), from: z.string(), to: z.string().nullable(), cue: z.string(), choreography: Choreography.nullable().optional(), id: z.string().nullable().optional(), relationship: Relationship.nullable().optional() });
 export type RecipeBehavior = z.infer<typeof RecipeBehavior>;
 
 export const SceneRecipe = z.object({
@@ -82,11 +84,11 @@ export type SceneRecipe = z.infer<typeof SceneRecipe>;
 // unreadable list is dropped (the recipe itself is kept).
 // What the Director writes (structured output: every key present; a missing
 // choreography reads as null).
-export const ModelSceneRecipe = SceneRecipe.extend({ behaviors: z.array(RecipeBehavior.extend({ choreography: ModelChoreography.nullable().default(null) })), background: ModelBackgroundChoreo.nullable().default(null) });
+export const ModelSceneRecipe = SceneRecipe.extend({ behaviors: z.array(RecipeBehavior.extend({ choreography: ModelChoreography.nullable().default(null), id: z.string().nullable().default(null), relationship: ModelRelationship.nullable().default(null) })), background: ModelBackgroundChoreo.nullable().default(null) });
 // Behaviors saved before choreography have none; an unreadable one is null.
 export const StoredSceneRecipe = SceneRecipe.extend({
   assets: z.array(AssetRequirement).nullable().default(null).catch(null),
-  behaviors: z.array(RecipeBehavior.extend({ choreography: Choreography.nullable().optional().catch(null) })),
+  behaviors: z.array(RecipeBehavior.extend({ choreography: Choreography.nullable().optional().catch(null), id: z.string().nullable().optional().catch(null), relationship: Relationship.nullable().optional().catch(null) })),
   background: BackgroundChoreo.nullable().optional().catch(null),
 });
 

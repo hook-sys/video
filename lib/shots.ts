@@ -4,7 +4,7 @@ import { FLOW_THEMES } from "@/lib/flow-script";
 import { CAMERA_MOVES, CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
 import { DEVICE_MODELS } from "@/components/video/flow/cards/device-data";
 import { type AssetSelection, applyAssetSelection } from "@/lib/asset-selection";
-import { normalizeBackground, normalizeChoreography } from "@/lib/choreography";
+import { normalizeBackground, normalizeChoreography, resolveRelationships } from "@/lib/choreography";
 import { boundaryTransition, type CompiledRecipe, ENV_BACKDROP, ModelSceneRecipe, LAYER, RECIPE_MAPPED, type RecipeTransition, SceneRecipe, sceneTransition, StoredSceneRecipe } from "@/lib/scene-recipe";
 import { tokenize } from "@/lib/voice-timing";
 
@@ -818,7 +818,15 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     const at0 = cuePos(s.cue);
     const tell = (b: SceneRecipe["behaviors"][number], status: BehaviorReport["status"], reason: string | null) => report?.push({ shot: si, object: b.from, type: `recipe:${b.type}`, status, reason, cue: b.cue });
     const consumed = new Set<string>(); // recipe ids merged away (never carried on)
-    for (const b of r.behaviors) {
+    // Relationships (Phase 5): an event after another of this scene starts
+    // when that one ends (+ offset); an invalid one is reported and dropped.
+    const rel = resolveRelationships(r.behaviors);
+    for (const e of rel.errors) notes.push(`recipe ${r.scene_id}: relationship: ${e}`);
+    const followed = new Set(rel.relations.filter((x) => x).map((x) => x!.after));
+    const eventKey = (k: number) => `${r.scene_id}#${k}`;
+    for (const [k, b] of r.behaviors.entries()) {
+      const relation = rel.relations[k];
+      const rk = { ...(followed.has(k) || relation ? { event: eventKey(k) } : {}), ...(relation ? { after: { event: eventKey(relation.after), offset: relation.offset } } : {}) };
       const from = idOf(b.from);
       const to = b.to ? idOf(b.to) : null;
       if (!from) {
@@ -847,21 +855,21 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
             tell(b, "dropped", from === heroId ? "the hero arrives with the scene" : "already on screen");
             break;
           }
-          beats.push(beat({ cue: b.cue, action: "place", layout: "recipe", style: "rise", elements: [e] }));
+          beats.push(beat({ ...rk, cue: b.cue, action: "place", layout: "recipe", style: "rise", elements: [e] }));
           tell(b, "applied", null);
           break;
         }
         case "move":
-          beats.push(beat({ cue: b.cue, action: "move", targets: [from], to, style: "recipe", ...ch }));
+          beats.push(beat({ ...rk, cue: b.cue, action: "move", targets: [from], to, style: "recipe", ...ch }));
           tell(b, "applied", null);
           break;
         case "connect":
         case "flow":
-          beats.push(beat({ cue: b.cue, action: b.type, targets: [from], to }));
+          beats.push(beat({ ...rk, cue: b.cue, action: b.type, targets: [from], to }));
           tell(b, "applied", null);
           break;
         case "merge":
-          beats.push(beat({ cue: b.cue, action: "merge", targets: [from], to, ...ch }));
+          beats.push(beat({ ...rk, cue: b.cue, action: "merge", targets: [from], to, ...ch }));
           consumed.add(b.from);
           tell(b, "applied", null);
           break;
@@ -871,23 +879,23 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
           const rel = r.supporting.find((sp) => sp.id === b.from)?.relation ?? null;
           const others = rel ? r.supporting.filter((sp) => sp.id !== b.from && sp.id !== b.to && sp.relation === rel && support.has(sp.id) && !consumed.has(sp.id) && !later.includes(support.get(sp.id)!)).map((sp) => sp.id) : [];
           const ids = [b.from, ...others].slice(0, 4);
-          beats.push(beat({ cue: b.cue, action: "merge", targets: ids.map((x) => idOf(x)!), to, style: "assemble", ...ch }));
+          beats.push(beat({ ...rk, cue: b.cue, action: "merge", targets: ids.map((x) => idOf(x)!), to, style: "assemble", ...ch }));
           for (const x of ids) consumed.add(x);
           tell(b, "applied", `assembled: ${ids.length} piece${ids.length > 1 ? "s" : ""} (${ids.join(", ")}) dock around ${b.to}, hold as one shape, then fuse into it (it grows)`);
           break;
         }
         case "transform":
-          beats.push(beat({ cue: b.cue, action: "merge", targets: [from], to, style: "transform", ...ch }));
+          beats.push(beat({ ...rk, cue: b.cue, action: "merge", targets: [from], to, style: "transform", ...ch }));
           consumed.add(b.from);
           tell(b, "applied", `transformed: ${b.from} flies to ${b.to}, takes its size and turns edge-on; ${b.to} turns in from the edge in its place (3D turn, no shape morph)`);
           break;
         case "highlight":
         case "expand":
-          beats.push(beat({ cue: b.cue, action: b.type, targets: [from], ...(b.type === "highlight" ? ch : {}) }));
+          beats.push(beat({ ...rk, cue: b.cue, action: b.type, targets: [from], ...(b.type === "highlight" ? ch : {}) }));
           tell(b, "applied", null);
           break;
         case "focus":
-          beats.push(beat({ cue: b.cue, action: "focus", targets: [from], style: "recipe" }));
+          beats.push(beat({ ...rk, cue: b.cue, action: "focus", targets: [from], style: "recipe" }));
           tell(b, "applied", null);
           break;
         case "arrange": {
@@ -896,7 +904,7 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
             tell(b, "dropped", `nothing to arrange: ${n} supporting object on screen (needs 2+)`);
             break;
           }
-          beats.push(beat({ cue: b.cue, action: "arrange", layout: "recipe", style: "recipe" }));
+          beats.push(beat({ ...rk, cue: b.cue, action: "arrange", layout: "recipe", style: "recipe" }));
           tell(b, "applied", `arranged: the ${n} supporting objects line up evenly (a row, or a column beside a side hero); the hero and the composition stay`);
           break;
         }

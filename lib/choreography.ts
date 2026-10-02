@@ -208,3 +208,65 @@ export function normalizeBackground(c: { transition?: unknown; direction?: unkno
   if (!transition) return null;
   return { transition, direction: BG_DIRECTIONS.find((x) => x === c?.direction) ?? "left", intensity: BG_INTENSITIES.find((x) => x === c?.intensity) ?? "medium" };
 }
+
+// Object relationships (Phase 5): an event may start after another event of
+// its scene — `after` names that event's id, `offset` the frames between the
+// first event's end and this one's start. Relationships only place events;
+// each event's own choreography (phases, camera, SFX) is kept as it is.
+export const Relationship = z.object({ after: z.string().nullable().optional(), offset: z.number().nullable().optional() });
+// The Director's strict output: every key present (null = none / 0).
+export const ModelRelationship = z.object({ after: z.string().nullable(), offset: z.number().nullable().default(null) });
+export type Relationship = z.infer<typeof Relationship>;
+// The longest wait after an event (frames); a negative or unusable offset is 0.
+export const MAX_RELATION_OFFSET = 90;
+export const normalizeOffset = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.min(MAX_RELATION_OFFSET, Math.max(0, Math.round(v))) : 0);
+// A scene's relationships, checked: per event (by its index in the list) the
+// index of the event it follows and the offset, or null. Deterministic; an
+// invalid relationship is dropped (the event keeps its words' timing) and
+// reported — an unknown or duplicate id, an event after itself, one after an
+// event that comes later in the list, or a circular chain (A after B, B after
+// A: every event in the circle is dropped).
+export type ResolvedRelation = { after: number; offset: number } | null;
+export function resolveRelationships(events: { id?: string | null; relationship?: Relationship | null }[]): { relations: ResolvedRelation[]; errors: string[] } {
+  const errors: string[] = [];
+  const index = new Map<string, number>();
+  events.forEach((e, i) => {
+    const id = e.id?.trim();
+    if (!id) return;
+    if (index.has(id)) errors.push(`event ${i + 1}: duplicate id "${id}" (the first one counts)`);
+    else index.set(id, i);
+  });
+  const drop = (msg: string) => {
+    errors.push(msg);
+    return null;
+  };
+  const want: (number | null)[] = events.map((e, i) => {
+    const after = e.relationship?.after?.trim();
+    if (!after) return null;
+    const k = index.get(after);
+    if (k === undefined) return drop(`event ${i + 1}: after unknown event "${after}" (timed on its words)`);
+    if (k === i) return drop(`event ${i + 1}: after itself (timed on its words)`);
+    return k;
+  });
+  // circles: follow each chain; an event seen twice closes one
+  const circular = new Set<number>();
+  want.forEach((_, i) => {
+    const seen: number[] = [];
+    for (let k: number | null = i; k !== null && !circular.has(k); k = want[k]) {
+      const at = seen.indexOf(k);
+      if (at >= 0) {
+        const loop = seen.slice(at);
+        loop.forEach((x) => circular.add(x));
+        errors.push(`circular dependency: ${[...loop, k].map((x) => `"${events[x].id?.trim()}"`).join(" → ")} (all timed on their words)`);
+        break;
+      }
+      seen.push(k);
+    }
+  });
+  const relations = want.map((k, i): ResolvedRelation => {
+    if (k === null || circular.has(i)) return null;
+    if (k > i) return drop(`event ${i + 1}: after "${events[k].id?.trim()}", which comes later in the list (timed on its words)`);
+    return { after: k, offset: normalizeOffset(events[i].relationship?.offset) };
+  });
+  return { relations, errors };
+}
