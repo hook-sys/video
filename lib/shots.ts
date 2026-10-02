@@ -4,7 +4,7 @@ import { FLOW_THEMES } from "@/lib/flow-script";
 import { CAMERA_MOVES, CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
 import { DEVICE_MODELS } from "@/components/video/flow/cards/device-data";
 import { type AssetSelection, applyAssetSelection } from "@/lib/asset-selection";
-import { type CompiledRecipe, ENV_BACKDROP, LAYER, RECIPE_MAPPED, type RecipeTransition, SceneRecipe, sceneTransition, StoredSceneRecipe } from "@/lib/scene-recipe";
+import { boundaryTransition, type CompiledRecipe, ENV_BACKDROP, LAYER, RECIPE_MAPPED, type RecipeTransition, SceneRecipe, sceneTransition, StoredSceneRecipe } from "@/lib/scene-recipe";
 import { tokenize } from "@/lib/voice-timing";
 
 // Shot templates: tested building blocks a video is made of. The Director
@@ -680,7 +680,8 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     const prev = beats[beats.length - 1];
     const dissolve = (layout !== lastLayout || prev?.text_layout === "display") && (transition ?? (prev?.action === "statement" || cut === "soft" ? "dissolve" : null));
     // (After a recipe scene its transition_out decides how this one arrives.)
-    const out = pendingOut ? sceneTransition(pendingOut, scenes) : null;
+    const chosen = boundaryTransition({ first: scenes === 0, out: pendingOut, into: null, canCarry: false }).transition;
+    const out = chosen && scenes > 0 ? sceneTransition(chosen, scenes) : null;
     beats.push(beat({ cue, action: "scene", elements, layout, style, camera: intent ? INTENT_CAMERA[intent] : "static", transition: scenes === 0 ? "cut" : out ? out.transition : dissolve ? "dissolve" : push, backdrop: scenes === 0 ? "mesh" : null }));
     lastLayout = layout;
     scenes++;
@@ -762,12 +763,15 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     if (r.supporting.length > 4) notes.push(`recipe ${r.scene_id}: ${r.supporting.length - 4} supporting objects over the 4 allowed: left out`);
     // object-transform from a different hero: the last scene's hero comes
     // along and flows into the new one (merge) on the shot's last word.
-    const morphFrom = r.transition_in === "object-transform" && prevRecipe && !carriedHero && lastWord(s.cue) ? prevRecipe.heroId : null;
+    // The boundary into this scene (lib/scene-recipe.ts boundaryTransition):
+    // first cut → a carry it asks for → the last scene's transition_out → its transition_in.
+    const boundary = boundaryTransition({ first: scenes === 0, out: pendingOut, into: r.transition_in, canCarry: !!prevRecipe });
+    const tIn: RecipeTransition = boundary.transition ?? r.transition_in;
+    const morphFrom = tIn === "object-transform" && prevRecipe && !carriedHero && lastWord(s.cue) ? prevRecipe.heroId : null;
     if (morphFrom) roles[morphFrom] = { role: "support", layer: LAYER.midground, relation: "feeds-hero" };
-    const tIn: RecipeTransition = scenes === 0 ? "cut" : r.transition_in;
     const tr = sceneTransition(tIn, scenes);
     if (RECIPE_MAPPED[tIn]) notes.push(`recipe ${r.scene_id}: ${MAPPED_NOTE} transition ${tIn} → ${RECIPE_MAPPED[tIn]}`);
-    if (tIn === "object-transform" && !carriedHero && !morphFrom) notes.push(`recipe ${r.scene_id}: object-transform with nothing to carry (no persistent hero before it): dissolve`);
+    if (tIn === "object-transform" && boundary.source !== "out" && !carriedHero && !morphFrom) notes.push(`recipe ${r.scene_id}: object-transform with nothing to carry (no persistent hero before it): dissolve`);
     const compiled: CompiledRecipe = { id: r.scene_id, composition: r.composition, environment: r.environment, hero: heroId, heroType: r.hero.type, roles, text: { position: r.typography.position, scale: r.typography.scale }, camera: r.camera, flash: tr.flash, words: false };
     const elements = [heroEl, ...[...support.values()].filter((e) => !later.includes(e)), ...(morphFrom ? [{ id: morphFrom, asset: null, label: null, screen: null, content: null } as SceneElement] : [])];
     beats.push(beat({ cue: s.cue, action: "scene", elements, layout: "recipe", style: null, camera: "static", transition: tr.transition, backdrop: ENV_BACKDROP[r.environment] as SceneBeat["backdrop"], recipe: compiled }));
@@ -798,6 +802,7 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     const idOf = (name: string) => (name === "hero" ? heroId : (support.get(name)?.id ?? null));
     const at0 = cuePos(s.cue);
     const tell = (b: SceneRecipe["behaviors"][number], status: BehaviorReport["status"], reason: string | null) => report?.push({ shot: si, object: b.from, type: `recipe:${b.type}`, status, reason, cue: b.cue });
+    const consumed = new Set<string>(); // recipe ids merged away (never carried on)
     for (const b of r.behaviors) {
       const from = idOf(b.from);
       const to = b.to ? idOf(b.to) : null;
@@ -835,10 +840,25 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
           tell(b, "applied", null);
           break;
         case "merge":
-        case "assemble":
-        case "transform":
           beats.push(beat({ cue: b.cue, action: "merge", targets: [from], to }));
-          tell(b, "applied", b.type === "merge" ? null : `mapped to merge: it flies into ${b.to}, which grows (no piece assembly or shape morph)`);
+          consumed.add(b.from);
+          tell(b, "applied", null);
+          break;
+        case "assemble": {
+          // The pieces: the named one and the scene's other objects that
+          // stand in the same relation to the hero (at most 4).
+          const rel = r.supporting.find((sp) => sp.id === b.from)?.relation ?? null;
+          const others = rel ? r.supporting.filter((sp) => sp.id !== b.from && sp.id !== b.to && sp.relation === rel && support.has(sp.id) && !consumed.has(sp.id) && !later.includes(support.get(sp.id)!)).map((sp) => sp.id) : [];
+          const ids = [b.from, ...others].slice(0, 4);
+          beats.push(beat({ cue: b.cue, action: "merge", targets: ids.map((x) => idOf(x)!), to, style: "assemble" }));
+          for (const x of ids) consumed.add(x);
+          tell(b, "applied", `assembled: ${ids.length} piece${ids.length > 1 ? "s" : ""} (${ids.join(", ")}) dock around ${b.to}, hold as one shape, then fuse into it (it grows)`);
+          break;
+        }
+        case "transform":
+          beats.push(beat({ cue: b.cue, action: "merge", targets: [from], to, style: "transform" }));
+          consumed.add(b.from);
+          tell(b, "applied", `transformed: ${b.from} flies to ${b.to}, takes its size and turns edge-on; ${b.to} turns in from the edge in its place (3D turn, no shape morph)`);
           break;
         case "highlight":
         case "expand":
@@ -849,9 +869,16 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
           beats.push(beat({ cue: b.cue, action: "focus", targets: [from], style: "recipe" }));
           tell(b, "applied", null);
           break;
-        case "arrange":
-          tell(b, "dropped", "unsupported: arrange re-lays a scene in a grid, not in its composition");
+        case "arrange": {
+          const n = r.supporting.filter((sp) => support.has(sp.id) && !consumed.has(sp.id)).length;
+          if (n < 2) {
+            tell(b, "dropped", `nothing to arrange: ${n} supporting object on screen (needs 2+)`);
+            break;
+          }
+          beats.push(beat({ cue: b.cue, action: "arrange", layout: "recipe", style: "recipe" }));
+          tell(b, "applied", `arranged: the ${n} supporting objects line up evenly (a row, or a column beside a side hero); the hero and the composition stay`);
           break;
+        }
       }
     }
     // A supporting object that orbits the hero circles it from the shot's last word.
@@ -867,8 +894,8 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
     }
     // What the next scene may carry (persistent objects, by asset).
     const keep = new Map<string, string>();
-    if (r.hero.persistence === "persistent") keep.set(r.hero.asset, heroId);
-    for (const sp of r.supporting) if (sp.persistence === "persistent" && support.has(sp.id)) keep.set(sp.asset, support.get(sp.id)!.id);
+    if (r.hero.persistence === "persistent" && !consumed.has("hero")) keep.set(r.hero.asset, heroId);
+    for (const sp of r.supporting) if (sp.persistence === "persistent" && support.has(sp.id) && !consumed.has(sp.id)) keep.set(sp.asset, support.get(sp.id)!.id);
     prevRecipe = { heroId, persisted: keep };
     pendingOut = r.transition_out;
     return true;

@@ -123,6 +123,22 @@ export const RECIPE_MAPPED: Partial<Record<RecipeTransition, string>> = {
   iris: "a brand-colour circle sweeps the canvas (flash) while the scene dissolves in",
   "morph-intent": "zoom-through (the old scene grows past the camera)",
 };
+// The transition at a scene boundary, deterministic, from both sides:
+// 1. the first scene cuts in ("first");
+// 2. the incoming recipe asks for object-transform and the outgoing scene is
+//    a recipe scene whose hero it can carry — continuity wins ("carry");
+// 3. the outgoing recipe's transition_out ("out");
+// 4. the incoming recipe's transition_in ("in");
+// 5. neither: null, the shot template's own handover ("default").
+export type BoundarySource = "first" | "carry" | "out" | "in" | "default";
+export function boundaryTransition({ first, out, into, canCarry }: { first: boolean; out: RecipeTransition | null; into: RecipeTransition | null; canCarry: boolean }): { transition: RecipeTransition | null; source: BoundarySource } {
+  if (first) return { transition: "cut", source: "first" };
+  if (into === "object-transform" && canCarry) return { transition: into, source: "carry" };
+  if (out) return { transition: out, source: "out" };
+  if (into) return { transition: into, source: "in" };
+  return { transition: null, source: "default" };
+}
+
 // Recipe transition → the scene compiler's transition (+ flash).
 export function sceneTransition(tr: RecipeTransition, seed: number): { transition: "cut" | "dissolve" | "push-left" | "push-up" | "panel-wipe" | "zoom-through"; flash: boolean } {
   switch (tr) {

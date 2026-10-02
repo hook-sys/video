@@ -58,6 +58,19 @@ export const directionFor = (script: string, preset: StylePreset) => {
 };
 // The theme a look forces on the video (null = the Director's choice).
 export const LOOK_THEME: Record<Look, "lavender" | "midnight" | null> = { Auto: null, "Light glass": null, "Dark glow": "midnight", "Warm brand": null };
+// The video's palette, deterministic (never a new theme):
+// 1. the customer's brand colour is the primary colour (withBrandColor, at render);
+// 2. the customer's look fixes light or dark (Dark glow → dark, Light glass → light);
+// 3. the Director's theme decides the rest (ground, ink, second colour) when
+//    it fits that look; otherwise the look's own theme.
+type ThemeName = "lavender" | "midnight" | "mint" | "teal";
+const DARK_THEMES: readonly ThemeName[] = ["midnight"];
+export function resolveTheme(director: ThemeName, look: Look): { theme: ThemeName; source: "director" | "look" } {
+  const want = look === "Dark glow" ? "dark" : look === "Light glass" ? "light" : null;
+  const dark = DARK_THEMES.includes(director);
+  if (!want || (want === "dark") === dark) return { theme: director, source: "director" };
+  return { theme: want === "dark" ? (LOOK_THEME[look] ?? "midnight") : "lavender", source: "look" };
+}
 // Creative preferences: guidance for the AI director only (never facts).
 export const CREATIVE_DIRECTIONS = ["Auto", "Story Ad", "Product Demo", "Fast Promo", "Cinematic Brand", "Explainer"] as const;
 export const MOTION_LEVELS = ["Subtle", "Balanced", "Dynamic", "High Energy"] as const;

@@ -100,7 +100,9 @@ export function withBrandColor(theme: FlowTheme, brand?: string | null): FlowThe
     ...theme,
     primary,
     primary2: toHex(mix(p, white, 0.35)),
-    accent: toHex(mix(p, hex(theme.accent), 0.4)),
+    // The second colour stays the theme's (the Director's palette), only
+    // drawn a quarter toward the brand so the two sit together.
+    accent: toHex(mix(hex(theme.accent), p, 0.25)),
     blobs: theme.dark ? [primary, theme.blobs[1], theme.blobs[2]] : [toHex(mix(p, white, 0.35)), theme.blobs[1], toHex(mix(p, white, 0.6))],
     soft: theme.dark ? theme.soft : toHex(mix(p, white, 0.86)),
     line: theme.dark ? theme.line : toHex(mix(p, white, 0.6)),

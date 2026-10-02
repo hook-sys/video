@@ -10,7 +10,7 @@ import { brandStartFrame, type CompileBrand, ctaLine, smoothCamera, wordFrames }
 import { num, vec } from "./eval";
 import { DEPTH, layoutFamily, layoutSlots, OVERLAPPING_FAMILIES, type Slot } from "./layouts";
 import { animate as animateAfter, Flow, type FlowNodeHandle, put as putAfter } from "./patterns";
-import { MARK_DELAY, type Ease, type FlowElement, type FlowLink, type FlowNode, type FlowPlan, type FlowText, type ThemeName, type Track, type Vec } from "./types";
+import { MARK_DELAY, type Ease, type FlowElement, type FlowLink, type FlowNode, type FlowPlan, type FlowText, type ThemeName, type Track, type Vec, type Vec3 } from "./types";
 import { EXPLAINER_TYPE, fitSize } from "./typography";
 import { type CompiledRecipe, type Layer, recipeCamera, recipeSlots, recipeText } from "@/lib/scene-recipe";
 
@@ -860,6 +860,60 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       }
       case "merge": {
         if (!to) break;
+        if (b.style === "assemble") {
+          // Recipe assemble: the pieces dock around the target's edge, hold
+          // there as one shape for a moment, then fuse into it (it grows).
+          const pieces = tgt.filter((n) => n !== to);
+          const r = (to.w * to.fit) / 2 + 30;
+          pieces.forEach((n, k) => {
+            const a = -Math.PI / 2 + (k * 2 * Math.PI) / Math.max(1, pieces.length) + (pieces.length === 2 ? Math.PI / 2 : 0);
+            const dock: Vec = [to.pos[0] + Math.cos(a) * r, to.pos[1] + Math.sin(a) * r * 0.8];
+            const t0 = t + k * 4;
+            travel(n, t0, 18, dock, "arc");
+            animate(n.h.spec.scale!, t0, 18, n.fit * 0.55, "inOut");
+            travel(n, t + 30, 10, to.pos, "straight");
+            animate(n.h.spec.scale!, t + 30, 10, n.fit * 0.15, "in");
+            animate(n.h.spec.opacity!, t + 34, 6, 0, "in");
+          });
+          for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
+          to.fit *= 1.12;
+          animate(to.h.spec.scale!, t + 40, 8, to.fit * 1.07, "out");
+          put(to.h.spec.scale!, t + 56, to.fit, "inOut");
+          moveSfx(t);
+          f.sfx(t + 22, "soft_pop");
+          f.sfx(t + 40, "subtle_impact");
+          break;
+        }
+        if (b.style === "transform") {
+          // Recipe transform: the source flies to the target's place, takes its
+          // size, turns edge-on (3D) and the target turns in from the edge in
+          // its stead — the source becomes the target's shape and state.
+          const [src] = tgt.filter((n) => n !== to);
+          if (!src) break;
+          // (Tilt keys from t on are replaced, so the track stays in time order.)
+          const tiltFrom = (n: Live, at: number): Vec3 => {
+            const tr = n.h.spec.tilt;
+            const v: Vec3 = tr?.length ? [0, 1, 2].map((i) => num(tr.map(([f, x, e]) => [f, x[i], e] as [number, number, Ease?]), at, 0)) as Vec3 : [0, 0, 0];
+            n.h.spec.tilt = [...(tr ?? []).filter(([f]) => f < at), [at, v]];
+            return v;
+          };
+          travel(src, t, 16, to.pos, "arc");
+          animate(src.h.spec.scale!, t, 16, (to.w * to.fit) / src.w, "inOut");
+          animate(to.h.spec.opacity!, t, 10, 0, "inOut");
+          const s0 = tiltFrom(src, t + 16);
+          src.h.spec.tilt!.push([t + 24, [s0[0], 90, s0[2]], "in"]);
+          animate(src.h.spec.opacity!, t + 22, 2, 0);
+          src.h.spec.z = (to.h.spec.z ?? 0) + 1;
+          const d0 = tiltFrom(to, t);
+          to.h.spec.tilt!.push([t + 22, d0], [t + 23, [d0[0], -90, d0[2]]], [t + 32, d0, "out"]);
+          put(to.h.spec.opacity!, t + 23, 0);
+          put(to.h.spec.opacity!, t + 24, 1);
+          bump(to, t + 32);
+          for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
+          moveSfx(t);
+          f.sfx(t + 24, "soft_pop");
+          break;
+        }
         tgt.filter((n) => n !== to).forEach((n, k) => {
           travel(n, t + k * 3, 20, to.pos, "arc");
           animate(n.h.spec.scale!, t + k * 3 + 8, 12, n.fit * 0.2, "in");
@@ -873,6 +927,30 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         break;
       }
       case "arrange": {
+        if (b.style === "recipe" && sceneRecipe) {
+          // Recipe arrange: the scene keeps its composition; its supporting
+          // objects line up evenly (a row, or a column beside a side hero)
+          // around where they stood. The hero does not move.
+          const rec = sceneRecipe;
+          const items = [...live.entries()].filter(([id]) => rec.roles[id]?.role === "support").map(([, n]) => n);
+          if (items.length < 2) break;
+          const cx = items.reduce((a, n) => a + n.pos[0], 0) / items.length;
+          const cy = items.reduce((a, n) => a + n.pos[1], 0) / items.length;
+          const column = Math.abs(cx) > 480;
+          const gap = Math.max(...items.map((n) => (column ? n.h0 : n.w) * n.fit)) + 40;
+          const span = gap * (items.length - 1);
+          const ordered = [...items].sort((a, c) => (column ? a.pos[1] - c.pos[1] : a.pos[0] - c.pos[0]));
+          const clampX = (x: number) => Math.max(-820 + span / 2, Math.min(820 - span / 2, x));
+          const clampY = (y: number) => Math.max(-430 + span / 2, Math.min(430 - span / 2, y));
+          const [ox, oy] = column ? [Math.max(-820, Math.min(820, cx)), clampY(cy)] : [clampX(cx), Math.max(-430, Math.min(430, cy))];
+          ordered.forEach((n, k) => {
+            const d = -span / 2 + k * gap;
+            travel(n, t + k * 3, 24, column ? [ox, oy + d] : [ox + d, oy], "straight");
+          });
+          moveSfx(t);
+          f.sfx(t + 24, "soft_pop");
+          break;
+        }
         const ids = [...live.keys()];
         const chosen = slotsFor(b.layout ?? layoutName, ids.map((id) => [live.get(id)!.w, live.get(id)!.h0] as Vec), sceneIdx + 3);
         const slots = chosen.slots;

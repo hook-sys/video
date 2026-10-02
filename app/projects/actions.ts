@@ -16,7 +16,7 @@ import {
   CREATIVE_DIRECTIONS,
   DIRECTION_MAX,
   estimateVideoSeconds,
-  LOOK_THEME,
+  resolveTheme,
   type Look,
   VOICE_SCRIPT_MAX,
   voiceVideoSeconds,
@@ -500,8 +500,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     });
   // The chosen look fixes the palette: dark → midnight; light → never midnight.
   const look = input.creative_preferences.look as Look;
-  if (v2.script && LOOK_THEME[look]) v2.script.theme = LOOK_THEME[look]!;
-  if (v2.script && look === "Light glass" && v2.script.theme === "midnight") v2.script.theme = "lavender";
+  if (v2.script) v2.script.theme = resolveTheme(v2.script.theme, look).theme;
   // Explainer pace unless the customer asked for more motion.
   if (v2.script) v2.script.pace = ["Dynamic", "High Energy"].includes(input.creative_preferences.motion_level) ? "lively" : "calm";
   // The videos the customer chooses between: one per creative direction.
