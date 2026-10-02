@@ -2,6 +2,7 @@
 // the scene boundary transition contract, and the palette precedence.
 import { RECIPE_NARRATION as RECIPE_NARRATION_, recipeFixture, RECIPE_SHOTS, RECIPE_SHOTS_LEGACY } from "@/components/video/flow/fixtures/recipe";
 import { THEMES, withBrandColor } from "@/components/video/flow/themes";
+import { plannedSfx } from "@/components/video/flow/flow-scene";
 import type { FlowNode, Track, Vec } from "@/components/video/flow/types";
 import { resolveTheme } from "@/lib/projects";
 import { BACKDROP_ROLE, BACKDROPS, backdropStrength, ENV_APPROVED_BACKDROPS, REJECTED_BACKDROPS, renderableBackdrop } from "@/components/video/flow/backdrop-names";
@@ -377,7 +378,18 @@ function choreoSfxChecks() {
   add("voice cue timing unchanged by SFX", words(imp.r) === words(none.r) && plain.n.paths!.at(-1)!.start === cue && imp.b.cue === plain.b.cue, `${imp.r.plan.texts.length} texts, same frames`);
   // the sound has its own length (the renderer plays each for SFX_LENGTH), not a phase's
   const short = run({ anticipation: null, action: 0.2, impact: null, settle: null, sfx: [{ phase: "action", kind: "whoosh" }] });
-  add("an SFX cue is a start frame only (own duration)", (short.r.plan.sfx ?? []).every((x) => Object.keys(x).join() === "frame,kind"), JSON.stringify(sfxAround(short.r)));
+  add("an SFX cue is a start frame only (own duration)", (short.r.plan.sfx ?? []).every((x) => Object.keys(x).every((k) => k === "frame" || k === "kind" || k === "choreo")), JSON.stringify(sfxAround(short.r)));
+  // Audio render review (9cdd6a0): a choreography cue within the renderer's
+  // 6-frame gap of a fixed sound was dropped for it (the transform's landing
+  // pop, 5 frames before the next scene's whoosh, played silent). A cue now
+  // goes first; the fixed sound gives way.
+  const longT = recipeFixture(withRecipe(3, (r) => ({ ...r, behaviors: [{ type: "transform", from: "coin", to: "hero", cue: "a sale happens", choreography: { anticipation: 0.2, action: 0.9, impact: null, settle: null, sfx: [{ phase: "impact", kind: "soft_pop" }] } }] })));
+  const cueSfx = (longT.plan.sfx ?? []).find((x) => x.choreo)!;
+  const near = (longT.plan.sfx ?? []).filter((x) => !x.choreo && Math.abs(x.frame - cueSfx.frame) < 6);
+  const kept = plannedSfx(longT.plan);
+  add("a cue near a fixed sound is kept; the fixed one gives way", near.length > 0 && kept.some((x) => x.frame === cueSfx.frame && x.src.endsWith("soft_pop.mp3")) && !near.some((n) => kept.some((x) => x.frame === n.frame)), `cue ${cueSfx.frame} soft_pop vs fixed ${near.map((n) => `${n.frame} ${n.kind}`).join(", ")} → kept ${kept.filter((x) => Math.abs(x.frame - cueSfx.frame) < 8).map((x) => `${x.frame} ${x.src.split("/").pop()}`).join(", ")}`);
+  const fixedOnlyPlan = recipeFixture(RECIPE_SHOTS).plan;
+  add("without cues the renderer keeps exactly what it kept before", !(fixedOnlyPlan.sfx ?? []).some((x) => x.choreo) && fingerprint(fixedOnlyPlan) === PRE_CHOREO.base, `${plannedSfx(fixedOnlyPlan).length} sounds`);
   // the Director's strict schema carries the cue list
   const schema = JSON.stringify(zodTextFormat(ShotScriptModel, "s"));
   add("Director schema: choreography.sfx (phase, kind)", schema.includes("\"sfx\"") && schema.includes("\"phase\""), "ok");

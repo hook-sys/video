@@ -269,7 +269,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   // without, nothing changes (false: play the fixed ones).
   const choreoSfx = (c: ChoreoTimeline | null) => {
     if (!c?.sfx?.length) return false;
-    for (const x of c.sfx) f.sfx(sfxFrame(c, x.phase), x.kind);
+    for (const x of c.sfx) f.sfx(sfxFrame(c, x.phase), x.kind, true);
     return true;
   };
   const setBlur = (n: Live, t: number, v: number, dur = 12) => {

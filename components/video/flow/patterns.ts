@@ -239,8 +239,10 @@ export class Flow {
     this.plan.brand = brand;
     return this;
   }
-  sfx(frame: number, kind: NonNullable<FlowPlan["sfx"]>[number]["kind"]) {
-    (this.plan.sfx ??= []).push({ frame: Math.max(0, Math.round(frame)), kind });
+  // choreo: a cue a choreography event asked for on one of its phases (it
+  // wins over a fixed sound too close to it, flow-scene.tsx plannedSfx).
+  sfx(frame: number, kind: NonNullable<FlowPlan["sfx"]>[number]["kind"], choreo = false) {
+    (this.plan.sfx ??= []).push({ frame: Math.max(0, Math.round(frame)), kind, ...(choreo ? { choreo: true } : {}) });
     return this;
   }
   text(text: string, start: number, end: number, { pos = [0, 0] as Vec, size = 72, weight, accent, style, words, mark, markAt, swap, align }: { pos?: Vec; size?: number; weight?: number; accent?: string; style?: FlowText["style"]; words?: number[]; mark?: FlowText["mark"]; markAt?: number; swap?: FlowText["swap"]; align?: FlowText["align"] } = {}) {

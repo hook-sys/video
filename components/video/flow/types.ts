@@ -189,7 +189,8 @@ export type FlowPlan = {
   // and presses (a ripple) at each click frame.
   cursor?: { path: Track<Vec>; show: Track<number>; clicks: number[] };
   // Sound effects tied to motion (kinds from components/video/sfx.tsx).
-  sfx?: { frame: number; kind: "whoosh" | "soft_pop" | "click" | "reveal" | "success_chime" | "subtle_impact" | "digital_processing" | "typing" }[];
+  // choreo: asked for by a choreography event's phase (lib/choreography.ts).
+  sfx?: { frame: number; kind: "whoosh" | "soft_pop" | "click" | "reveal" | "success_chime" | "subtle_impact" | "digital_processing" | "typing"; choreo?: boolean }[];
 };
 
 // Frames after the last accent word is spoken before its pill / strike lands.

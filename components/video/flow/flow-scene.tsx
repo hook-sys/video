@@ -35,7 +35,9 @@ export const SFX_LENGTH = 45;
 const SFX_RANK: Record<string, number> = { reveal: 0, success_chime: 0, click: 1, subtle_impact: 1, whoosh: 2, soft_pop: 3, typing: 4, digital_processing: 4 };
 export function plannedSfx(plan: FlowPlan) {
   const want = (plan.sfx ?? []).filter((s) => SFX_LIBRARY[s.kind] && s.frame < plan.duration - 6);
-  want.sort((a, b) => (SFX_RANK[a.kind] ?? 5) - (SFX_RANK[b.kind] ?? 5) || a.frame - b.frame);
+  // (A choreography cue is timed to its event's phase on purpose: it goes
+  // first, so a fixed sound within the gap gives way to it, not the reverse.)
+  want.sort((a, b) => (a.choreo ? -1 : (SFX_RANK[a.kind] ?? 5)) - (b.choreo ? -1 : (SFX_RANK[b.kind] ?? 5)) || a.frame - b.frame);
   const kept: typeof want = [];
   for (const s of want) {
     if (kept.length >= SFX_MAX) break;
