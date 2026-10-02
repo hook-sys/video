@@ -1,6 +1,6 @@
 import { estimateWords } from "@/lib/flow-script";
 import { type BackdropSlot, backdropSlot, renderableBackdrop } from "./backdrop-names";
-import { choreoTimeline, type ChoreoTimeline } from "@/lib/choreography";
+import { choreoTimeline, type ChoreoTimeline, sfxFrame } from "@/lib/choreography";
 import { parseAsset, type SceneBeat, type SceneContent, type SceneElement, type SceneScript } from "@/lib/scene-script";
 import { spokenCueTimes, type WordTiming } from "@/lib/voice-timing";
 import { cardSize } from "./cards/card";
@@ -263,6 +263,14 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       animate(sc, c.impactAt, Math.max(1, Math.round(c.settle / 3)), n.fit * 1.03, "out");
       animate(sc, c.impactAt + Math.max(1, Math.round(c.settle / 3)), Math.max(1, c.settle - Math.round(c.settle / 3)), n.fit, "inOut");
     }
+  };
+  // Phase 2: the event's own SFX cues, each on its phase's frame
+  // (sfxFrame). With cues, the event's fixed sounds give way to them;
+  // without, nothing changes (false: play the fixed ones).
+  const choreoSfx = (c: ChoreoTimeline | null) => {
+    if (!c?.sfx?.length) return false;
+    for (const x of c.sfx) f.sfx(sfxFrame(c, x.phase), x.kind);
+    return true;
   };
   const setBlur = (n: Live, t: number, v: number, dur = 12) => {
     const b = (n.h.spec.blur ??= [[0, num(n.h.spec.blur, t, 0)]]);
@@ -729,7 +737,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           if (c) anticipate(a, c);
           travel(a, c?.actionAt ?? t, c?.action ?? 26, [to.pos[0] + dir * ((to.w * to.fit) / 2 + (a.w * a.fit) / 2 + 24), to.pos[1] + 30], "arc");
           if (c) land(a, c);
-          moveSfx(t);
+          if (!choreoSfx(c)) moveSfx(t);
           break;
         }
         // It takes the layout slot next to its destination; the others shift.
@@ -963,9 +971,11 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
             animate(to.h.spec.scale!, t + 40, 8, to.fit * 1.07, "out");
             put(to.h.spec.scale!, t + 56, to.fit, "inOut");
           }
-          moveSfx(t);
-          f.sfx(t + 22, "soft_pop");
-          f.sfx(t + 40, "subtle_impact");
+          if (!choreoSfx(c)) {
+            moveSfx(t);
+            f.sfx(t + 22, "soft_pop");
+            f.sfx(t + 40, "subtle_impact");
+          }
           break;
         }
         if (b.style === "transform") {
@@ -1006,8 +1016,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           if (c) land(to, c);
           else bump(to, t + 32);
           for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
-          moveSfx(t);
-          f.sfx(t + 24, "soft_pop");
+          if (!choreoSfx(c)) {
+            moveSfx(t);
+            f.sfx(t + 24, "soft_pop");
+          }
           break;
         }
         const c = choreoOf(b, t);
@@ -1023,8 +1035,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         to.fit *= 1.1;
         if (c) land(to, c);
         else bump(to, t + 22);
-        moveSfx(t);
-        f.sfx(t + 22, "subtle_impact");
+        if (!choreoSfx(c)) {
+          moveSfx(t);
+          f.sfx(t + 22, "subtle_impact");
+        }
         break;
       }
       case "arrange": {
@@ -1094,7 +1108,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           animate(n.h.spec.opacity!, c?.actionAt ?? t, c?.action ?? 8, 0.35);
           put(n.h.spec.opacity!, c ? Math.max(c.end, c.actionAt + 26) : t + 34, 1, "inOut");
         }
-        f.sfx(t + 2, "soft_pop");
+        if (!choreoSfx(c)) f.sfx(t + 2, "soft_pop");
         // Pushed in on another element: pull back so the highlighted one is seen.
         framed = !!focusedOn && focusedOn !== a;
         break;

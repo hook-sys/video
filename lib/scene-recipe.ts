@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Choreography } from "@/lib/choreography";
+import { Choreography, ModelChoreography } from "@/lib/choreography";
 import type { EnvBackdrop } from "@/components/video/flow/backdrop-names";
 import type { Vec } from "@/components/video/flow/types";
 
@@ -78,7 +78,7 @@ export type SceneRecipe = z.infer<typeof SceneRecipe>;
 // unreadable list is dropped (the recipe itself is kept).
 // What the Director writes (structured output: every key present; a missing
 // choreography reads as null).
-export const ModelSceneRecipe = SceneRecipe.extend({ behaviors: z.array(RecipeBehavior.extend({ choreography: Choreography.nullable().default(null) })) });
+export const ModelSceneRecipe = SceneRecipe.extend({ behaviors: z.array(RecipeBehavior.extend({ choreography: ModelChoreography.nullable().default(null) })) });
 // Behaviors saved before choreography have none; an unreadable one is null.
 export const StoredSceneRecipe = SceneRecipe.extend({
   assets: z.array(AssetRequirement).nullable().default(null).catch(null),

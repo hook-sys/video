@@ -10,8 +10,9 @@ import { num } from "@/components/video/flow/eval";
 import { boundaryTransition, ENV_BACKDROP, ENV_WORLD, ENVIRONMENTS, type SceneRecipe } from "@/lib/scene-recipe";
 import { SceneScript } from "@/lib/scene-script";
 import { createHash } from "node:crypto";
-import { type Choreography, choreoTimeline, MAX_TOTAL, normalizeChoreography, PHASE_BOUNDS } from "@/lib/choreography";
-import { type Dna, dnaMove, isFixableNote, type ShotScript, ShotScript as ShotScriptSchema } from "@/lib/shots";
+import { type Choreography, choreoTimeline, MAX_TOTAL, normalizeChoreography, normalizeSfx, PHASE_BOUNDS, sfxFrame } from "@/lib/choreography";
+import { zodTextFormat } from "openai/helpers/zod";
+import { type Dna, dnaMove, isFixableNote, type ShotScript, ShotScript as ShotScriptSchema, ShotScriptModel } from "@/lib/shots";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 const checks: Check[] = [];
@@ -336,6 +337,52 @@ function choreography() {
   add("an event not choreographed yet keeps its timing and says so (never a revision)", unsupported.notes.some((n) => n.includes("flow keeps its own timing") && !isFixableNote(n)) && !unsupported.script.beats.some((b) => b.choreo), unsupported.notes.find((n) => n.includes("own timing")) ?? "-");
 }
 
+function choreoSfxChecks() {
+  section = "14. choreography SFX";
+  const FULL = { anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 };
+  const moveWith = (c: Choreography | null) => withRecipe(0, (r) => ({ ...r, behaviors: [{ type: "move", from: "sheet", to: "hero", cue: "ten different tools", ...(c ? { choreography: c } : {}) }] }));
+  const run = (c: Choreography | null) => {
+    const r = recipeFixture(moveWith(c));
+    const b = r.script.beats.find((x) => x.action === "move")!;
+    const n = r.plan.nodes.find((x) => x.id === b.targets![0])!;
+    return { r, b, n };
+  };
+  const plain = run(null);
+  const cue = plain.n.paths!.at(-1)!.start; // the move starts on its cue frame
+  const sfxAround = (r: ReturnType<typeof recipeFixture>) => (r.plan.sfx ?? []).filter((x) => x.frame >= cue - 2 && x.frame <= cue + 60);
+  // impact → the landing frame
+  const imp = run({ ...FULL, sfx: [{ phase: "impact", kind: "subtle_impact" }] });
+  const tl = choreoTimeline(imp.b.choreo!, cue);
+  add("impact SFX on the impact frame", sfxAround(imp.r).some((x) => x.kind === "subtle_impact" && x.frame === tl.impactAt) && tl.impactAt === cue + 6 + 18, `cue ${cue} · impact at ${tl.impactAt} · ${JSON.stringify(sfxAround(imp.r))}`);
+  // anticipation → the event start
+  const ant = run({ ...FULL, sfx: [{ phase: "anticipation", kind: "whoosh" }, { phase: "impact", kind: "soft_pop" }] });
+  const tlA = choreoTimeline(ant.b.choreo!, cue);
+  add("anticipation SFX on the event start (with an impact cue)", sfxAround(ant.r).some((x) => x.kind === "whoosh" && x.frame === tlA.start) && sfxAround(ant.r).some((x) => x.kind === "soft_pop" && x.frame === tlA.impactAt), JSON.stringify(sfxAround(ant.r)));
+  add("action / settle SFX on their frames", sfxFrame(tl, "action") === tl.actionAt && sfxFrame(tl, "settle") === tl.settleAt && tl.settleAt === tl.impactAt + tl.impact, `action ${tl.actionAt} · settle ${tl.settleAt}`);
+  // missing SFX → no new audio event; the event keeps its own fixed sounds (unchanged)
+  const none = run(FULL);
+  const fixedOnly = JSON.stringify((none.r.plan.sfx ?? []).filter((x) => x.frame >= cue - 2 && x.frame <= cue + 60)) === JSON.stringify((plain.r.plan.sfx ?? []).filter((x) => x.frame >= cue - 2 && x.frame <= cue + 60));
+  add("no SFX cues → no choreography audio event (the fixed sounds as before)", !none.b.choreo!.sfx && fixedOnly, JSON.stringify(sfxAround(none.r)));
+  // choreography absent → the plan, sounds included, exactly as before
+  add("choreography absent → unchanged (plan fingerprint)", fingerprint(plain.r.plan) === PRE_CHOREO.move, fingerprint(plain.r.plan));
+  // invalid timing / kind → safe fallback
+  const bad = normalizeSfx([{ phase: "after-lunch", kind: "subtle_impact" }, { phase: "impact", kind: "laser-blast" }, { phase: 7, kind: null }]);
+  const many = normalizeSfx([{ phase: "impact", kind: "click" }, { phase: "impact", kind: "reveal" }, { phase: "settle", kind: "soft_pop" }, { phase: "action", kind: "whoosh" }]);
+  add("unknown phase → impact; unknown kind → dropped; ≤ 2 per event, one per phase", JSON.stringify(bad) === JSON.stringify([{ phase: "impact", kind: "subtle_impact" }]) && JSON.stringify(many) === JSON.stringify([{ phase: "impact", kind: "click" }, { phase: "settle", kind: "soft_pop" }]), `${JSON.stringify(bad)} · ${JSON.stringify(many)}`);
+  // deterministic
+  const a1 = run({ ...FULL, sfx: [{ phase: "impact", kind: "subtle_impact" }] });
+  add("deterministic: same input, same SFX frames", JSON.stringify(a1.r.plan.sfx) === JSON.stringify(imp.r.plan.sfx), `${(imp.r.plan.sfx ?? []).length} cues`);
+  // the voice's own timing is untouched: every word-timed text and the cue frames stay
+  const words = (r: ReturnType<typeof recipeFixture>) => JSON.stringify(r.plan.texts.map((t) => [t.text, t.start, t.end ?? null]));
+  add("voice cue timing unchanged by SFX", words(imp.r) === words(none.r) && plain.n.paths!.at(-1)!.start === cue && imp.b.cue === plain.b.cue, `${imp.r.plan.texts.length} texts, same frames`);
+  // the sound has its own length (the renderer plays each for SFX_LENGTH), not a phase's
+  const short = run({ anticipation: null, action: 0.2, impact: null, settle: null, sfx: [{ phase: "action", kind: "whoosh" }] });
+  add("an SFX cue is a start frame only (own duration)", (short.r.plan.sfx ?? []).every((x) => Object.keys(x).join() === "frame,kind"), JSON.stringify(sfxAround(short.r)));
+  // the Director's strict schema carries the cue list
+  const schema = JSON.stringify(zodTextFormat(ShotScriptModel, "s"));
+  add("Director schema: choreography.sfx (phase, kind)", schema.includes("\"sfx\"") && schema.includes("\"phase\""), "ok");
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
@@ -346,5 +393,6 @@ export async function runChecks(): Promise<Check[]> {
   environments();
   worldStack();
   choreography();
+  choreoSfxChecks();
   return checks;
 }
