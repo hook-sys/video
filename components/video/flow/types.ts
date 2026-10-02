@@ -169,6 +169,9 @@ export type FlowPlan = {
   flashes?: [number, number, number?][];
   // Explainer canvas decor (a variant the search picks): dots, ribbons, waves, glow.
   decor?: string;
+  // How much of the decor shows over time (1 = all; a recipe environment
+  // turns it down to an accent so the scene has one world). Absent: 1.
+  decorLevel?: Track<number>;
   // Explainer canvas tone: tint (default), white or deep.
   tone?: string;
   // Explainer icon style: tile (default), solid, soft or outline.

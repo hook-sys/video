@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { EnvBackdrop } from "@/components/video/flow/backdrop-names";
 import type { Vec } from "@/components/video/flow/types";
 
 // Scene Recipe: how one scene visually exists — its world, its hero, the few
@@ -79,16 +80,19 @@ export type Layer = 0 | 1 | 2 | 3;
 // amounts, so the scene has depth (components/video/flow/states.ts).
 export const PARALLAX: Record<Layer, number> = { 0: 0.55, 1: 0.82, 2: 1, 3: 1.3 };
 
-// Environment → the existing backdrop it is drawn with (backdrops.tsx), over
-// the explainer canvas, cross-faded scene to scene.
-export const ENV_BACKDROP: Record<Environment, string> = {
+// Environment → the approved backdrop it is drawn with (backdrops.tsx), over
+// the explainer canvas, cross-faded scene to scene. Only production-approved
+// backdrops (ENV_APPROVED_BACKDROPS); the audit rejected the old studio
+// spotlight and data-space data-stream, and the horizon / light-beams / glow
+// plates (70–72) are not premium either.
+export const ENV_BACKDROP: Record<Environment, EnvBackdrop> = {
   open: "mesh", // the plain canvas and its edge decor
-  studio: "spotlight",
-  "dark-space": "glow",
+  studio: "mesh", // a clean, neutral studio (was spotlight: rejected)
+  "dark-space": "aurora", // colour drifting in a deep space (was glow)
   "grid-space": "perspective-grid",
-  "product-space": "horizon",
-  "data-space": "data-stream",
-  cinematic: "light-beams",
+  "product-space": "aurora", // soft light rising behind the product (was horizon)
+  "data-space": "perspective-grid", // the spatial data floor (was data-stream: rejected)
+  cinematic: "aurora", // curtains of light (was light-beams)
 };
 
 // What the compiler needs of a recipe scene (stored on its scene beat).

@@ -1,4 +1,5 @@
 import { estimateWords } from "@/lib/flow-script";
+import { renderableBackdrop } from "./backdrop-names";
 import { parseAsset, type SceneBeat, type SceneContent, type SceneElement, type SceneScript } from "@/lib/scene-script";
 import { spokenCueTimes, type WordTiming } from "@/lib/voice-timing";
 import { cardSize } from "./cards/card";
@@ -83,6 +84,9 @@ function put<T>(track: Track<T>, t: number, value: T, ease?: Ease) {
   if (typeof value === "number") cut(track as unknown as Track<number>, t);
   putAfter(track, t, value, ease);
 }
+
+// The canvas decor's level under a recipe environment: an edge accent only.
+export const DECOR_ACCENT = 0.35;
 
 // Cards whose last block is a button (the cursor clicks it).
 const BUTTON_CARDS = new Set(["action-panel", "login", "checkout", "cta"]);
@@ -510,6 +514,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   const rings: NonNullable<FlowPlan["rings"]> = []; // dashed orbit paths
   const ghosts: { live: Live; end: number }[] = []; // running orbits, for framing
   const backdrops: { kind: string; start: number; strength?: number }[] = [];
+  const decorLevel: Track<number> = [[0, 1]]; // how much of the canvas decor shows (1 = all)
   let focusedOn: Live | null = null; // the camera is pushed in on this element
   const flashes: [number, number, number?][] = [];
 
@@ -573,8 +578,15 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
         // (A recipe scene's environment is its own; one shared with the scene
         // before simply continues, so the world stays one place.)
         // (After recipe scenes, a shot that names its backdrop — the DNA's — keeps it.)
-        const kind = sceneRecipe ? (b.backdrop ?? "mesh") : calm && backdrops.length ? (b.backdrop && backdrops.some((x) => x.strength) ? b.backdrop : backdrops[0].kind) : b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh");
+        const kind = renderableBackdrop(sceneRecipe ? (b.backdrop ?? "mesh") : calm && backdrops.length ? (b.backdrop && backdrops.some((x) => x.strength) ? b.backdrop : backdrops[0].kind) : b.backdrop ?? (sceneIdx === 0 ? "mesh" : backdrops[backdrops.length - 1]?.kind ?? "mesh"));
         if (backdrops[backdrops.length - 1]?.kind !== kind) backdrops.push(sceneRecipe ? { kind, start: t, strength: 0.9 } : { kind, start: t });
+        // One world at a time: in a recipe scene its environment is the world
+        // and the canvas decor steps back to a quiet edge accent (the glow
+        // decor, itself an atmosphere, goes); elsewhere the decor is full.
+        const level = sceneRecipe ? (script.look?.decor === "glow" ? 0 : DECOR_ACCENT) : 1;
+        if (num(decorLevel, t, 1) !== level) {
+          decorLevel.push([t, num(decorLevel, t, 1)], [t + 24, level, "inOut"]);
+        }
         // A flash / iris transition: a brand-colour circle sweeps the canvas as the scene arrives.
         if (sceneRecipe?.flash && explainer) flashes.push([t - 6, t + 40, 22]);
         sceneMove = b.camera ?? ["push-in", "drift", "pan-right", "pull-back", "rise"][sceneIdx % 5];
@@ -1131,7 +1143,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       }
     }
     // A backdrop named on any later beat changes the atmosphere from there.
-    if (!calm && b.action !== "scene" && b.backdrop && backdrops.length && backdrops[backdrops.length - 1].kind !== b.backdrop) backdrops.push({ kind: b.backdrop, start: t });
+    if (!calm && b.action !== "scene" && b.backdrop && backdrops.length && backdrops[backdrops.length - 1].kind !== renderableBackdrop(b.backdrop)) backdrops.push({ kind: renderableBackdrop(b.backdrop), start: t });
     // Before a caption arrives the camera already makes room for it.
     if (framed || (b.action !== "scene" && b.action !== "statement" && planned.some((l) => l.start > t && l.start <= t + 45))) shoot(t, span, b.action === "scene" ? sceneMove : "drift");
   });
@@ -1177,6 +1189,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   if (overlaps.length || orbiting.length) plan.overlaps = [...overlaps, ...orbiting];
   if (rings.length) plan.rings = [...(plan.rings ?? []), ...rings];
   if (backdrops.some((x) => x.kind !== "mesh")) plan.backdrops = backdrops;
+  if (decorLevel.length > 1) plan.decorLevel = decorLevel;
   // Elements that never appeared (skipped beats) are dropped.
   plan.nodes = plan.nodes.filter((n: FlowNode) => n.kind !== "el" || n.appear !== undefined);
   const out = smoothCamera(plan);

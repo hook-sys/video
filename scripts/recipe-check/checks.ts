@@ -1,10 +1,14 @@
 // Scene Recipe execution: assemble / transform / arrange run on screen,
 // the scene boundary transition contract, and the palette precedence.
-import { recipeFixture, RECIPE_SHOTS, RECIPE_SHOTS_LEGACY } from "@/components/video/flow/fixtures/recipe";
+import { RECIPE_NARRATION as RECIPE_NARRATION_, recipeFixture, RECIPE_SHOTS, RECIPE_SHOTS_LEGACY } from "@/components/video/flow/fixtures/recipe";
 import { THEMES, withBrandColor } from "@/components/video/flow/themes";
 import type { FlowNode, Track, Vec } from "@/components/video/flow/types";
 import { resolveTheme } from "@/lib/projects";
-import { boundaryTransition, type SceneRecipe } from "@/lib/scene-recipe";
+import { BACKDROPS, ENV_APPROVED_BACKDROPS, REJECTED_BACKDROPS, renderableBackdrop } from "@/components/video/flow/backdrop-names";
+import { compileSceneScript, DECOR_ACCENT } from "@/components/video/flow/compile-scene";
+import { num } from "@/components/video/flow/eval";
+import { boundaryTransition, ENV_BACKDROP, ENVIRONMENTS, type SceneRecipe } from "@/lib/scene-recipe";
+import { SceneScript } from "@/lib/scene-script";
 import { type Dna, dnaMove, type ShotScript } from "@/lib/shots";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
@@ -143,7 +147,8 @@ function dnaMappings() {
   const open = run({ background: "open" });
   add("other backgrounds keep the plain canvas", scenes(open)[0].backdrop === "mesh" && scenes(open).slice(1).every((b) => b.backdrop === null), scenes(open).map((b) => b.backdrop).join(", "));
   // Mixed: recipe scenes first, then shots without one — those show the DNA grid.
-  const mixed = run({ background: "grid" }, { ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 4 ? { ...x, recipe: null } : x)) });
+  // (shot 2 follows a studio scene, so the grid is a change of world there)
+  const mixed = run({ background: "grid" }, { ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 1 ? { ...x, recipe: null } : x)) });
   const kinds = (mixed.plan.backdrops ?? []).map((x) => `${x.kind}${x.strength ? "" : "*"}`);
   add("after recipe scenes a DNA-grid shot keeps the grid (* = non-recipe)", kinds.includes("perspective-grid*"), kinds.join(", "));
   const panel = run({ transitions: "panel" });
@@ -167,6 +172,47 @@ function dnaMappings() {
   add("the recipe camera path is identical", camKeys(base) === camKeys(withDna), `${base.plan.camera.center.length} camera keys`);
 }
 
+function environments() {
+  section = "9. environment → approved backdrop";
+  add("studio no longer selects the rejected spotlight", (ENV_BACKDROP.studio as string) !== "spotlight" && ENV_BACKDROP.studio === "mesh", `studio → ${ENV_BACKDROP.studio}`);
+  add("data-space no longer selects the rejected data-stream", (ENV_BACKDROP["data-space"] as string) !== "data-stream" && ENV_BACKDROP["data-space"] === "perspective-grid", `data-space → ${ENV_BACKDROP["data-space"]}`);
+  add("every environment resolves to an approved backdrop", ENVIRONMENTS.every((e) => (ENV_APPROVED_BACKDROPS as readonly string[]).includes(ENV_BACKDROP[e]) && !(ENV_BACKDROP[e] in REJECTED_BACKDROPS)), ENVIRONMENTS.map((e) => `${e} → ${ENV_BACKDROP[e]}`).join(", "));
+  add("approved backdrops exist in the renderer", ENV_APPROVED_BACKDROPS.every((k) => (BACKDROPS as readonly string[]).includes(k)), ENV_APPROVED_BACKDROPS.join(", "));
+  // A rejected backdrop named anywhere (Scene Director, older scripts) never reaches the plan.
+  const { script } = recipeFixture(RECIPE_SHOTS_LEGACY);
+  const named = (k: string) => {
+    const s = SceneScript.parse({ ...script, pace: "lively", beats: script.beats.map((b, i) => (b.action === "scene" ? { ...b, backdrop: i === 0 ? k : null } : b)) });
+    return (compileSceneScript(s, { narration: RECIPE_NARRATION_, durationSeconds: 26 }).backdrops ?? []).map((x) => x.kind);
+  };
+  const leaks = Object.keys(REJECTED_BACKDROPS).map((k) => [k, named(k)] as const);
+  add("a rejected backdrop is drawn as its approved replacement", leaks.every(([k, kinds]) => !kinds.includes(k) && kinds.includes(renderableBackdrop(k)) || (renderableBackdrop(k) === "mesh" && !kinds.length)), leaks.map(([k, v]) => `${k} → ${v.join("/") || "mesh"}`).join(", "));
+
+  section = "10. recipe world precedence";
+  const base = recipeFixture(RECIPE_SHOTS);
+  const envs = (r: typeof base) => r.script.beats.filter((b) => b.action === "scene" && b.recipe).map((b) => b.backdrop).join(",");
+  const stack = (r: typeof base) => (r.plan.backdrops ?? []).map((x) => `${x.kind}@${x.start}:${x.strength}`).join(" ");
+  const withDna = recipeFixture({ ...RECIPE_SHOTS, dna: { ...DNA, background: "grid" } });
+  const withBold = recipeFixture({ ...RECIPE_SHOTS, dna: { ...DNA, background: "bold-field" } });
+  add("recipe backdrops are not overridden by a DNA background", envs(base) === envs(withDna) && stack(base) === stack(withDna) && stack(base) === stack(withBold), stack(withDna));
+  add("plan backdrop stack: approved kinds only", (base.plan.backdrops ?? []).every((x) => (ENV_APPROVED_BACKDROPS as readonly string[]).includes(x.kind)), stack(base));
+  // One world: under a recipe environment the canvas decor is an accent only.
+  const lvl = (r: typeof base, f: number) => num(r.plan.decorLevel, f, 1);
+  const firstRecipe = (base.plan.backdrops ?? [])[0]?.start ?? 0;
+  add("recipe scenes turn the decor down to an accent", Math.abs(lvl(base, firstRecipe + 30) - DECOR_ACCENT) < 1e-6, `decor level ${lvl(base, firstRecipe + 30)} (accent ${DECOR_ACCENT})`);
+  const glow = recipeFixture({ ...RECIPE_SHOTS, dna: { ...DNA, background: "bold-field" } });
+  add("the glow decor (an atmosphere itself) goes entirely", glow.script.look?.decor === "glow" && lvl(glow, firstRecipe + 30) === 0, `decor ${glow.script.look?.decor}: level ${lvl(glow, firstRecipe + 30)}`);
+  const mixed = recipeFixture({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x, i) => (i === 4 ? { ...x, recipe: null } : x)) });
+  const sc = mixed.script.beats.map((b, i) => [b, i] as const).filter(([b]) => b.action === "scene");
+  const plain = (mixed.plan.backdrops ?? []).find((x) => !x.strength);
+  add("a shot without a recipe brings the full decor back", !!plain && lvl(mixed, plain.start + 30) === 1, `non-recipe scene at ${plain?.start}: level ${plain ? lvl(mixed, plain.start + 30) : "-"} (${sc.length} scenes)`);
+
+  section = "11. legacy DNA shots unchanged";
+  const legacy = recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: { ...DNA, background: "environment" } });
+  add("no recipe: no decor change, no recipe backdrop", legacy.plan.decorLevel === undefined && !(legacy.plan.backdrops ?? []).some((x) => x.strength), `decorLevel ${legacy.plan.decorLevel ? "set" : "none"} · backdrops ${(legacy.plan.backdrops ?? []).map((x) => x.kind).join(", ") || "mesh"} · decor ${legacy.script.look?.decor}`);
+  const g = recipeFixture({ ...RECIPE_SHOTS_LEGACY, dna: { ...DNA, background: "grid" } });
+  add("DNA grid shots keep their perspective-grid", (g.plan.backdrops ?? []).map((x) => x.kind).join() === "perspective-grid" && g.plan.decorLevel === undefined, (g.plan.backdrops ?? []).map((x) => x.kind).join());
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
@@ -174,5 +220,6 @@ export async function runChecks(): Promise<Check[]> {
   transitions();
   palette();
   dnaMappings();
+  environments();
   return checks;
 }

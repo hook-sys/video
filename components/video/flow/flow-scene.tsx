@@ -124,7 +124,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
   );
   return (
     <AbsoluteFill style={{ fontFamily: plan.explainer ? EXPLAINER_FONT : FLOW_FONT, overflow: "hidden" }}>
-      <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} decor={plan.decor} tone={plan.tone} />
+      <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} decor={plan.decor} tone={plan.tone} decorLevel={num(plan.decorLevel, frame, 1)} />
       {(plan.backdrops ?? []).map((b, i, all) => {
         // Cross-fade 24 frames into each backdrop; it fades as the next arrives
         // and clears for the brand lockup.
@@ -137,7 +137,7 @@ export function FlowScene({ plan, theme: themeOverride, audioUrl, webAudio }: Fl
       )}
       {irises.filter((i) => !i.done).map((i, n) => (
         <AbsoluteFill key={n} style={{ clipPath: i.k > 0 ? `circle(${i.r}px at ${i.x}px ${i.y}px)` : undefined }}>
-          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} decor={plan.decor} tone={plan.tone} />}
+          {i.k > 0 && <World theme={theme} frame={frame} camera={[cx, cy]} seed={plan.seed} explainer={plan.explainer} flashes={plan.flashes} decor={plan.decor} tone={plan.tone} decorLevel={num(plan.decorLevel, frame, 1)} />}
           {content((id) => i.ir.members.includes(id), false)}
         </AbsoluteFill>
       ))}
@@ -208,8 +208,8 @@ function OrbitRing({ ring, states, frame, theme }: { ring: NonNullable<FlowPlan[
 // ── world ───────────────────────────────────────────────────────────────────
 // A soft mesh of coloured light that keeps drifting (and moves a little with
 // the camera), so the frame breathes even when nothing else moves.
-export function World({ theme, frame, camera, seed = 0, explainer, flashes, decor, tone }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number; explainer?: boolean; flashes?: [number, number, number?][]; decor?: string; tone?: string }) {
-  if (explainer) return <FlatWorld theme={theme} frame={frame} camera={camera} seed={seed} flashes={flashes} decor={decor} tone={tone} />;
+export function World({ theme, frame, camera, seed = 0, explainer, flashes, decor, tone, decorLevel = 1 }: { theme: FlowTheme; frame: number; camera: Vec; seed?: number; explainer?: boolean; flashes?: [number, number, number?][]; decor?: string; tone?: string; decorLevel?: number }) {
+  if (explainer) return <FlatWorld theme={theme} frame={frame} camera={camera} seed={seed} flashes={flashes} decor={decorLevel > 0.001 ? decor : "none"} tone={tone} decorLevel={decorLevel} />;
   const par = (k: number): Vec => [-camera[0] * k, -camera[1] * k];
   // Per-video variation: the blobs sit elsewhere and the light comes from another side.
   const sx = seed ? ((seed % 997) / 997 - 0.5) * 900 : 0;
@@ -251,7 +251,7 @@ const wavePath = (y: number, amp: number, len: number, phase: number) =>
     return `${i ? "L" : "M"}${x} ${(y + amp * Math.sin((x / len) * Math.PI * 2 + phase)).toFixed(1)}`;
   }).join(" ");
 
-function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone }: { theme: FlowTheme; frame: number; camera: Vec; seed: number; flashes?: [number, number, number?][]; decor?: string; tone?: string }) {
+function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone, decorLevel = 1 }: { theme: FlowTheme; frame: number; camera: Vec; seed: number; flashes?: [number, number, number?][]; decor?: string; tone?: string; decorLevel?: number }) {
   // The brand-colour moment: a circle of brand colour grows from the centre and
   // fills the canvas, then fades back.
   // (A third value is a softer ramp both ways: a transition flash, not a reveal.)
@@ -274,7 +274,7 @@ function FlatWorld({ theme, frame, camera, seed, flashes, decor = "dots", tone }
   const arcSpin = frame * 0.25;
   return (
     <AbsoluteFill style={{ background: bg, overflow: "hidden" }}>
-      <div style={{ position: "absolute", inset: 0, transform: flip < 0 ? "scaleX(-1)" : undefined }}>
+      <div style={{ position: "absolute", inset: 0, transform: flip < 0 ? "scaleX(-1)" : undefined, opacity: decorLevel < 0.999 ? decorLevel : undefined }}>
         {decor === "ribbons" && (
           // Flowing colour ribbons along the bottom edge (Flike), never behind the subject.
           <svg style={{ position: "absolute", left: 0, top: 0 }} width={1920} height={1080}>

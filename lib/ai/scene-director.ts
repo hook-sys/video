@@ -8,7 +8,7 @@ import { CROP_NAMES } from "@/components/video/flow/cards/device-data";
 import { CARD_STYLES } from "@/components/video/flow/cards/types";
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
 import { layoutCatalogText } from "@/components/video/flow/layouts";
-import { BACKDROPS } from "@/components/video/flow/backdrop-names";
+import { BACKDROPS, REJECTED_BACKDROPS } from "@/components/video/flow/backdrop-names";
 import { compositionCheck, violationNote, type Violation } from "@/components/video/flow/composition-check";
 import { validateFlowPlan } from "@/components/video/flow/validate";
 import { CAMERA_MOVES, ENTER_STYLES, ERASE_STYLES, MAX_ELEMENTS_PER_SCENE, MAX_SCENE_BEATS, PATH_STYLES, repairSceneScript, SceneScript, SceneScriptModel, sceneScriptBlockers, SHAPES, TRANSITIONS, VISUALS } from "@/lib/scene-script";
@@ -55,7 +55,7 @@ LAYOUTS (scene/arrange layout; pick a lettered variant for variety, e.g. "scatte
 ${layoutCatalogText()}
 
 VERBS (action):
-- scene: start a scene: elements (1–${MAX_ELEMENTS_PER_SCENE}) in a layout; camera (${CAMERA_MOVES.filter((m) => m !== "orbit").join(", ")}); transition from the previous scene (${TRANSITIONS.join(", ")}; morph = carried elements travel into the new layout, the others leave). style = entrance (${ENTER_STYLES.join(", ")}) or null for a varied mix. backdrop = the atmosphere behind the elements (${BACKDROPS.join(", ")}; null keeps the previous one): set ONE backdrop on the first scene and keep it (later scenes null) — the background supports the subject, it never competes. Match the product's mood — data / dev → grid, perspective-grid, data-stream; AI → particles, glow, energy; money / growth → dot-field, waves, light-beams; calm / care → mesh, blobs, rings; premium → glow, grain.
+- scene: start a scene: elements (1–${MAX_ELEMENTS_PER_SCENE}) in a layout; camera (${CAMERA_MOVES.filter((m) => m !== "orbit").join(", ")}); transition from the previous scene (${TRANSITIONS.join(", ")}; morph = carried elements travel into the new layout, the others leave). style = entrance (${ENTER_STYLES.join(", ")}) or null for a varied mix. backdrop = the atmosphere behind the elements (${BACKDROPS.filter((k) => !(k in REJECTED_BACKDROPS)).join(", ")}; null keeps the previous one): set ONE backdrop on the first scene and keep it (later scenes null) — the background supports the subject, it never competes. Match the product's mood — data / dev → perspective-grid; AI → particles, glow, energy; money / growth → dot-field, waves, light-beams; calm / care → mesh, blobs; premium → glow, grain.
 - place: add elements to the current scene (the scene re-lays out).
 - move: targets [one id] travels next to "to" (style: ${PATH_STYLES.join(", ")}).
 - trigger: targets [one id] flies INTO "to", which reacts; content = what "to" now shows (e.g. a form submission hitting the CRM card → status "New lead"; a commit hitting the deploy card → "Live"; a booking hitting the calendar → "Confirmed").

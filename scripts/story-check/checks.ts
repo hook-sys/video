@@ -1115,7 +1115,8 @@ function sceneRecipeChecks(): Check[] {
   add("recipe B: the compiled plan is valid and the resolve pass leaves nothing", validateFlowPlan(plan).length === 0 && (plan.resolved?.left.length ?? 0) === 0, `invalid: ${validateFlowPlan(plan).join("; ") || "none"} · left: ${plan.resolved?.left.join("; ") || "none"}`);
   // environment → the backdrops behind each scene (one shared by two scenes continues)
   const kinds = (plan.backdrops ?? []).map((b) => b.kind);
-  add("recipe C: environment → the scene's backdrop (studio, product-space, data-space, cinematic)", kinds.join(",") === "spotlight,horizon,data-stream,light-beams" && (plan.backdrops ?? []).every((b) => b.strength === 0.9), kinds.join(" → "));
+  // (approved backdrops only: studio → mesh, product-space → aurora, data-space → perspective-grid, cinematic → aurora)
+  add("recipe C: environment → the scene's backdrop (studio, product-space, data-space, cinematic)", kinds.join(",") === "mesh,aurora,perspective-grid,aurora" && (plan.backdrops ?? []).every((b) => b.strength === 0.9), kinds.join(" → "));
   // hero + supporting at their depth layers
   const node = (id: string) => plan.nodes.find((n) => n.id === id);
   const heroes = recipes.map((r) => node(r!.hero));
