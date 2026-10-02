@@ -23,6 +23,26 @@ export const RECIPE_CAMERAS = ["static", "push-in", "pull-back", "lateral", "foc
 export const RECIPE_BEHAVIORS = ["reveal", "move", "connect", "flow", "assemble", "merge", "transform", "highlight", "expand", "focus", "arrange"] as const;
 export const RECIPE_TRANSITIONS = ["cut", "push", "panel-wipe", "iris", "flash", "object-transform", "morph-intent", "dissolve"] as const;
 
+// Asset requirements: what a scene needs, as structure instead of a free
+// visual description. lib/asset-selection.ts matches each one against the
+// approved assets (heroes only from the hero allowlist) or leaves it
+// unresolved; it never forces a low-quality pick.
+export const ASSET_CATEGORIES = ["hero", "supporting", "accent"] as const;
+export const ASSET_ROLES = ["primary", "secondary", "accent"] as const;
+export const ASSET_CONCEPTS = ["payment-card", "money", "chart", "growth", "dashboard", "security-lock", "security-shield", "ai-chip", "document", "chat", "email", "goal", "success", "award", "idea", "question", "speed", "other"] as const;
+export type AssetConcept = (typeof ASSET_CONCEPTS)[number];
+export const AssetRequirement = z.object({
+  category: z.enum(ASSET_CATEGORIES),
+  concept: z.enum(ASSET_CONCEPTS),
+  role: z.enum(ASSET_ROLES),
+  visual_need: z.string(), // a few words: what the asset must show
+  preferred_asset_id: z.string().nullable(),
+  fallback_allowed: z.boolean(),
+  // which recipe element it is for: "hero", a supporting id, or null (the scene)
+  slot: z.string().nullable(),
+});
+export type AssetRequirement = z.infer<typeof AssetRequirement>;
+
 export type Environment = (typeof ENVIRONMENTS)[number];
 export type Composition = (typeof COMPOSITIONS)[number];
 export type RecipeTransition = (typeof RECIPE_TRANSITIONS)[number];
@@ -42,8 +62,13 @@ export const SceneRecipe = z.object({
   behaviors: z.array(z.object({ type: z.enum(RECIPE_BEHAVIORS), from: z.string(), to: z.string().nullable(), cue: z.string() })),
   transition_in: z.enum(RECIPE_TRANSITIONS),
   transition_out: z.enum(RECIPE_TRANSITIONS).nullable(),
+  // What the scene's assets must be (null: the assets named above as they are).
+  assets: z.array(AssetRequirement).nullable(),
 });
 export type SceneRecipe = z.infer<typeof SceneRecipe>;
+// A stored recipe: ones saved before asset requirements have none, and an
+// unreadable list is dropped (the recipe itself is kept).
+export const StoredSceneRecipe = SceneRecipe.extend({ assets: z.array(AssetRequirement).nullable().default(null).catch(null) });
 
 // Depth layers (z order, size and camera response). The hero layer is the
 // scene's own; background sits behind and blurred, foreground in front.

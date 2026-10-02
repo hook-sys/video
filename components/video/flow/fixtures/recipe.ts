@@ -18,7 +18,7 @@ export const RECIPE_BRAND = { name: "Flowly", cta: "Start free" };
 const shot = (s: Partial<Shot> & Pick<Shot, "shot" | "cue" | "recipe">): Shot => ({
   subject: null, label: null, line: null, line_cue: null, accent: null, mark: null, card: null, title: null, input: null, button: null, action_cue: null, result: null, result_cue: null, items: null, camera: null, objects: null, ...s,
 });
-const R = (r: Omit<SceneRecipe, "transition_out"> & { transition_out?: SceneRecipe["transition_out"] }): SceneRecipe => ({ transition_out: null, ...r });
+const R = (r: Omit<SceneRecipe, "transition_out" | "assets"> & Partial<Pick<SceneRecipe, "transition_out" | "assets">>): SceneRecipe => ({ transition_out: null, assets: null, ...r });
 
 export const RECIPE_SHOTS: ShotScript = {
   version: 3,

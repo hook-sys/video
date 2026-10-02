@@ -3,7 +3,8 @@ import { isIconName } from "@/components/video/icons";
 import { FLOW_THEMES } from "@/lib/flow-script";
 import { CAMERA_MOVES, CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
 import { DEVICE_MODELS } from "@/components/video/flow/cards/device-data";
-import { type CompiledRecipe, ENV_BACKDROP, LAYER, RECIPE_MAPPED, type RecipeTransition, SceneRecipe, sceneTransition } from "@/lib/scene-recipe";
+import { type AssetSelection, applyAssetSelection } from "@/lib/asset-selection";
+import { type CompiledRecipe, ENV_BACKDROP, LAYER, RECIPE_MAPPED, type RecipeTransition, SceneRecipe, sceneTransition, StoredSceneRecipe } from "@/lib/scene-recipe";
 import { tokenize } from "@/lib/voice-timing";
 
 // Shot templates: tested building blocks a video is made of. The Director
@@ -117,7 +118,7 @@ export type Shot = z.infer<typeof Shot>;
 // no objects (null).
 // Shots stored before the Scene Recipe have none; an unreadable recipe is
 // dropped (the template composition is used), never a failed parse.
-const StoredShot = Shot.extend({ camera: z.enum(SHOT_INTENTS).nullable().default(null), objects: z.array(StoredShotObject).nullable().default(null), recipe: SceneRecipe.nullable().default(null).catch(null) });
+const StoredShot = Shot.extend({ camera: z.enum(SHOT_INTENTS).nullable().default(null), objects: z.array(StoredShotObject).nullable().default(null), recipe: StoredSceneRecipe.nullable().default(null).catch(null) });
 // Phase 2: before choosing shots the Director writes what the video means
 // (creative) and, per sentence, what the viewer should SEE (concepts). The
 // shots then show those concepts. Stored with the shots for later phases;
@@ -626,7 +627,10 @@ export function dnaProblems(shots: DnaShot[], dna: Dna): string[] {
   return out;
 }
 
-export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInput[]; version?: number; dna?: Dna | null }, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant, report?: BehaviorReport[]): SceneScript {
+// assets: collects how each recipe's asset requirements were resolved
+// (lib/asset-selection.ts). Never notes: an unresolved requirement keeps the
+// Director's own asset and is not a reason to revise.
+export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInput[]; version?: number; dna?: Dna | null }, notes: ExpandNotes = [], narration?: string, variant?: ShotVariant, report?: BehaviorReport[], assets?: (AssetSelection & { shot: number })[]): SceneScript {
   // (the seed is mixed first: neighbouring seeds give unrelated videos)
   const pick = variant ? rng(Math.imul(variant.seed ^ 0x9e3779b9, 0x85ebca6b)) : null;
   const choose = <T,>(fallback: T, options: readonly T[]) => (pick ? options[Math.floor(pick() * options.length)] : fallback);
@@ -874,7 +878,10 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
   const byRecipe = new Set<number>(); // shots built from their recipe (its behaviors replace the objects')
   for (const s of script.shots) {
     ranges.push([beats.length, beats.length]);
-    if (s.recipe && recipeShot(s, s.recipe, ranges.length - 1)) {
+    // The recipe with its asset requirements resolved to approved assets.
+    const chosen = s.recipe ? applyAssetSelection(s.recipe) : null;
+    if (chosen) assets?.push(...chosen.selections.map((x) => ({ ...x, shot: ranges.length - 1 })));
+    if (chosen && recipeShot(s, chosen.recipe, ranges.length - 1)) {
       byRecipe.add(ranges.length - 1);
       intent = null;
       lastUi = s.shot === "ui" ? (beats.find((b, k) => k >= ranges[ranges.length - 1][0] && b.action === "scene")?.recipe?.hero ?? null) : null;

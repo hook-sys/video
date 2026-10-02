@@ -2,6 +2,7 @@ import "server-only";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
+import type { AssetSelection } from "@/lib/asset-selection";
 import type { SceneDirectorInput, SceneDirectorResult } from "@/lib/ai/scene-director";
 import { compositionCheck, violationNote } from "@/components/video/flow/composition-check";
 import { type DirectionDiagnostics, searchCreative, seedFrom } from "@/lib/shot-search";
@@ -37,6 +38,7 @@ SCENE RECIPE (recipe — how the scene visually exists, a premium motion-design 
 - camera: { intent: static | push-in | pull-back | lateral | focus-hero | reveal | orbit-intent, intensity: low | medium | high } (this replaces the shot's camera).
 - behaviors: what the objects DO on their words: { type: reveal (a supporting object arrives on its words) | move | connect | flow (data runs from → to) | merge | assemble | transform | highlight | expand | focus (the camera pushes on it, the rest blurs), from ("hero" or a supporting id), to (an id or null), cue (1–6 narration words spoken after the shot's cue, in order) }. At least one where the narration says something happens.
 - transition_in: cut | push | panel-wipe | iris | flash | object-transform (a persistent hero carries into this scene) | morph-intent | dissolve; transition_out: the same, or null (how the next, non-recipe scene arrives). Never all the same.
+- assets: what the scene's assets must be, as requirements instead of a description (the engine picks only approved, premium assets; one it cannot match keeps the asset you named above): [{ category: hero | supporting | accent, concept: payment-card | money | chart | growth | dashboard | security-lock | security-shield | ai-chip | document | chat | email | goal | success | award | idea | question | speed | other, role: primary (the hero) | secondary (a supporting object) | accent, visual_need (3–8 words: what it must show), preferred_asset_id (an asset you would like, e.g. object:shield, else null), fallback_allowed (true when a related approved asset may stand in), slot ("hero", a supporting id, or null) }] — one for the hero and one per supporting object that matters; null when the named assets are exactly right.
 
 CAMERA (each shot's camera, an intent — never positions or numbers): establish (the opening: wide and settling) · reveal (the product or answer opens up) · push (move closer to what matters now) · close (a detail in focus) · pull_back (show the bigger picture) · follow / track (the eye travels across a row or a flow) · hold (stay still so a number or a line can be read) · overhead (rise above it) · transition (a quiet bridge). Open with establish; reveal where the product is named; hold on numbers and on the closing line; push on the problem; vary — never the same intent three shots in a row.
 
@@ -77,7 +79,9 @@ export const directionMode = (env: string | undefined = process.env.SHOT_DIRECTI
 export type ShotVariantOut = { seed: number; score: number; scene: SceneScript; variant: string | null; direction: Direction | null; dna: Dna | null };
 // diagnostics: what the search did with each direction; status says whether
 // four different videos came out (else INSUFFICIENT_VISUAL_DIVERSITY).
-export type ShotDirectorDiagnostics = { mode: "four" | "single"; status: string; directions: DirectionDiagnostics[]; output_tokens: number };
+// assets: how the chosen direction's asset requirements were resolved.
+export type AssetDiagnostics = { shot: number; slot: string | null; category: string; concept: string; status: AssetSelection["status"]; asset_id: string | null; reason: string };
+export type ShotDirectorDiagnostics = { mode: "four" | "single"; status: string; directions: DirectionDiagnostics[]; output_tokens: number; assets?: AssetDiagnostics[] };
 export type ShotDirectorResult = SceneDirectorResult & { shots: ShotScript | null; variants: ShotVariantOut[]; diagnostics: ShotDirectorDiagnostics | null };
 
 // `client` is for tests (a stand-in for the OpenAI client).
@@ -88,7 +92,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(ShotScriptModel, "shot_script") };
   const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
-  const none = { violations: [] as ReturnType<typeof compositionCheck>, notes: [] as string[], variants: [] as ShotVariantOut[], status: "failed", directions: [] as DirectionDiagnostics[] };
+  const none = { violations: [] as ReturnType<typeof compositionCheck>, notes: [] as string[], variants: [] as ShotVariantOut[], status: "failed", directions: [] as DirectionDiagnostics[], assets: [] as AssetDiagnostics[] };
   // Each draft holds four creative directions; each is built a few ways, its
   // cleanest kept, and the directions that are truly different are offered
   // (lib/shot-search.ts searchCreative); the seed comes from the project.
@@ -99,12 +103,15 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
     const scripts = directionScripts(ShotScriptModel.parse(raw));
     if (!scripts.length) return { shots: null, script: null, problems: ["no creative directions"], ...none };
     const expandNotes: string[] = [];
+    const assetsOf = new Map<string | null, AssetDiagnostics[]>(); // per direction
     for (const shots of scripts) {
       // Phase 4: object continuity (errors reach the revision through the expand notes).
       const chain = continuityCheck(shots.shots);
       if (chain.errors.length || chain.warnings.length) console.info("shot continuity:", { variant: shots.variant, ...chain });
       const notes: string[] = [];
-      expandShots(shots, notes, input.narration);
+      const picked: Parameters<typeof expandShots>[5] = [];
+      expandShots(shots, notes, input.narration, undefined, undefined, picked);
+      assetsOf.set(shots.variant, picked.map((x) => ({ shot: x.shot, slot: x.requirement.slot, category: x.requirement.category, concept: x.requirement.concept, status: x.status, asset_id: x.asset_id, reason: x.reason })));
       expandNotes.push(...notes.map((n) => `direction ${shots.variant}: ${n}`));
     }
     try {
@@ -117,7 +124,9 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       const variants = found.picks.map((p) => ({ seed: p.seed, score: p.score, scene: p.script, variant: p.shots?.variant ?? null, direction: p.shots?.direction ?? null, dna: p.shots?.dna ?? null }));
       // Fewer than four different directions is never padded with copies.
       const thin = found.insufficient && scripts.length > 1 ? [`${found.status}: ${found.picks.length} of 4 directions are valid and different (${found.skipped.map((x) => `${x.variant}: ${x.reason}`).join("; ")}) — give each direction its own composition, cards, typography, motion and shot sequence`] : [];
-      return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote), ...thin], variants, status: found.status as string, directions: found.diagnostics };
+      const assets = assetsOf.get(shots.variant) ?? [];
+      if (assets.length) console.info("shot assets:", { variant: shots.variant, exact: assets.filter((a) => a.status === "exact").length, fallback: assets.filter((a) => a.status === "fallback").length, unresolved: assets.filter((a) => a.status === "unresolved").length });
+      return { shots, script, problems: [] as string[], violations, notes: [...expandNotes, ...violations.map(violationNote), ...thin], variants, status: found.status as string, directions: found.diagnostics, assets };
     } catch (e) {
       return { shots: scripts[0], script: null, problems: [`does not compile: ${e instanceof Error ? e.message : e}`], ...none };
     }
@@ -178,7 +187,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
         }
       } else problems = [`single direction skipped: ${Math.round(left() / 1000)} s left`];
       if (!result.script) console.warn("shot director: no usable shots", { ms: Date.now() - started, problems: problems.slice(0, 6) });
-      const diagnostics: ShotDirectorDiagnostics = { mode: "single", status: result.script ? result.status : "failed", directions: result.directions, output_tokens: usage.outputTokens };
+      const diagnostics: ShotDirectorDiagnostics = { mode: "single", status: result.script ? result.status : "failed", directions: result.directions, output_tokens: usage.outputTokens, assets: result.assets };
       return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: problems, ms: Date.now() - started, timing, violations: result.violations, diagnostics };
     }
     // Four directions in one call, with time kept back for the one-direction
@@ -218,7 +227,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       } else problems = [...problems, `single direction skipped: ${Math.round(left() / 1000)} s left`];
       if (!result.script) console.warn("shot director: no usable shots", { ms: Date.now() - started, problems: problems.slice(0, 6) });
     }
-    const diagnostics: ShotDirectorDiagnostics = { mode, status: result.script ? result.status : "failed", directions: mode === "single" && fourDirections.length ? fourDirections : result.directions, output_tokens: usage.outputTokens };
+    const diagnostics: ShotDirectorDiagnostics = { mode, status: result.script ? result.status : "failed", directions: mode === "single" && fourDirections.length ? fourDirections : result.directions, output_tokens: usage.outputTokens, assets: result.assets };
     return { script: result.script, shots: result.script ? result.shots : null, variants: result.script ? result.variants : [], attempts, revised: attempts > 1, errors: fellBack ? [`fallback: one direction`, ...problems] : problems, ms: Date.now() - started, timing, violations: result.violations, diagnostics };
   } catch (e) {
     return { script: null, shots: null, variants: [], attempts, revised: attempts > 1, errors: [e instanceof Error ? e.message : String(e)], ms: Date.now() - started, timing, violations: [], diagnostics: null };
