@@ -2,36 +2,23 @@ import type { KWord } from "../text";
 import type { CleanPlan, Scene, Variant, Word } from "../types";
 import { FPS } from "../types";
 import { FLOWLY_WORDS } from "./flowly-words";
+import { findPhrase, norm } from "../words";
 
 // The Flowly proof: the real voice timings of project db7482bf, its seven
 // sentences each on a template, in four variants that share nothing visual.
 // (Hand-made scene choice; the Director takes this over.)
 
-const WORDS: Word[] = FLOWLY_WORDS.map(([text, start, end]) => ({ text, start, end }));
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-// Index of the first word of `phrase` in the voice (at or after `after` s).
-function find(phrase: string, after = 0): number {
-  const want = phrase.split(/\s+/).map(norm).filter(Boolean);
-  const toks = WORDS.map((w, i) => ({ t: norm(w.text), i })).filter((x) => x.t);
-  for (let k = 0; k <= toks.length - want.length; k++) {
-    if (WORDS[toks[k].i].start < after) continue;
-    if (want.every((w, j) => toks[k + j].t === w)) return toks[k].i;
-  }
-  throw new Error(`phrase not in the voice: ${phrase}`);
-}
-const at = (phrase: string, after = 0) => Math.round(WORDS[find(phrase, after)].start * FPS);
+export const WORDS: Word[] = FLOWLY_WORDS.map(([text, start, end]) => ({ text, start, end }));
+// Frame of the first word of `phrase` in the voice (at or after `after` s).
+export const at = (phrase: string, after = 0) => Math.round(WORDS[findPhrase(WORDS, phrase, after)[0]].start * FPS);
 // The spoken words of a phrase as kinetic words (the keyword marked).
-function kw(phrase: string, key: string[] = [], strike: Record<string, number> = {}, after = 0): KWord[] {
-  let i = find(phrase, after);
-  return phrase.split(/\s+/).map((t) => {
-    while (i < WORDS.length && !norm(WORDS[i].text)) i++;
-    const w = WORDS[i++];
-    return { t, at: Math.round(w.start * FPS) - 2, key: key.includes(t), strike: strike[t] };
-  });
+export function kw(phrase: string, key: string[] = [], strike: Record<string, number> = {}, after = 0): KWord[] {
+  const idx = findPhrase(WORDS, phrase, after);
+  return phrase.split(/\s+/).filter((t) => norm(t)).map((t, n) => ({ t, at: Math.round(WORDS[idx[n]].start * FPS) - 2, key: key.includes(t), strike: strike[t] }));
 }
 
-const END = Math.round(WORDS[WORDS.length - 1].end * FPS);
-const DURATION = END + 66;
+export const END = Math.round(WORDS[WORDS.length - 1].end * FPS);
+export const DURATION = END + 66;
 const b = {
   sales: at("Sales"),
   flowly: at("Flowly"),

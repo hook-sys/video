@@ -7,7 +7,7 @@ import { planSfx, SFX_FILES } from "./sfx";
 import type { CleanPlan, CleanVideoProps, Scene, Variant } from "./types";
 
 let fontReady = false;
-function useCleanFont() {
+export function useCleanFont() {
   useState(() => {
     if (fontReady || typeof document === "undefined") return;
     const handle = delayRender("Loading Inter");
@@ -21,9 +21,9 @@ function useCleanFont() {
   });
 }
 
-const IN = 10; // frames a scene takes to come in (from just before its cut)
-const LEAD_IN = 2;
-const OUTF = 6; // and to go (ending on the next cut): one at a time, never both half-seen
+export const IN = 10; // frames a scene takes to come in (from just before its cut)
+export const LEAD_IN = 2;
+export const OUTF = 6; // and to go (ending on the next cut): one at a time, never both half-seen
 
 // The palette at a frame: each scene's act, blended in over its first frames.
 function paletteAt(plan: CleanPlan, look: Look, f: number): Palette {
@@ -136,11 +136,11 @@ function frameStyle(sc: Scene, v: Variant, f: number, index: number, last: boole
 }
 
 // The voice's words grouped into short captions (2–4 words, broken at stops).
-function captionAt(plan: CleanPlan, f: number) {
-  const s = f / 30;
-  const groups: { start: number; end: number; words: string[] }[] = [];
-  let cur: typeof groups[number] | null = null;
-  for (const w of plan.words) {
+export type CaptionGroup = { start: number; end: number; words: string[] };
+export function captionGroups(words: CleanPlan["words"]): CaptionGroup[] {
+  const groups: CaptionGroup[] = [];
+  let cur: CaptionGroup | null = null;
+  for (const w of words) {
     if (/^[.,!?]+$/.test(w.text)) {
       cur = null; // a stop ends the caption
       continue;
@@ -150,7 +150,11 @@ function captionAt(plan: CleanPlan, f: number) {
     cur.end = w.end;
     if (/[.,!?]$/.test(w.text)) cur = null;
   }
-  const g = groups.find((x) => s >= x.start - 0.05 && s <= x.end + 0.25);
+  return groups;
+}
+function captionAt(plan: CleanPlan, f: number) {
+  const s = f / 30;
+  const g = captionGroups(plan.words).find((x) => s >= x.start - 0.05 && s <= x.end + 0.25);
   if (!g) return null;
   const spoken = plan.words.filter((w) => w.start <= s).length;
   return { g, spoken };
