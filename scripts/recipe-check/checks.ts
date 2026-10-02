@@ -310,6 +310,28 @@ function choreography() {
   const stored = JSON.parse(JSON.stringify(RECIPE_SHOTS));
   const back = ShotScriptSchema.parse(stored);
   add("stored recipes without choreography reload (behaviors kept)", back.shots.every((x, i) => (x.recipe?.behaviors.length ?? 0) === (RECIPE_SHOTS.shots[i].recipe?.behaviors.length ?? 0)), `${back.shots.filter((x) => x.recipe).length} recipes`);
+  // Visual review (acc10fb): a short choreographed transform compressed the
+  // turn — the source vanished barely turned, a blank frame, the target cut
+  // in. The turn now keeps its own 16 frames (as without choreography).
+  const swap = (c: Choreography | null) => {
+    const r = recipeFixture(withRecipe(3, (rc) => ({ ...rc, behaviors: [{ type: "transform", from: "coin", to: "hero", cue: "a sale happens", ...(c ? { choreography: c } : {}) }] })));
+    const b = r.script.beats.find((x) => x.style === "transform")!;
+    const src = r.plan.nodes.find((n) => n.id === b.targets![0])!;
+    const dst = r.plan.nodes.find((n) => n.id === b.to)!;
+    const st = src.tilt ?? [];
+    const out = st[st.length - 1][0] - st[st.length - 2][0]; // the source's turn to edge-on
+    const dt = dst.tilt ?? [];
+    const k = dt.findIndex(([, v]) => v[1] === -90);
+    const inn = dt[k + 1][0] - dt[k][0]; // the target's turn in
+    const fade = (src.opacity ?? []).filter(([, v]) => v === 0).map(([f]) => f).pop()!; // source gone
+    return { out, inn, gap: dt[k][0] - (fade - 1), end: dt[k + 1][0], b };
+  };
+  const plainSwap = swap(null);
+  const shortSwap = swap({ anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 });
+  const tlS = choreoTimeline({ ...shortSwap.b.choreo!, action: Math.max(shortSwap.b.choreo!.action, 22) }, 0);
+  add("choreographed transform keeps its turn (no blank frame, no hard cut)", shortSwap.out === plainSwap.out && shortSwap.inn === plainSwap.inn && shortSwap.gap === plainSwap.gap, `turn out ${shortSwap.out} (plain ${plainSwap.out}) · in ${shortSwap.inn} (plain ${plainSwap.inn}) · handover gap ${shortSwap.gap} (plain ${plainSwap.gap})`);
+  const cueAt = plainSwap.end - 32; // (without choreography the turn ends 32 frames after the cue)
+  add("a short transform action stretches to 22 frames; the turn ends on the impact", tlS.action === 22 && shortSwap.end === cueAt + tlS.impactAt, `action ${shortSwap.b.choreo!.action} → ${tlS.action} · turn ends ${shortSwap.end} = cue ${cueAt} + ${tlS.impactAt}`);
   const unsupported = recipeFixture(withRecipe(0, (r) => ({ ...r, behaviors: [{ type: "flow", from: "sheet", to: "hero", cue: "ten different tools", choreography: { anticipation: 0.2, action: 0.5, impact: null, settle: null } }] })));
   add("an event not choreographed yet keeps its timing and says so (never a revision)", unsupported.notes.some((n) => n.includes("flow keeps its own timing") && !isFixableNote(n)) && !unsupported.script.beats.some((b) => b.choreo), unsupported.notes.find((n) => n.includes("own timing")) ?? "-");
 }

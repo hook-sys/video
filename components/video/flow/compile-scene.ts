@@ -981,17 +981,23 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
             n.h.spec.tilt = [...(tr ?? []).filter(([f]) => f < at), [at, v]];
             return v;
           };
-          // (choreographed: the same beats on the event's action length)
-          const c = choreoOf(b, t);
+          // (choreographed: the flight takes the action's length; the turn
+          // itself — out edge-on, hand over, in from the edge — keeps its own
+          // 16 frames, so the action is at least 22 frames: compressed, the
+          // source vanished barely turned and a blank frame came before the
+          // target, a hard cut)
+          const c0 = choreoOf(b, t);
+          const c = c0 && b.choreo ? choreoTimeline({ ...b.choreo, action: Math.max(c0.action, 22) }, t) : null;
           const T = c?.actionAt ?? t;
-          const sc = (x: number) => (c ? Math.max(1, Math.round((x * c.action) / 32)) : x);
+          const fly = c ? c.action - 16 : 16;
+          const sc = (x: number) => (x <= 16 ? Math.round((x * fly) / 16) : fly + x - 16);
           if (c) anticipate(src, c);
           travel(src, T, sc(16), to.pos, "arc");
           animate(src.h.spec.scale!, T, sc(16), (to.w * to.fit) / src.w, "inOut");
           animate(to.h.spec.opacity!, T, sc(10), 0, "inOut");
           const s0 = tiltFrom(src, T + sc(16));
           src.h.spec.tilt!.push([T + sc(24), [s0[0], 90, s0[2]], "in"]);
-          animate(src.h.spec.opacity!, T + sc(22), sc(2), 0);
+          animate(src.h.spec.opacity!, T + sc(22), 2, 0);
           src.h.spec.z = (to.h.spec.z ?? 0) + 1;
           const d0 = tiltFrom(to, T);
           to.h.spec.tilt!.push([T + sc(22), d0], [T + sc(23), [d0[0], -90, d0[2]]], [T + sc(32), d0, "out"]);
