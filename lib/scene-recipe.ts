@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Choreography } from "@/lib/choreography";
 import type { EnvBackdrop } from "@/components/video/flow/backdrop-names";
 import type { Vec } from "@/components/video/flow/types";
 
@@ -48,6 +49,11 @@ export type Environment = (typeof ENVIRONMENTS)[number];
 export type Composition = (typeof COMPOSITIONS)[number];
 export type RecipeTransition = (typeof RECIPE_TRANSITIONS)[number];
 
+// (choreography is optional here; the Director's strict output schema,
+// ModelSceneRecipe, asks for it as null or a value)
+export const RecipeBehavior = z.object({ type: z.enum(RECIPE_BEHAVIORS), from: z.string(), to: z.string().nullable(), cue: z.string(), choreography: Choreography.nullable().optional() });
+export type RecipeBehavior = z.infer<typeof RecipeBehavior>;
+
 export const SceneRecipe = z.object({
   scene_id: z.string(),
   environment: z.enum(ENVIRONMENTS),
@@ -60,7 +66,8 @@ export const SceneRecipe = z.object({
   typography: z.object({ position: z.enum(TYPE_POSITIONS), scale: z.enum(["hero", "supporting"]), emphasis: z.enum(["word-highlight", "pill", "strike", "none"]) }),
   camera: z.object({ intent: z.enum(RECIPE_CAMERAS), intensity: z.enum(["low", "medium", "high"]) }),
   // from / to: "hero" or a supporting id; cue: 1–6 narration words.
-  behaviors: z.array(z.object({ type: z.enum(RECIPE_BEHAVIORS), from: z.string(), to: z.string().nullable(), cue: z.string() })),
+  // choreography: the event's phases (lib/choreography.ts), null = the engine's timing.
+  behaviors: z.array(RecipeBehavior),
   transition_in: z.enum(RECIPE_TRANSITIONS),
   transition_out: z.enum(RECIPE_TRANSITIONS).nullable(),
   // What the scene's assets must be (null: the assets named above as they are).
@@ -69,7 +76,14 @@ export const SceneRecipe = z.object({
 export type SceneRecipe = z.infer<typeof SceneRecipe>;
 // A stored recipe: ones saved before asset requirements have none, and an
 // unreadable list is dropped (the recipe itself is kept).
-export const StoredSceneRecipe = SceneRecipe.extend({ assets: z.array(AssetRequirement).nullable().default(null).catch(null) });
+// What the Director writes (structured output: every key present; a missing
+// choreography reads as null).
+export const ModelSceneRecipe = SceneRecipe.extend({ behaviors: z.array(RecipeBehavior.extend({ choreography: Choreography.nullable().default(null) })) });
+// Behaviors saved before choreography have none; an unreadable one is null.
+export const StoredSceneRecipe = SceneRecipe.extend({
+  assets: z.array(AssetRequirement).nullable().default(null).catch(null),
+  behaviors: z.array(RecipeBehavior.extend({ choreography: Choreography.nullable().optional().catch(null) })),
+});
 
 // Depth layers (z order, size and camera response). The hero layer is the
 // scene's own; background sits behind and blurred, foreground in front.

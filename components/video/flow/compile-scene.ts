@@ -1,5 +1,6 @@
 import { estimateWords } from "@/lib/flow-script";
 import { type BackdropSlot, backdropSlot, renderableBackdrop } from "./backdrop-names";
+import { choreoTimeline, type ChoreoTimeline } from "@/lib/choreography";
 import { parseAsset, type SceneBeat, type SceneContent, type SceneElement, type SceneScript } from "@/lib/scene-script";
 import { spokenCueTimes, type WordTiming } from "@/lib/voice-timing";
 import { cardSize } from "./cards/card";
@@ -239,6 +240,29 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
     const sc = n.h.spec.scale!;
     animate(sc, t, 6, n.fit * 1.07, "out");
     put(sc, t + 18, n.fit, "inOut");
+  };
+  // Choreographed events (lib/choreography.ts): anticipation → action →
+  // impact → settle on the event's own frames. Absent: the event keeps its
+  // own fixed timing (nothing here runs).
+  const choreoOf = (b: SceneBeat, t: number): ChoreoTimeline | null => (b.choreo ? choreoTimeline(b.choreo, t) : null);
+  // Anticipation: the actor gathers itself (a small dip) before it acts.
+  const anticipate = (n: Live, c: ChoreoTimeline) => {
+    if (!c.anticipation) return;
+    const sc = n.h.spec.scale!;
+    animate(sc, c.start, c.anticipation, n.fit * 0.93, "inOut");
+    animate(sc, c.actionAt, Math.min(6, c.action), n.fit, "out");
+  };
+  // Impact and settle on what the action lands on: a pop, then the return
+  // to rest; with no impact, the settle is a soft overshoot coming to rest.
+  const land = (n: Live, c: ChoreoTimeline) => {
+    const sc = n.h.spec.scale!;
+    if (c.impact) {
+      animate(sc, c.impactAt, c.impact, n.fit * 1.08, "out");
+      animate(sc, c.settleAt, Math.max(1, c.settle), n.fit, "inOut");
+    } else if (c.settle) {
+      animate(sc, c.impactAt, Math.max(1, Math.round(c.settle / 3)), n.fit * 1.03, "out");
+      animate(sc, c.impactAt + Math.max(1, Math.round(c.settle / 3)), Math.max(1, c.settle - Math.round(c.settle / 3)), n.fit, "inOut");
+    }
   };
   const setBlur = (n: Live, t: number, v: number, dur = 12) => {
     const b = (n.h.spec.blur ??= [[0, num(n.h.spec.blur, t, 0)]]);
@@ -701,7 +725,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           const [a] = tgt;
           if (!a || !to) break;
           const dir = Math.sign(a.pos[0] - to.pos[0]) || -1;
-          travel(a, t, 26, [to.pos[0] + dir * ((to.w * to.fit) / 2 + (a.w * a.fit) / 2 + 24), to.pos[1] + 30], "arc");
+          const c = choreoOf(b, t);
+          if (c) anticipate(a, c);
+          travel(a, c?.actionAt ?? t, c?.action ?? 26, [to.pos[0] + dir * ((to.w * to.fit) / 2 + (a.w * a.fit) / 2 + 24), to.pos[1] + 30], "arc");
+          if (c) land(a, c);
           moveSfx(t);
           break;
         }
@@ -914,20 +941,28 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           // there as one shape for a moment, then fuse into it (it grows).
           const pieces = tgt.filter((n) => n !== to);
           const r = (to.w * to.fit) / 2 + 30;
+          // (choreographed: the same beats on the event's action length)
+          const c = choreoOf(b, t);
+          const T = c?.actionAt ?? t;
+          const sc = (x: number) => (c ? Math.max(1, Math.round((x * c.action) / 40)) : x);
+          if (c) for (const n of pieces) anticipate(n, c);
           pieces.forEach((n, k) => {
             const a = -Math.PI / 2 + (k * 2 * Math.PI) / Math.max(1, pieces.length) + (pieces.length === 2 ? Math.PI / 2 : 0);
             const dock: Vec = [to.pos[0] + Math.cos(a) * r, to.pos[1] + Math.sin(a) * r * 0.8];
-            const t0 = t + k * 4;
-            travel(n, t0, 18, dock, "arc");
-            animate(n.h.spec.scale!, t0, 18, n.fit * 0.55, "inOut");
-            travel(n, t + 30, 10, to.pos, "straight");
-            animate(n.h.spec.scale!, t + 30, 10, n.fit * 0.15, "in");
-            animate(n.h.spec.opacity!, t + 34, 6, 0, "in");
+            const t0 = T + sc(k * 4);
+            travel(n, t0, sc(18), dock, "arc");
+            animate(n.h.spec.scale!, t0, sc(18), n.fit * 0.55, "inOut");
+            travel(n, T + sc(30), sc(10), to.pos, "straight");
+            animate(n.h.spec.scale!, T + sc(30), sc(10), n.fit * 0.15, "in");
+            animate(n.h.spec.opacity!, T + sc(34), sc(6), 0, "in");
           });
           for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
           to.fit *= 1.12;
-          animate(to.h.spec.scale!, t + 40, 8, to.fit * 1.07, "out");
-          put(to.h.spec.scale!, t + 56, to.fit, "inOut");
+          if (c) land(to, c);
+          else {
+            animate(to.h.spec.scale!, t + 40, 8, to.fit * 1.07, "out");
+            put(to.h.spec.scale!, t + 56, to.fit, "inOut");
+          }
           moveSfx(t);
           f.sfx(t + 22, "soft_pop");
           f.sfx(t + 40, "subtle_impact");
@@ -946,31 +981,42 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
             n.h.spec.tilt = [...(tr ?? []).filter(([f]) => f < at), [at, v]];
             return v;
           };
-          travel(src, t, 16, to.pos, "arc");
-          animate(src.h.spec.scale!, t, 16, (to.w * to.fit) / src.w, "inOut");
-          animate(to.h.spec.opacity!, t, 10, 0, "inOut");
-          const s0 = tiltFrom(src, t + 16);
-          src.h.spec.tilt!.push([t + 24, [s0[0], 90, s0[2]], "in"]);
-          animate(src.h.spec.opacity!, t + 22, 2, 0);
+          // (choreographed: the same beats on the event's action length)
+          const c = choreoOf(b, t);
+          const T = c?.actionAt ?? t;
+          const sc = (x: number) => (c ? Math.max(1, Math.round((x * c.action) / 32)) : x);
+          if (c) anticipate(src, c);
+          travel(src, T, sc(16), to.pos, "arc");
+          animate(src.h.spec.scale!, T, sc(16), (to.w * to.fit) / src.w, "inOut");
+          animate(to.h.spec.opacity!, T, sc(10), 0, "inOut");
+          const s0 = tiltFrom(src, T + sc(16));
+          src.h.spec.tilt!.push([T + sc(24), [s0[0], 90, s0[2]], "in"]);
+          animate(src.h.spec.opacity!, T + sc(22), sc(2), 0);
           src.h.spec.z = (to.h.spec.z ?? 0) + 1;
-          const d0 = tiltFrom(to, t);
-          to.h.spec.tilt!.push([t + 22, d0], [t + 23, [d0[0], -90, d0[2]]], [t + 32, d0, "out"]);
-          put(to.h.spec.opacity!, t + 23, 0);
-          put(to.h.spec.opacity!, t + 24, 1);
-          bump(to, t + 32);
+          const d0 = tiltFrom(to, T);
+          to.h.spec.tilt!.push([T + sc(22), d0], [T + sc(23), [d0[0], -90, d0[2]]], [T + sc(32), d0, "out"]);
+          put(to.h.spec.opacity!, T + sc(23), 0);
+          put(to.h.spec.opacity!, T + sc(24), 1);
+          if (c) land(to, c);
+          else bump(to, t + 32);
           for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
           moveSfx(t);
           f.sfx(t + 24, "soft_pop");
           break;
         }
+        const c = choreoOf(b, t);
+        const T = c?.actionAt ?? t;
+        const dur = c?.action ?? 20;
         tgt.filter((n) => n !== to).forEach((n, k) => {
-          travel(n, t + k * 3, 20, to.pos, "arc");
-          animate(n.h.spec.scale!, t + k * 3 + 8, 12, n.fit * 0.2, "in");
-          animate(n.h.spec.opacity!, t + k * 3 + 14, 6, 0, "in");
+          if (c) anticipate(n, c);
+          travel(n, T + k * 3, dur, to.pos, "arc");
+          animate(n.h.spec.scale!, T + k * 3 + Math.round(dur * 0.4), dur - Math.round(dur * 0.4), n.fit * 0.2, "in");
+          animate(n.h.spec.opacity!, T + k * 3 + Math.round(dur * 0.7), 6, 0, "in");
         });
         for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
         to.fit *= 1.1;
-        bump(to, t + 22);
+        if (c) land(to, c);
+        else bump(to, t + 22);
         moveSfx(t);
         f.sfx(t + 22, "subtle_impact");
         break;
@@ -1032,11 +1078,15 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       case "highlight": {
         const [a] = tgt;
         if (!a) break;
-        bump(a, t + 2);
+        const c = choreoOf(b, t);
+        if (c) {
+          anticipate(a, c);
+          land(a, c);
+        } else bump(a, t + 2);
         for (const n of live.values()) {
           if (n === a) continue;
-          animate(n.h.spec.opacity!, t, 8, 0.35);
-          put(n.h.spec.opacity!, t + 34, 1, "inOut");
+          animate(n.h.spec.opacity!, c?.actionAt ?? t, c?.action ?? 8, 0.35);
+          put(n.h.spec.opacity!, c ? Math.max(c.end, c.actionAt + 26) : t + 34, 1, "inOut");
         }
         f.sfx(t + 2, "soft_pop");
         // Pushed in on another element: pull back so the highlighted one is seen.

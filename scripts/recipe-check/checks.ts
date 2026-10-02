@@ -9,7 +9,9 @@ import { compileSceneScript, DECOR_ACCENT } from "@/components/video/flow/compil
 import { num } from "@/components/video/flow/eval";
 import { boundaryTransition, ENV_BACKDROP, ENV_WORLD, ENVIRONMENTS, type SceneRecipe } from "@/lib/scene-recipe";
 import { SceneScript } from "@/lib/scene-script";
-import { type Dna, dnaMove, type ShotScript } from "@/lib/shots";
+import { createHash } from "node:crypto";
+import { type Choreography, choreoTimeline, MAX_TOTAL, normalizeChoreography, PHASE_BOUNDS } from "@/lib/choreography";
+import { type Dna, dnaMove, isFixableNote, type ShotScript, ShotScript as ShotScriptSchema } from "@/lib/shots";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 const checks: Check[] = [];
@@ -241,6 +243,77 @@ function worldStack() {
   add("recipe → shot: no stale backdrop inherited (plain canvas)", gEnd !== undefined && at(gEnd + 30).length === 0 && !shotScene.recipe, `shot scene from ${gEnd}: ${gEnd !== undefined ? at(gEnd + 30).join("+") || "canvas" : "-"} · ${mb.map((x) => `${x.kind}@${x.start}${x.end ? `–${x.end}` : ""}(${x.source})`).join(" ")}`);
 }
 
+// Plan fingerprints from before choreography existed (commit 64f7170): an
+// event without choreography must compile to exactly the same plan.
+const PRE_CHOREO: Record<string, string> = { base: "ea6e409b38595cfe", legacy: "3e2e8f88b481c1cb", assemble: "7981d8c18737d641", transform: "a4b67c921a494901", move: "8744b8be42c7597e" };
+const fingerprint = (x: unknown) => createHash("sha256").update(JSON.stringify(x)).digest("hex").slice(0, 16);
+function choreography() {
+  section = "13. motion choreography";
+  const moveWith = (c: Choreography | null) => withRecipe(0, (r) => ({ ...r, behaviors: [{ type: "move", from: "sheet", to: "hero", cue: "ten different tools", ...(c ? { choreography: c } : {}) }] }));
+  const actor = (r: ReturnType<typeof recipeFixture>) => {
+    const b = r.script.beats.find((x) => x.action === "move")!;
+    return { b, n: r.plan.nodes.find((x) => x.id === b.targets![0])! };
+  };
+  const plain = actor(recipeFixture(moveWith(null)));
+  const t = plain.n.paths!.at(-1)!.start; // the cue frame (the move starts on it)
+
+  // 1. full four phases
+  const full = normalizeChoreography({ anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 }, 26);
+  const four = actor(recipeFixture(moveWith({ anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 })));
+  const tl = choreoTimeline(four.b.choreo!, t);
+  const path = four.n.paths!.at(-1)!;
+  const sc = four.n.scale ?? [];
+  const fit = sc.find(([f]) => f === tl.impactAt + tl.impact)?.[1];
+  add("full: phases normalized to frames", JSON.stringify(full) === JSON.stringify({ anticipation: 6, action: 18, impact: 5, settle: 9 }) && JSON.stringify(four.b.choreo) === JSON.stringify(full), JSON.stringify(full));
+  add("full: anticipation dip, action after it, impact pop, settle to rest", path.start === tl.actionAt && path.end === tl.impactAt && sc.some(([f, v]) => f === tl.actionAt && v < sc[sc.length - 1][1]) && !!fit && sc.some(([f, v]) => f === tl.end && Math.abs(v * 1.08 - fit) < 1e-6), `cue ${t} · dip →${tl.actionAt} · travel ${path.start}–${path.end} · impact →${tl.impactAt + tl.impact} · settle →${tl.end}`);
+
+  // 2. action + settle only
+  const as = normalizeChoreography({ anticipation: null, action: 0.5, impact: null, settle: 0.4 }, 26);
+  const two = actor(recipeFixture(moveWith({ anticipation: null, action: 0.5, impact: null, settle: 0.4 })));
+  const tl2 = choreoTimeline(two.b.choreo!, t);
+  const p2 = two.n.paths!.at(-1)!;
+  add("action + settle: starts on the cue, soft overshoot settles", JSON.stringify(as) === JSON.stringify({ anticipation: 0, action: 15, impact: 0, settle: 12 }) && p2.start === t && p2.end === t + 15 && (two.n.scale ?? []).some(([f]) => f === tl2.end), `${JSON.stringify(as)} · travel ${p2.start}–${p2.end} · rest at ${tl2.end}`);
+
+  // 3. missing optional phases
+  const none = normalizeChoreography({ anticipation: null, action: null, impact: null, settle: null }, 26);
+  const impactOnly = normalizeChoreography({ impact: 0.2 }, 20);
+  add("missing phases: action keeps the event's own length, others absent", JSON.stringify(none) === JSON.stringify({ anticipation: 0, action: 26, impact: 0, settle: 0 }), JSON.stringify(none));
+  add("an impact without a settle gets a safe 10-frame settle", JSON.stringify(impactOnly) === JSON.stringify({ anticipation: 0, action: 20, impact: 6, settle: 10 }), JSON.stringify(impactOnly));
+
+  // 4. invalid / negative / unrealistic
+  const bad = normalizeChoreography({ anticipation: -1, action: Number.NaN, impact: 5, settle: 0.05 }, 26);
+  add("negative / NaN → default, too long → max, too short → min", JSON.stringify(bad) === JSON.stringify({ anticipation: 0, action: 26, impact: 12, settle: 4 }), JSON.stringify(bad));
+  const tiny = normalizeChoreography({ anticipation: 0.04, action: 0.05, impact: 0.01, settle: null }, 26);
+  add("tiny phases clamp up (0 frames = absent)", JSON.stringify(tiny) === JSON.stringify({ anticipation: 4, action: 6, impact: 0, settle: 0 }), JSON.stringify(tiny));
+  const long = normalizeChoreography({ anticipation: 1, action: 5, impact: 1, settle: 2 }, 26);
+  const lt = long.anticipation + long.action + long.impact + long.settle;
+  add("total capped: never over MAX_TOTAL, phases within bounds", lt <= MAX_TOTAL && (Object.keys(PHASE_BOUNDS) as (keyof typeof PHASE_BOUNDS)[]).every((k) => long[k] === 0 || (long[k] >= PHASE_BOUNDS[k][0] && long[k] <= PHASE_BOUNDS[k][1])), `${JSON.stringify(long)} = ${lt} ≤ ${MAX_TOTAL}`);
+
+  // 5. deterministic total
+  const again = normalizeChoreography({ anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 }, 26);
+  const tlA = choreoTimeline(full, 100);
+  add("deterministic: same input, same frames; total = sum of phases", JSON.stringify(again) === JSON.stringify(full) && tlA.total === 6 + 18 + 5 + 9 && tlA.end === 138 && fingerprint(recipeFixture(moveWith({ anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 })).plan) === fingerprint(recipeFixture(moveWith({ anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 })).plan), `total ${tlA.total} · ${tlA.start}→${tlA.actionAt}→${tlA.impactAt}→${tlA.settleAt}→${tlA.end}`);
+
+  // 6. compatibility: no choreography → the same plan as before it existed
+  const R0 = (i: number, f: (r: SceneRecipe) => SceneRecipe) => withRecipe(i, f);
+  const cases: Record<string, ShotScript> = {
+    base: RECIPE_SHOTS,
+    legacy: RECIPE_SHOTS_LEGACY,
+    assemble: R0(0, (r) => ({ ...r, supporting: [...r.supporting, { id: "chart", asset: "icon:chart-line", role: "x", layer: "midground", relation: "feeds-hero", persistence: "scene" }], behaviors: [{ type: "assemble", from: "sheet", to: "hero", cue: "ten different tools" }] })),
+    transform: R0(3, (r) => ({ ...r, behaviors: [{ type: "transform", from: "coin", to: "hero", cue: "a sale happens" }] })),
+    move: moveWith(null),
+  };
+  const fp = Object.entries(cases).map(([k, v]) => [k, fingerprint(recipeFixture(v).plan)] as const);
+  add("non-choreographed motion compiles exactly as before", fp.every(([k, h]) => h === PRE_CHOREO[k]), fp.map(([k, h]) => `${k} ${h === PRE_CHOREO[k] ? "=" : "≠"}`).join(", "));
+  const nulls = fingerprint(recipeFixture({ ...RECIPE_SHOTS, shots: RECIPE_SHOTS.shots.map((x) => (x.recipe ? { ...x, recipe: { ...x.recipe, behaviors: x.recipe.behaviors.map((b) => ({ ...b, choreography: null })) } } : x)) }).plan);
+  add("choreography null = no choreography", nulls === PRE_CHOREO.base, nulls);
+  const stored = JSON.parse(JSON.stringify(RECIPE_SHOTS));
+  const back = ShotScriptSchema.parse(stored);
+  add("stored recipes without choreography reload (behaviors kept)", back.shots.every((x, i) => (x.recipe?.behaviors.length ?? 0) === (RECIPE_SHOTS.shots[i].recipe?.behaviors.length ?? 0)), `${back.shots.filter((x) => x.recipe).length} recipes`);
+  const unsupported = recipeFixture(withRecipe(0, (r) => ({ ...r, behaviors: [{ type: "flow", from: "sheet", to: "hero", cue: "ten different tools", choreography: { anticipation: 0.2, action: 0.5, impact: null, settle: null } }] })));
+  add("an event not choreographed yet keeps its timing and says so (never a revision)", unsupported.notes.some((n) => n.includes("flow keeps its own timing") && !isFixableNote(n)) && !unsupported.script.beats.some((b) => b.choreo), unsupported.notes.find((n) => n.includes("own timing")) ?? "-");
+}
+
 export async function runChecks(): Promise<Check[]> {
   assemble();
   transform();
@@ -250,5 +323,6 @@ export async function runChecks(): Promise<Check[]> {
   dnaMappings();
   environments();
   worldStack();
+  choreography();
   return checks;
 }

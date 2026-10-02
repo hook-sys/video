@@ -4,7 +4,8 @@ import { FLOW_THEMES } from "@/lib/flow-script";
 import { CAMERA_MOVES, CUTS, DECORS, ICON_STYLES, parseAsset, TONES, SceneScript, type SceneBeat, type SceneContent, type SceneElement } from "@/lib/scene-script";
 import { DEVICE_MODELS } from "@/components/video/flow/cards/device-data";
 import { type AssetSelection, applyAssetSelection } from "@/lib/asset-selection";
-import { boundaryTransition, type CompiledRecipe, ENV_BACKDROP, LAYER, RECIPE_MAPPED, type RecipeTransition, SceneRecipe, sceneTransition, StoredSceneRecipe } from "@/lib/scene-recipe";
+import { normalizeChoreography } from "@/lib/choreography";
+import { boundaryTransition, type CompiledRecipe, ENV_BACKDROP, ModelSceneRecipe, LAYER, RECIPE_MAPPED, type RecipeTransition, SceneRecipe, sceneTransition, StoredSceneRecipe } from "@/lib/scene-recipe";
 import { tokenize } from "@/lib/voice-timing";
 
 // Shot templates: tested building blocks a video is made of. The Director
@@ -171,7 +172,7 @@ export const ModelShot = z.object({
   items: z.array(Item).nullable(),
   camera: z.enum(SHOT_INTENTS).nullable(),
   objects: z.array(ShotObject).nullable(),
-  recipe: SceneRecipe.nullable(),
+  recipe: ModelSceneRecipe.nullable(),
 });
 export type ModelShot = z.infer<typeof ModelShot>;
 // A direction and its shots; its concepts (Phase 2) are read off the shots.
@@ -253,6 +254,9 @@ export const directionScripts = (model: z.infer<typeof ShotScriptModel>): ShotSc
   });
 
 // ── expansion ──
+// The recipe behaviors the compiler choreographs, with their own action
+// length in frames (the fixed timing they keep without choreography).
+const CHOREO_ACTION: Partial<Record<SceneRecipe["behaviors"][number]["type"], number>> = { move: 26, merge: 20, assemble: 40, transform: 32, highlight: 8 };
 // Marks a note that only says how an intent was drawn (a recipe transition
 // mapped to its closest renderer form): reported, never a reason to revise.
 export const MAPPED_NOTE = "mapped:";
@@ -827,6 +831,12 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
         tell(b, "dropped", "invalid-target");
         continue;
       }
+      // The event's choreography (lib/choreography.ts), normalized to frames
+      // on the event's own action length; only the events the compiler
+      // choreographs carry it (the rest keep their fixed timing, reported).
+      const choreo = b.choreography && CHOREO_ACTION[b.type] ? normalizeChoreography(b.choreography, CHOREO_ACTION[b.type]!) : null;
+      const ch = choreo ? { choreo } : {};
+      if (b.choreography && !CHOREO_ACTION[b.type]) notes.push(`recipe ${r.scene_id}: ${MAPPED_NOTE} ${b.type} keeps its own timing (choreography is not applied to it yet)`);
       switch (b.type) {
         case "reveal": {
           const e = later.find((x) => x.id === from);
@@ -839,7 +849,7 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
           break;
         }
         case "move":
-          beats.push(beat({ cue: b.cue, action: "move", targets: [from], to, style: "recipe" }));
+          beats.push(beat({ cue: b.cue, action: "move", targets: [from], to, style: "recipe", ...ch }));
           tell(b, "applied", null);
           break;
         case "connect":
@@ -848,7 +858,7 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
           tell(b, "applied", null);
           break;
         case "merge":
-          beats.push(beat({ cue: b.cue, action: "merge", targets: [from], to }));
+          beats.push(beat({ cue: b.cue, action: "merge", targets: [from], to, ...ch }));
           consumed.add(b.from);
           tell(b, "applied", null);
           break;
@@ -858,19 +868,19 @@ export function expandShots(script: { theme: ShotScript["theme"]; shots: ShotInp
           const rel = r.supporting.find((sp) => sp.id === b.from)?.relation ?? null;
           const others = rel ? r.supporting.filter((sp) => sp.id !== b.from && sp.id !== b.to && sp.relation === rel && support.has(sp.id) && !consumed.has(sp.id) && !later.includes(support.get(sp.id)!)).map((sp) => sp.id) : [];
           const ids = [b.from, ...others].slice(0, 4);
-          beats.push(beat({ cue: b.cue, action: "merge", targets: ids.map((x) => idOf(x)!), to, style: "assemble" }));
+          beats.push(beat({ cue: b.cue, action: "merge", targets: ids.map((x) => idOf(x)!), to, style: "assemble", ...ch }));
           for (const x of ids) consumed.add(x);
           tell(b, "applied", `assembled: ${ids.length} piece${ids.length > 1 ? "s" : ""} (${ids.join(", ")}) dock around ${b.to}, hold as one shape, then fuse into it (it grows)`);
           break;
         }
         case "transform":
-          beats.push(beat({ cue: b.cue, action: "merge", targets: [from], to, style: "transform" }));
+          beats.push(beat({ cue: b.cue, action: "merge", targets: [from], to, style: "transform", ...ch }));
           consumed.add(b.from);
           tell(b, "applied", `transformed: ${b.from} flies to ${b.to}, takes its size and turns edge-on; ${b.to} turns in from the edge in its place (3D turn, no shape morph)`);
           break;
         case "highlight":
         case "expand":
-          beats.push(beat({ cue: b.cue, action: b.type, targets: [from] }));
+          beats.push(beat({ cue: b.cue, action: b.type, targets: [from], ...(b.type === "highlight" ? ch : {}) }));
           tell(b, "applied", null);
           break;
         case "focus":

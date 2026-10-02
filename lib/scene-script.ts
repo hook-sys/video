@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ChoreoFrames } from "@/lib/choreography";
 import { isIconName, resolveIcon } from "@/components/video/icons";
 import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
 import { isCardStyle, isCardTemplate, searchCards } from "@/components/video/flow/cards/catalog";
@@ -100,7 +101,8 @@ const Beat = z.object({
 });
 // A stored beat may carry its scene's recipe (lib/scene-recipe.ts; scene
 // beats expanded from a shot that has one). Not part of the model's schema.
-const StoredBeat = Beat.extend({ recipe: CompiledRecipeSchema.nullable().optional() });
+// It may also carry its event's choreography (lib/choreography.ts, frames).
+const StoredBeat = Beat.extend({ recipe: CompiledRecipeSchema.nullable().optional(), choreo: ChoreoFrames.nullable().optional() });
 export type SceneBeat = z.infer<typeof StoredBeat>;
 
 export const SceneScriptModel = z.object({ theme: z.enum(FLOW_THEMES), beats: z.array(Beat) });
