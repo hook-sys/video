@@ -27,7 +27,7 @@ export default function NewProjectPage() {
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium text-violet-600 dark:text-violet-300">New video</p>
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Create your video</h1>
-          <p className="max-w-xl text-foreground/60">Five quick steps. MotionBrief directs the scenes, records the voice and renders your promo.</p>
+          <p className="max-w-xl text-foreground/60">Six quick steps. MotionBrief directs the scenes, records the voice and renders your promo.</p>
         </div>
         <CreateProjectForm maxTotalBytes={process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES : undefined} waiting={heroPlan()} />
       </main>

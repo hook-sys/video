@@ -195,7 +195,7 @@ export async function createProject(
   const logoUpload = await supabase.storage.from(SCREENSHOTS_BUCKET).upload(logoAt, logo!, { contentType: logo!.type });
   if (logoUpload.error) {
     await supabase.from("projects").delete().eq("id", data.id);
-    return { error: "Logo upload failed. Please try again." };
+    return { error: "Icon upload failed. Please try again." };
   }
   for (const file of screenshots) {
     const path = `${user.id}/${data.id}/${crypto.randomUUID()}.${SCREENSHOT_TYPES[file.type]}`;

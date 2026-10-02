@@ -7,16 +7,20 @@ import type { FlowPlan } from "@/components/video/flow/types";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import {
   BRAND_NAME_MAX,
+  CTA_MAX,
   directionFor,
   VOICE_SCRIPT_MAX,
   FORMATS,
   LOGO_MAX_BYTES,
+  SCREENSHOT_MAX_BYTES,
+  SCREENSHOT_MAX_FILES,
   STYLE_PRESETS,
   VOICE_GENDERS,
   VOICE_LANGUAGES,
   VOICE_STYLES,
   estimateVideoSeconds,
   validateLogo,
+  validateScreenshots,
   type StylePreset,
 } from "@/lib/projects";
 
@@ -49,12 +53,14 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
   const [format, setFormat] = useState<string>(FORMATS[0]);
   const [logo, setLogo] = useState<{ name: string; url: string; size: number } | null>(null);
   const [logoError, setLogoError] = useState<string>();
-  // The logo shares the upload budget on this server.
-  const budgetError = maxTotalBytes && (logo?.size ?? 0) > maxTotalBytes ? `The logo must be ${Math.floor(maxTotalBytes / 1024 / 1024)} MB or less.` : undefined;
-  const error = logoError ?? budgetError ?? state.error;
+  const [shots, setShots] = useState<File[]>([]);
+  // The icon and the screenshots share the upload budget on this server.
+  const shotsError = validateScreenshots(shots, maxTotalBytes ? maxTotalBytes - (logo?.size ?? 0) : undefined);
+  const budgetError = maxTotalBytes && (logo?.size ?? 0) > maxTotalBytes ? `The icon must be ${Math.floor(maxTotalBytes / 1024 / 1024)} MB or less.` : undefined;
+  const error = logoError ?? budgetError ?? shotsError ?? state.error;
   const seconds = script.trim() ? estimateVideoSeconds(script) : 0;
   const ready = !!script.trim() && !!logo;
-  const blocked = pending || !!logoError || !!budgetError;
+  const blocked = pending || !!logoError || !!budgetError || !!shotsError;
 
   const submit = (
     <button
@@ -94,12 +100,12 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
             </div>
           </Step>
 
-          <Step n={2} title="Brand" sub="Your logo closes the video.">
+          <Step n={2} title="Brand" sub="Your icon and brand name reveal the product and close the video.">
             <div className="grid gap-4 sm:grid-cols-2">
               <Upload
-                title="Logo"
+                title="Icon"
                 required
-                text={logo ? logo.name : "Upload your logo"}
+                text={logo ? logo.name : "Upload your icon"}
                 sub={`PNG, JPG or WebP · up to ${LOGO_MAX_BYTES / 1024 / 1024} MB`}
                 preview={
                   logo ? (
@@ -128,7 +134,34 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
             </div>
           </Step>
 
-          <Step n={3} title="Style">
+          <Step n={3} title="Product" sub="Optional. Real words and screens from your product make the cards look like it.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field title="Website" optional>
+                <input name="website_url" type="url" inputMode="url" placeholder="https://yourproduct.com" className={input} />
+              </Field>
+              <Field title="Call to action" optional>
+                <input name="call_to_action" maxLength={CTA_MAX} placeholder="e.g. Try it free today" className={input} />
+              </Field>
+              <div className="sm:col-span-2">
+                <Upload
+                  title="Screenshots"
+                  text={shots.length ? `${shots.length} screenshot${shots.length > 1 ? "s" : ""} chosen` : "Upload product screenshots"}
+                  sub={`Up to ${SCREENSHOT_MAX_FILES} · PNG, JPG or WebP · ${SCREENSHOT_MAX_BYTES / 1024 / 1024} MB each`}
+                >
+                  <input
+                    name="screenshots"
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp"
+                    className="sr-only"
+                    onChange={(e) => setShots(Array.from(e.target.files ?? []))}
+                  />
+                </Upload>
+              </div>
+            </div>
+          </Step>
+
+          <Step n={4} title="Style">
             <fieldset className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               <legend className="sr-only">Style</legend>
               {(Object.keys(STYLE_PRESETS) as StylePreset[]).map((p) => (
@@ -146,7 +179,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
             </fieldset>
           </Step>
 
-          <Step n={4} title="Voice">
+          <Step n={5} title="Voice">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field title="Language">
                 <select name="voice_language" required className={input}>
@@ -159,7 +192,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
             </div>
           </Step>
 
-          <Step n={5} title="Format">
+          <Step n={6} title="Format">
             <fieldset className="flex flex-col gap-2">
               <legend className="sr-only">Format</legend>
               <div className="grid grid-cols-3 gap-3">
@@ -201,7 +234,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
             </dl>
             <ul className="flex flex-col gap-1.5 text-xs text-foreground/60">
               <Check ok={!!script.trim()}>Voice-over</Check>
-              <Check ok={!!logo}>Logo</Check>
+              <Check ok={!!logo}>Icon</Check>
             </ul>
             {submit}
             <p className="text-center text-[11px] text-foreground/45">1080p · 4K download available after</p>
@@ -211,7 +244,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
           <div className="mx-auto flex max-w-2xl items-center gap-3">
             <div className="shrink-0 text-xs text-foreground/60">
               <p className="font-semibold text-foreground">{seconds ? `≈ ${seconds} s` : "New video"}</p>
-              <p>{ready ? "Ready" : `${[!script.trim() && "voice-over", !logo && "logo"].filter(Boolean).join(", ")} missing`}</p>
+              <p>{ready ? "Ready" : `${[!script.trim() && "voice-over", !logo && "icon"].filter(Boolean).join(", ")} missing`}</p>
             </div>
             <div className="flex-1">{submit}</div>
           </div>

@@ -133,9 +133,9 @@ export const logoPath = (userId: string, projectId: string, ext: string) => `${u
 
 export function validateLogo(file: File | null | undefined): string | undefined {
   // An empty entry (no file chosen; "blob" on mobile browsers) means no logo.
-  if (!file || file.size === 0) return "Please upload your logo.";
-  if (!SCREENSHOT_TYPES[file.type]) return `${file.name}: the logo must be a PNG, JPG or WebP image.`;
-  if (file.size > LOGO_MAX_BYTES) return `${file.name}: the logo must be 2 MB or smaller.`;
+  if (!file || file.size === 0) return "Please upload your icon.";
+  if (!SCREENSHOT_TYPES[file.type]) return `${file.name}: the icon must be a PNG, JPG or WebP image.`;
+  if (file.size > LOGO_MAX_BYTES) return `${file.name}: the icon must be 2 MB or smaller.`;
 }
 
 // Vercel Functions reject request bodies over 4.5 MB; keep uploads (plus form
