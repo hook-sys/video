@@ -254,7 +254,9 @@ function worldStack() {
 
 // Plan fingerprints from before choreography existed (commit 64f7170): an
 // event without choreography must compile to exactly the same plan.
-const PRE_CHOREO: Record<string, string> = { base: "ea6e409b38595cfe", legacy: "3e2e8f88b481c1cb", assemble: "7981d8c18737d641", transform: "a4b67c921a494901", move: "8744b8be42c7597e" };
+// (Re-baselined for the recipe scenes' supporting placement — recipeSlots
+// keeps supporting objects clear of the hero and in frame; legacy unchanged.)
+const PRE_CHOREO: Record<string, string> = { base: "5705aa0e66828a46", legacy: "3e2e8f88b481c1cb", assemble: "82ec12572b34d391", transform: "c1b411ccd37e223d", move: "69f3c837d15c8d67" };
 const fingerprint = (x: unknown) => createHash("sha256").update(JSON.stringify(x)).digest("hex").slice(0, 16);
 function choreography() {
   section = "13. motion choreography";
@@ -403,7 +405,7 @@ function choreoSfxChecks() {
 }
 
 // Camera fingerprints from before camera choreography existed (66a6b82).
-const PRE_CAMERA: Record<string, string> = { dnaOrbit: "093b1b3e1b249145", dnaPush: "8d53a92de7e6cb3e", recipeOrbitDna: "ea6e409b38595cfe", baseCamera: "239c0a100f5f066f" };
+const PRE_CAMERA: Record<string, string> = { dnaOrbit: "093b1b3e1b249145", dnaPush: "8d53a92de7e6cb3e", recipeOrbitDna: "5705aa0e66828a46", baseCamera: "239c0a100f5f066f" };
 function cameraChoreo() {
   section = "15. camera choreography";
   const FULL = { anticipation: 0.2, action: 0.6, impact: 0.15, settle: 0.3 };

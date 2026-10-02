@@ -229,13 +229,19 @@ const SUPPORT_BOX: Record<Layer, Vec> = { 0: [420, 420], 1: [260, 260], 2: [300,
 export type RecipeSlot = { pos: Vec; box: Vec; grow: number; depth: 0 | 1 | 2; layer: Layer; scale: number };
 // One slot per element id, from the composition and each element's layer
 // and relation (several with one relation take its anchors in turn).
-export function recipeSlots(r: CompiledRecipe, ids: string[]): Map<string, RecipeSlot> {
+// `size` (the compiler's): an element's rendered size in its slot (world px,
+// before the camera); with it, supporting objects are kept clear of the hero
+// and of each other, and inside the frame (clearSlots).
+export function recipeSlots(r: CompiledRecipe, ids: string[], size?: (id: string, slot: RecipeSlot) => Vec): Map<string, RecipeSlot> {
   const g0 = GEOMETRY[r.composition];
   // No words in the scene: the whole arrangement moves toward the centre and
   // the hero grows into the room the words would have taken.
   const dx = r.words ? 0 : -g0.hero.pos[0] * 0.6;
   const shift = (p: Vec): Vec => [Math.max(-820, Math.min(820, p[0] + dx)), p[1]];
-  const g: Geometry = r.words ? g0 : { ...g0, hero: { ...g0.hero, pos: shift(g0.hero.pos), box: [g0.hero.box[0] * 1.35, g0.hero.box[1] * 1.2] }, anchors: Object.fromEntries(Object.entries(g0.anchors).map(([k, v]) => [k, v.map(shift)])) as Geometry["anchors"] };
+  // (A full-frame hero already fills the frame, centred: no room to grow into
+  // — the words' band is below it — so it keeps its own size; grown, it
+  // covered 90 % of the frame and left its supporting objects nowhere to stand.)
+  const g: Geometry = r.words || r.composition === "full-frame" ? g0 : { ...g0, hero: { ...g0.hero, pos: shift(g0.hero.pos), box: [g0.hero.box[0] * 1.35, g0.hero.box[1] * 1.2] }, anchors: Object.fromEntries(Object.entries(g0.anchors).map(([k, v]) => [k, v.map(shift)])) as Geometry["anchors"] };
   const out = new Map<string, RecipeSlot>();
   const used: Record<string, number> = {};
   for (const id of ids) {
@@ -252,7 +258,115 @@ export function recipeSlots(r: CompiledRecipe, ids: string[]): Map<string, Recip
     const layer: Layer = role?.layer ?? 1;
     out.set(id, { pos: k >= anchors.length ? [pos[0], pos[1] + 120] : pos, box: SUPPORT_BOX[layer], grow: layer === 0 ? 1.4 : 1.2, depth: layer === 0 ? 0 : layer === 3 ? 2 : 1, layer, scale: LAYER_SCALE[layer] });
   }
+  if (size) clearSlots(r, ids, out, size, g.hero.pos);
   return out;
+}
+
+// Supporting objects kept clear and in frame. A composition's anchors are
+// fixed points; an object drawn there (a card the asset selection chose for
+// an icon's place is far bigger) could sit on the hero or another object, or
+// leave the frame once the scene's camera pushes in and its depth layer
+// moves with it. Measured on screen at both ends of the scene's camera move
+// (recipeCamera; a layer's parallax as in states.ts computeStates), each
+// supporting object, in order, takes the best of: its anchor; moved straight
+// off what it hits along x or y (either way); each kept inside the safe area;
+// drawn smaller (down to 60 %) when there is no room. Best = least overlap
+// with the hero and the objects placed before it, then least out of frame,
+// then the least change. An object that does not overlap anything nor leave
+// the frame stays exactly at its anchor. Background objects (layer 0, blurred behind the hero) may stay
+// behind the hero, not on another object.
+const SAFE: Vec = [960 - 0.06 * 1920, 540 - 0.06 * 1080]; // half the frame less a 6 % edge
+const GAP = 40; // screen px kept between objects
+function clearSlots(r: CompiledRecipe, ids: string[], out: Map<string, RecipeSlot>, size: (id: string, slot: RecipeSlot) => Vec, heroPos: Vec) {
+  const cam = recipeCamera(r, heroPos);
+  const ends = [{ c: cam.from, z: cam.z0 }, { c: cam.to, z: cam.z1 }];
+  const kOf = (layer: Layer, z: number) => z * (z / 1.1) ** (PARALLAX[layer] - 1); // screen px per world px
+  type Placed = { s: RecipeSlot; half: Vec; hero: boolean };
+  // a slot's screen rect (centre offset from the frame centre, half size) at a camera end
+  const rect = (s: RecipeSlot, half: Vec, e: (typeof ends)[number]) => {
+    const p = PARALLAX[s.layer];
+    const k = kOf(s.layer, e.z);
+    return { c: [k * (s.pos[0] - p * e.c[0]), k * (s.pos[1] - p * e.c[1])] as Vec, h: [half[0] * k, half[1] * k] as Vec };
+  };
+  const placed: Placed[] = [];
+  const heroId = ids.find((id) => r.roles[id]?.role === "hero");
+  if (heroId) placed.push({ s: out.get(heroId)!, half: size(heroId, out.get(heroId)!).map((v) => v / 2) as Vec, hero: true });
+  const against = (s: RecipeSlot) => placed.filter((o) => !(o.hero && s.layer === 0));
+  // overlap (with `gap`) as a share of the object's own area, and the share out of `bounds`, worst camera end
+  const score = (s: RecipeSlot, half: Vec, gap = GAP, bounds: Vec = SAFE) => {
+    let hit = 0, outside = 0;
+    for (const e of ends) {
+      const a = rect(s, half, e);
+      const area = 4 * a.h[0] * a.h[1];
+      for (const o of against(s)) {
+        const b = rect(o.s, o.half, e);
+        const w = a.h[0] + b.h[0] + gap - Math.abs(a.c[0] - b.c[0]), h = a.h[1] + b.h[1] + gap - Math.abs(a.c[1] - b.c[1]);
+        if (w > 0 && h > 0) hit = Math.max(hit, (Math.min(w, 2 * a.h[0]) * Math.min(h, 2 * a.h[1])) / area);
+      }
+      const inX = Math.max(0, Math.min(bounds[0], a.c[0] + a.h[0]) - Math.max(-bounds[0], a.c[0] - a.h[0])), inY = Math.max(0, Math.min(bounds[1], a.c[1] + a.h[1]) - Math.max(-bounds[1], a.c[1] - a.h[1]));
+      outside = Math.max(outside, 1 - (inX * inY) / area);
+    }
+    return { hit, outside };
+  };
+  // inside the safe area at both camera ends (when it fits at all)
+  const clamp = (s: RecipeSlot, half: Vec): RecipeSlot => {
+    const pos = [...s.pos] as Vec;
+    for (let ax = 0; ax < 2; ax++) {
+      let lo = -Infinity, hi = Infinity;
+      for (const e of ends) {
+        const p = PARALLAX[s.layer];
+        const room = SAFE[ax] / kOf(s.layer, e.z) - half[ax];
+        lo = Math.max(lo, p * e.c[ax] - room);
+        hi = Math.min(hi, p * e.c[ax] + room);
+      }
+      if (lo <= hi) pos[ax] = Math.min(hi, Math.max(lo, pos[ax]));
+    }
+    return { ...s, pos };
+  };
+  for (const id of ids) {
+    if (id === heroId) continue;
+    const s0 = out.get(id)!;
+    const half0 = size(id, s0).map((v) => v / 2) as Vec;
+    // Only an object that really overlaps (as the quality check counts it:
+    // more than 8 % of it) or is more than 15 % out of the frame is moved.
+    const real = score(s0, half0, 0, [960, 540]);
+    if (real.hit <= 0.08 && real.outside <= 0.15) {
+      placed.push({ s: s0, half: half0, hero: false });
+      continue;
+    }
+    const first = score(s0, half0);
+    let best = { s: s0, half: half0, key: [first.hit, first.outside, 0] };
+    for (const shrink of [1, 0.85, 0.7, 0.6]) {
+      const sized: RecipeSlot = { ...s0, scale: s0.scale * shrink };
+      const half = size(id, sized).map((v) => v / 2) as Vec;
+      const cands: RecipeSlot[] = [sized];
+      // moved off each object it hits, along x or y, either way (enough at both camera ends)
+      for (const o of against(sized))
+        for (let ax = 0; ax < 2; ax++)
+          for (const dir of [1, -1]) {
+            let to = sized.pos[ax];
+            for (const e of ends) {
+              const a = rect({ ...sized, pos: sized.pos }, half, e), b = rect(o.s, o.half, e);
+              const k = kOf(sized.layer, e.z);
+              const want = b.c[ax] + dir * (a.h[ax] + b.h[ax] + GAP); // screen offset clear of o
+              const pos = want / k + PARALLAX[sized.layer] * e.c[ax];
+              to = dir > 0 ? Math.max(to, pos) : Math.min(to, pos);
+            }
+            const pos = [...sized.pos] as Vec;
+            pos[ax] = to;
+            cands.push({ ...sized, pos });
+          }
+      for (const c0 of cands) {
+        const c = clamp(c0, half);
+        const sc = score(c, half);
+        const moved = Math.hypot(c.pos[0] - s0.pos[0], c.pos[1] - s0.pos[1]) / 2000 + (1 - shrink) * 0.2;
+        const key = [Math.round(sc.hit * 100) / 100, Math.round(sc.outside * 100) / 100, moved];
+        if (key[0] < best.key[0] || (key[0] === best.key[0] && (key[1] < best.key[1] || (key[1] === best.key[1] && key[2] < best.key[2])))) best = { s: c, half, key };
+      }
+    }
+    out.set(id, best.s);
+    placed.push({ s: best.s, half: best.half, hero: false });
+  }
 }
 
 // Where the words go: a position the Director asked for, unless it would sit

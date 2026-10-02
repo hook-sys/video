@@ -104,8 +104,20 @@ function eligible(a: ApprovedAsset, category: AssetRequirement["category"], allo
 }
 const best = (list: ApprovedAsset[]) => [...list].sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))[0] ?? null;
 
-export function selectAsset(req: AssetRequirement, registry: Registry = defaultRegistry()): AssetSelection {
-  const pool = registry.assets.filter((a) => eligible(a, req.category, registry.allowlist));
+// A text-free kind (an icon, a visual) is never stood in for by a card: a
+// card carries words and a panel's shape, not the picture asked for. Better
+// unresolved (the Director's own asset stays) than the wrong visual.
+const TEXT_FREE = ["icon", "visual"];
+const kindOf = (id: string | null | undefined) => (id?.includes(":") ? id.slice(0, id.indexOf(":")) : null);
+function compatible(a: ApprovedAsset, asked: string | null): boolean {
+  return !(TEXT_FREE.includes(asked ?? "") && kindOf(a.id) === "card");
+}
+
+// `requested`: the asset the requirement is for (its preferred asset, else the
+// slot's own asset), whose kind the selection must stay compatible with.
+export function selectAsset(req: AssetRequirement, registry: Registry = defaultRegistry(), requested?: string | null): AssetSelection {
+  const asked = kindOf(req.preferred_asset_id ?? requested);
+  const pool = registry.assets.filter((a) => eligible(a, req.category, registry.allowlist) && compatible(a, asked));
   const pick = (a: ApprovedAsset, status: AssetSelection["status"], reason: string): AssetSelection => ({ requirement: req, status, asset_id: a.id, ref: a.ref, reason });
   let why = "";
   if (req.preferred_asset_id) {
@@ -113,14 +125,15 @@ export function selectAsset(req: AssetRequirement, registry: Registry = defaultR
     if (p) return pick(p, "exact", "preferred asset");
     why = `preferred ${req.preferred_asset_id} is not approved for ${req.category}; `;
   }
+  // (asked for a preferred asset that is not here: its concept's asset stands in — a fallback)
   const exact = best(pool.filter((a) => a.concepts.includes(req.concept)));
-  if (exact && req.concept !== "other") return pick(exact, "exact", `${why}concept ${req.concept}`);
+  if (exact && req.concept !== "other") return pick(exact, why ? "fallback" : "exact", `${why}concept ${req.concept}`);
   if (req.fallback_allowed && req.concept !== "other") {
     const family = FAMILY[req.concept];
     const near = best(pool.filter((a) => a.concepts.some((c) => FAMILY[c] === family)));
     if (near) return pick(near, "fallback", `${why}no approved ${req.concept} ${req.category}; same family (${family})`);
   }
-  const none = req.category === "hero" && !registry.allowlist.length ? "the hero allowlist is empty" : `no approved ${req.category} asset for ${req.concept}${req.fallback_allowed ? " or its family" : " (fallback not allowed)"}`;
+  const none = req.category === "hero" && !registry.allowlist.length ? "the hero allowlist is empty" : `no approved ${req.category} asset for ${req.concept}${req.fallback_allowed ? " or its family" : " (fallback not allowed)"}${TEXT_FREE.includes(asked ?? "") ? ` compatible with ${asked} (no card)` : ""}`;
   return { requirement: req, status: "unresolved", asset_id: null, ref: null, reason: `${why}${none}` };
 }
 
@@ -129,7 +142,11 @@ export function selectAsset(req: AssetRequirement, registry: Registry = defaultR
 // unresolved requirement leaves the Director's own asset as it was.
 export function applyAssetSelection(recipe: SceneRecipe, registry: Registry = defaultRegistry()): { recipe: SceneRecipe; selections: AssetSelection[] } {
   if (!recipe.assets?.length) return { recipe, selections: [] };
-  const selections = recipe.assets.map((req) => selectAsset(req, registry));
+  const own = (req: AssetRequirement) => {
+    const slot = req.slot ?? (req.role === "primary" ? "hero" : null);
+    return slot === "hero" ? recipe.hero.asset : recipe.supporting.find((s) => s.id === slot)?.asset ?? null;
+  };
+  const selections = recipe.assets.map((req) => selectAsset(req, registry, own(req)));
   let hero = recipe.hero;
   const supporting = recipe.supporting.map((s) => ({ ...s }));
   for (const sel of selections) {

@@ -486,6 +486,8 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
   };
 
   // Lay the given elements out in a layout (new ones enter, existing ones travel).
+  // The hero of a text-free full-frame recipe scene (it already fills the frame).
+  const fillsFrame = (id: string | null | undefined) => !!id && sceneRecipe?.composition === "full-frame" && !sceneRecipe.words && sceneRecipe.roles[id]?.role === "hero";
   let entered: number[] = []; // when the last place() brought each newcomer in
   const place = (els: SceneElement[], t: number, layout: string, style: string | null, carry: boolean, push?: Vec) => {
     entered = [];
@@ -499,7 +501,12 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
       return n ? [n.w, n.h0] : [sp!.w, sp!.h];
     });
     // A recipe scene: each element at its composition's place and depth layer.
-    const rs = layout === "recipe" && sceneRecipe ? recipeSlots(sceneRecipe, kept) : null;
+    // (its rendered size measured as drawn: fitIn on its own slot)
+    const rs = layout === "recipe" && sceneRecipe ? recipeSlots(sceneRecipe, kept, (id, sl) => {
+      const [w, h] = sizes[kept.indexOf(id)];
+      const k = fitIn(w, h, { ...sl, rot: 0 });
+      return [w * k, h * k];
+    }) : null;
     const { slots, name } = rs ? { slots: kept.map((id): Slot => ({ ...rs.get(id)!, rot: 0 })), name: "recipe" } : slotsFor(layout, sizes, sceneIdx);
     const layerOf = (id: string): Layer | undefined => rs?.get(id)?.layer;
     const zOf = (id: string, s: Slot, i: number) => (layerOf(id) ?? s.depth) * 10 + i;
@@ -1083,7 +1090,7 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
             animate(n.h.spec.opacity!, T + sc(34), sc(6), 0, "in");
           });
           for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
-          to.fit *= 1.12;
+          if (!fillsFrame(b.to)) to.fit *= 1.12;
           if (c) land(to, c);
           else {
             animate(to.h.spec.scale!, t + 40, 8, to.fit * 1.07, "out");
@@ -1152,7 +1159,10 @@ export function compileSceneScript(script: SceneScript, { narration, words, dura
           animate(n.h.spec.opacity!, T + k * 3 + Math.round(dur * 0.7), 6, 0, "in");
         });
         for (const id of b.targets ?? []) if (id !== b.to) live.delete(id);
-        to.fit *= 1.1;
+        // (a text-free full-frame hero already fills the frame: it does not
+        // grow for good — only its arrival bump — or it would cover the
+        // objects beside it)
+        if (!fillsFrame(b.to)) to.fit *= 1.1;
         if (c) land(to, c);
         else bump(to, t + 22);
         cameraCue(c, to);

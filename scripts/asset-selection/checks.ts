@@ -93,6 +93,27 @@ function unresolved() {
 
 const BASE = RECIPE_SHOTS.shots[0].recipe!;
 const withAssets = (assets: AssetRequirement[]): SceneRecipe => ({ ...BASE, assets });
+// A text-free kind asked for (an icon, a visual) never becomes a card: a
+// compatible asset stands in, else the requirement stays unresolved.
+function typeGuard() {
+  section = "asset type compatibility";
+  const isCard = (id: string | null) => !!id?.startsWith("card:");
+  const bars = selectAsset(req({ category: "supporting", concept: "growth", preferred_asset_id: "visual:bars" }));
+  add("visual:bars never falls back to a card", !isCard(bars.asset_id) && bars.status === "unresolved", `${bars.status} ${bars.asset_id ?? "-"}: ${bars.reason}`);
+  const file = selectAsset(req({ category: "supporting", concept: "document" }), undefined, "icon:file-text");
+  add("icon:file-text never falls back to a card", !isCard(file.asset_id) && file.status === "unresolved", `${file.status} ${file.asset_id ?? "-"}: ${file.reason}`);
+  const own = { ...BASE, supporting: BASE.supporting.map((x) => (x.id === "sheet" ? { ...x, asset: "icon:file-text" } : x)), assets: [req({ category: "supporting", concept: "document", slot: "sheet" })] };
+  const kept = applyAssetSelection(own);
+  add("the slot's own icon decides (applied): icon:file-text kept", kept.recipe.supporting.find((x) => x.id === "sheet")?.asset === "icon:file-text" && kept.selections[0].status === "unresolved", `sheet → ${kept.recipe.supporting.find((x) => x.id === "sheet")?.asset} (${kept.selections[0].status})`);
+  const mail = applyAssetSelection(withAssets([req({ category: "supporting", concept: "security-shield", slot: "mail" })]));
+  add("icon:mail → object:shield is still a compatible replacement", mail.recipe.supporting.find((x) => x.id === "mail")?.asset === "object:shield" && mail.selections[0].status === "exact", `mail → ${mail.recipe.supporting.find((x) => x.id === "mail")?.asset} (${mail.selections[0].status})`);
+  const stand = selectAsset(req({ category: "supporting", concept: "security-shield", preferred_asset_id: "icon:shield" }));
+  add("preferred not approved, compatible concept asset → fallback (not exact)", stand.status === "fallback" && stand.asset_id === "object:shield" && stand.reason.includes("icon:shield is not approved"), `${stand.status} ${stand.asset_id}: ${stand.reason}`);
+  const chart = selectAsset(req({ category: "supporting", concept: "chart" }), undefined, "icon:chart-line");
+  const viz = selectAsset(req({ category: "supporting", concept: "dashboard", preferred_asset_id: "visual:bars" }));
+  add("icon / visual with no compatible asset → unresolved", chart.status === "unresolved" && chart.asset_id === null && viz.status === "unresolved" && viz.asset_id === null, `icon:chart-line ${chart.status}; visual:bars ${viz.status}`);
+}
+
 function recipeApply() {
   section = "recipe application";
   const r = withAssets([req({ category: "hero", concept: "question", slot: "hero" }), req({ category: "supporting", concept: "security-shield", slot: "mail" }), req({ category: "supporting", concept: "other", slot: "sheet" })]);
@@ -190,6 +211,7 @@ export async function runChecks(): Promise<Check[]> {
   fallback();
   unresolved();
   recipeApply();
+  typeGuard();
   storage();
   await directorFlow();
   return checks;
