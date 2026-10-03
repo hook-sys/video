@@ -1,6 +1,6 @@
 import "server-only";
 import { zodTextFormat } from "openai/helpers/zod";
-import { textAi } from "@/lib/ai/models";
+import { countUsage, textAi } from "@/lib/ai/models";
 import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import { compileFlowScript } from "@/components/video/flow/compile";
@@ -134,8 +134,7 @@ export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (us
       },
       { timeout: Math.min(80_000, budgetMs) },
     );
-    usage.inputTokens += first.usage?.input_tokens ?? 0;
-    usage.outputTokens += first.usage?.output_tokens ?? 0;
+    countUsage(usage, first.usage);
     let result = check(first.output_parsed);
     problems = result.problems.length ? result.problems : result.notes;
     const left = budgetMs - (Date.now() - started);
@@ -151,8 +150,7 @@ export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (us
         // A failed or timed-out revision never discards a usable first draft.
         return { script: result.script, attempts, revised: false, errors: [`revision failed: ${e instanceof Error ? e.message : e}`, ...problems], ms: Date.now() - started, timing };
       }
-      usage.inputTokens += revised.usage?.input_tokens ?? 0;
-      usage.outputTokens += revised.usage?.output_tokens ?? 0;
+      countUsage(usage, revised.usage);
       const second = check(revised.output_parsed);
       // Keep the revision if it is usable; otherwise a usable first draft.
       if (second.script || !result.script) result = second;

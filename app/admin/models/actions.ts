@@ -95,7 +95,7 @@ export async function testAiModel(_prev: TestResult | null, formData: FormData):
       const sample = "This is a MotionBrief voice test. Your product, explained in thirty seconds.";
       const r = await generateVoice({ script: sample, language: "English", style: "Friendly", gender: text(formData, "gender") || "female" }, { on: true, model, template: text(formData, "template", 2000), female: text(formData, "female", 80), male: text(formData, "male", 80) });
       const priced = unitCost(config, r.model, sample.length, () => NaN);
-      return { ok: true, ms: Date.now() - started, audioUrl: r.audioUrl, output: r.words ? `${r.words.length} word timestamps` : "no word timestamps (the video will use estimated timing)", cost: Number.isFinite(priced) ? `${usd(priced)} for ${sample.length} characters (from your prices)` : `${sample.length} characters — add a price per character below` };
+      return { ok: true, ms: Date.now() - started, audioUrl: r.audioUrl, output: r.words?.length ? `Word timing: yes (${r.words.length} words) — the video's text and scenes stay in sync with this voice.` : "⚠ Word timing: NO. This model returns no word timestamps, so the video guesses when each word is spoken: text and scenes will drift from the voice. Not recommended for videos.", cost: Number.isFinite(priced) ? `${usd(priced)} for ${sample.length} characters (from your prices)` : `${sample.length} characters — add a price per character below` };
     }
     if (kind === "image") {
       const r = await generateImage({ prompt: "Soft abstract gradient shapes and floating glass panels, a calm SaaS product launch backdrop", format: "16:9" }, { on: true, model, template: text(formData, "template", 2000) });

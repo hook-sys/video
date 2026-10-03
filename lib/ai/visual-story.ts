@@ -1,6 +1,6 @@
 import "server-only";
 import { zodTextFormat } from "openai/helpers/zod";
-import { textAi } from "@/lib/ai/models";
+import { countUsage, textAi } from "@/lib/ai/models";
 import { z } from "zod";
 import { AREA_KINDS, ASSET_TYPES, INTENTS, MAX_STORY_ASSETS, MOODS, OBJECT_KINDS, SHOTS, SLOTS, storyBlockers, VERBS, VisualStory } from "@/lib/visual-story";
 import type { BriefUsage } from "@/lib/ai/product-brief";
@@ -251,8 +251,7 @@ export async function generateVisualStory(input: StoryInput, onUsage?: (usage: B
         ADVANCED_DIRECTION: input.creative_preferences?.advanced_direction?.trim() || null,
         creative_preferences: input.creative_preferences ? { ...input.creative_preferences, advanced_direction: undefined } : null,
       }), text: format }, { timeout: Math.min(80_000, budgetMs) });
-    usage.inputTokens += first.usage?.input_tokens ?? 0;
-    usage.outputTokens += first.usage?.output_tokens ?? 0;
+    countUsage(usage, first.usage);
     let result = first.output_parsed ? problemsOf(toStory(first.output_parsed), input.narration, input.words) : { story: null, problems: ["no structured output"] };
     problems = result.problems;
     const left = budgetMs - (Date.now() - started);
@@ -262,8 +261,7 @@ export async function generateVisualStory(input: StoryInput, onUsage?: (usage: B
         { model, instructions, previous_response_id: first.id, input: `Your visual story failed these checks:\n- ${problems.slice(0, 12).join("\n- ")}\nReturn the corrected complete story.`, text: format },
         { timeout: Math.min(60_000, left) },
       );
-      usage.inputTokens += revised.usage?.input_tokens ?? 0;
-      usage.outputTokens += revised.usage?.output_tokens ?? 0;
+      countUsage(usage, revised.usage);
       result = revised.output_parsed ? problemsOf(toStory(revised.output_parsed), input.narration, input.words) : { story: null, problems: ["no structured output"] };
       problems = result.problems;
     }

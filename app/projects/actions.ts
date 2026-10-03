@@ -50,7 +50,7 @@ import { renderStoryboardMp4 } from "@/lib/render-video";
 import { validateForRender } from "@/lib/render-validation";
 import { falCost, openaiCost, renderCost, storageCost } from "@/lib/costs/pricing";
 import { recordCost } from "@/lib/costs/record";
-import { getAiConfig, textCost, unitCost } from "@/lib/ai/models";
+import { getAiConfig, unitCost, usageCost } from "@/lib/ai/models";
 import { canUseDevTools } from "@/lib/dev-tools";
 import {
   flowBudgetMs,
@@ -386,7 +386,7 @@ export async function generateBrief(projectId: string) {
         operation: "openai_brief",
         model: u.model,
         quantity: u.inputTokens + u.outputTokens,
-        estimated_cost_usd: textCost(ai, u.model, u.inputTokens, u.outputTokens, () => openaiCost(u.model, u.inputTokens, u.outputTokens)),
+        estimated_cost_usd: usageCost(ai, u, (i, o) => openaiCost(u.model, i, o)),
         metadata: { kind, input_tokens: u.inputTokens, output_tokens: u.outputTokens },
       });
     }
@@ -513,7 +513,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   let cost = 0;
   const models = new Set<string>();
   const addUsage = (u: BriefUsage) => {
-    cost += textCost(ai, u.model, u.inputTokens, u.outputTokens, () => openaiCost(u.model, u.inputTokens, u.outputTokens));
+    cost += usageCost(ai, u, (i, o) => openaiCost(u.model, i, o));
     if (u.inputTokens || u.outputTokens) models.add(u.model);
     usage = usage ? { ...u, inputTokens: usage.inputTokens + u.inputTokens, outputTokens: usage.outputTokens + u.outputTokens } : u;
   };
@@ -677,7 +677,7 @@ async function generateStory(projectId: string, userId: string, budgetMs: number
       operation: "openai_brief",
       model: usage.model,
       quantity: usage.inputTokens + usage.outputTokens,
-      estimated_cost_usd: textCost(await getAiConfig(), usage.model, usage.inputTokens, usage.outputTokens, () => openaiCost(usage!.model, usage!.inputTokens, usage!.outputTokens)),
+      estimated_cost_usd: usageCost(await getAiConfig(), usage, (i, o) => openaiCost(usage!.model, i, o)),
       metadata: { kind: "visual_story", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts: result.attempts, latency_ms: result.ms, stored: !!result.story, timing: result.timing },
     });
   }

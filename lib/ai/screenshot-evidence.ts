@@ -1,6 +1,6 @@
 import "server-only";
 import { zodTextFormat } from "openai/helpers/zod";
-import { textAi } from "@/lib/ai/models";
+import { countUsage, textAi } from "@/lib/ai/models";
 import { z } from "zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 
@@ -50,11 +50,9 @@ export async function analyzeScreenshots(
     text: { format: zodTextFormat(ScreenshotEvidence, "screenshot_evidence") },
   });
 
-  onUsage?.({
-    model,
-    inputTokens: response.usage?.input_tokens ?? 0,
-    outputTokens: response.usage?.output_tokens ?? 0,
-  });
+  const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
+  countUsage(usage, response.usage);
+  onUsage?.(usage);
   const parsed = ScreenshotEvidence.parse(response.output_parsed);
   return {
     visible_product_name: parsed.visible_product_name.trim().slice(0, 120),

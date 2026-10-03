@@ -128,7 +128,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">Off: no AI images; scenes use screenshots, icons and shapes. Empty fields use the environment (model <code>{env.image}</code>). Images never show people or animals.</p>
               <input name="image_model" list="image-models" defaultValue={c.image.model} placeholder="Model, e.g. fal-ai/flux/schnell" className={input} />
-              <textarea name="image_template" rows={2} defaultValue={c.image.template} placeholder='Input template (JSON). Placeholders: {{prompt}} {{format}}. e.g. {"prompt":"{{prompt}}"}' className={`${input} font-mono text-xs`} />
+              <textarea name="image_template" rows={2} defaultValue={c.image.template} placeholder='Input template (JSON). Placeholders: {{prompt}} {{aspect_ratio}} ("16:9") {{image_size}} ("landscape_16_9"). e.g. {"prompt":"{{prompt}}","aspect_ratio":"{{aspect_ratio}}"}. FLUX and Recraft get the video&apos;s size by themselves.' className={`${input} font-mono text-xs`} />
             </div>
           </Card>
 

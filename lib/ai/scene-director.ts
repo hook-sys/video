@@ -1,6 +1,6 @@
 import "server-only";
 import { zodTextFormat } from "openai/helpers/zod";
-import { textAi } from "@/lib/ai/models";
+import { countUsage, textAi } from "@/lib/ai/models";
 import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import { cardCatalogText, deviceCatalogText } from "@/components/video/flow/cards/catalog";
@@ -176,8 +176,7 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
       },
       { timeout: Math.min(110_000, budgetMs - 8_000) },
     );
-    usage.inputTokens += first.usage?.input_tokens ?? 0;
-    usage.outputTokens += first.usage?.output_tokens ?? 0;
+    countUsage(usage, first.usage);
     let result = check(first.output_parsed);
     problems = result.problems.length ? result.problems : result.notes;
     console.info("scene director first draft:", { ms: Date.now() - started, usable: !!result.script, problems: problems.slice(0, 8) });
@@ -195,8 +194,7 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
         const why = e instanceof Error ? e.message : String(e);
         return { script: result.script, attempts, revised: false, errors: [`revision failed: ${why}`, ...problems], ms: Date.now() - started, timing, violations: result.violations };
       }
-      usage.inputTokens += revised.usage?.input_tokens ?? 0;
-      usage.outputTokens += revised.usage?.output_tokens ?? 0;
+      countUsage(usage, revised.usage);
       const second = check(revised.output_parsed);
       // Keep the draft that breaks fewer rules.
       if (!result.script || (second.script && second.violations.length <= result.violations.length)) result = second;

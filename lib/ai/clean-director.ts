@@ -3,7 +3,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
-import { textAi } from "@/lib/ai/models";
+import { countUsage, textAi } from "@/lib/ai/models";
 import { resolveIcon } from "@/components/video/icons";
 import { DEFAULT_CONTENT, type FilmContent } from "@/components/video/clean/content";
 import { buildPlan, type SevenPart } from "@/components/video/clean/plan";
@@ -126,8 +126,7 @@ export async function generateCleanScript(input: CleanDirectorInput, onUsage?: (
   const request = `Product: ${input.brand.name}${input.product ? ` — ${input.product}` : ""}\nCall to action: ${input.brand.cta}\nNarration:\n${narration}`;
   const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
   const count = (r: { usage?: { input_tokens?: number; output_tokens?: number } | null }) => {
-    usage.inputTokens += r.usage?.input_tokens ?? 0;
-    usage.outputTokens += r.usage?.output_tokens ?? 0;
+    countUsage(usage, r.usage);
   };
   const done = (r: Omit<CleanDirectorResult, "attempts" | "ms">): CleanDirectorResult => {
     onUsage?.(usage);

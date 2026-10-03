@@ -1,5 +1,5 @@
 import { zodTextFormat } from "openai/helpers/zod";
-import { textAi } from "@/lib/ai/models";
+import { countUsage, textAi } from "@/lib/ai/models";
 import { z } from "zod";
 import { checkContinuity, keepOmittedObjects } from "@/lib/ai/blueprint-check";
 import { StoryAssetRecord, VisualStory } from "@/lib/visual-story";
@@ -340,7 +340,9 @@ export function fitDurations(brief: ProductBrief, target: number): ProductBrief 
   return { ...brief, scenes };
 }
 
-export type BriefUsage = { model: string; inputTokens: number; outputTokens: number };
+// reportedUsd: what the provider said its calls cost (fal does); the tokens of
+// calls it reported no cost for are priced from /admin/models.
+export type BriefUsage = { model: string; inputTokens: number; outputTokens: number; reportedUsd?: number; unreportedIn?: number; unreportedOut?: number };
 
 export async function generateProductBrief(
   input: BriefInput,
@@ -373,7 +375,8 @@ export async function generateProductBrief(
     text: { format: zodTextFormat(ProductBriefOutput, "product_brief") },
   });
 
-  const usage = { model, inputTokens: response.usage?.input_tokens ?? 0, outputTokens: response.usage?.output_tokens ?? 0 };
+  const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
+  countUsage(usage, response.usage);
   if (!response.output_parsed) throw new Error("AI returned no structured output.");
   let brief = sanitizeBrief(ProductBrief.parse(response.output_parsed));
 
@@ -388,8 +391,7 @@ export async function generateProductBrief(
         input: `Your storyboard's visual blueprint failed these continuity checks:\n- ${problems.join("\n- ")}\nRevise it and return the complete corrected product_brief. Keep the narration, script and durations unchanged.`,
         text: { format: zodTextFormat(ProductBriefOutput, "product_brief") },
       });
-      usage.inputTokens += revised.usage?.input_tokens ?? 0;
-      usage.outputTokens += revised.usage?.output_tokens ?? 0;
+      countUsage(usage, revised.usage);
       if (revised.output_parsed) {
         const candidate = sanitizeBrief(ProductBrief.parse(revised.output_parsed));
         if (candidate.scenes.length && checkContinuity(candidate).length < problems.length) brief = candidate;

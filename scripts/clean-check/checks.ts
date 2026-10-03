@@ -27,7 +27,7 @@ import { ProductBrief } from "@/lib/ai/product-brief";
 import http from "node:http";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import { defaultConfig, normalizeConfig, textClient, textCost } from "@/lib/ai/models";
+import { countUsage, defaultConfig, normalizeConfig, textClient, textCost, usageCost } from "@/lib/ai/models";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -247,6 +247,16 @@ export async function runChecks(): Promise<Check[]> {
     add("the brief can't be turned off", normalizeConfig({ tasks: { brief: { on: false }, shot: { on: false } } }).tasks.brief.on && !normalizeConfig({ tasks: { shot: { on: false } } }).tasks.shot.on, "brief stays on");
     const cfg = normalizeConfig({ prices: { "google/gemini-2.5-flash": { in: 0.3, out: 2.5 } } });
     add("a model's own price is used for its cost", Math.abs(textCost(cfg, "google/gemini-2.5-flash", 1e6, 1e6, () => -1) - 2.8) < 1e-9 && textCost(cfg, "other", 1, 1, () => -1) === -1, "0.30 in + 2.50 out per 1M");
+    {
+      // fal reports each call's cost; a call without one (the OpenAI backup) is priced
+      const u = { model: "google/gemini-2.5-flash", inputTokens: 0, outputTokens: 0 };
+      countUsage(u, { input_tokens: 100, output_tokens: 50, cost: 0.001 });
+      countUsage(u, { input_tokens: 1e6, output_tokens: 0 });
+      countUsage(u, { input_tokens: 10, output_tokens: 5, cost: 0.002 });
+      const total = usageCost(cfg, u, () => -100);
+      const old = usageCost(cfg, { model: "x", inputTokens: 5, outputTokens: 5 }, () => 7);
+      add("a video's AI cost: fal's reported cost plus the rest priced", Math.abs(total - (0.003 + 0.3)) < 1e-9 && u.inputTokens === 1e6 + 110 && old === 7, `$${total.toFixed(4)} · no report → env pricing`);
+    }
     // fal's OpenAI-compatible chat endpoint, here a local stand-in.
     const seen: { auth?: string; body: { messages: { role: string; content: unknown }[]; response_format?: { type: string } } }[] = [];
     let strict = true;
@@ -270,7 +280,7 @@ export async function runChecks(): Promise<Check[]> {
       const fmt = { format: zodTextFormat(P, "probe") };
       const ai = textClient("fal", "google/gemini-2.5-flash", false);
       const r1 = await ai.client.responses.parse({ model: ai.model, instructions: "SYS", input: "hello", text: fmt });
-      add("fal: structured answer parsed, tokens counted", r1.output_parsed?.tagline === "Plan less" && r1.usage?.input_tokens === 120 && r1.usage?.output_tokens === 30 && seen[0].auth === "Key check-key" && seen[0].body.response_format?.type === "json_schema", `${seen[0].auth} · ${seen[0].body.response_format?.type}`);
+      add("fal: structured answer parsed, tokens and cost counted", r1.output_parsed?.tagline === "Plan less" && (r1.usage as { cost?: number } | null)?.cost === 0.0004 && r1.usage?.input_tokens === 120 && r1.usage?.output_tokens === 30 && seen[0].auth === "Key check-key" && seen[0].body.response_format?.type === "json_schema", `${seen[0].auth} · ${seen[0].body.response_format?.type}`);
       await ai.client.responses.parse({ model: ai.model, instructions: "SYS", previous_response_id: r1.id, input: "fix it", text: fmt });
       const roles = seen[1].body.messages.map((m) => m.role).join(",");
       add("fal: a revision carries the conversation", roles === "system,user,assistant,user", roles);

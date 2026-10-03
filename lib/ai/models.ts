@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import type { BriefUsage } from "@/lib/ai/product-brief";
 
 // Which AI model does each job, and whether the job runs at all — chosen by a
 // super admin on /admin/models (app_settings key "ai_models"). Nothing stored
@@ -98,6 +99,31 @@ export function textCost(config: AiConfig, model: string, inputTokens: number, o
   const p = config.prices[model];
   if (p?.in === undefined && p?.out === undefined) return fallback();
   return (inputTokens / 1e6) * (p.in ?? 0) + (outputTokens / 1e6) * (p.out ?? 0);
+}
+// Adds one call's usage; a cost the provider reported is kept as it is.
+type CallUsage = { input_tokens?: number; output_tokens?: number; cost?: number } | null | undefined;
+export function countUsage(u: BriefUsage, r: CallUsage) {
+  const i = r?.input_tokens ?? 0;
+  const o = r?.output_tokens ?? 0;
+  const before = { in: u.unreportedIn ?? (u.reportedUsd === undefined ? u.inputTokens : 0), out: u.unreportedOut ?? (u.reportedUsd === undefined ? u.outputTokens : 0) };
+  u.inputTokens += i;
+  u.outputTokens += o;
+  const cost = (r as { cost?: unknown } | null | undefined)?.cost;
+  if (typeof cost === "number" && Number.isFinite(cost)) {
+    u.reportedUsd = (u.reportedUsd ?? 0) + cost;
+    u.unreportedIn = before.in;
+    u.unreportedOut = before.out;
+  } else if (u.reportedUsd !== undefined) {
+    u.unreportedIn = before.in + i;
+    u.unreportedOut = before.out + o;
+  }
+}
+// A usage's cost: what the provider reported, plus its other tokens priced.
+export function usageCost(config: AiConfig, u: BriefUsage, fallback: (inputTokens: number, outputTokens: number) => number) {
+  const reported = u.reportedUsd;
+  const i = reported === undefined ? u.inputTokens : (u.unreportedIn ?? 0);
+  const o = reported === undefined ? u.outputTokens : (u.unreportedOut ?? 0);
+  return (reported ?? 0) + (i || o ? textCost(config, u.model, i, o, () => fallback(i, o)) : 0);
 }
 export const unitCost = (config: AiConfig, model: string, units: number, fallback: () => number) => {
   const p = config.prices[model]?.unit;

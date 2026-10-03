@@ -1,7 +1,7 @@
 import "server-only";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
-import { textAi } from "@/lib/ai/models";
+import { countUsage, textAi } from "@/lib/ai/models";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import type { AssetSelection } from "@/lib/asset-selection";
 import type { SceneDirectorInput, SceneDirectorResult } from "@/lib/ai/scene-director";
@@ -195,8 +195,7 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
       return ai.responses.parse({ model, instructions, input: request, text: format, ...quick }, { timeout });
     };
     const count = (r: { usage?: { input_tokens?: number; output_tokens?: number } | null }) => {
-      usage.inputTokens += r.usage?.input_tokens ?? 0;
-      usage.outputTokens += r.usage?.output_tokens ?? 0;
+      countUsage(usage, r.usage);
     };
     const left = () => budgetMs - (Date.now() - started);
     let result: ReturnType<typeof check> = { shots: null, script: null, problems: [], ...none };
