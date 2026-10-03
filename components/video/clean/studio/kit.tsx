@@ -50,7 +50,7 @@ export const card = (pal: Pal, radius = 24): CSSProperties => ({
 // (dark product cards when the look has them — Warm)
 export const appTone = (pal: Pal): AppTone =>
   pal.panelDark
-    ? { bg: pal.panel, side: "#231e1c", ink: pal.panelInk, sub: pal.panelSub, line: pal.line, accent: pal.accent, accent2: pal.accent2, card: "#241f1d" }
+    ? { bg: pal.panel, side: pal.panelSide ?? "#231e1c", ink: pal.panelInk, sub: pal.panelSub, line: pal.line, accent: pal.accent, accent2: pal.accent2, card: pal.panelSide ?? "#241f1d" }
     : { bg: "#ffffff", side: "#f6f6fb", ink: pal.panelInk, sub: pal.panelSub, line: pal.line, accent: pal.panelAccent ?? pal.accent, accent2: pal.panelAccent ? "#8b78ff" : pal.accent2, card: "#ffffff" };
 
 // A part's progress 0..1 (eased by the caller).

@@ -17,7 +17,7 @@ export { partCuts };
 export type Recipe = { look: LookId; blocks: Partial<Record<Role, string>>; hue?: number };
 export type StudioProps = { plan: CleanPlan; recipe: Recipe; postHue?: number; audioUrl?: string | null; webAudio?: boolean };
 
-const ENTER: Record<LookId, Enter> = { glow: "zoom", dusk: "blur", fly: "push", connect: "rise", ember: "blur", paper: "slide", pastel: "blur", warm: "blur", violet: "zoom", azure: "push" };
+const ENTER: Record<LookId, Enter> = { glow: "zoom", dusk: "blur", fly: "push", connect: "rise", ember: "blur", paper: "slide", pastel: "blur", warm: "blur", violet: "zoom", azure: "push", night: "push", line: "slide", crimson: "blur" };
 function cam(kind: Camera) {
   return (p: number, f: number) => {
     if (kind === "push") return `${float(f)} scale(${mix(0.97, 1.05, p)})`;
@@ -36,9 +36,9 @@ function fillOf(box: Box, pal: Pal): CSSProperties {
 }
 function Morph({ f, at: t, a, z, pa, pz }: { f: number; at: number; a: Box; z: Box; pa: Pal; pz: Pal }) {
   // it holds on the new object while the field opens out of it (t + 12)
-  const show = rise(f, t - 18, 8) * (1 - rise(f, t + 16, 12));
+  const show = rise(f, t - 12, 8) * (1 - rise(f, t + 16, 12));
   if (show <= 0) return null;
-  const m = rise(f, t - 12, 24, IN_OUT);
+  const m = rise(f, t - 8, 22, IN_OUT);
   const x = mix(a.x, z.x, m), y = mix(a.y, z.y, m), w = mix(a.w, z.w, m), h = mix(a.h, z.h, m), r = mix(a.r, z.r, m);
   const geo: CSSProperties = { position: "absolute", left: x - w / 2, top: y - h / 2, width: w, height: h, borderRadius: r };
   return (

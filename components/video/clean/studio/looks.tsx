@@ -25,6 +25,7 @@ export type Pal = {
   glass: string; // frosted-pill tint
   panelDark?: boolean; // the product's cards are dark (Warm)
   panelAccent?: string; // the accent on cards when `accent` is for the field (Violet's violet part)
+  panelSide?: string; // a dark card's inner panels (rows, fields)
 };
 
 export type KeyStyle = "pill" | "color" | "underline" | "gradient";
@@ -240,6 +241,58 @@ function azureField(f: number, mode: Mode, i: number) {
   );
 }
 
+// ── from the third set of references ──────────────────────────────────────
+const nightPal: Pal = { dark: true, ink: "#eef2ff", sub: "#8f9bd0", accent: "#3d6bff", accent2: "#8fb0ff", glow: "#4f7dff", panel: "#0d1330", panelInk: "#e8edff", panelSub: "#8391c4", line: "#1d2858", glass: "#6d8dff", panelDark: true, panelSide: "#141c42" };
+const lineLight: Pal = { dark: false, ink: "#1d1060", sub: "#5c578f", accent: "#2b0fa8", accent2: "#24c6c0", glow: "#2b0fa8", panel: "#ffffff", panelInk: "#1d1060", panelSub: "#6f6a9c", line: "#e4e2f1", glass: "#ffffff" };
+const lineDark: Pal = { dark: true, ink: "#ffffff", sub: "#c9c3ff", accent: "#5ee3e0", accent2: "#f06b7c", glow: "#5ee3e0", panel: "#ffffff", panelInk: "#1d1060", panelSub: "#6f6a9c", line: "#e4e2f1", glass: "#ffffff", panelAccent: "#2b0fa8" };
+const crimsonPal: Pal = { dark: true, ink: "#ffffff", sub: "#d2aeb3", accent: "#e3162d", accent2: "#ff6170", glow: "#ff2e44", panel: "#17131a", panelInk: "#ffffff", panelSub: "#a8939a", line: "#2c2329", glass: "#ff8a96", panelDark: true, panelSide: "#221b20" };
+
+// Night (Kitaabh): near-black navy under a deep blue glow, faint rings of
+// light turning slowly.
+function nightField(f: number, i: number) {
+  const cx = [960, 760, 1160, 960][i % 4];
+  return (
+    <AbsoluteFill style={{ background: "#060918", overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: cx - 1300 + Math.sin(f / 80) * 80, top: 380, width: 2600, height: 1300, filter: "blur(30px)" }}><Radial at={[50, 55]} stops={[["rgba(40,80,255,0.55)", 0], ["rgba(30,50,180,0.22)", 0.3], ["transparent", 0.6]]} /></div>
+      {[900, 1300, 1700].map((d, k) => (
+        <div key={d} style={{ position: "absolute", left: cx - d / 2, top: 760 - d / 2 + Math.sin(f / 60 + k) * 10, width: d, height: d, borderRadius: 9999, border: `2px solid rgba(90,130,255,${0.16 - k * 0.04})` }} />
+      ))}
+    </AbsoluteFill>
+  );
+}
+
+// Line (Assembly): flat paper white with dot grids in the corners; its dark
+// mode is a flat deep indigo.
+const dots = (x: number, y: number, w: number, h: number, c: string) => (
+  <div style={{ position: "absolute", left: x, top: y, width: w, height: h, backgroundImage: `linear-gradient(90deg, ${c} 3px, transparent 3px), linear-gradient(${c} 3px, transparent 3px)`, backgroundSize: "26px 26px", WebkitMaskImage: "linear-gradient(135deg, #000, transparent 70%)", maskImage: "linear-gradient(135deg, #000, transparent 70%)", opacity: 0.5 }} />
+);
+function lineField(f: number, mode: Mode, i: number) {
+  if (mode === "dark") return <AbsoluteFill style={{ background: "#2b0fa8" }} />;
+  const flip = i % 2;
+  return (
+    <AbsoluteFill style={{ background: "#f7f7fa", overflow: "hidden" }}>
+      <div style={{ position: "absolute", inset: 0, transform: flip ? "scaleX(-1)" : undefined }}>
+        {dots(1340 + Math.sin(f / 90) * 10, 40, 560, 220, "#9ae6e3")}
+        <div style={{ transform: "rotate(180deg)", position: "absolute", left: 0, top: 820, width: 620, height: 240 }}>{dots(0, 0, 620, 240, "#9ae6e3")}</div>
+      </div>
+    </AbsoluteFill>
+  );
+}
+
+// Crimson (FSS): black with deep red light and slow glossy red orbs.
+const ORBS = Array.from({ length: 7 }, (_, k) => ({ x: (k * 331 + 120) % 1920, y: (k * 547 + 90) % 1080, s: 30 + ((k * 37) % 70) }));
+function crimsonField(f: number, i: number) {
+  return (
+    <AbsoluteFill style={{ background: "#0c0a0c", overflow: "hidden" }}>
+      <div style={{ position: "absolute", left: [-300, 500, 900, 100][i % 4] + Math.sin(f / 90) * 100, top: -500, width: 1700, height: 1500, filter: "blur(40px)" }}><Radial stops={[["rgba(190,10,30,0.55)", 0], ["rgba(120,0,20,0.22)", 0.35], ["transparent", 0.62]]} /></div>
+      <div style={{ position: "absolute", left: 900, top: 500, width: 1400, height: 900, filter: "blur(40px)" }}><Radial stops={[["rgba(150,0,20,0.35)", 0], ["transparent", 0.6]]} /></div>
+      {ORBS.map((o, k) => (
+        <div key={k} style={{ position: "absolute", left: o.x + Math.sin(f / 70 + k) * 30, top: o.y + Math.cos(f / 80 + k) * 24, width: o.s, height: o.s, borderRadius: 999, background: "linear-gradient(150deg, rgba(255,120,130,0.5), rgba(200,10,30,0.35) 55%, rgba(80,0,10,0.2))", filter: `blur(${k % 3 ? 3 : 0}px)`, opacity: 0.55 }} />
+      ))}
+    </AbsoluteFill>
+  );
+}
+
 const always = (m: Mode) => () => m;
 export const LOOKS: Record<LookId, Look> = {
   glow: { id: "glow", name: "Glow", mode: always("dark"), pal: { dark: glowPal, light: glowPal }, key: "pill", camera: "push", field: (f, _m, i) => glowField(f, i) },
@@ -252,6 +305,9 @@ export const LOOKS: Record<LookId, Look> = {
   warm: { id: "warm", name: "Warm", mode: always("light"), pal: { dark: warmPal, light: warmPal }, key: "pill", camera: "push", field: (f, _m, i) => warmField(f, i) },
   violet: { id: "violet", name: "Violet", mode: (r) => (r === "reveal" || r === "growth" ? "dark" : "light"), pal: { dark: violetDark, light: violetLight }, key: "color", camera: "float", field: violetField, wipe: "circle" },
   azure: { id: "azure", name: "Azure", mode: (r) => (r === "reveal" || r === "pay" ? "dark" : "light"), pal: { dark: azureDark, light: azureLight }, key: "gradient", camera: "tilt", field: azureField },
+  night: { id: "night", name: "Night", mode: always("dark"), pal: { dark: nightPal, light: nightPal }, key: "gradient", camera: "tilt", field: (f, _m, i) => nightField(f, i) },
+  line: { id: "line", name: "Line", mode: (r) => (r === "trio" || r === "cta" ? "dark" : "light"), pal: { dark: lineDark, light: lineLight }, key: "color", camera: "float", field: lineField, wipe: "circle" },
+  crimson: { id: "crimson", name: "Crimson", mode: always("dark"), pal: { dark: crimsonPal, light: crimsonPal }, key: "color", camera: "push", field: (f, _m, i) => crimsonField(f, i) },
 };
 export const LOOK_IDS = Object.keys(LOOKS) as LookId[];
 
