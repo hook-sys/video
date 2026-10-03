@@ -19,7 +19,7 @@ export const OUTF = 12;
 // OUTF frames — blurring and moving on, never just vanishing — and the next
 // comes in over IN frames from just before its cut).
 // `cam(p, f)` is the camera over the shot (p 0..1 eased through it).
-export type Enter = "blur" | "zoom" | "push" | "slide" | "rise" | "none";
+export type Enter = "blur" | "zoom" | "push" | "slide" | "rise" | "fade" | "none";
 // `inDur` / `outDur` lengthen the way in / out (big bright panels on a dark
 // field need longer, so the frame never flashes).
 export function Shot({ f, from, to, enter = "blur", exit = "blur", cam, last, children, style, inDur = IN, outDur = OUTF }: { f: number; from: number; to: number; enter?: Enter; exit?: Enter; cam?: (p: number, f: number) => string; last?: boolean; children: ReactNode; style?: CSSProperties; inDur?: number; outDur?: number }) {
@@ -33,6 +33,7 @@ export function Shot({ f, from, to, enter = "blur", exit = "blur", cam, last, ch
     push: (k, out) => ({ t: `scale(${out ? mix(0.8, 1, k) : mix(1.3, 1, k)})`, filter: `blur(${(1 - k) * 14}px)`, o: k }),
     slide: (k, out) => ({ t: `translateX(${(1 - k) * (out ? -260 : 260)}px)`, filter: `blur(${(1 - k) * 12}px)`, o: k }),
     rise: (k, out) => ({ t: `translateY(${(1 - k) * (out ? -140 : 140)}px)`, filter: `blur(${(1 - k) * 12}px)`, o: k }),
+    fade: (k) => ({ t: "", filter: `blur(${(1 - k) * 6}px)`, o: k }),
     none: () => ({ t: "", o: 1 }),
   };
   const a = fx[enter](kin, false);

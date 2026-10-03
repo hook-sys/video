@@ -2,7 +2,7 @@ import { Icon } from "../../../icons";
 import { IN_OUT, mix, OUT, rise } from "../../anim";
 import { plainW } from "../../refs/beats";
 import { abs, Area, AppWindow, at, FlowMark, Glass, glide, grow, Kpi, Pointer, press, soft, W } from "../../refs/common";
-import { appTone, type Block, type BlockCtx, card, Say } from "../kit";
+import { appTone, type Block, type BlockCtx, box, card, Say } from "../kit";
 
 // The closing line: the promise.
 
@@ -139,6 +139,6 @@ export const CTA_BLOCKS: Block[] = [
   { id: "cta.notch", role: "cta", name: "Glass notch → glowing check", from: "Glow", draw: notch },
   { id: "cta.frame", role: "cta", name: "Words in curved lines", from: "Dusk", draw: frame },
   { id: "cta.overview", role: "cta", name: "Two tones over the product", from: "Fly", draw: overview },
-  { id: "cta.stack", role: "cta", name: "Things fan behind the card", from: "Connect", draw: stack },
-  { id: "cta.button", role: "cta", name: "Button clicked", from: "new", draw: button },
+  { id: "cta.stack", role: "cta", name: "Things fan behind the card", from: "Connect", draw: stack, obj: () => ({ a: box(960, 620, 420, 340, 28), z: box(960, 620, 420, 340, 28) }) },
+  { id: "cta.button", role: "cta", name: "Button clicked", from: "new", draw: button, obj: (c) => ({ a: box(960, 680, 230 + c.b.brand.cta.length * 31, 138, 69, "accent"), z: box(960, 680, 230 + c.b.brand.cta.length * 31, 138, 69, "accent") }) },
 ];

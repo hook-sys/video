@@ -3,7 +3,7 @@ import { Icon } from "../../../icons";
 import { compact, show } from "../../content";
 import { IN_OUT, mix, OUT, rise } from "../../anim";
 import { Area, at, FlowMark, glide, grow, Pointer, press, soft, W } from "../../refs/common";
-import { appTone, type Block, type BlockCtx, card, Say } from "../kit";
+import { appTone, type Block, type BlockCtx, type Box, card, Say } from "../kit";
 import type { Pal } from "../looks";
 import { TOOLS } from "./parts";
 
@@ -588,14 +588,16 @@ function outline(c: BlockCtx) {
   );
 }
 
+const card$ = (x: number, y: number, w: number, h: number, r: number, fill: Box["fill"] = "card"): Box => ({ x, y, w, h, r, fill });
+
 export const R2_CLOSE: Block[] = [
-  { id: "growth.monitor", role: "growth", name: "Desktop + floating figures", from: "Alex", draw: monitor },
-  { id: "growth.analytics", role: "growth", name: "Figures + bar chart", from: "Alex", draw: analytics },
+  { id: "growth.monitor", role: "growth", name: "Desktop + floating figures", from: "Alex", draw: monitor, obj: () => ({ a: card$(960, 546, 1060, 620, 34, "dark"), z: card$(960, 546, 1060, 620, 34, "dark") }) },
+  { id: "growth.analytics", role: "growth", name: "Figures + bar chart", from: "Alex", draw: analytics, obj: () => ({ a: card$(960, 590, 1300, 620, 36), z: card$(960, 590, 1300, 620, 36) }) },
   { id: "nomore.pills", role: "nomore", name: '"No more" pills + icons', from: "UrVote", draw: pills },
-  { id: "nomore.clear", role: "nomore", name: "Alerts cleared", from: "Alex", draw: clear },
-  { id: "nomore.lock", role: "nomore", name: "Lock, entries scramble", from: "UrVote", draw: lock },
-  { id: "cta.store", role: "cta", name: "App-store card, Get → Open", from: "Converse", draw: store },
-  { id: "cta.rings", role: "cta", name: "Mark in rings, ticks", from: "UrVote", draw: rings },
-  { id: "end.pen", role: "end", name: "Pen name + tapped pill", from: "Alex", draw: pen },
-  { id: "end.outline", role: "end", name: "Outline fills, two-tone name", from: "Converse", draw: outline },
+  { id: "nomore.clear", role: "nomore", name: "Alerts cleared", from: "Alex", draw: clear, obj: () => ({ a: card$(960, 620, 760, 620, 36), z: card$(960, 620, 760, 620, 36) }) },
+  { id: "nomore.lock", role: "nomore", name: "Lock, entries scramble", from: "UrVote", draw: lock, obj: () => ({ a: card$(960, 650, 1000, 460, 30), z: card$(960, 650, 1000, 460, 30) }) },
+  { id: "cta.store", role: "cta", name: "App-store card, Get → Open", from: "Converse", draw: store, obj: () => ({ a: card$(960, 600, 1240, 370, 44, "glass"), z: card$(960, 600, 1240, 370, 44, "glass") }) },
+  { id: "cta.rings", role: "cta", name: "Mark in rings, ticks", from: "UrVote", draw: rings, obj: () => ({ a: card$(960, 540, 280, 280, 140, "accent"), z: card$(960, 540, 280, 280, 140, "accent") }) },
+  { id: "end.pen", role: "end", name: "Pen name + tapped pill", from: "Alex", draw: pen, obj: () => ({ a: card$(960, 660, 330, 100, 50, "accent") }) },
+  { id: "end.outline", role: "end", name: "Outline fills, two-tone name", from: "Converse", draw: outline, obj: () => ({ a: card$(960, 380, 230, 230, 60, "accent") }) },
 ];

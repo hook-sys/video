@@ -8,6 +8,11 @@ import type { Look, Pal, Role } from "./looks";
 // What a block is given: the frame, its part's span, the look and palette,
 // the script's moments and lines, the product's card content.
 export type BlockCtx = { f: number; from: number; to: number; role: Role; look: Look; pal: Pal; b: Beats; T: Moments; L: Lines; C: FilmContent };
+// A block's main object (centre, size, corner radius, how it is filled):
+// where it stands when the part opens (`a`) and when it closes (`z`). Between
+// two parts the one becomes the other (film.tsx) instead of a cut.
+export type Box = { x: number; y: number; w: number; h: number; r: number; fill: "card" | "accent" | "glass" | "dark" };
+export const box = (x: number, y: number, w: number, h: number, r: number, fill: Box["fill"] = "card"): Box => ({ x, y, w, h, r, fill });
 export type Block = {
   id: string;
   role: Role;
@@ -15,6 +20,7 @@ export type Block = {
   // where the design came from (a reference film, or new)
   from: string;
   draw: (c: BlockCtx) => ReactNode;
+  obj?: (c: BlockCtx) => { a?: Box; z?: Box };
 };
 
 // The keyword in the look's way: a pill, a colour, a marker or a gradient.

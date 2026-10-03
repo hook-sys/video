@@ -51,3 +51,16 @@ export const BLOCK_TAGS: Record<string, Category[]> = {
   "end.pen": ["sales"],
   "end.outline": ["fintech"],
 };
+
+// Blocks whose main object can take part in a hand-off: "a" — it stands
+// ready when the part opens, "z" — when it closes (blocks' `obj`).
+export const HANDS: Record<string, "a" | "z" | "az"> = {
+  "hook.fan": "a", "hook.slot": "az", "hook.bigtype": "z", "hook.alerts": "az", "hook.bill": "az",
+  "trio.split": "az", "trio.bubbles": "az", "trio.juggle": "az",
+  "reveal.profile": "az", "reveal.link": "z", "reveal.appicon": "az",
+  "pay.receipt": "az", "pay.notify": "z", "pay.command": "az", "pay.rank": "az",
+  "growth.live": "az", "growth.chart": "az", "growth.monitor": "az", "growth.analytics": "az",
+  "nomore.clear": "az", "nomore.lock": "az",
+  "cta.stack": "az", "cta.button": "az", "cta.store": "az", "cta.rings": "az",
+  "end.spotlight": "a", "end.pen": "a", "end.outline": "a",
+};

@@ -1,7 +1,7 @@
 import { Icon } from "../../../icons";
 import { mix, OUT, rise } from "../../anim";
 import { abs, at, Comet, FlowMark, Glass, grow, Logo, soft, W } from "../../refs/common";
-import type { Block, BlockCtx } from "../kit";
+import { type Block, type BlockCtx, box } from "../kit";
 
 // The end card: logo, promise, call to action, address.
 const cols = (c: BlockCtx): [string, string] => [c.pal.accent2, c.pal.accent];
@@ -94,5 +94,5 @@ export const END_BLOCKS: Block[] = [
   { id: "end.mark", role: "end", name: "Mark draws, dark pill", from: "Dusk", draw: mark },
   { id: "end.button", role: "end", name: "Logo + solid button", from: "Fly / Connect", draw: button },
   { id: "end.split", role: "end", name: "Mark | name, button", from: "new", draw: split },
-  { id: "end.spotlight", role: "end", name: "Mark in a ring of light", from: "new", draw: spotlight },
+  { id: "end.spotlight", role: "end", name: "Mark in a ring of light", from: "new", draw: spotlight, obj: () => ({ a: box(960, 400, 420, 420, 210, "glass") }) },
 ];

@@ -20,9 +20,9 @@ import { cleanVariants, FILM_HUE, hueOf } from "@/lib/clean-variants";
 import { buildPlan } from "@/components/video/clean/plan";
 import { DEFAULT_CONTENT } from "@/components/video/clean/content";
 import { BLOCKS } from "@/components/video/clean/studio/blocks";
-import { BLOCK_IDS, BLOCK_TAGS, LOOK_IDS as STUDIO_LOOK_IDS, LOOK_TAGS, ROLES } from "@/components/video/clean/studio/ids";
+import { BLOCK_IDS, BLOCK_TAGS, HANDS, LOOK_IDS as STUDIO_LOOK_IDS, LOOK_TAGS, ROLES } from "@/components/video/clean/studio/ids";
 import { LOOKS } from "@/components/video/clean/studio/looks";
-import { type StudioRecipe, studioVariants, toRecipe, tooClose } from "@/lib/studio-variants";
+import { handoffs, type StudioRecipe, studioVariants, toRecipe, tooClose } from "@/lib/studio-variants";
 import { ProductBrief } from "@/lib/ai/product-brief";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
@@ -211,6 +211,13 @@ export async function runChecks(): Promise<Check[]> {
   add("the id list matches the drawn blocks and looks", JSON.stringify(ROLES.flatMap((r) => BLOCK_IDS[r])) === JSON.stringify(BLOCKS.map((b) => b.id)) && JSON.stringify([...STUDIO_LOOK_IDS]) === JSON.stringify(Object.keys(LOOKS)), `${BLOCKS.length} blocks, ${Object.keys(LOOKS).length} looks`);
   const allIds = new Set(ROLES.flatMap((r) => BLOCK_IDS[r]));
   add("every category tag names a real block or look", Object.keys(BLOCK_TAGS).every((id) => allIds.has(id)) && Object.keys(LOOK_TAGS).every((l) => (STUDIO_LOOK_IDS as readonly string[]).includes(l)), `${Object.keys(BLOCK_TAGS).length} blocks, ${Object.keys(LOOK_TAGS).length} looks tagged`);
+  const ctx = { f: 0, from: 0, to: 100, role: "hook", look: LOOKS.glow, pal: LOOKS.glow.pal.dark, b: beatsFromPlan(shopnestPlan()), T: beatsFromPlan(shopnestPlan()).t, L: beatsFromPlan(shopnestPlan()).line, C: beatsFromPlan(shopnestPlan()).content } as Parameters<NonNullable<(typeof BLOCKS)[number]["obj"]>>[0];
+  const handsOk = BLOCKS.every((b) => {
+    const o = b.obj?.(ctx) ?? {};
+    const want = (o.a ? "a" : "") + (o.z ? "z" : "");
+    return (HANDS[b.id] ?? "") === want;
+  });
+  add("the hand-off list matches the blocks' objects", handsOk, `${Object.keys(HANDS).length} blocks hand off`);
   const valid = (v: StudioRecipe) => STUDIO_LOOK_IDS.includes(v.look) && ROLES.every((r) => BLOCK_IDS[r].includes(v.blocks[r]));
   const sets: StudioRecipe[][] = [];
   for (let g = 0; g < 6; g++) sets.push(studioVariants(4321, sets));
@@ -221,6 +228,7 @@ export async function runChecks(): Promise<Check[]> {
   const closeCount = sets.reduce((n, set, g) => n + set.filter((v) => sets.slice(0, g).flat().some((p) => tooClose(v, p))).length, 0);
   add("six regenerations: no video close to an earlier one", closeCount === 0, `${closeCount} close of ${sets.flat().length}`);
   add("a regeneration is not a reshuffle of the last set", sets.slice(1).every((set, g) => set.every((v) => !sets[g].some((p) => p.look === v.look && ROLES.every((r) => p.blocks[r] === v.blocks[r])))), "no recipe repeats");
+  add("a set hands off at several cuts", s1.every((v) => handoffs(v) >= 2), s1.map((v) => `${v.look} ${handoffs(v)}`).join(", "));
   add("the same seed and history → the same four", JSON.stringify(studioVariants(4321, [])) === JSON.stringify(s1), "deterministic");
   const legacy = toRecipe({ film: "dusk", tint: "brand", hue: 40 });
   add("an older film video maps to its look and blocks", valid(legacy) && legacy.look === "dusk" && legacy.hue === 40 && legacy.blocks.hook === "hook.typed", JSON.stringify(legacy.blocks).slice(0, 80));

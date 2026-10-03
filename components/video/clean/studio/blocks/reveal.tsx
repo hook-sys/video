@@ -2,7 +2,7 @@ import { Icon } from "../../../icons";
 import { count, IN_OUT, mix, OUT, rise } from "../../anim";
 import { change, show } from "../../content";
 import { appear, Area, AppWindow, at, Check, Comet, FlowMark, Glass, grow, Kpi, Logo, Pointer, press, soft, W } from "../../refs/common";
-import { appTone, type Block, type BlockCtx, card, Say } from "../kit";
+import { appTone, type Block, type BlockCtx, box, card, Say } from "../kit";
 
 // The product comes in: its name on its spoken word, then what it does.
 const markColors = (c: BlockCtx): [string, string] => [c.pal.accent2, c.pal.accent];
@@ -153,6 +153,6 @@ export const REVEAL_BLOCKS: Block[] = [
   { id: "reveal.streak", role: "reveal", name: "Light streak → linked cards", from: "Glow", draw: streak },
   { id: "reveal.pill", role: "reveal", name: "Tagline pill → big button", from: "Dusk", draw: pill },
   { id: "reveal.rising", role: "reveal", name: "Product rises under the name", from: "Fly", draw: rising },
-  { id: "reveal.profile", role: "reveal", name: "Product card", from: "Connect", draw: profile },
+  { id: "reveal.profile", role: "reveal", name: "Product card", from: "Connect", draw: profile, obj: () => ({ a: box(960, 540, 946, 482, 26), z: box(960, 540, 1144, 582, 31) }) },
   { id: "reveal.converge", role: "reveal", name: "Things merge into the mark", from: "new", draw: converge },
 ];

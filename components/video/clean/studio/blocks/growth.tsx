@@ -2,7 +2,7 @@ import { Icon } from "../../../icons";
 import { count, IN_OUT, mix, OUT, rise } from "../../anim";
 import { pct, show, steps } from "../../content";
 import { abs, Area, AppWindow, at, BarsV, Check, glide, grow, Kpi, Person, Pointer, soft, W } from "../../refs/common";
-import { appTone, type Block, type BlockCtx, card, Say } from "../kit";
+import { appTone, type Block, type BlockCtx, box, card, Say } from "../kit";
 
 // Growth, seen by the whole team (initials only).
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#0ea5e9"];
@@ -204,7 +204,7 @@ function ring(c: BlockCtx) {
 export const GROWTH_BLOCKS: Block[] = [
   { id: "growth.bars", role: "growth", name: "Bar card + team toggle", from: "Glow", draw: bars },
   { id: "growth.dashboard", role: "growth", name: "Sparkle → dashboard → team", from: "Dusk", draw: dashboard },
-  { id: "growth.chart", role: "growth", name: "Chart, then the team table", from: "Fly", draw: chart },
-  { id: "growth.live", role: "growth", name: "LIVE card", from: "Connect", draw: live },
+  { id: "growth.chart", role: "growth", name: "Chart, then the team table", from: "Fly", draw: chart, obj: () => ({ a: box(960, 440, 1400, 520, 24), z: box(960, 440, 1400, 520, 24) }) },
+  { id: "growth.live", role: "growth", name: "LIVE card", from: "Connect", draw: live, obj: () => ({ a: box(960, 540, 1180, 470, 28), z: box(960, 540, 1180, 470, 28) }) },
   { id: "growth.ring", role: "growth", name: "Ring gauge + team around it", from: "new", draw: ring },
 ];

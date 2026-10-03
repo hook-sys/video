@@ -3,7 +3,7 @@ import { Icon } from "../../../icons";
 import { IN_OUT, mix, OUT, rise } from "../../anim";
 import type { KWord } from "../../text";
 import { abs, at, FlowMark, glide, grow, Person, Pointer, press, soft, W } from "../../refs/common";
-import { appTone, type Block, type BlockCtx, card, Say } from "../kit";
+import { appTone, type Block, type BlockCtx, type Box, card, Say } from "../kit";
 import type { Pal } from "../looks";
 import { TOOLS } from "./parts";
 
@@ -1171,6 +1171,28 @@ function rank(c: BlockCtx) {
   );
 }
 
+// ── where each block's main object stands (for the hand-off between parts)
+const card$ = (x: number, y: number, w: number, h: number, r: number, fill: Box["fill"] = "card"): Box => ({ x, y, w, h, r, fill });
+function slotBox(c: BlockCtx): Box {
+  const lead = c.L.hookA.reduce((a, w) => a + w.t.length + 1, 0);
+  const items = [...c.b.trio.map((x) => x.label), c.L.hookBig.t.replace(/[.,!?]$/, "")];
+  const longest = Math.max(...items.map((t) => t.length));
+  const size = Math.min(84, Math.floor(1700 / (lead * 0.5 + longest * 0.56 + 2)));
+  const wPill = longest * size * 0.56 + 90;
+  const row = lead * size * 0.5 + 26 + wPill;
+  return card$(W / 2 + row / 2 - wPill / 2, 540, wPill, size * 1.4, 26, "accent");
+}
+function bigtypeBox(c: BlockCtx): Box {
+  const w = c.L.hookBig.t.length * 190 * 0.52 + 100;
+  return card$(1720 - w / 2, 540, w, 228, 60, "accent");
+}
+function linkBox(c: BlockCtx): Box {
+  const brandW = 108 + 76 + 22 + c.b.brand.name.length * 66 * 0.55;
+  const thingW = Math.max(320, 108 + 58 + 22 + c.b.label.length * 66 * 0.55);
+  const row = brandW + 30 + 60 + 30 + thingW;
+  return card$(W / 2 + row / 2 - thingW / 2, 540, thingW, 150, 34, "dark");
+}
+
 export const R2_OPEN: Block[] = [
   {
     id: "hook.slot",
@@ -1178,6 +1200,7 @@ export const R2_OPEN: Block[] = [
     name: "Word rolls in a pill",
     from: "UrVote",
     draw: slot,
+    obj: (c) => ({ a: slotBox(c), z: slotBox(c) }),
   },
   {
     id: "hook.bigtype",
@@ -1185,6 +1208,7 @@ export const R2_OPEN: Block[] = [
     name: "Giant typing, keyword pill",
     from: "Alex",
     draw: bigtype,
+    obj: (c) => ({ z: bigtypeBox(c) }),
   },
   {
     id: "hook.glassgrid",
@@ -1199,6 +1223,7 @@ export const R2_OPEN: Block[] = [
     name: "Alerts pile up",
     from: "Alex",
     draw: alerts,
+    obj: () => ({ a: card$(960, 640, 760, 560, 36), z: card$(960, 640, 760, 560, 36) }),
   },
   {
     id: "hook.bill",
@@ -1206,6 +1231,7 @@ export const R2_OPEN: Block[] = [
     name: "Bill of hours lost",
     from: "Madison",
     draw: bill,
+    obj: () => ({ a: card$(1330, 540, 640, 540, 30), z: card$(1330, 540, 640, 540, 30) }),
   },
   {
     id: "trio.bubbles",
@@ -1213,6 +1239,7 @@ export const R2_OPEN: Block[] = [
     name: "Glass bubbles",
     from: "Alex",
     draw: bubbles,
+    obj: () => ({ a: card$(460, 445, 300, 300, 150, "glass"), z: card$(960, 445, 300, 300, 150, "glass") }),
   },
   {
     id: "trio.juggle",
@@ -1220,6 +1247,7 @@ export const R2_OPEN: Block[] = [
     name: "One person, many chips",
     from: "Madison",
     draw: juggle,
+    obj: () => ({ a: card$(960, 540, 268, 268, 134, "accent"), z: card$(960, 540, 268, 268, 134, "accent") }),
   },
   {
     id: "reveal.script",
@@ -1241,6 +1269,7 @@ export const R2_OPEN: Block[] = [
     name: "Linked pills flip",
     from: "Alex",
     draw: link,
+    obj: (c) => ({ z: linkBox(c) }),
   },
   {
     id: "reveal.appicon",
@@ -1248,6 +1277,7 @@ export const R2_OPEN: Block[] = [
     name: "App icon → name card",
     from: "Converse",
     draw: appicon,
+    obj: () => ({ a: card$(960, 440, 200, 200, 52, "accent"), z: card$(960, 440, 560, 520, 48) }),
   },
   {
     id: "pay.command",
@@ -1255,6 +1285,7 @@ export const R2_OPEN: Block[] = [
     name: "Command bar → list ticks",
     from: "Alex",
     draw: command,
+    obj: () => ({ a: card$(960, 400, 1180, 120, 60), z: card$(960, 330, 1180, 120, 60) }),
   },
   {
     id: "pay.rank",
@@ -1262,5 +1293,6 @@ export const R2_OPEN: Block[] = [
     name: "Row climbs to the top",
     from: "Madison",
     draw: rank,
+    obj: () => ({ a: card$(1300, 540, 760, 620, 32), z: card$(1300, 540, 760, 620, 32) }),
   },
 ];

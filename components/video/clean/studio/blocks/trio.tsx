@@ -2,7 +2,7 @@ import { interpolate } from "remotion";
 import { Icon } from "../../../icons";
 import { IN_OUT, mix, OUT, rise } from "../../anim";
 import { Area, at, Glass, glide, grow, Pointer, press, soft, W } from "../../refs/common";
-import { type Block, type BlockCtx, card, Say } from "../kit";
+import { type Block, type BlockCtx, box, card, Say } from "../kit";
 import { Win } from "./parts";
 
 // The three things (each on its own spoken word). All three stay on screen
@@ -155,5 +155,5 @@ export const TRIO_BLOCKS: Block[] = [
   { id: "trio.carousel", role: "trio", name: "Word carousel", from: "Dusk", draw: carousel },
   { id: "trio.windows", role: "trio", name: "Tool windows + cursor", from: "Fly", draw: windows },
   { id: "trio.cards", role: "trio", name: "Header cards", from: "Connect", draw: cards },
-  { id: "trio.split", role: "trio", name: "Three panels", from: "new", draw: split },
+  { id: "trio.split", role: "trio", name: "Three panels", from: "new", draw: split, obj: () => ({ a: box(370, 540, 560, 860, 36), z: box(960, 540, 560, 860, 36) }) },
 ];

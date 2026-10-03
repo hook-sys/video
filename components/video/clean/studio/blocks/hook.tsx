@@ -1,6 +1,6 @@
 import { mix, OUT, rise } from "../../anim";
 import { at, Comet, soft, Token, Typed, W } from "../../refs/common";
-import { type Block, type BlockCtx, Say } from "../kit";
+import { type Block, type BlockCtx, box, Say } from "../kit";
 import { Sheet, Tag, TOOLS, Win } from "./parts";
 
 // The opening line (the problem). Every block keeps its things on screen for
@@ -122,5 +122,5 @@ export const HOOK_BLOCKS: Block[] = [
   { id: "hook.typed", role: "hook", name: "Typed between sheets", from: "Dusk", draw: typed },
   { id: "hook.depth", role: "hook", name: "Windows at depth", from: "Fly", draw: depth },
   { id: "hook.tags", role: "hook", name: "Tags at depth", from: "Connect", draw: tags },
-  { id: "hook.fan", role: "hook", name: "Stack fans out", from: "new", draw: fan },
+  { id: "hook.fan", role: "hook", name: "Stack fans out", from: "new", draw: fan, obj: () => ({ a: box(960, 470, 420, 270, 20) }) },
 ];

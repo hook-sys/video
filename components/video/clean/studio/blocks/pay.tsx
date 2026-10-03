@@ -3,7 +3,7 @@ import { count, IN_OUT, mix, OUT, rise } from "../../anim";
 import { change, type FilmContent, show } from "../../content";
 import { abs, Area, AppWindow, type AppTone, at, Check, glide, grow, Kpi, Person, Pointer, press, soft, W } from "../../refs/common";
 import type { Moments } from "../../refs/beats";
-import { appTone, type Block, type BlockCtx, card, Say } from "../kit";
+import { appTone, type Block, type BlockCtx, box, card, Say } from "../kit";
 
 // The event: something happens and the number changes, on the voice.
 
@@ -215,8 +215,8 @@ function notify(c: BlockCtx) {
 
 export const PAY_BLOCKS: Block[] = [
   { id: "pay.board", role: "pay", name: "Tilted app list", from: "Glow", draw: board },
-  { id: "pay.receipt", role: "pay", name: "Receipt scanned", from: "Dusk", draw: receipt },
+  { id: "pay.receipt", role: "pay", name: "Receipt scanned", from: "Dusk", draw: receipt, obj: () => ({ a: box(1380, 540, 308, 385, 6), z: box(760, 540, 560, 700, 10) }) },
   { id: "pay.flight", role: "pay", name: "Camera into the product", from: "Fly", draw: flight },
   { id: "pay.wall", role: "pay", name: "Wall of people ticks", from: "Connect", draw: wall },
-  { id: "pay.notify", role: "pay", name: "Notification → big number", from: "new", draw: notify },
+  { id: "pay.notify", role: "pay", name: "Notification → big number", from: "new", draw: notify, obj: () => ({ z: box(1460, 250, 560, 104, 22) }) },
 ];

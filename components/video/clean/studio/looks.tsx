@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { AbsoluteFill, interpolate } from "remotion";
 import { Radial, W } from "../refs/common";
 
@@ -256,18 +256,33 @@ export const LOOKS: Record<LookId, Look> = {
 export const LOOK_IDS = Object.keys(LOOKS) as LookId[];
 
 // The background over the whole video: each part's field; where the mode
-// changes, the new field rises as a soft band (linear, so it never flashes).
-export function Backdrop({ f, look, parts }: { f: number; look: Look; parts: { role: Role; from: number }[] }) {
-  const i = Math.max(0, parts.findLastIndex((p) => p.from <= f + 16));
+// changes, the new field opens out of a card (or Violet's circle).
+export type Origin = { x: number; y: number; w: number; h: number; r: number } | null;
+export function Backdrop({ f, look, parts, origins }: { f: number; look: Look; parts: { role: Role; from: number }[]; origins?: Origin[] }) {
+  // where the field changes: from 16 frames before a cut — or, when the new
+  // part's object grows out of the last one's, once it has arrived
+  const w0 = (j: number) => (origins?.[j] ? parts[j].from + 2 : parts[j].from - 16);
+  const dur = (j: number) => (origins?.[j] ? 28 : 36);
+  const i = Math.max(0, parts.findLastIndex((_, j) => w0(j) <= f));
   const cur = look.mode(parts[i].role);
   const prev = i ? look.mode(parts[i - 1].role) : cur;
-  const k = cur === prev ? 1 : interpolate(f, [parts[i].from - 16, parts[i].from + 20], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const y = k * 1400 - 320;
-  const mask = `linear-gradient(to top, #000 ${y}px, transparent ${y + 320}px)`;
-  // a circle grows from the left or right edge (alternating), eased
+  const k = cur === prev ? 1 : interpolate(f, [w0(i), w0(i) + dur(i)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const ck = k * k * (3 - 2 * k);
-  const clip = `circle(${Math.round(ck * 2300)}px at ${i % 2 ? 1920 : 0}px 540px)`;
-  const wipe = k < 1 ? (look.wipe === "circle" ? { clipPath: clip, WebkitClipPath: clip } : { maskImage: mask, WebkitMaskImage: mask }) : undefined;
+  let wipe: CSSProperties | undefined;
+  if (k < 1 && look.wipe === "circle") {
+    const clip = `circle(${Math.round(ck * 2300)}px at ${i % 2 ? 1920 : 0}px 540px)`;
+    wipe = { clipPath: clip, WebkitClipPath: clip };
+  } else if (k < 1) {
+    // the new field opens out of the incoming object (or a point in the
+    // middle) to the full frame — a clean edge, never a grey band
+    const o = origins?.[i] ?? { x: 960, y: 540, w: 0, h: 0, r: 0 };
+    const top = (o.y - o.h / 2) * (1 - ck);
+    const left = (o.x - o.w / 2) * (1 - ck);
+    const bottom = (1080 - o.y - o.h / 2) * (1 - ck);
+    const right = (1920 - o.x - o.w / 2) * (1 - ck);
+    const clip = `inset(${Math.round(top)}px ${Math.round(right)}px ${Math.round(bottom)}px ${Math.round(left)}px round ${Math.round(Math.max(o.r, 60 * Math.sin(ck * Math.PI)) * (1 - ck))}px)`;
+    wipe = { clipPath: clip, WebkitClipPath: clip };
+  }
   return (
     <AbsoluteFill>
       {k < 1 && <AbsoluteFill>{look.field(f, prev, Math.max(0, i - 1))}</AbsoluteFill>}
