@@ -78,7 +78,7 @@ function spotlight(c: BlockCtx) {
     <>
       {at(W / 2, 400, (
         <div style={{ position: "relative", width: 420, height: 420, opacity: k, transform: `scale(${mix(0.8, 1, k)})` }}>
-          <div style={{ position: "absolute", inset: 0, borderRadius: 999, background: `conic-gradient(from ${f * 1.5}deg, transparent, ${pal.glow}aa, transparent 30%, transparent 50%, ${pal.accent2}aa, transparent 80%)`, filter: "blur(6px)" }} />
+          <div style={{ position: "absolute", inset: 0, borderRadius: 999, border: `3px solid ${pal.glow}55`, background: `conic-gradient(from ${f * 1.5}deg, transparent, ${pal.glow}aa, transparent 30%, transparent 50%, ${pal.accent2}aa, transparent 80%)`, filter: "blur(6px)" }} />
           <div style={{ position: "absolute", inset: 18, borderRadius: 999, background: pal.dark ? "#00000055" : "#ffffffcc", display: "flex", alignItems: "center", justifyContent: "center" }}><FlowMark size={200} colors={cols(c)} draw={rise(f, t + 4, 26)} /></div>
         </div>
       ))}

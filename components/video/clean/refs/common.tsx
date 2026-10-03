@@ -1,4 +1,4 @@
-import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useId, type CSSProperties, type ReactNode } from "react";
 import { AbsoluteFill, Easing, Img } from "remotion";
 import { Icon } from "../../icons";
 import { IN_OUT, mix, rise } from "../anim";
@@ -375,3 +375,22 @@ export function glide(f: number, path: [number, number, number][]): [number, num
   return [l[1], l[2]];
 }
 export const press = (f: number, clicks: number[]) => clicks.reduce((a, c) => Math.max(a, rise(f, c, 4) * (1 - rise(f, c + 4, 10))), 0);
+
+// A radial glow as SVG: the browser renderer behind downloads draws linear
+// gradients only, so a CSS radial-gradient would vanish from the file.
+// `stops`: [colour, offset 0–1]; `at`: centre in % of the box; `r`: radius
+// as a fraction of the box (0.71 ≈ CSS "ellipse" farthest-corner).
+export function Radial({ stops, at = [50, 50], r = 0.71, style }: { stops: [string, number][]; at?: [number, number]; r?: number; style?: CSSProperties }) {
+  const id = `rg${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  return (
+    <svg style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", ...style }} viewBox="0 0 100 100" preserveAspectRatio="none">
+      <defs>
+        <radialGradient id={id} cx={at[0] / 100} cy={at[1] / 100} r={r}>
+          {/* "transparent" fades the colour before it (SVG would blend through black) */}
+          {stops.map(([c, o], i) => (c === "transparent" ? <stop key={i} offset={o} stopColor={stops[Math.max(0, i - 1)][0]} stopOpacity={0} /> : <stop key={i} offset={o} stopColor={c} />))}
+        </radialGradient>
+      </defs>
+      <rect width={100} height={100} fill={`url(#${id})`} />
+    </svg>
+  );
+}

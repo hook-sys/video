@@ -31,7 +31,7 @@ function bars(c: BlockCtx) {
       ))}
       {abs(1200, 400, (
         <div style={{ width: mix(150, 600, on), height: 140, borderRadius: 999, padding: 12, boxSizing: "border-box", background: pal.dark ? `linear-gradient(180deg, ${pal.glass}3d, ${pal.glass}14)` : "#ffffff", border: `1.5px solid ${pal.dark ? `${pal.glass}77` : pal.line}`, boxShadow: pal.dark ? "0 30px 80px rgba(0,0,0,0.35)" : "0 30px 80px rgba(40,40,110,0.14)", display: "flex", alignItems: "center", overflow: "hidden" }}>
-          <div style={{ width: 116, height: 116, borderRadius: 999, background: `radial-gradient(circle at 40% 35%, #fff, ${pal.accent2} 30%, ${pal.accent} 75%)`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+          <div style={{ width: 116, height: 116, borderRadius: 999, backgroundColor: pal.accent, backgroundImage: `radial-gradient(circle at 40% 35%, #fff, ${pal.accent2} 30%, ${pal.accent} 75%)`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
             {[0, 1, 2].map((i) => <span key={i} style={{ width: 11, height: 11, borderRadius: 99, background: "#fff", opacity: 0.5 + 0.5 * Math.sin(f / 5 - i) }} />)}
           </div>
           <div style={{ display: "flex", gap: 12, marginLeft: 18 }}>

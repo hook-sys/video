@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AbsoluteFill, interpolate } from "remotion";
-import { W } from "../refs/common";
+import { Radial, W } from "../refs/common";
 
 // The studio: a video is one LOOK (its backgrounds, colours, type and camera)
 // and one BLOCK for each part of the script (blocks/). Looks never draw
@@ -49,7 +49,7 @@ const emberPal: Pal = { dark: true, ink: "#fff4ea", sub: "#e3c3ad", accent: "#ff
 const paperPal: Pal = { dark: false, ink: "#1c1a17", sub: "#77706a", accent: "#ff5a3c", accent2: "#ff9a6b", glow: "#ff5a3c", panel: "#ffffff", panelInk: "#1c1a17", panelSub: "#8a837c", line: "#ece6df", glass: "#ffffff" };
 
 const blob = (left: number, top: number, size: number, color: string, blur = 30) => (
-  <div style={{ position: "absolute", left, top, width: size, height: size * 0.66, borderRadius: "50%", background: `radial-gradient(ellipse, ${color}, transparent 65%)`, filter: `blur(${blur}px)` }} />
+  <div style={{ position: "absolute", left, top, width: size, height: size * 0.66, filter: `blur(${blur}px)` }}><Radial stops={[[color, 0], ["transparent", 0.65]]} /></div>
 );
 const pass = (f: number, color: string, speed = 2.2) => (
   <div style={{ position: "absolute", top: -200, height: 1500, width: 460, left: ((f * speed) % 2700) - 650, transform: "rotate(21deg)", background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
@@ -73,9 +73,10 @@ function glowField(f: number, i: number) {
     <div style={{ position: "absolute", left: -600, width: W + 1200, height: 2200, top: y, borderRadius: "50%", transform: `rotate(${tilt}deg)`, borderTop: flip ? undefined : `3px solid rgba(150,255,215,${op})`, borderBottom: flip ? `3px solid rgba(150,255,215,${op})` : undefined, boxShadow: flip ? `0 40px 120px -20px rgba(70,242,176,${op * 0.6}), inset 0 -60px 160px -40px rgba(70,242,176,${op * 0.5})` : `0 -40px 120px -20px rgba(70,242,176,${op * 0.6}), inset 0 60px 160px -40px rgba(70,242,176,${op * 0.5})` }} />
   );
   return (
-    <AbsoluteFill style={{ background: "radial-gradient(ellipse at 50% 38%, #0d5a43 0%, #0a3f30 38%, #062a20 100%)", overflow: "hidden" }}>
+    <AbsoluteFill style={{ background: "#062a20", overflow: "hidden" }}>
+      <Radial at={[50, 38]} r={0.8} stops={[["#0d5a43", 0], ["#0a3f30", 0.38], ["#062a20", 1]]} />
       {[0, 1, 2].map((k) => (
-        <div key={k} style={{ position: "absolute", width: 900, height: 900, borderRadius: 999, left: [-200, 1250, 600][k] + Math.sin(f / (70 + k * 13) + k) * 180, top: [-260, 380, 640][k] + Math.cos(f / (83 + k * 9)) * 120, background: `radial-gradient(circle, rgba(70,242,176,${[0.2, 0.16, 0.12][k]}), transparent 65%)`, filter: "blur(20px)" }} />
+        <div key={k} style={{ position: "absolute", width: 900, height: 900, left: [-200, 1250, 600][k] + Math.sin(f / (70 + k * 13) + k) * 180, top: [-260, 380, 640][k] + Math.cos(f / (83 + k * 9)) * 120, filter: "blur(20px)" }}><Radial r={0.5} stops={[[`rgba(70,242,176,${[0.2, 0.16, 0.12][k]})`, 0], ["transparent", 0.65]]} /></div>
       ))}
       {arc(top + Math.sin(f / 60) * 16, false, 0.75)}
       {arc(bot - 2200 + Math.cos(f / 66) * 16, true, 0.55)}
@@ -90,7 +91,7 @@ function duskField(f: number, mode: Mode) {
   const light = mode === "light";
   return (
     <AbsoluteFill style={{ background: light ? "#f7f5fb" : "#0d0612", overflow: "hidden" }}>
-      <div style={{ position: "absolute", left: -300 + Math.sin(f / 70) * 160, width: W + 600, height: 900, top: 760 + lift, borderRadius: "50%", background: `radial-gradient(ellipse at 50% 30%, ${light ? "rgba(196,168,255,0.55)" : "rgba(139,92,246,0.85)"}, transparent 62%)`, filter: "blur(30px)" }} />
+      <div style={{ position: "absolute", left: -300 + Math.sin(f / 70) * 160, width: W + 600, height: 900, top: 760 + lift, filter: "blur(30px)" }}><Radial at={[50, 30]} stops={[[light ? "rgba(196,168,255,0.55)" : "rgba(139,92,246,0.85)", 0], ["transparent", 0.62]]} /></div>
       {blob(500 + Math.cos(f / 60) * 300, -380, 900, light ? "rgba(196,168,255,0.25)" : "rgba(139,92,246,0.14)")}
       {!light && <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 4, background: "linear-gradient(90deg, transparent, rgba(110,255,200,0.5), #8b5cf6, transparent)", opacity: 0.8 }} />}
     </AbsoluteFill>
@@ -125,7 +126,7 @@ function emberField(f: number, i: number) {
   const sunX = [960, 640, 1280, 900, 1100, 760, 960, 960][i % 8];
   return (
     <AbsoluteFill style={{ background: "linear-gradient(180deg, #120a07 0%, #1f120b 55%, #2b160c 100%)", overflow: "hidden" }}>
-      <div style={{ position: "absolute", left: sunX - 900 + Math.sin(f / 80) * 60, top: 640, width: 1800, height: 900, borderRadius: "50%", background: "radial-gradient(ellipse at 50% 30%, rgba(255,122,61,0.75), rgba(255,90,40,0.18) 45%, transparent 68%)", filter: "blur(24px)" }} />
+      <div style={{ position: "absolute", left: sunX - 900 + Math.sin(f / 80) * 60, top: 640, width: 1800, height: 900, filter: "blur(24px)" }}><Radial at={[50, 30]} stops={[["rgba(255,122,61,0.75)", 0], ["rgba(255,90,40,0.18)", 0.45], ["transparent", 0.68]]} /></div>
       {Array.from({ length: 9 }, (_, k) => (
         <div key={k} style={{ position: "absolute", left: 0, right: 0, top: 700 + k * 44 - ((f * 0.6) % 44), height: 1, background: `rgba(255,170,110,${0.05 + k * 0.012})` }} />
       ))}

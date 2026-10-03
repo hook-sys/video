@@ -20,7 +20,7 @@ function slabs(c: BlockCtx) {
   return (
     <>
       <div style={{ position: "absolute", left: 1330, top: -60, width: 900, height: 1200, borderRadius: 120, background: `linear-gradient(180deg, ${pal.glass}1a, ${pal.glass}08)`, borderLeft: `2px solid ${pal.glass}55`, boxShadow: `inset 30px 0 80px -30px ${pal.glow}66` }} />
-      {at(1400, 520, <div style={{ width: 128, height: 128, borderRadius: 999, background: `radial-gradient(circle at 40% 35%, #ffffff, ${pal.accent2} 60%, ${pal.accent})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 70, fontWeight: 700, color: "#fff", boxShadow: `0 0 80px ${pal.glow}aa`, transform: `scale(${grow(f, c.from + 6, 18)})`, opacity: soft(f, c.from + 6, 20) }}>?</div>)}
+      {at(1400, 520, <div style={{ width: 128, height: 128, borderRadius: 999, backgroundColor: pal.accent, backgroundImage: `radial-gradient(circle at 40% 35%, #ffffff, ${pal.accent2} 60%, ${pal.accent})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 70, fontWeight: 700, color: "#fff", boxShadow: `0 0 80px ${pal.glow}aa`, transform: `scale(${grow(f, c.from + 6, 18)})`, opacity: soft(f, c.from + 6, 20) }}>?</div>)}
       {b.trio.map((it, i) => {
         const k = soft(f, it.at - 3, 22);
         const p = pos[i];

@@ -17,13 +17,13 @@ function notch(c: BlockCtx) {
         <svg width={W} height={1080} style={{ position: "absolute", left: 0, top: 0 }}>
           <path d="M-20 560 L640 560 C760 560 760 760 960 760 C1160 760 1160 560 1280 560 L1940 560 L1940 1100 L-20 1100 Z" fill={`${pal.glass}1a`} stroke={`${pal.glass}99`} strokeWidth={3} />
         </svg>
-        {at(W / 2, mix(420, 600, rise(f, c.from + 4, 26, OUT)), <div style={{ padding: 18, borderRadius: 999, background: `radial-gradient(circle, ${pal.glass}55, ${pal.glass}10)`, boxShadow: `0 0 90px ${pal.glow}88` }}><div style={{ width: 170, height: 170, borderRadius: 999, background: pal.panel, display: "flex", alignItems: "center", justifyContent: "center" }}><FlowMark size={120} colors={[pal.accent2, pal.accent]} /></div></div>)}
+        {at(W / 2, mix(420, 600, rise(f, c.from + 4, 26, OUT)), <div style={{ padding: 18, borderRadius: 999, backgroundColor: `${pal.glass}22`, backgroundImage: `radial-gradient(circle, ${pal.glass}55, ${pal.glass}10)`, boxShadow: `0 0 90px ${pal.glow}88` }}><div style={{ width: 170, height: 170, borderRadius: 999, background: pal.panel, display: "flex", alignItems: "center", justifyContent: "center" }}><FlowMark size={120} colors={[pal.accent2, pal.accent]} /></div></div>)}
         {at(W / 2, 250, <Say c={c} words={L.ctaA} size={80} />)}
       </div>
       {sw > 0 && (
         <div style={{ opacity: sw }}>
           {at(640, 520, (
-            <div style={{ width: 300, height: 300, borderRadius: 999, background: `radial-gradient(circle at 40% 30%, #ffffff, ${pal.accent2} 30%, ${pal.accent} 80%)`, boxShadow: `0 0 0 26px ${pal.glow}22, 0 0 140px ${pal.glow}99`, display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${grow(f, T.every2 - 8, 18)})` }}>
+            <div style={{ width: 300, height: 300, borderRadius: 999, backgroundColor: pal.accent, backgroundImage: `radial-gradient(circle at 40% 30%, #ffffff, ${pal.accent2} 30%, ${pal.accent} 80%)`, boxShadow: `0 0 0 26px ${pal.glow}22, 0 0 140px ${pal.glow}99`, display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${grow(f, T.every2 - 8, 18)})` }}>
               <svg width={170} height={170} viewBox="0 0 24 24"><path d="M5 12.5 L10 17 L19 7" stroke="#fff" strokeWidth={2.8} fill="none" strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={`${rise(f, T.every2, 16)} 1`} /></svg>
             </div>
           ))}
