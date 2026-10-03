@@ -100,3 +100,37 @@ export const CLEAN_RULES: CleanRule[] = [
 ];
 
 export const CLEAN_RULE_BY_ID = Object.fromEntries(CLEAN_RULES.map((r) => [r.id, r]));
+
+// Problems seen but not solved yet, and rules proposed but not yet agreed.
+// Each moves into CLEAN_RULES once it is fixed and the user approves.
+export type OpenItem = { id: string; seen: string; problem: string; plan: string; status: "open" | "proposed" };
+export const CLEAN_OPEN: OpenItem[] = [
+  {
+    id: "too-brief",
+    seen: "Films 1 (Glow) and 2 (Dusk), user review 2026-10-03",
+    problem: "Icons and cards are on screen too briefly: one comes and goes before it can be seen (e.g. the trio slabs, the tokens, the circuit cards, the receipt, the team rows).",
+    plan: "Give every card/icon a minimum time fully visible (about 1 s) before its shot leaves; measure it per element on the render; where the sentence is too short, show fewer things or keep them into the next shot instead of cutting them.",
+    status: "open",
+  },
+  {
+    id: "short-shot",
+    seen: "Film 2 (Dusk): a shot of 3 frames when cuts were computed from the words",
+    problem: "A shot can collapse to a few frames.",
+    plan: "Rule: no shot shorter than 16 frames (IN + OUT); check:clean checks it.",
+    status: "proposed",
+  },
+  {
+    id: "bg-flip",
+    seen: "Film 2 (Dusk): a grey frame (slow blend) and then a flash (3-frame flip) between dark and light",
+    problem: "Dark ↔ light background changes show a grey frame or flash.",
+    plan: "Rule: a dark ↔ light change is a band of light that rises across the frame (done in Dusk).",
+    status: "proposed",
+  },
+  {
+    id: "frame-jump",
+    seen: "Films 1–2: whole scenes vanished in 3–6 frames, cards popped from nothing (jumps of 62 and 194)",
+    problem: "Cards and icons pop in, scenes vanish at once.",
+    plan: "Rule: things ease in (no pop from nothing), shots blur away over 12+ frames; a render's frame-to-frame jump stays at or under 25.",
+    status: "proposed",
+  },
+];
