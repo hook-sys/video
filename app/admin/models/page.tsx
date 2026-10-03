@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/admin";
 import { SETTING_KEY, TEXT_TASKS, normalizeConfig } from "@/lib/ai/models";
-import { Badge, Card, Notice, PageHeader, Table, btnPrimary, input, td } from "../_components/ui";
+import { Badge, Card, Notice, PageHeader, btnPrimary, input } from "../_components/ui";
 import { daysAgo, usd } from "../_components/format";
 import { saveAiModels } from "./actions";
 import { ModelTest } from "./model-test";
@@ -163,18 +163,25 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
       )}
 
       <Card title="Cost by model · last 7 days">
-        <Table head={["Job", "Model", "Calls", "Videos", "Total", "Per video"]} empty="No AI costs recorded in the last 7 days.">
-          {usage.map(([k, m]) => (
-            <tr key={k}>
-              <td className={td}>{m.op === "openai_brief" ? "Script / director" : m.op === "fal_voice" ? "Voice" : "Image"}</td>
-              <td className={`${td} font-mono text-xs`}>{k.split("|")[1]}</td>
-              <td className={td}>{m.calls}</td>
-              <td className={td}>{m.videos.size}</td>
-              <td className={td}>{usd(m.cost)}</td>
-              <td className={td}>{usd(m.cost / Math.max(1, m.videos.size))}</td>
-            </tr>
-          ))}
-        </Table>
+        {/* (a list, not a table: the model name stays visible on a phone) */}
+        {usage.length ? (
+          <div className="divide-y divide-white/[0.05] text-sm">
+            {usage.map(([k, m]) => (
+              <div key={k} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
+                <p className="flex flex-wrap items-center gap-2">
+                  <Badge tone={m.op === "openai_brief" ? "violet" : m.op === "fal_voice" ? "blue" : "amber"}>{m.op === "openai_brief" ? "Script / director" : m.op === "fal_voice" ? "Voice" : "Image"}</Badge>
+                  <span className="break-all font-mono text-xs text-white">{k.split("|")[1]}</span>
+                </p>
+                <p className="text-zinc-400">
+                  {m.calls} calls · {m.videos.size} videos · total <b className="text-zinc-200">{usd(m.cost)}</b> · per video <b className="text-zinc-200">{usd(m.cost / Math.max(1, m.videos.size))}</b>
+                  {m.cost === 0 && <span className="text-amber-300"> · no price set for this model</span>}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-zinc-500">No AI costs recorded in the last 7 days.</p>
+        )}
       </Card>
     </>
   );
