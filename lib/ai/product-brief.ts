@@ -6,6 +6,7 @@ import { StoryAssetRecord, VisualStory } from "@/lib/visual-story";
 import { FlowScript } from "@/lib/flow-script";
 import { Look, SceneScript } from "@/lib/scene-script";
 import { Direction, Dna } from "@/lib/shots";
+import { LOOK_IDS, type Role, ROLES } from "@/components/video/clean/studio/ids";
 
 // Internal scene model. `animation`, `transition` and sound effect `cue`s are
 // free-text directions chosen by the AI from the scene's meaning; the Remotion
@@ -155,7 +156,10 @@ const ProductBriefOutput = z.object({
 // Stored/validated schema: briefs saved before transitions and SFX existed
 // still parse, with neutral defaults.
 // One video of the clean set: a film template and its colour turn.
-export const CleanVariantRecord = z.object({ film: z.enum(["glow", "dusk", "fly", "connect"]), tint: z.enum(["native", "brand", "brand+120", "brand-120"]), hue: z.number() });
+export const FilmVariantRecord = z.object({ film: z.enum(["glow", "dusk", "fly", "connect"]), tint: z.enum(["native", "brand", "brand+120", "brand-120"]), hue: z.number() });
+// Since the studio: one look and one block per part (lib/studio-variants.ts).
+export const StudioRecipeRecord = z.object({ look: z.enum(LOOK_IDS), blocks: z.object(Object.fromEntries(ROLES.map((r) => [r, z.string()])) as Record<Role, z.ZodString>), hue: z.number() });
+export const CleanVariantRecord = z.union([StudioRecipeRecord, FilmVariantRecord]);
 
 export const ProductBrief = z.object({
   ...briefFields,

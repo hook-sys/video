@@ -68,7 +68,7 @@ import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { generateVisualStory } from "@/lib/ai/visual-story";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
 import { generateCleanScript } from "@/lib/ai/clean-director";
-import { type CleanVariant, cleanVariants } from "@/lib/clean-variants";
+import { type StoredVariant, studioVariants } from "@/lib/studio-variants";
 import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { generateFlowScript } from "@/lib/ai/flow-director";
 import { generateSceneScript } from "@/lib/ai/scene-director";
@@ -448,7 +448,7 @@ async function loadTaste(admin: ReturnType<typeof createAdminClient>): Promise<T
 }
 
 // The clean set for a project: the Director's seven parts (with the
-// product's card content) and four videos (template + colour). Earlier sets
+// product's card content) and four studio videos (look + a block per part). Earlier sets
 // of this customer for the same narration are its history, so the new four
 // differ from every one of them. Null when nothing usable came back.
 async function cleanSet(
@@ -475,13 +475,13 @@ async function cleanSet(
   if (!result.script || !result.plan) return null;
   const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const { data: past } = await admin.from("projects").select("id, clean:brief->clean, script:brief->>script").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(40);
-  const history: CleanVariant[][] = (past ?? [])
+  const history: StoredVariant[][] = (past ?? [])
     .filter((p) => typeof p.script === "string" && norm(p.script) === norm(narration))
     .flatMap((p) => {
-      const c = p.clean as { variants?: CleanVariant[]; history?: CleanVariant[][] } | null;
+      const c = p.clean as { variants?: StoredVariant[]; history?: StoredVariant[][] } | null;
       return c?.variants ? [...(c.history ?? []), c.variants] : [];
     });
-  return { script: result.script as unknown as Record<string, unknown>, source: result.source, variants: cleanVariants(seedFrom(projectId), history, brand.color), history, at: new Date().toISOString() };
+  return { script: result.script as unknown as Record<string, unknown>, source: result.source, variants: studioVariants(seedFrom(projectId), history), history, at: new Date().toISOString() };
 }
 
 async function generateFlow(projectId: string, userId: string, budgetMs: number) {
@@ -1322,7 +1322,7 @@ export async function newCleanSet(projectId: string) {
   const clean = brief.success ? brief.data.clean : null;
   if (!project || !clean) return;
   const history = [...clean.history, clean.variants];
-  const variants = cleanVariants(seedFrom(projectId), history, project.brand_color);
+  const variants = studioVariants(seedFrom(projectId), history);
   await createAdminClient()
     .from("projects")
     .update({ brief: { ...(project.brief as object), clean: { ...clean, variants, history, at: new Date().toISOString() } } })

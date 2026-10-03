@@ -19,6 +19,11 @@ import { type CleanScriptOut, generateCleanScript } from "@/lib/ai/clean-directo
 import { cleanVariants, FILM_HUE, hueOf } from "@/lib/clean-variants";
 import { buildPlan } from "@/components/video/clean/plan";
 import { DEFAULT_CONTENT } from "@/components/video/clean/content";
+import { BLOCKS } from "@/components/video/clean/studio/blocks";
+import { BLOCK_IDS, LOOK_IDS as STUDIO_LOOK_IDS, ROLES } from "@/components/video/clean/studio/ids";
+import { LOOKS } from "@/components/video/clean/studio/looks";
+import { type StudioRecipe, studioVariants, toRecipe, tooClose } from "@/lib/studio-variants";
+import { ProductBrief } from "@/lib/ai/product-brief";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -201,6 +206,24 @@ export async function runChecks(): Promise<Check[]> {
   const branded = g1.concat(g2, g3, g4).filter((v) => v.tint === "brand");
   add("a brand tint turns the film to the brand's hue", branded.every((v) => Math.abs(((FILM_HUE[v.film] + v.hue - bh) % 360 + 540) % 360 - 180) <= 1), branded.map((v) => `${v.film} ${v.hue}°`).join(", "));
   add("the same seed → the same four", JSON.stringify(cleanVariants(1234, [], "#6a5bff")) === JSON.stringify(g1), "deterministic");
+
+  section = "studio variation engine";
+  add("the id list matches the drawn blocks and looks", JSON.stringify(ROLES.flatMap((r) => BLOCK_IDS[r])) === JSON.stringify(BLOCKS.map((b) => b.id)) && JSON.stringify([...STUDIO_LOOK_IDS]) === JSON.stringify(Object.keys(LOOKS)), `${BLOCKS.length} blocks, ${Object.keys(LOOKS).length} looks`);
+  const valid = (v: StudioRecipe) => STUDIO_LOOK_IDS.includes(v.look) && ROLES.every((r) => BLOCK_IDS[r].includes(v.blocks[r]));
+  const sets: StudioRecipe[][] = [];
+  for (let g = 0; g < 6; g++) sets.push(studioVariants(4321, sets));
+  const s1 = sets[0];
+  add("a set: four different looks", new Set(s1.map((v) => v.look)).size === 4, s1.map((v) => v.look).join(", "));
+  add("a set: every part a different block in each video", ROLES.every((r) => new Set(s1.map((v) => v.blocks[r])).size === 4), ROLES.map((r) => s1.map((v) => v.blocks[r].split(".")[1]).join("/")).slice(0, 3).join(" · "));
+  add("every recipe names real blocks and looks", sets.flat().every(valid), `${sets.flat().length} recipes`);
+  const closeCount = sets.reduce((n, set, g) => n + set.filter((v) => sets.slice(0, g).flat().some((p) => tooClose(v, p))).length, 0);
+  add("six regenerations: no video close to an earlier one", closeCount === 0, `${closeCount} close of ${sets.flat().length}`);
+  add("a regeneration is not a reshuffle of the last set", sets.slice(1).every((set, g) => set.every((v) => !sets[g].some((p) => p.look === v.look && ROLES.every((r) => p.blocks[r] === v.blocks[r])))), "no recipe repeats");
+  add("the same seed and history → the same four", JSON.stringify(studioVariants(4321, [])) === JSON.stringify(s1), "deterministic");
+  const legacy = toRecipe({ film: "dusk", tint: "brand", hue: 40 });
+  add("an older film video maps to its look and blocks", valid(legacy) && legacy.look === "dusk" && legacy.hue === 40 && legacy.blocks.hook === "hook.typed", JSON.stringify(legacy.blocks).slice(0, 80));
+  const parsed = ProductBrief.shape.clean.safeParse({ script: {}, source: "ai", variants: [{ film: "glow", tint: "native", hue: 0 }, s1[0]], history: [[{ film: "fly", tint: "brand", hue: 12 }], s1], at: "now" });
+  add("stored briefs with old and new videos both parse", parsed.success && !!parsed.data && parsed.data.variants.length === 2 && parsed.data.history.length === 2, parsed.success ? "ok" : String(parsed.error).slice(0, 120));
 
   section = "covered elsewhere";
   add("asset-type-swap, support-placement", true, "checked by npm run check:assets and check:recipe");

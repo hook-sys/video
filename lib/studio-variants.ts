@@ -1,0 +1,65 @@
+import { BLOCK_IDS, LOOK_IDS, type LookId, type Role, ROLES } from "@/components/video/clean/studio/ids";
+import type { CleanVariant } from "@/lib/clean-variants";
+
+// The studio's variation engine: a set is four videos, each one LOOK and one
+// BLOCK per part. Within a set the four looks differ and, part by part, the
+// blocks differ. Against everything this customer already had for the script
+// (history), a new video never repeats a look with three or more of the same
+// blocks, and the set as a whole prefers what has been seen least.
+
+export type StudioRecipe = { look: LookId; blocks: Record<Role, string>; hue: number };
+// What a project stores per video: a studio recipe, or (older) a film template.
+export type StoredVariant = CleanVariant | StudioRecipe;
+
+const blockIds = (role: Role) => BLOCK_IDS[role];
+
+// A video stored before the studio (one of the four film templates): the
+// same look with the blocks that came from that film.
+const FROM_FILM: Record<CleanVariant["film"], number> = { glow: 0, dusk: 1, fly: 2, connect: 3 };
+export function toRecipe(v: StoredVariant): StudioRecipe {
+  if ("look" in v) return v;
+  const i = FROM_FILM[v.film];
+  const blocks = Object.fromEntries(ROLES.map((r) => [r, r === "end" && v.film === "connect" ? "end.button" : BLOCK_IDS[r][i]])) as Record<Role, string>;
+  return { look: v.film, blocks, hue: v.hue };
+}
+
+function rng(seed: number) {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+// How much a recipe repeats an earlier one (same look counts 3, each same block 1).
+export function overlap(a: StudioRecipe, b: StudioRecipe) {
+  return (a.look === b.look ? 3 : 0) + ROLES.filter((r) => a.blocks[r] === b.blocks[r]).length;
+}
+// Too close to an earlier video: the same look and 3+ of the same blocks, or 6+ same blocks.
+export const tooClose = (a: StudioRecipe, b: StudioRecipe) => {
+  const same = ROLES.filter((r) => a.blocks[r] === b.blocks[r]).length;
+  return (a.look === b.look && same >= 3) || same >= 6;
+};
+
+export function studioVariants(seed: number, history: StoredVariant[][], count = 4): StudioRecipe[] {
+  const past = history.flat().map(toRecipe);
+  const r = rng(seed + history.length * 104729);
+  const seen = (role: Role, id: string) => past.filter((p) => p.blocks[role] === id).length;
+  const seenLook = (l: LookId) => past.filter((p) => p.look === l).length;
+  let best: StudioRecipe[] = [];
+  let bestScore = Infinity;
+  // seeded tries until a set has nothing too close to the past; keep the one
+  // that repeats the past least
+  for (let t = 0; t < 400 && bestScore >= 100; t++) {
+    const looks = [...LOOK_IDS].map((l) => [l, seenLook(l) + r() * 1.5] as const).sort((a, b) => a[1] - b[1]).slice(0, count).map(([l]) => l);
+    const perRole = Object.fromEntries(ROLES.map((role) => [role, [...blockIds(role)].map((id) => [id, seen(role, id) + r() * 1.5] as const).sort((a, b) => a[1] - b[1]).map(([id]) => id)])) as Record<Role, string[]>;
+    const set = looks.map((look, i) => ({ look, hue: 0, blocks: Object.fromEntries(ROLES.map((role) => [role, perRole[role][i % perRole[role].length]])) as Record<Role, string> }));
+    const close = set.reduce((n, v) => n + past.filter((p) => tooClose(v, p)).length, 0);
+    const score = close * 100 + set.reduce((n, v) => n + past.reduce((m, p) => m + overlap(v, p), 0), 0) + r();
+    if (score < bestScore) {
+      best = set;
+      bestScore = score;
+    }
+  }
+  return best;
+}

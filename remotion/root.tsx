@@ -9,6 +9,7 @@ import { CleanVideo } from "@/components/video/clean/clean-video";
 import { CLEAN_ID, type CleanVideoProps } from "@/components/video/clean/types";
 import { Film, FILM_ID, FILM_IDS, type FilmId, REF_DURATION, REF_ID, RefFilm } from "@/components/video/clean/refs";
 import { shopnestPlan } from "@/components/video/clean/fixtures/sample";
+import { type Recipe, StudioFilm } from "@/components/video/clean/studio/film";
 import type { CleanPlan } from "@/components/video/clean/types";
 import { flowlyPlan } from "@/components/video/clean/fixtures/flowly";
 import { ecommercePlan } from "@/components/video/flow/fixtures/ecommerce";
@@ -94,6 +95,17 @@ export function RemotionRoot() {
       height={1080}
       durationInFrames={REF_DURATION}
       defaultProps={{ plan: flowlyPlan(0), film: "glow" as FilmId, hue: 0 } as { plan: CleanPlan; film: FilmId; hue?: number }}
+      calculateMetadata={({ props }) => ({ durationInFrames: props.plan.duration })}
+    />
+    {/* The studio: one look + one block per part, on any seven-part plan. */}
+    <Composition
+      id="StudioFilm"
+      component={StudioFilm}
+      fps={30}
+      width={1920}
+      height={1080}
+      durationInFrames={REF_DURATION}
+      defaultProps={{ plan: flowlyPlan(0), recipe: { look: "glow", blocks: {} } as Recipe }}
       calculateMetadata={({ props }) => ({ durationInFrames: props.plan.duration })}
     />
     {/* Proof: a second script (Shopnest) in the film templates (0–3). */}

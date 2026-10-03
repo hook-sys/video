@@ -35,9 +35,11 @@ const area =
 const STYLE: StylePreset = "Auto";
 const AUTO_BG = "linear-gradient(135deg, #e0e7ff, #f5d0fe 50%, #0f172a 50.5%, #312e81)";
 
-export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: number; waiting: { plan: FlowPlan; captions: HeroCaption[] } }) {
+export type Prefill = { script: string; brandName: string; websiteUrl: string; cta: string };
+
+export function CreateProjectForm({ maxTotalBytes, waiting, prefill }: { maxTotalBytes?: number; waiting: { plan: FlowPlan; captions: HeroCaption[] }; prefill?: Prefill }) {
   const [state, action, pending] = useActionState(createProject, {});
-  const [script, setScript] = useState("");
+  const [script, setScript] = useState(prefill?.script ?? "");
   const [format, setFormat] = useState<string>(FORMATS[0]);
   const [logo, setLogo] = useState<{ name: string; url: string; size: number } | null>(null);
   const [logoError, setLogoError] = useState<string>();
@@ -117,7 +119,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
                 />
               </Upload>
               <Field title="Brand name" optional>
-                <input name="brand_name" maxLength={BRAND_NAME_MAX} placeholder="e.g. SeloraX" className={input} />
+                <input name="brand_name" defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="e.g. SeloraX" className={input} />
               </Field>
             </div>
           </Step>
@@ -125,10 +127,10 @@ export function CreateProjectForm({ maxTotalBytes, waiting }: { maxTotalBytes?: 
           <Step n={3} title="Product" sub="Optional. Real words and screens from your product make the cards look like it.">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field title="Website" optional>
-                <input name="website_url" type="url" inputMode="url" placeholder="https://yourproduct.com" className={input} />
+                <input name="website_url" defaultValue={prefill?.websiteUrl} type="url" inputMode="url" placeholder="https://yourproduct.com" className={input} />
               </Field>
               <Field title="Call to action" optional>
-                <input name="call_to_action" maxLength={CTA_MAX} placeholder="e.g. Try it free today" className={input} />
+                <input name="call_to_action" defaultValue={prefill?.cta} maxLength={CTA_MAX} placeholder="e.g. Try it free today" className={input} />
               </Field>
               <div className="sm:col-span-2">
                 <Upload

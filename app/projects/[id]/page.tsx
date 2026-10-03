@@ -33,7 +33,7 @@ import { BrowserDownload } from "./browser-download";
 import { VariantStudio, type StudioVariant } from "./variant-studio";
 import { CleanStudio } from "./clean-studio";
 import type { CleanPlan } from "@/components/video/clean/types";
-import type { CleanVariant } from "@/lib/clean-variants";
+import type { StudioRecipe } from "@/lib/studio-variants";
 import { DIMENSIONS } from "@/components/video/types";
 import type { FlowPlan } from "@/components/video/flow/types";
 
@@ -142,7 +142,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const ready = project.pipeline_status === "completed" || project.pipeline_status === "preview_ready";
   let preview: RenderProps | null = null;
   let variants: StudioVariant[] = [];
-  let clean: { plan: CleanPlan; variants: CleanVariant[] } | null = null;
+  let clean: { plan: CleanPlan; variants: StudioRecipe[] } | null = null;
   if (ready && !video?.signedUrl) {
     try {
       const input = await buildRenderInput(supabase, project);
@@ -175,7 +175,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           <Link href="/dashboard" aria-label="MotionBrief home">
             <Logo size={28} className="text-lg" />
           </Link>
-          <Link href="/projects/new" className="ml-auto hidden rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90 sm:inline-flex">
+          <Link href="/projects/new" className="ml-auto inline-flex rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90">
             + New video
           </Link>
         </div>
@@ -304,6 +304,9 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
               <h2 className="text-sm font-semibold">Next</h2>
               <Link href="/projects/new" className={secondaryBtn}>
                 + Make another video
+              </Link>
+              <Link href={`/projects/new?from=${id}`} className={secondaryBtn}>
+                Same script, new video
               </Link>
             </div>
           </aside>

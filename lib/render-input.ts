@@ -13,7 +13,7 @@ import { compileFlowScript, type CompileBrand } from "@/components/video/flow/co
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
 import { buildPlan, type SevenPart } from "@/components/video/clean/plan";
 import type { CleanPlan } from "@/components/video/clean/types";
-import type { CleanVariant } from "@/lib/clean-variants";
+import { type StudioRecipe, toRecipe } from "@/lib/studio-variants";
 
 export type RenderProject = {
   id?: string;
@@ -160,14 +160,14 @@ export async function buildRenderInput(
 
   // The clean film templates: the stored seven parts on the voice's words,
   // with the customer's brand inputs; the four videos offered.
-  let clean: { plan: CleanPlan; variants: CleanVariant[] } | null = null;
+  let clean: { plan: CleanPlan; variants: StudioRecipe[] } | null = null;
   const stored = brief.data.clean;
   if (stored && project.format === "16:9" && wordTimings?.length) {
     try {
       const script = stored.script as unknown as SevenPart;
       const brand = { ...script.brand, name: project.brand_name?.trim() || script.brand.name, color: project.brand_color || script.brand.color, cta: project.call_to_action?.trim() || script.brand.cta, icon: logoUrl ?? null };
       const built = buildPlan({ ...script, brand }, wordTimings);
-      if (built.plan && stored.variants.length) clean = { plan: built.plan, variants: stored.variants };
+      if (built.plan && stored.variants.length) clean = { plan: built.plan, variants: stored.variants.map(toRecipe) };
     } catch {
       clean = null;
     }

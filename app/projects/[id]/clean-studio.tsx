@@ -1,21 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { Player } from "@remotion/player";
 import { newCleanSet } from "@/app/projects/actions";
-import { Film, type FilmProps } from "@/components/video/clean/refs";
+import { StudioFilm, type StudioProps } from "@/components/video/clean/studio/film";
+import { BLOCK_BY_ID } from "@/components/video/clean/studio/blocks";
+import { LOOK_NAMES } from "@/components/video/clean/studio/ids";
 import type { CleanPlan } from "@/components/video/clean/types";
-import type { CleanVariant } from "@/lib/clean-variants";
+import type { StudioRecipe } from "@/lib/studio-variants";
 
-// The four clean videos of a project (film template + colour): watch each,
-// download one or all (rendered in this browser), or ask for four new ones
-// that differ from every earlier set.
-const NAMES: Record<CleanVariant["film"], string> = { glow: "Glow", dusk: "Dusk", fly: "Fly-through", connect: "Connect" };
-const TINTS: Record<CleanVariant["tint"], string> = { native: "own colours", brand: "brand colour", "brand+120": "accent colour", "brand-120": "contrast colour" };
+// The four clean videos of a project (one look + one block per part): watch
+// each, download one or all (rendered in this browser), or ask for four new
+// ones that differ from every earlier set.
+const keyOf = (r: StudioRecipe) => `${r.look}:${Object.values(r.blocks).join(",")}:${r.hue}`;
+const opening = (r: StudioRecipe) => BLOCK_BY_ID[r.blocks.hook]?.name.toLowerCase() ?? "";
 const W = 1920;
 const H = 1080;
 
-async function renderFilmToFile({ props, file, signal, onProgress }: { props: FilmProps; file: string; signal: AbortSignal; onProgress: (p: number) => void }) {
+async function renderFilmToFile({ props, file, signal, onProgress }: { props: StudioProps; file: string; signal: AbortSignal; onProgress: (p: number) => void }) {
   const { renderMediaOnWeb, canRenderMediaOnWeb, getEncodableVideoCodecs } = await import("@remotion/web-renderer");
   const codecs = await getEncodableVideoCodecs("mp4");
   const videoCodec = (["h264", "vp9", "av1"] as const).find((c) => codecs.includes(c));
@@ -24,8 +27,8 @@ async function renderFilmToFile({ props, file, signal, onProgress }: { props: Fi
   if (!check.canRender) throw new Error(check.issues.map((i) => i.message).join(" ") || "This browser can't render video.");
   // The colour turn on each finished frame (a parent's CSS filter is not
   // applied everywhere by this renderer).
-  const hue = props.hue ?? 0;
-  const inputProps: FilmProps = { ...props, hue: 0, postHue: hue, webAudio: true };
+  const hue = props.recipe.hue ?? 0;
+  const inputProps: StudioProps = { ...props, recipe: { ...props.recipe, hue: 0 }, postHue: hue, webAudio: true };
   const canvas = hue ? new OffscreenCanvas(W, H) : null;
   const ctx = canvas?.getContext("2d") ?? null;
   const onFrame = canvas && ctx
@@ -36,7 +39,7 @@ async function renderFilmToFile({ props, file, signal, onProgress }: { props: Fi
       }
     : undefined;
   const { getBlob } = await renderMediaOnWeb({
-    composition: { component: Film, id: "CleanFilm", width: W, height: H, fps: 30, durationInFrames: Math.max(1, props.plan.duration), defaultProps: inputProps },
+    composition: { component: StudioFilm, id: "StudioFilm", width: W, height: H, fps: 30, durationInFrames: Math.max(1, props.plan.duration), defaultProps: inputProps },
     inputProps,
     container: "mp4",
     videoCodec,
@@ -56,7 +59,7 @@ async function renderFilmToFile({ props, file, signal, onProgress }: { props: Fi
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export function CleanStudio({ projectId, plan, variants, audioUrl, name, className, secondaryClassName }: { projectId: string; plan: CleanPlan; variants: CleanVariant[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string }) {
+export function CleanStudio({ projectId, plan, variants, audioUrl, name, className, secondaryClassName }: { projectId: string; plan: CleanPlan; variants: StudioRecipe[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string }) {
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState<number | null>(null);
   const [all, setAll] = useState(false);
@@ -75,8 +78,8 @@ export function CleanStudio({ projectId, plan, variants, audioUrl, name, classNa
       for (const i of indexes) {
         setBusy(i);
         setProgress(0);
-        const file = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "video"}-${i + 1}-${variants[i].film}.mp4`;
-        await renderFilmToFile({ props: { plan, film: variants[i].film, hue: variants[i].hue, audioUrl }, file, signal: controller.signal, onProgress: setProgress });
+        const file = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "video"}-${i + 1}-${variants[i].look}.mp4`;
+        await renderFilmToFile({ props: { plan, recipe: variants[i], audioUrl }, file, signal: controller.signal, onProgress: setProgress });
       }
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
@@ -91,9 +94,9 @@ export function CleanStudio({ projectId, plan, variants, audioUrl, name, classNa
       <section className="flex min-w-0 flex-col gap-3">
         <div className="overflow-hidden rounded-3xl border border-foreground/10 bg-black shadow-2xl shadow-violet-900/20">
           <Player
-            key={`${v.film}:${v.hue}`}
-            component={Film}
-            inputProps={{ plan, film: v.film, hue: v.hue, audioUrl } satisfies FilmProps}
+            key={keyOf(v)}
+            component={StudioFilm}
+            inputProps={{ plan, recipe: v, audioUrl } satisfies StudioProps}
             durationInFrames={Math.max(1, plan.duration)}
             fps={30}
             compositionWidth={W}
@@ -105,14 +108,14 @@ export function CleanStudio({ projectId, plan, variants, audioUrl, name, classNa
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {variants.map((x, i) => (
             <button
-              key={`${x.film}:${x.hue}`}
+              key={keyOf(x)}
               type="button"
               onClick={() => setSelected(i)}
               className={`flex flex-col items-start gap-0.5 rounded-2xl border px-3 py-2.5 text-left transition ${i === selected ? "border-violet-500 bg-violet-500/10" : "border-foreground/10 hover:bg-foreground/5"}`}
             >
               <span className="text-sm font-semibold">Video {i + 1}</span>
               <span className="text-xs text-foreground/55">
-                {NAMES[x.film]} · {TINTS[x.tint]}
+                {LOOK_NAMES[x.look]} · {opening(x)}
               </span>
             </button>
           ))}
@@ -158,6 +161,12 @@ export function CleanStudio({ projectId, plan, variants, audioUrl, name, classNa
             {pending ? "Making 4 new videos…" : "↻ 4 new videos"}
           </button>
           <p className="text-xs text-foreground/50">Same script and voice, four videos unlike any you have had for it before.</p>
+          <Link href={`/projects/new?from=${projectId}`} className={secondaryClassName}>
+            ✎ Same script, new video
+          </Link>
+          <Link href="/projects/new" className={secondaryClassName}>
+            + Create a new video
+          </Link>
         </div>
       </aside>
     </div>

@@ -45,7 +45,7 @@ export function DashboardView({
             )}
           </nav>
           <div className="ml-auto flex items-center gap-2">
-            <Link href="/projects/new" className="hidden rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90 sm:inline-flex">
+            <Link href="/projects/new" className="inline-flex rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90">
               + New video
             </Link>
             <details className="relative">
