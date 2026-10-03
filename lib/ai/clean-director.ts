@@ -38,11 +38,13 @@ CONTENT — what the product's own screens show (realistic for this product, nev
 - side: 2 more figures of the same screen { label, value }.
 - growth { label, from, to, unit }: what grows in part 5 (to > from).
 - people: 4 team members { name (first and last name), role }.
-Keep every label short (1–4 words).`;
+Keep every label short (1–4 words).
+- tagline: the product's promise for the end card, 3–6 words (e.g. "Every answer you need").`;
 
 const Item = z.object({ label: z.string(), sub: z.string(), icon: z.string() });
 const Figure = z.object({ label: z.string(), from: z.number(), to: z.number(), unit: z.enum(["$", "%", ""]) });
 export const CleanScriptModel = z.object({
+  tagline: z.string(),
   hook: z.object({ text: z.string(), key: z.string(), big: z.string().nullable() }),
   trio: z.object({ text: z.string(), items: z.array(Item) }),
   reveal: z.object({ name: z.string(), sub: z.string(), key: z.string() }),
@@ -78,7 +80,8 @@ export function tidyScript(out: CleanScriptOut, brand: Brand): SevenPart {
     people: pad(c.people, 4, DEFAULT_CONTENT.people),
   };
   const items = out.trio.items.slice(0, 3).map((it) => ({ ...it, icon: resolveIcon(it.icon) ? it.icon : "sparkles" }));
-  return { brand, hook: out.hook, trio: { ...out.trio, items }, reveal: out.reveal, pay: out.pay, growth: out.growth, nomore: out.nomore, cta: out.cta, content };
+  const tagline = out.tagline?.trim().split(/\s+/).length >= 2 && out.tagline.trim().split(/\s+/).length <= 8 ? out.tagline.trim() : brand.tagline;
+  return { brand: { ...brand, tagline }, hook: out.hook, trio: { ...out.trio, items }, reveal: out.reveal, pay: out.pay, growth: out.growth, nomore: out.nomore, cta: out.cta, content };
 }
 
 // The plain fallback: the narration's sentences (long ones split at commas)

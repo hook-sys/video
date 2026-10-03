@@ -154,6 +154,9 @@ const ProductBriefOutput = z.object({
 
 // Stored/validated schema: briefs saved before transitions and SFX existed
 // still parse, with neutral defaults.
+// One video of the clean set: a film template and its colour turn.
+export const CleanVariantRecord = z.object({ film: z.enum(["glow", "dusk", "fly", "connect"]), tint: z.enum(["native", "brand", "brand+120", "brand-120"]), hue: z.number() });
+
 export const ProductBrief = z.object({
   ...briefFields,
   // Briefs saved before the cast existed have none; rendering never needs it.
@@ -189,6 +192,20 @@ export const ProductBrief = z.object({
   taste: z.object({ downloads: z.array(z.object({ seed: z.number(), look: Look.nullable(), at: z.string(), selected_variant: z.string().nullable().optional(), direction: Direction.nullable().optional(), dna: Dna.nullable().optional() })) }).nullable().default(null).catch(null),
   // What the Shot Director's search did (per direction; see generateFlow).
   diagnostics: z.record(z.string(), z.unknown()).nullable().default(null).catch(null),
+  // The clean film templates (lib/ai/clean-director.ts): the narration in
+  // seven parts with the product's card content, the four videos offered
+  // (template + colour) and the earlier sets (so a new set never repeats).
+  clean: z
+    .object({
+      script: z.record(z.string(), z.unknown()),
+      source: z.string(),
+      variants: z.array(CleanVariantRecord),
+      history: z.array(z.array(CleanVariantRecord)).default([]),
+      at: z.string(),
+    })
+    .nullable()
+    .default(null)
+    .catch(null),
 });
 export type SoundEffect = z.infer<typeof SoundEffect>;
 export type SceneAction = z.infer<typeof SceneAction>;

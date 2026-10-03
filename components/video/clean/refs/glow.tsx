@@ -86,7 +86,7 @@ export function GlowFilm({ f, b }: { f: number; b: Beats }) {
             const k = soft(f, T.data + 2 + i * 3, 22);
             const x = W / 2 + Math.cos(a) * r * 1.25;
             const y = 520 + Math.sin(a) * r * 0.6;
-            return at(x, y, <Token icon={ic} size={mix(140, 104, sc)} bg="#f4fff9" color="#0b6b4b" ring="rgba(120,255,200,0.35)" style={{ transform: `scale(${mix(0.6, 1, k)}) rotate(${sc * (i % 2 ? 28 : -28)}deg)` }} />, { opacity: k * (1 - sc * 0.35), filter: `blur(${sc * (i % 3 === 0 ? 4 : 0)}px)` });
+            return at(x, y, <Token icon={ic} size={mix(140, 104, sc)} bg="#f4fff9" color="#0b6b4b" ring="rgba(120,255,200,0.35)" style={{ transform: `scale(${mix(0.6, 1, k)}) rotate(${sc * (i % 2 ? 28 : -28)}deg)` }} />, { opacity: k * (1 - sc * 0.35), filter: `blur(${sc * (i % 3 === 0 ? 4 : 0)}px)` }, ic);
           });
         })()}
         {at(W / 2, 440, <div style={{ fontSize: 210, fontWeight: 700, letterSpacing: "-0.05em", backgroundImage: `linear-gradient(180deg, #ffffff, ${MINT})`, WebkitBackgroundClip: "text", color: "transparent", opacity: rise(f, T.data - 2, 12), filter: `blur(${(1 - rise(f, T.data - 2, 12)) * 16}px)` }}>Data</div>)}
@@ -113,6 +113,7 @@ export function GlowFilm({ f, b }: { f: number; b: Beats }) {
               <span style={{ fontSize: 26, color: "#bff5df", fontWeight: 500, opacity: rise(f, it.c + 10, 14) }}>{it.s}</span>
             </div>,
             { opacity: k, filter: `blur(${(1 - k) * 10}px)` },
+            it.t,
           );
         })}
       </Shot>
@@ -159,7 +160,7 @@ export function GlowFilm({ f, b }: { f: number; b: Beats }) {
                   return <circle key={i} cx={mix(560, 1360, t)} cy={470} r={5} fill="#fff" opacity={0.9} />;
                 })}
               </svg>
-              {cards.map((c, i) => at(c.x + (c.x - 960) * 0.5, c.y + (c.y - 500) * 0.5 + 110, <div style={{ padding: 6, borderRadius: 22, background: "rgba(200,255,235,0.18)", border: "1px solid rgba(200,255,235,0.4)", boxShadow: "0 30px 80px rgba(0,0,0,0.35)" }}>{c.el}</div>, appear(f, T.into - 4 + i * 6, 24, "up", "translate(-50%, -50%) scale(1.45)")))}
+              {cards.map((c, i) => at(c.x + (c.x - 960) * 0.5, c.y + (c.y - 500) * 0.5 + 110, <div style={{ padding: 6, borderRadius: 22, background: "rgba(200,255,235,0.18)", border: "1px solid rgba(200,255,235,0.4)", boxShadow: "0 30px 80px rgba(0,0,0,0.35)" }}>{c.el}</div>, appear(f, T.into - 4 + i * 6, 24, "up", "translate(-50%, -50%) scale(1.45)"), i))}
               {at(W / 2, 110, <Glass dark tint="#bfffe6" pad="16px 38px" glow={MINT} style={{ fontSize: 40, fontWeight: 650, color: "#fff", transform: `scale(${pop(f, T.live - 2, 16)})` }}><Icon name="activity" size={36} color={MINT} strokeWidth={2.4} />{b.label}</Glass>, { opacity: rise(f, T.live - 2, 10) })}
             </>
           );

@@ -1,4 +1,5 @@
-import { AbsoluteFill, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Html5Audio, useCurrentFrame } from "remotion";
+import { Audio as MediaAudio } from "@remotion/media";
 import { useCleanFont } from "../clean-video";
 import { flowlyPlan } from "../fixtures/flowly";
 import type { CleanPlan } from "../types";
@@ -21,17 +22,24 @@ export const FILM_IDS = Object.keys(FILMS) as FilmId[];
 
 // `hue`: a turn of the whole film's colours (degrees), from the variation
 // engine; the brand's uploaded icon is turned back so it keeps its colours.
-export function Film({ plan, film, hue = 0 }: { plan: CleanPlan; film: FilmId; hue?: number }) {
+// `audioUrl`: the voice; `webAudio` mixes it through @remotion/media (what
+// the in-browser renderer can put into the file).
+// `postHue`: the colour turn is done on the finished frames instead (the
+// in-browser renderer does not apply a parent's CSS filter everywhere): the
+// film is drawn unturned and only the brand icon is turned back in advance.
+export type FilmProps = { plan: CleanPlan; film: FilmId; hue?: number; postHue?: number; audioUrl?: string | null; webAudio?: boolean };
+export function Film({ plan, film, hue = 0, postHue = 0, audioUrl, webAudio }: FilmProps) {
   useCleanFont();
   const f = useCurrentFrame();
   const b = beatsFromPlan(plan);
   const F = FILMS[film] ?? GlowFilm;
-  const brand = { name: plan.brand.name, icon: plan.brand.icon, tagline: plan.brand.tagline, cta: plan.brand.cta, url: plan.brand.url, hue, things: b.trio.map((x) => ({ label: x.label, icon: x.icon })) };
+  const brand = { name: plan.brand.name, icon: plan.brand.icon, tagline: plan.brand.tagline, cta: plan.brand.cta, url: plan.brand.url, hue: hue + postHue, things: b.trio.map((x) => ({ label: x.label, icon: x.icon })) };
   return (
     <BrandCtx.Provider value={brand}>
       <AbsoluteFill style={{ background: "#000", overflow: "hidden", filter: hue ? `hue-rotate(${hue}deg)` : undefined }}>
         <F f={f} b={b} />
       </AbsoluteFill>
+      {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
     </BrandCtx.Provider>
   );
 }

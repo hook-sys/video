@@ -111,6 +111,7 @@ export function DuskFilm({ f, b }: { f: number; b: Beats }) {
                 <span style={{ fontSize: 40, color: "#b9aecb", opacity: rise(f, it.c + 10, 12) }}>{it.s}</span>
               </div>,
               { opacity: k * Math.max(0, 1 - Math.abs(d) * 0.75), filter: `blur(${Math.min(14, Math.abs(d) * 10)}px)` },
+              it.t,
             );
           });
         })()}
@@ -283,7 +284,7 @@ export function DuskFilm({ f, b }: { f: number; b: Beats }) {
       <Shot f={f} from={cut.end} to={cut.dur} last enter="blur" cam={(p, f) => `${float(f, 0.4)} scale(${mix(1.03, 1, p)})`}>
         {at(W / 2, 470, <Logo size={180} ink={ink} colors={["#a78bfa", "#6d28d9"]} k={rise(f, cut.end, 30, OUT)} />)}
         {at(W / 2, 610, <div style={{ fontSize: 44, color: "#5d5870", opacity: rise(f, cut.end + 16, 14) }}>{b.brand.tagline}</div>)}
-        {at(W / 2, 740, <div style={{ padding: "18px 44px", borderRadius: 999, background: ink, color: "#fff", fontSize: 36, fontWeight: 600, transform: `scale(${pop(f, cut.end + 24, 16)})` }}>{b.brand.cta} · {b.brand.url}</div>, { opacity: rise(f, cut.end + 24, 10) })}
+        {at(W / 2, 740, <div style={{ padding: "18px 44px", borderRadius: 999, background: ink, color: "#fff", fontSize: 36, fontWeight: 600, transform: `scale(${pop(f, cut.end + 24, 16)})` }}>{b.brand.url ? `${b.brand.cta} · ${b.brand.url}` : b.brand.cta}</div>, { opacity: rise(f, cut.end + 24, 10) })}
       </Shot>
     </AbsoluteFill>
   );

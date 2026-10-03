@@ -11,6 +11,9 @@ import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
 import { storyAssetsEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { compileFlowScript, type CompileBrand } from "@/components/video/flow/compile";
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
+import { buildPlan, type SevenPart } from "@/components/video/clean/plan";
+import type { CleanPlan } from "@/components/video/clean/types";
+import type { CleanVariant } from "@/lib/clean-variants";
 
 export type RenderProject = {
   id?: string;
@@ -113,7 +116,7 @@ export async function buildRenderInput(
   // (shown on the UI planes). Missing files simply leave them out.
   let logoUrl: string | undefined;
   let screenshotUrls: string[] = [];
-  if (flowing && project.id && project.user_id) {
+  if ((flowing || brief.data.clean) && project.id && project.user_id) {
     const folder = `${project.user_id}/${project.id}`;
     const [{ data: files }, { data: shots }] = await Promise.all([
       supabase.storage.from(SCREENSHOTS_BUCKET).list(folder, { search: LOGO_FILE_PREFIX }),
@@ -155,9 +158,25 @@ export async function buildRenderInput(
       })
     : [];
 
+  // The clean film templates: the stored seven parts on the voice's words,
+  // with the customer's brand inputs; the four videos offered.
+  let clean: { plan: CleanPlan; variants: CleanVariant[] } | null = null;
+  const stored = brief.data.clean;
+  if (stored && project.format === "16:9" && wordTimings?.length) {
+    try {
+      const script = stored.script as unknown as SevenPart;
+      const brand = { ...script.brand, name: project.brand_name?.trim() || script.brand.name, color: project.brand_color || script.brand.color, cta: project.call_to_action?.trim() || script.brand.cta, icon: logoUrl ?? null };
+      const built = buildPlan({ ...script, brand }, wordTimings);
+      if (built.plan && stored.variants.length) clean = { plan: built.plan, variants: stored.variants };
+    } catch {
+      clean = null;
+    }
+  }
+
   return {
     problems,
     variants,
+    clean,
     props: {
       story: story ? { story, narration: brief.data.script, assets: storyAssets } : null,
       flow: flowing ? { plan: compilePlan() } : null,

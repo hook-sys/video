@@ -152,6 +152,7 @@ export function ConnectFilm({ f, b }: { f: number; b: Beats }) {
               </div>
             </div>,
             { opacity: k },
+            w.t,
           );
         })}
       </Shot>

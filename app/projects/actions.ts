@@ -66,7 +66,9 @@ import {
 import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
 import { generateVisualStory } from "@/lib/ai/visual-story";
-import { parseWordTimings } from "@/lib/voice-timing";
+import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
+import { generateCleanScript } from "@/lib/ai/clean-director";
+import { type CleanVariant, cleanVariants } from "@/lib/clean-variants";
 import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { generateFlowScript } from "@/lib/ai/flow-director";
 import { generateSceneScript } from "@/lib/ai/scene-director";
@@ -356,7 +358,7 @@ export async function generateBrief(projectId: string) {
     // With a locked script the voice and the Shot Director run alongside the
     // brief: keep what they already stored, and fit the storyboard to the voice.
     const { data: fresh } = await admin.from("projects").select("brief, voice_status, duration_seconds").eq("id", projectId).single();
-    const kept = Object.fromEntries(Object.entries((fresh?.brief as Record<string, unknown> | null) ?? {}).filter(([k]) => ["scene", "flow", "story", "shots", "variants", "diagnostics", "taste"].includes(k)));
+    const kept = Object.fromEntries(Object.entries((fresh?.brief as Record<string, unknown> | null) ?? {}).filter(([k]) => ["scene", "flow", "story", "shots", "variants", "diagnostics", "taste", "clean"].includes(k)));
     let next = lockBriefScript(brief, project);
     if (fresh?.voice_status === "completed" && fresh.duration_seconds) {
       try {
@@ -445,11 +447,48 @@ async function loadTaste(admin: ReturnType<typeof createAdminClient>): Promise<T
   }
 }
 
+// The clean set for a project: the Director's seven parts (with the
+// product's card content) and four videos (template + colour). Earlier sets
+// of this customer for the same narration are its history, so the new four
+// differ from every one of them. Null when nothing usable came back.
+async function cleanSet(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string,
+  userId: string,
+  project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null },
+  words: WordTiming[],
+  narration: string,
+  brief: { product_name?: string; product_summary?: string; cta?: string } | null,
+  addUsage: (u: BriefUsage) => void,
+) {
+  const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
+  const brand = {
+    name: project.brand_name?.trim() || brief?.product_name || "Your product",
+    color: project.brand_color || "#6a5bff",
+    tagline: "",
+    cta: project.call_to_action?.trim() || brief?.cta || "Get started",
+    url: host,
+    icon: null,
+  };
+  const result = await generateCleanScript({ brand, words, product: brief?.product_summary ?? null }, addUsage);
+  console.info("clean director:", { projectId, source: result.source, attempts: result.attempts, ms: result.ms, problems: result.problems.slice(0, 6) });
+  if (!result.script || !result.plan) return null;
+  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const { data: past } = await admin.from("projects").select("id, clean:brief->clean, script:brief->>script").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(40);
+  const history: CleanVariant[][] = (past ?? [])
+    .filter((p) => typeof p.script === "string" && norm(p.script) === norm(narration))
+    .flatMap((p) => {
+      const c = p.clean as { variants?: CleanVariant[]; history?: CleanVariant[][] } | null;
+      return c?.variants ? [...(c.history ?? []), c.variants] : [];
+    });
+  return { script: result.script as unknown as Record<string, unknown>, source: result.source, variants: cleanVariants(seedFrom(projectId), history, brand.color), history, at: new Date().toISOString() };
+}
+
 async function generateFlow(projectId: string, userId: string, budgetMs: number) {
   const admin = createAdminClient();
   const { data: project } = await admin
     .from("projects")
-    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction, target_audience, brand_name, voice_status, voice_result")
+    .select("brief, format, duration_seconds, direction, creative_direction, motion_level, visual_density, advanced_direction, target_audience, brand_name, brand_color, call_to_action, website_url, voice_status, voice_result")
     .eq("id", projectId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -467,6 +506,10 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // fallback when no usable SceneScript comes back and time remains.
   let usage: BriefUsage | undefined;
   const addUsage = (u: BriefUsage) => (usage = usage ? { ...u, inputTokens: usage.inputTokens + u.inputTokens, outputTokens: usage.outputTokens + u.outputTokens } : u);
+  // The clean film templates first (one quick call): the narration in seven
+  // parts and the four videos to offer, never a set this customer already had
+  // for the same script. The engines below still run (fallback).
+  const clean = project.format === "16:9" && words?.length ? await cleanSet(admin, projectId, userId, project, words, narration, brief.success ? brief.data : null, addUsage) : null;
   // Shot templates first (lib/shots.ts): tested shots, the Director only picks
   // and fills them (four directions, else one — inside generateShotScript).
   // The free-form scene Director is the fallback only when no shots came back.
@@ -505,7 +548,8 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   if (v2.script) v2.script.pace = ["Dynamic", "High Energy"].includes(input.creative_preferences.motion_level) ? "lively" : "calm";
   // The videos the customer chooses between: one per creative direction.
   const variants = shot.script && v2 === shot ? shot.variants.map((v) => ({ ...v, scene: { ...v.scene, theme: v2.script!.theme, pace: v2.script!.pace } })) : [];
-  const stored = v2.script ? { scene: v2.script, ...(shot.script ? { shots: shot.shots } : {}), ...(variants.length > 1 ? { variants } : {}) } : result.script ? { flow: result.script } : null;
+  const engine = v2.script ? { scene: v2.script, ...(shot.script ? { shots: shot.shots } : {}), ...(variants.length > 1 ? { variants } : {}) } : result.script ? { flow: result.script } : null;
+  const stored = engine || clean ? { ...(engine ?? {}), ...(clean ? { clean } : {}) } : null;
   // What the Shot Director's search did with each direction (why one was
   // dropped, its DNA, its behaviors) and which build made it — kept even
   // when nothing usable came back.
@@ -1261,6 +1305,29 @@ export async function retryPipeline(projectId: string) {
       .eq("user_id", user.id);
   }
   if (await claimPipeline(projectId, user.id)) after(() => runPipeline(projectId, user.id));
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// Four new clean videos for the same script and voice: the current four join
+// the history and a new set unlike every earlier one is offered.
+export async function newCleanSet(projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  // RLS: only returns the project if this user owns it.
+  const { data: project } = await supabase.from("projects").select("brief, brand_color").eq("id", projectId).maybeSingle();
+  const brief = ProductBrief.safeParse(project?.brief);
+  const clean = brief.success ? brief.data.clean : null;
+  if (!project || !clean) return;
+  const history = [...clean.history, clean.variants];
+  const variants = cleanVariants(seedFrom(projectId), history, project.brand_color);
+  await createAdminClient()
+    .from("projects")
+    .update({ brief: { ...(project.brief as object), clean: { ...clean, variants, history, at: new Date().toISOString() } } })
+    .eq("id", projectId)
+    .eq("user_id", user.id);
   revalidatePath(`/projects/${projectId}`);
 }
 

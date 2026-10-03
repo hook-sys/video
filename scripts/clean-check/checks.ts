@@ -130,6 +130,7 @@ export async function runChecks(): Promise<Check[]> {
   section = "clean director";
   const flowly = plans[0];
   const FLOWLY_OUT: CleanScriptOut = {
+    tagline: "Every answer you need",
     hook: { text: "Every team starts with data scattered across different tools.", key: "scattered", big: "data" },
     trio: {
       text: "Sales in one place. Payments in another. Reports somewhere else.",
@@ -182,6 +183,10 @@ export async function runChecks(): Promise<Check[]> {
   add("too short a narration → no plan, never a throw", short.source === "none" && !short.plan, short.problems.slice(-1)[0] ?? "");
   const nope = buildPlan({ ...FLOWLY_OUT, brand: flowly.brand, content: DEFAULT_CONTENT, hook: { text: "Words nobody said here.", key: "nobody", big: null } } as never, flowly.words);
   add("buildPlan reports a misquote instead of throwing", !nope.plan && nope.problems.some((p) => p.startsWith("hook")), nope.problems[0] ?? "");
+
+  const stored = JSON.parse(JSON.stringify(r1.script));
+  const again = buildPlan({ ...stored, brand: { ...stored.brand, name: "Renamed", icon: "https://example.com/i.png" } }, flowly.words);
+  add("the stored script (JSON) rebuilds the plan with the customer's brand", !!again.plan && again.plan.brand.name === "Renamed" && again.plan.duration === flowly.duration, again.problems[0] ?? `duration ${again.plan?.duration}`);
 
   section = "variation engine";
   const g1 = cleanVariants(1234, [], "#6a5bff");

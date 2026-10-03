@@ -63,12 +63,13 @@ export const grow = (f: number, at: number, dur = 20) => mix(0.86, 1, soft(f, at
 // A slight hand-held float added to every camera.
 export const float = (f: number, k = 1) => `translate(${Math.sin(f / 41) * 6 * k}px, ${Math.cos(f / 57) * 5 * k}px)`;
 
-export const abs = (x: number, y: number, node: ReactNode, style?: CSSProperties) => (
-  <div style={{ position: "absolute", left: x, top: y, width: "max-content", ...style }}>{node}</div>
+// `key`: only when the element is one of a list.
+export const abs = (x: number, y: number, node: ReactNode, style?: CSSProperties, key?: string | number) => (
+  <div key={key} style={{ position: "absolute", left: x, top: y, width: "max-content", ...style }}>{node}</div>
 );
 // Centred at (x, y).
-export const at = (x: number, y: number, node: ReactNode, style?: CSSProperties) => (
-  <div style={{ position: "absolute", left: x, top: y, width: "max-content", maxWidth: 1760, transform: "translate(-50%, -50%)", ...style }}>{node}</div>
+export const at = (x: number, y: number, node: ReactNode, style?: CSSProperties, key?: string | number) => (
+  <div key={key} style={{ position: "absolute", left: x, top: y, width: "max-content", maxWidth: 1760, transform: "translate(-50%, -50%)", ...style }}>{node}</div>
 );
 
 // ── words ─────────────────────────────────────────────────────────────────
