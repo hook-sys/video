@@ -317,8 +317,8 @@ export type Origin = { x: number; y: number; w: number; h: number; r: number } |
 export function Backdrop({ f, look, parts, origins }: { f: number; look: Look; parts: { role: Role; from: number }[]; origins?: Origin[] }) {
   // where the field changes: from 16 frames before a cut — or, when the new
   // part's object grows out of the last one's, once it has arrived
-  const w0 = (j: number) => (origins?.[j] ? parts[j].from + 4 : parts[j].from - 16);
-  const dur = (j: number) => (origins?.[j] ? 22 : 36);
+  const w0 = (j: number) => (origins?.[j] ? parts[j].from + 4 : parts[j].from - 2);
+  const dur = (j: number) => (origins?.[j] ? 22 : 30);
   const i = Math.max(0, parts.findLastIndex((_, j) => w0(j) <= f));
   const cur = look.mode(parts[i].role);
   const prev = i ? look.mode(parts[i - 1].role) : cur;

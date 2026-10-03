@@ -66,6 +66,9 @@ export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio, bare
     const c: BlockCtx = { f, from: p.from, to, role: p.role, look, pal: look.pal[look.mode(p.role)], b, T: b.t, L: b.line, C: b.content };
     return { block, c, obj: block?.obj?.(c) ?? {} };
   });
+  // a cut where the field turns dark ↔ light: the last part has gone before
+  // the new field opens (its words would vanish on the new colour)
+  const flips = (j: number) => j > 0 && j < parts.length && look.mode(parts[j - 1].role) !== look.mode(parts[j].role);
   // where the last part's object (z) becomes this part's (a)
   const hands = shots.map((s, i) => (i && shots[i - 1].obj.z && s.obj.a ? { a: shots[i - 1].obj.z as Box, z: s.obj.a } : null));
   const brand = { name: plan.brand.name, icon: plan.brand.icon, tagline: plan.brand.tagline, cta: plan.brand.cta, url: plan.brand.url, hue: hue + postHue, things: b.trio.map((x) => ({ label: x.label, icon: x.icon })) };
@@ -84,7 +87,7 @@ export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio, bare
           // slower entrance where the field turns dark ↔ light; every part
           // leaves after the next has begun to come in (no empty frame)
           return (
-            <Shot key={p.role} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && look.mode(parts[i - 1].role) !== look.mode(p.role) ? 28 : 18} outDur={outHand ? 12 : c.pal.dark || c.pal.panelDark ? 20 : 14} tail={outHand ? 4 : 10} cam={cam(look.camera)}>
+            <Shot key={p.role} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && look.mode(parts[i - 1].role) !== look.mode(p.role) ? 28 : 18} outDur={outHand ? 12 : c.pal.dark || c.pal.panelDark ? 20 : 14} tail={outHand ? 4 : flips(i + 1) ? 0 : 10} cam={cam(look.camera)}>
               {block.draw(c)}
             </Shot>
           );

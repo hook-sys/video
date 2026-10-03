@@ -4,7 +4,8 @@
 # frame of the background alone (StudioFilm `bare`), fewer than EMPTY of its
 # pixels (at 192×108) differ by more than STEP — a line of small text or a
 # dark card on a dark field still counts. The rule allows no run of more than
-# LIMIT empty frames.
+# LIMIT empty frames. Frames where the background itself is changing (a new
+# field opening) are not empty: something is happening on screen.
 #
 #   python3 scripts/clean-check/empty-frames.py full.mp4 bare.mp4 [full2.mp4 bare2.mp4 …]
 #
@@ -33,6 +34,8 @@ def runs(full, bare):
     a, b = frames(full), frames(bare)
     n = min(len(a), len(b))
     diff = [float((np.abs(a[i] - b[i]) > STEP).mean()) for i in range(n)]
+    moving = [i > 0 and float(np.abs(b[i] - b[i - 1]).mean()) > 1.5 for i in range(n)]
+    diff = [1.0 if moving[i] else d for i, d in enumerate(diff)]
     found, start = [], None
     for i, v in enumerate(diff + [1.0]):
         if v < EMPTY and start is None:
