@@ -120,10 +120,17 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
                 <input name="voice_female" defaultValue={c.voice.female} placeholder="Female voice name (this model's)" className={input} />
                 <input name="voice_male" defaultValue={c.voice.male} placeholder="Male voice name (this model's)" className={input} />
               </div>
+              {c.voice.model && (!c.voice.female || !c.voice.male) && !(["female", "male"] as const).every((g) => c.voice[g] || c.voice.choices.some((v) => v.gender === g)) && (
+                <p className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-2 text-xs text-amber-200">Set both a female and a male voice name for this model (or list both genders below): a video in the missing gender can&apos;t be voiced.</p>
+              )}
+              <label className="flex items-center gap-3 text-zinc-300">
+                <Toggle name="voice_fallback" on={c.voice.fallback} />
+                Backup: when this model fails, use the environment&apos;s voice ({env.voice}) — both are charged
+              </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-zinc-300">Voices customers can pick</span>
                 <textarea name="voice_choices" rows={4} defaultValue={voiceChoicesText(c.voice.choices)} placeholder={"One per line: name, female or male, a short description\nKore, female, Warm and clear\nPuck, male, Upbeat"} className={`${input} font-mono text-xs`} />
-                <span className="text-xs text-zinc-500">Names of the voice model above. Shown on the new-video form; empty = customers only pick male or female. Test each name below first.</span>
+                <span className="text-xs text-zinc-500">Names of the voice model above, spelled exactly (they are case-sensitive: Kore, not kore). Shown on the new-video form; empty = customers only pick male or female. Test each name below first.</span>
               </label>
               <p className="text-xs text-zinc-500">Every fal voice model takes its own input fields and voice names — copy them from the model&apos;s API page on fal, then use the test below.</p>
             </div>

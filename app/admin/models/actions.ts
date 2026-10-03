@@ -43,7 +43,7 @@ export async function saveAiModels(formData: FormData) {
   const next = normalizeConfig({
     text: { provider: text(formData, "text_provider"), model: text(formData, "text_model"), backup: formData.get("text_backup") === "on" },
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: formData.get(`task_${t.id}_on`) === "on", provider: text(formData, `task_${t.id}_provider`), model: text(formData, `task_${t.id}_model`) }])),
-    voice: { on: formData.get("voice_on") === "on", model: text(formData, "voice_model"), template: text(formData, "voice_template", 2000), female: text(formData, "voice_female", 80), male: text(formData, "voice_male", 80), choices: text(formData, "voice_choices", 4000) },
+    voice: { on: formData.get("voice_on") === "on", model: text(formData, "voice_model"), template: text(formData, "voice_template", 2000), female: text(formData, "voice_female", 80), male: text(formData, "voice_male", 80), choices: text(formData, "voice_choices", 4000), fallback: formData.get("voice_fallback") === "on" },
     image: { on: formData.get("image_on") === "on", model: text(formData, "image_model"), template: text(formData, "image_template", 2000) },
     prices,
   });

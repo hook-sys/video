@@ -134,6 +134,15 @@ export async function generateVoice({
 
   const text = script.trim().slice(0, SCRIPT_MAX);
   if (!text) throw new Error("The brief has no script to narrate.");
+  // The admin's model speaks with its own voice names: the customer's pick, the
+  // gender's name, else the first listed voice of that gender. (The
+  // environment's default names belong to its own model and are never sent.)
+  if (voice.model && !picked) {
+    const own = gender === "female" ? voice.female : voice.male;
+    const listed = voice.choices.find((c) => c.gender === (gender === "female" ? "female" : "male"))?.name;
+    if (!own && listed) voice[gender === "female" ? "female" : "male"] = listed;
+    if (!own && !listed) throw new Error(`No ${gender === "female" ? "female" : "male"} voice name is set for ${voice.model} on /admin/models.`);
+  }
   const speak = (m: string, template: string, names: { female?: string; male?: string }) => {
     const input = buildInput(template || '{"text":"{{text}}"}', { text, language, style, gender, voice: (names === voice && picked) || voiceForGender(gender, names) });
     // fal-ai/elevenlabs/tts/* return per-word timestamps only when asked.
@@ -148,7 +157,7 @@ export async function generateVoice({
   } catch (e) {
     // A model chosen on /admin/models that fails never stops a video: the
     // environment's voice speaks instead. (The admin page's test has no fallback.)
-    if (override || !voice.model || !envModel || envModel === model) throw e;
+    if (override || !voice.fallback || !voice.model || !envModel || envModel === model) throw e;
     console.warn("voice model failed; environment voice instead:", { model, error: e instanceof Error ? e.message.slice(0, 300) : String(e) });
     used = envModel;
     result = await speak(envModel, process.env.FAL_VOICE_INPUT_TEMPLATE || "", {});

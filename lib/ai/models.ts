@@ -28,7 +28,8 @@ export type AiConfig = {
   // per job: on/off, and a model (and provider) other than the main one
   tasks: Record<TextTask, { on: boolean; provider: Provider | ""; model: string }>;
   // empty strings mean the environment's values
-  voice: { on: boolean; model: string; template: string; female: string; male: string; choices: VoiceChoice[] };
+  // fallback: when the chosen model fails, the environment's voice speaks (it is paid too)
+  voice: { on: boolean; model: string; template: string; female: string; male: string; choices: VoiceChoice[]; fallback: boolean };
   image: { on: boolean; model: string; template: string };
   // USD: per 1M input / output tokens (text), per character (voice), per image
   prices: Record<string, ModelPrice>;
@@ -57,7 +58,7 @@ export function defaultConfig(): AiConfig {
   return {
     text: { provider: "openai", model: process.env.OPENAI_MODEL || "gpt-5-mini", backup: true },
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: true, provider: "", model: "" }])) as AiConfig["tasks"],
-    voice: { on: true, model: "", template: "", female: "", male: "", choices: [] },
+    voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     image: { on: true, model: "", template: "" },
     prices: {},
   };
@@ -79,7 +80,7 @@ export function normalizeConfig(raw: unknown): AiConfig {
     tasks: Object.fromEntries(
       TEXT_TASKS.map((t) => [t.id, { on: t.canOff ? bool(tasks[t.id]?.on, true) : true, provider: provider(tasks[t.id]?.provider), model: str(tasks[t.id]?.model) }]),
     ) as AiConfig["tasks"],
-    voice: { on: bool(r.voice?.on, true), model: str(r.voice?.model), template: str(r.voice?.template, 2000), female: str(r.voice?.female, 80), male: str(r.voice?.male, 80), choices: parseVoiceChoices(r.voice?.choices) },
+    voice: { on: bool(r.voice?.on, true), model: str(r.voice?.model), template: str(r.voice?.template, 2000), female: str(r.voice?.female, 80), male: str(r.voice?.male, 80), choices: parseVoiceChoices(r.voice?.choices), fallback: bool(r.voice?.fallback, false) },
     image: { on: bool(r.image?.on, true), model: str(r.image?.model), template: str(r.image?.template, 2000) },
     prices: Object.fromEntries(
       Object.entries(prices)
