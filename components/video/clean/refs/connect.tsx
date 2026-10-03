@@ -1,6 +1,7 @@
 import { AbsoluteFill } from "remotion";
 import { Icon } from "../../icons";
-import { count, IN_OUT, mix, money, OUT, pop, rise } from "../anim";
+import { type FilmContent, pct, show } from "../content";
+import { count, IN_OUT, mix, OUT, pop, rise } from "../anim";
 import { Area, at, Check, float, FlowMark, glide, Logo, Person, Pointer, press, Shot, useBrand, W, Words } from "./common";
 import { type Beats, type Moments, plainW } from "./beats";
 
@@ -55,7 +56,7 @@ function PCard({ l, n, r, c, f, tick }: { l: string; n: string; r: string; c: st
 }
 
 // The app frame used tilted (a table of tools/rows), drawn flat.
-function Board({ f, title, rows, live }: { f: number; title: string; rows: { n: string; s: string; c: string; at?: number; st?: string }[]; live?: number }) {
+function Board({ f, title, rows, live, C }: { f: number; title: string; rows: { n: string; s: string; c: string; at?: number; st?: string }[]; live?: number; C: FilmContent }) {
   const brand = useBrand();
   const name = brand.name;
   return (
@@ -75,7 +76,7 @@ function Board({ f, title, rows, live }: { f: number; title: string; rows: { n: 
       <div style={{ flex: 1, padding: 40 }}>
         <div style={{ fontSize: 34, fontWeight: 700 }}>{title}</div>
         <div style={{ display: "flex", gap: 20, marginTop: 26 }}>
-          {[["Revenue", money(count(f, live ?? 0, 30, 50700, 63900))], ["Sales", String(count(f, live ?? 0, 30, 312, 396))], ["Open reports", "0"]].map(([a, b]) => (
+          {[[C.metric.label, show(C.metric.unit, C.metric.to)], [C.growth.label, show(C.growth.unit, count(f, live ?? 0, 30, C.growth.from, C.growth.to))], [C.side[0].label, C.side[0].value]].map(([a, b]) => (
             <div key={a} style={{ flex: 1, padding: "20px 24px", borderRadius: 18, border: `1px solid ${LINE}` }}>
               <div style={{ fontSize: 18, color: SUB }}>{a}</div>
               <div style={{ fontSize: 40, fontWeight: 700, marginTop: 4 }}>{b}</div>
@@ -105,16 +106,12 @@ export function ConnectFilm({ f, b }: { f: number; b: Beats }) {
   const T = b.t;
   const L = b.line;
   const cut = connectCuts(T);
-  const people = [
-    ["A", "Ava Brooks", "Sales lead", "#3b82f6"],
-    ["N", "Noah Reed", "Finance", "#10b981"],
-    ["L", "Lily Cooper", "Operations", "#f59e0b"],
-    ["E", "Ethan Park", "Marketing", "#8b5cf6"],
-    ["O", "Olivia Ward", "Support", "#ef4444"],
-    ["S", "Sam Evans", "Product", "#0ea5e9"],
-    ["M", "Mia Turner", "Accounts", "#ec4899"],
-    ["J", "Jack Hayes", "Sales", "#14b8a6"],
-  ] as const;
+  const C = b.content;
+  // the wall: the team, then the people/accounts of the list (initials only)
+  const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#0ea5e9", "#ec4899", "#14b8a6"];
+  const people = [...C.people.map((p) => [p.name, p.role] as const), [C.event.source, C.event.label] as const, ...C.rows.map((r) => [r.name, r.value] as const)]
+    .slice(0, 8)
+    .map(([n, r], i) => [n.trim()[0]?.toUpperCase() ?? "•", n, r, COLORS[i]] as const);
   return (
     <AbsoluteFill style={{ fontFamily: "InterClean, system-ui, sans-serif" }}>
       <ConnectBg f={f} />
@@ -209,7 +206,7 @@ export function ConnectFilm({ f, b }: { f: number; b: Beats }) {
               {at(W / 2, 420, <Words f={f} words={L.payA} s={{ size: 52, ink: INK, weight: 500 }} />)}
               {at(W / 2, 560, (
                 <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "24px 50px", borderRadius: 16, background: sent > 0.5 ? IND : INK, color: "#fff", fontSize: 38, fontWeight: 600, boxShadow: "0 24px 60px rgba(30,30,100,0.3)", transform: `scale(${pop(f, T.payment, 16) * (1 - press(f, [T.revenue]) * 0.06)})` }}>
-                  {sent > 0.5 ? <>Revenue updated<Check size={36} color="#22c55e" /></> : <>New payment · $2,400<Icon name="send" size={32} color="#fff" /></>}
+                  {sent > 0.5 ? <>{C.event.done}<Check size={36} color="#22c55e" /></> : <>{C.event.label} · {C.event.detail}<Icon name="send" size={32} color="#fff" /></>}
                 </div>
               ), { opacity: rise(f, T.payment - 2, 8) })}
               {at(W / 2, 680, <Words f={f} words={L.payB} s={{ size: 48, ink: INK, weight: 500, key: () => ({ color: IND }) }} />)}
@@ -226,9 +223,9 @@ export function ConnectFilm({ f, b }: { f: number; b: Beats }) {
           <div style={{ width: 1180, borderRadius: 28, background: "#fff", padding: "36px 44px", boxSizing: "border-box", boxShadow: "0 50px 120px rgba(50,50,140,0.18)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 700, color: "#16a34a" }}><span style={{ width: 12, height: 12, borderRadius: 99, background: "#16a34a", opacity: 0.5 + 0.5 * Math.sin(f / 4) }} />LIVE</span>
-              <span style={{ fontSize: 34, fontWeight: 650, color: INK }}>Sales this month</span>
-              <span style={{ marginLeft: "auto", fontSize: 40, fontWeight: 700, color: INK }}>{money(count(f, T.grow, 34, 41018, 52240))}</span>
-              <span style={{ fontSize: 20, fontWeight: 700, color: "#16a34a", background: "#16a34a16", padding: "4px 12px", borderRadius: 99 }}>+{count(f, T.grow, 34, 4, 27)}%</span>
+              <span style={{ fontSize: 34, fontWeight: 650, color: INK }}>{C.growth.label}</span>
+              <span style={{ marginLeft: "auto", fontSize: 40, fontWeight: 700, color: INK }}>{show(C.growth.unit, count(f, T.grow, 34, C.growth.from, C.growth.to))}</span>
+              <span style={{ fontSize: 20, fontWeight: 700, color: "#16a34a", background: "#16a34a16", padding: "4px 12px", borderRadius: 99 }}>+{count(f, T.grow, 34, Math.round(pct(C.growth) / 6), pct(C.growth))}%</span>
             </div>
             <div style={{ marginTop: 26 }}>
               <Area w={1090} h={230} draw={rise(f, cut.live + 4, 24)} color={BLUE} pts={[0.2, 0.26, 0.22, 0.32, 0.3, 0.38, 0.36, 0.42, 0.46, 0.5]} lift={rise(f, T.grow, 34, OUT) * 3.4} dot />
@@ -250,6 +247,7 @@ export function ConnectFilm({ f, b }: { f: number; b: Beats }) {
         {at(W / 2, 700, (
           <div style={{ transform: `perspective(2200px) rotateX(${mix(26, 14, rise(f, cut.board, 120, IN_OUT))}deg) rotateZ(${mix(-3, 0, rise(f, cut.board, 120, IN_OUT))}deg) scale(0.86)` }}>
             <Board
+              C={C}
               f={f}
               title="All tools, one place"
               live={cut.board}

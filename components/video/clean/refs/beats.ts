@@ -1,3 +1,4 @@
+import { DEFAULT_CONTENT, type FilmContent } from "../content";
 import type { KWord } from "../text";
 import type { Brand, CleanPlan, Scene } from "../types";
 import { FPS } from "../types";
@@ -33,7 +34,7 @@ export type Lines = {
 export type Thing = { label: string; sub: string; icon: string; at: number };
 // `label`: the product in a few words for a pill ("One live dashboard"):
 // the last three words of the reveal line.
-export type Beats = { t: Moments; line: Lines; trio: Thing[]; brand: Brand; label: string };
+export type Beats = { t: Moments; line: Lines; trio: Thing[]; brand: Brand; label: string; content: FilmContent };
 
 // The spoken frame of a word (KWord.at is 2 frames before it).
 const said = (w: KWord) => w.at + 2;
@@ -181,7 +182,7 @@ export function beatsFromPlan(plan: CleanPlan): Beats {
   };
   const tail = reveal.slice(-3).map((w) => w.t.replace(/[.,!?]+$/, "")).join(" ");
   const label = tail ? tail[0].toUpperCase() + tail.slice(1) : plan.brand.name;
-  return { t, line, trio, brand: plan.brand, label };
+  return { t, line, trio, brand: plan.brand, label, content: plan.content ?? DEFAULT_CONTENT };
 }
 
 // Words with no keyword or strike.

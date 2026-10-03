@@ -15,6 +15,10 @@ import { CLEAN_RULES } from "@/components/video/clean/rules";
 import type { KWord } from "@/components/video/clean/text";
 import { FPS } from "@/components/video/clean/types";
 import { findPhrase } from "@/components/video/clean/words";
+import { type CleanScriptOut, generateCleanScript } from "@/lib/ai/clean-director";
+import { cleanVariants, FILM_HUE, hueOf } from "@/lib/clean-variants";
+import { buildPlan } from "@/components/video/clean/plan";
+import { DEFAULT_CONTENT } from "@/components/video/clean/content";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -122,6 +126,76 @@ export async function runChecks(): Promise<Check[]> {
   }
   add("an unspoken phrase still fails", missing, "throws");
   add("Flowly voice phrases still found", findPhrase(WORDS, "No more waiting for reports.").length === 5, "No more waiting for reports.");
+
+  section = "clean director";
+  const flowly = plans[0];
+  const FLOWLY_OUT: CleanScriptOut = {
+    hook: { text: "Every team starts with data scattered across different tools.", key: "scattered", big: "data" },
+    trio: {
+      text: "Sales in one place. Payments in another. Reports somewhere else.",
+      items: [
+        { label: "Sales", sub: "in one place", icon: "chart-line" },
+        { label: "Payments", sub: "in another", icon: "credit-card" },
+        { label: "Reports", sub: "somewhere else", icon: "not-an-icon" },
+      ],
+    },
+    reveal: { name: "Flowly", sub: "brings everything into one live dashboard.", key: "dashboard." },
+    pay: { eyebrow: "When a payment arrives,", title: "revenue updates instantly.", key: "instantly.", pay: "payment arrives", rev: "revenue updates", inst: "instantly" },
+    growth: { eyebrow: "When sales grow,", title: "the entire team sees the change in one view.", key: "view.", grow: "grow", team: "entire team", zoom: "in one view" },
+    nomore: { a: "No more switching between tools.", aKey: "switching", b: "No more waiting for reports.", bKey: "waiting" },
+    cta: { tagline: "Just one live dashboard with every answer you need.", key: "answer" },
+    content: { ...DEFAULT_CONTENT, rows: DEFAULT_CONTENT.rows.slice(0, 2), growth: { label: "Sales", from: 900, to: 800, unit: "$" } },
+  };
+  const mock = (answers: (CleanScriptOut | Error)[]) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      client: {
+        responses: {
+          parse: async (req: { input: string }) => {
+            calls.push(req.input);
+            const a = answers[Math.min(calls.length - 1, answers.length - 1)];
+            if (a instanceof Error) throw a;
+            return { id: `r${calls.length}`, usage: { input_tokens: 10, output_tokens: 20 }, output_parsed: a };
+          },
+        },
+      } as never,
+    };
+  };
+  const input = { brand: flowly.brand, words: flowly.words, product: "a live dashboard for small teams" };
+  const ok = mock([FLOWLY_OUT]);
+  const r1 = await generateCleanScript(input, undefined, ok.client);
+  const same = r1.plan ? Object.entries(beatsFromPlan(flowly).t).filter(([k, v]) => (beatsFromPlan(r1.plan!).t as Record<string, number>)[k] !== v).map(([k]) => k) : ["no plan"];
+  add("a good answer → the plan, on the voice", r1.source === "ai" && r1.attempts === 1 && !same.length, `${r1.source}, ${r1.attempts} call; moments differing from the hand-made Flowly plan: ${same.join(", ") || "none"}`);
+  add("unknown icon → a safe icon; short lists filled; growth grows", r1.script?.trio.items[2].icon === "sparkles" && r1.script.content?.rows.length === 3 && r1.script.content.growth.to > r1.script.content.growth.from, `${r1.script?.trio.items[2].icon}, ${r1.script?.content?.rows.length} rows, growth ${r1.script?.content?.growth.from}→${r1.script?.content?.growth.to}`);
+  const bad = { ...FLOWLY_OUT, pay: { ...FLOWLY_OUT.pay, title: "revenue changes at once." } };
+  const rev = mock([bad, FLOWLY_OUT]);
+  const r2 = await generateCleanScript(input, undefined, rev.client);
+  add("a misquote → one revision with the problem", r2.source === "revised" && r2.attempts === 2 && rev.calls[1]?.includes("revenue changes at once."), `${r2.source}, ${r2.attempts} calls; problem sent: ${rev.calls[1]?.split("\n")[1]?.slice(0, 80)}`);
+  const fail = mock([new Error("timeout")]);
+  const r3 = await generateCleanScript(input, undefined, fail.client);
+  add("a failed call → the sentence fallback, still a plan", r3.source === "fallback" && !!r3.plan && r3.problems.some((p) => p.includes("timeout")), `${r3.source}; ${r3.problems[0]}`);
+  const sn = shopnestPlan();
+  const r4 = await generateCleanScript({ brand: sn.brand, words: sn.words }, undefined, mock([bad, bad]).client);
+  add("wrong twice → fallback on another script", r4.source === "fallback" && !!r4.plan, `${r4.source}, ${r4.problems.length} problems noted`);
+  const short = await generateCleanScript({ brand: sn.brand, words: sn.words.slice(0, 12) }, undefined, mock([new Error("x")]).client);
+  add("too short a narration → no plan, never a throw", short.source === "none" && !short.plan, short.problems.slice(-1)[0] ?? "");
+  const nope = buildPlan({ ...FLOWLY_OUT, brand: flowly.brand, content: DEFAULT_CONTENT, hook: { text: "Words nobody said here.", key: "nobody", big: null } } as never, flowly.words);
+  add("buildPlan reports a misquote instead of throwing", !nope.plan && nope.problems.some((p) => p.startsWith("hook")), nope.problems[0] ?? "");
+
+  section = "variation engine";
+  const g1 = cleanVariants(1234, [], "#6a5bff");
+  add("four different templates", new Set(g1.map((v) => v.film)).size === 4, g1.map((v) => `${v.film}/${v.tint}`).join(", "));
+  const g2 = cleanVariants(1234, [g1], "#6a5bff");
+  const g3 = cleanVariants(1234, [g1, g2], "#6a5bff");
+  const g4 = cleanVariants(1234, [g1, g2, g3], "#6a5bff");
+  const all = [g1, g2, g3, g4].flat().map((v) => `${v.film}:${v.tint}`);
+  add("four regenerations: no template repeats a colour", new Set(all).size === 16, `${new Set(all).size}/16 distinct; g2 ${g2.map((v) => `${v.film}/${v.tint}`).join(", ")}`);
+  add("a regeneration changes the order or every colour", g2.every((v, i) => v.film !== g1[i].film || v.tint !== g1[i].tint), g2.map((v) => v.film).join(", "));
+  const bh = hueOf("#6a5bff")!;
+  const branded = g1.concat(g2, g3, g4).filter((v) => v.tint === "brand");
+  add("a brand tint turns the film to the brand's hue", branded.every((v) => Math.abs(((FILM_HUE[v.film] + v.hue - bh) % 360 + 540) % 360 - 180) <= 1), branded.map((v) => `${v.film} ${v.hue}°`).join(", "));
+  add("the same seed → the same four", JSON.stringify(cleanVariants(1234, [], "#6a5bff")) === JSON.stringify(g1), "deterministic");
 
   section = "covered elsewhere";
   add("asset-type-swap, support-placement", true, "checked by npm run check:assets and check:recipe");

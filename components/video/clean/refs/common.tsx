@@ -180,7 +180,7 @@ export function Token({ icon, size = 110, bg = "#ffffff", color = "#111", ring, 
 // ── the brand ─────────────────────────────────────────────────────────────
 // The film's brand (name, uploaded icon, tagline, call to action, address),
 // given once by the film and read by the mark, the logo and the app window.
-export type FilmBrand = { name: string; icon?: string | null; tagline: string; cta: string; url: string; things: { label: string; icon: string }[] };
+export type FilmBrand = { name: string; icon?: string | null; tagline: string; cta: string; url: string; hue?: number; things: { label: string; icon: string }[] };
 export const BrandCtx = createContext<FilmBrand>({ name: "Brand", tagline: "", cta: "", url: "", things: [] });
 export const useBrand = () => useContext(BrandCtx);
 
@@ -190,7 +190,7 @@ export const useBrand = () => useContext(BrandCtx);
 export function FlowMark({ size, colors, draw = 1, plain, ink = "#fff" }: { size: number; colors: [string, string]; draw?: number; plain?: boolean; ink?: string }) {
   const brand = useBrand();
   const id = `fm${colors[0].slice(1)}${plain ? "p" : ""}`;
-  if (brand.icon) return <Img src={brand.icon} style={{ width: size, height: size, objectFit: "contain", opacity: Math.min(1, draw * 1.5) }} />;
+  if (brand.icon) return <Img src={brand.icon} style={{ width: size, height: size, objectFit: "contain", opacity: Math.min(1, draw * 1.5), filter: brand.hue ? `hue-rotate(${-brand.hue}deg)` : undefined }} />;
   const letter = (brand.name.trim()[0] ?? "B").toUpperCase();
   if (letter !== "F")
     return (

@@ -1,10 +1,11 @@
 import { AbsoluteFill, interpolate } from "remotion";
 import { Icon } from "../../icons";
-import { count, IN_OUT, mix, money, OUT, rise } from "../anim";
+import { count, IN_OUT, mix, OUT, rise } from "../anim";
 import { abs, appear, Area, AppWindow, at, BarsV, Check, Comet, float, FlowMark, Glass, grow, Kpi, LIGHT_APP, Logo, Person, Shot, soft, Token, W, Words } from "./common";
 
 // Cards, icons and pills ease in from slightly smaller (never from nothing).
 const pop = grow;
+import { change, type FilmContent, pct, show, steps } from "../content";
 import { type Beats, type Moments } from "./beats";
 
 // Film 1 — "Glow" (reference: an AI-product explainer on deep green): a
@@ -60,6 +61,7 @@ export const glowCuts = (T: Moments) => ({ data: T.data - 4, trio: T.sales - 4, 
 export function GlowFilm({ f, b }: { f: number; b: Beats }) {
   const T = b.t;
   const L = b.line;
+  const C = b.content;
   const cut = glowCuts(T);
   return (
     <AbsoluteFill style={{ fontFamily: "InterClean, system-ui, sans-serif" }}>
@@ -136,9 +138,9 @@ export function GlowFilm({ f, b }: { f: number; b: Beats }) {
         {(() => {
           const lineK = rise(f, T.into + 6, 26, IN_OUT);
           const cards = [
-            { x: 960, y: 300, w: 400, el: <Kpi tone={APP} w={400} label="Total revenue" value={money(count(f, T.into + 4, 30, 61200, 75734))} delta="+12%" /> },
+            { x: 960, y: 300, w: 400, el: <Kpi tone={APP} w={400} label={C.metric.label} value={show(C.metric.unit, count(f, T.into + 4, 30, C.metric.from * 0.85, C.metric.to))} delta={`+${pct(C.growth)}%`} /> },
             { x: 560, y: 640, w: 330, el: <MiniPie f={f} at={T.live} /> },
-            { x: 1360, y: 640, w: 330, el: <div style={{ width: 330, background: "#fff", borderRadius: 16, padding: 18 }}><div style={{ fontSize: 14, color: APP.sub }}>Sales this month</div><Area w={294} h={110} draw={rise(f, T.live, 30)} color={APP.accent} pts={[0.2, 0.3, 0.26, 0.42, 0.4, 0.58, 0.66, 0.8]} /></div> },
+            { x: 1360, y: 640, w: 330, el: <div style={{ width: 330, background: "#fff", borderRadius: 16, padding: 18 }}><div style={{ fontSize: 14, color: APP.sub }}>{C.growth.label}</div><Area w={294} h={110} draw={rise(f, T.live, 30)} color={APP.accent} pts={[0.2, 0.3, 0.26, 0.42, 0.4, 0.58, 0.66, 0.8]} /></div> },
           ];
           const node = (x: number, y: number, k: number) => <circle cx={x} cy={y} r={7 * k} fill={MINT} style={{ filter: "drop-shadow(0 0 8px #46f2b0)" }} />;
           return (
@@ -169,7 +171,7 @@ export function GlowFilm({ f, b }: { f: number; b: Beats }) {
         {abs(250, 300, (
           <div style={{ transform: `perspective(2200px) rotateY(${mix(-16, -8, rise(f, cut.app, 90, IN_OUT))}deg) rotateX(9deg)`, transformOrigin: "30% 50%" }}>
             <AppWindow w={1420} h={820} tone={APP} active={2} title={b.trio[1]?.label ?? "Payments"}>
-              <PayBoard f={f} T={T} />
+              <PayBoard f={f} T={T} C={C} />
             </AppWindow>
           </div>
         ))}
@@ -183,11 +185,11 @@ export function GlowFilm({ f, b }: { f: number; b: Beats }) {
           <div style={{ width: 1080, height: 640, borderRadius: 36, padding: 46, background: "linear-gradient(180deg, #ffffff, #effcf6)", boxShadow: "0 0 0 10px rgba(200,255,235,0.18), 0 60px 140px rgba(0,0,0,0.4)", transform: "rotateY(-10deg) rotateX(6deg)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
               <div style={{ width: 58, height: 58, borderRadius: 99, background: EMER, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon name="trending-up" size={32} color="#fff" strokeWidth={2.6} /></div>
-              <span style={{ fontSize: 44, fontWeight: 650, color: "#0d2a21", letterSpacing: "-0.02em" }}>Sales growth</span>
-              <span style={{ marginLeft: "auto", fontSize: 30, fontWeight: 700, color: EMER }}>{`+${count(f, T.grow, 40, 0, 38)}%`}</span>
+              <span style={{ fontSize: 44, fontWeight: 650, color: "#0d2a21", letterSpacing: "-0.02em" }}>{C.growth.label}</span>
+              <span style={{ marginLeft: "auto", fontSize: 30, fontWeight: 700, color: EMER }}>{`+${count(f, T.grow, 40, 0, pct(C.growth))}%`}</span>
             </div>
             <div style={{ marginTop: 40 }}>
-              <BarsV w={990} h={420} values={[0.34, 0.42, 0.38, 0.5, 0.56, 0.62, 0.74, 0.92]} grow={rise(f, T.grow - 4, 40, OUT)} base={0.3} color={EMER} sub="#5c7a6f" labels={["$128k", "$141k", "$136k", "$162k", "$178k", "$194k", "$221k", "$276k"]} />
+              <BarsV w={990} h={420} values={steps(C.growth).values} grow={rise(f, T.grow - 4, 40, OUT)} base={0.3} color={EMER} sub="#5c7a6f" labels={steps(C.growth).labels} />
             </div>
           </div>
         ))}
@@ -296,27 +298,22 @@ function MiniPie({ f, at: a }: { f: number; at: number }) {
 }
 
 // The app's payments board: a new payment slides in, revenue counts up.
-function PayBoard({ f, T }: { f: number; T: Moments }) {
+function PayBoard({ f, T, C }: { f: number; T: Moments; C: FilmContent }) {
   const row = rise(f, T.payment, 16, OUT);
   const hi = rise(f, T.updates, 10) * (1 - rise(f, T.instantly + 20, 20));
-  const rows = [
-    ["Northwind Ltd", "$1,240", "Paid"],
-    ["Acme Studio", "$860", "Paid"],
-    ["Blue Harbor", "$2,150", "Paid"],
-  ];
+  const rows = C.rows.map((r) => [r.name, r.value]);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
       <div style={{ display: "flex", gap: 18 }}>
-        <Kpi tone={APP} w={300} label="Revenue" value={money(count(f, T.revenue + 2, 26, 48300, 50700))} delta={f > T.updates ? "+$2,400" : undefined} hi={hi} />
-        <Kpi tone={APP} w={260} label="Payments today" value={String(f > T.payment + 6 ? 18 : 17)} />
-        <Kpi tone={APP} w={260} label="Avg. order" value="$1,312" />
+        <Kpi tone={APP} w={300} label={C.metric.label} value={show(C.metric.unit, count(f, T.revenue + 2, 26, C.metric.from, C.metric.to))} delta={f > T.updates ? change(C.metric) : undefined} hi={hi} />
+        {C.side.map((x) => <Kpi key={x.label} tone={APP} w={260} label={x.label} value={x.value} />)}
       </div>
       <div style={{ borderRadius: 16, border: `1px solid ${APP.line}`, overflow: "hidden" }}>
         <div style={{ display: "flex", padding: "12px 20px", fontSize: 14, color: APP.sub, background: APP.side }}>
           <span style={{ flex: 2 }}>Customer</span><span style={{ flex: 1 }}>Amount</span><span style={{ flex: 1 }}>Status</span>
         </div>
         <div style={{ height: row * 64, overflow: "hidden", background: `rgba(58,214,156,${0.16 * (1 - rise(f, T.instantly + 30, 30))})` }}>
-          <PayRow name="Lumen Co." amt="$2,400" k={row} fresh />
+          <PayRow name={C.event.source} amt={C.event.detail} k={row} fresh />
         </div>
         {rows.map((r) => <PayRow key={r[0]} name={r[0]} amt={r[1]} k={1} />)}
       </div>

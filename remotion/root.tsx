@@ -93,11 +93,11 @@ export function RemotionRoot() {
       width={1920}
       height={1080}
       durationInFrames={REF_DURATION}
-      defaultProps={{ plan: flowlyPlan(0), film: "glow" as FilmId } as { plan: CleanPlan; film: FilmId }}
+      defaultProps={{ plan: flowlyPlan(0), film: "glow" as FilmId, hue: 0 } as { plan: CleanPlan; film: FilmId; hue?: number }}
       calculateMetadata={({ props }) => ({ durationInFrames: props.plan.duration })}
     />
     {/* Proof: a second script (Shopnest) in the film templates (0–3). */}
-    <Composition id="CleanFilmSample" component={({ film }: { film: number }) => <Film plan={shopnestPlan()} film={FILM_IDS[film] ?? "glow"} />} fps={30} width={1920} height={1080} durationInFrames={shopnestPlan().duration} defaultProps={{ film: 0 }} />
+    <Composition id="CleanFilmSample" component={({ film, hue = 0 }: { film: number; hue?: number }) => <Film plan={shopnestPlan()} film={FILM_IDS[film] ?? "glow"} hue={hue} />} fps={30} width={1920} height={1080} durationInFrames={shopnestPlan().duration} defaultProps={{ film: 0 }} />
     {/* Flow engine: pattern-built continuous motion graphics (reference: e-commerce). */}
     <Composition
       id={FLOW_SCENE_ID}

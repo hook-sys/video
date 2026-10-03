@@ -1,3 +1,5 @@
+import type { FilmContent } from "./content";
+
 // The clean explainer: flat UI, kinetic type and icons on a moving,
 // story-coloured background (no 3D objects). A plan is a list of scenes on
 // the voice's word timeline; each scene is one template with its own data
@@ -49,6 +51,8 @@ export type CleanPlan = {
   brand: Brand;
   words: Word[];
   scenes: Scene[];
+  // what the product's cards show in the film templates (else the defaults)
+  content?: FilmContent;
 };
 
 export type CleanVideoProps = { plan: CleanPlan; audioUrl?: string | null };

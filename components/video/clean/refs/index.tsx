@@ -19,15 +19,17 @@ export const FILMS = { glow: GlowFilm, dusk: DuskFilm, fly: FlyFilm, connect: Co
 export type FilmId = keyof typeof FILMS;
 export const FILM_IDS = Object.keys(FILMS) as FilmId[];
 
-export function Film({ plan, film }: { plan: CleanPlan; film: FilmId }) {
+// `hue`: a turn of the whole film's colours (degrees), from the variation
+// engine; the brand's uploaded icon is turned back so it keeps its colours.
+export function Film({ plan, film, hue = 0 }: { plan: CleanPlan; film: FilmId; hue?: number }) {
   useCleanFont();
   const f = useCurrentFrame();
   const b = beatsFromPlan(plan);
   const F = FILMS[film] ?? GlowFilm;
-  const brand = { name: plan.brand.name, icon: plan.brand.icon, tagline: plan.brand.tagline, cta: plan.brand.cta, url: plan.brand.url, things: b.trio.map((x) => ({ label: x.label, icon: x.icon })) };
+  const brand = { name: plan.brand.name, icon: plan.brand.icon, tagline: plan.brand.tagline, cta: plan.brand.cta, url: plan.brand.url, hue, things: b.trio.map((x) => ({ label: x.label, icon: x.icon })) };
   return (
     <BrandCtx.Provider value={brand}>
-      <AbsoluteFill style={{ background: "#000", overflow: "hidden" }}>
+      <AbsoluteFill style={{ background: "#000", overflow: "hidden", filter: hue ? `hue-rotate(${hue}deg)` : undefined }}>
         <F f={f} b={b} />
       </AbsoluteFill>
     </BrandCtx.Provider>

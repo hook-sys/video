@@ -1,7 +1,8 @@
 import { AbsoluteFill, interpolate } from "remotion";
 import { Icon } from "../../icons";
-import { count, IN_OUT, mix, money, OUT, rise } from "../anim";
+import { count, IN_OUT, mix, OUT, rise } from "../anim";
 import { abs, AppWindow, at, Check, float, grow, Kpi, soft, LIGHT_APP, Logo, Person, Pointer, press, Shot, Typed, W, Words } from "./common";
+import { type FilmContent, pct, show } from "../content";
 import { type Beats, keyAt, type Moments, strikeKey } from "./beats";
 
 // Film 2 — "Dusk" (reference: a payments-assistant explainer): a near-black
@@ -64,6 +65,7 @@ export const duskCuts = (T: Moments) => ({ carousel: T.sales - 4, logo: T.flowly
 export function DuskFilm({ f, b }: { f: number; b: Beats }) {
   const T = b.t;
   const L = b.line;
+  const C = b.content;
   const cut = duskCuts(T);
   const dark = "#f4f0ff";
   const ink = "#16121f";
@@ -151,7 +153,7 @@ export function DuskFilm({ f, b }: { f: number; b: Beats }) {
         {abs(260, 240, (
           <div style={{ transform: `perspective(1600px) rotateY(${mix(-30, -14, rise(f, cut.app, 40, IN_OUT))}deg) rotateX(${mix(18, 8, rise(f, cut.app, 40, IN_OUT))}deg) rotateZ(-2deg)`, transformOrigin: "20% 50%" }}>
             <AppWindow w={1500} h={820} tone={APP} active={0}>
-              <DashBody f={f} live={cut.app} />
+              <DashBody f={f} live={cut.app} C={C} />
             </AppWindow>
           </div>
         ))}
@@ -200,7 +202,7 @@ export function DuskFilm({ f, b }: { f: number; b: Beats }) {
         {abs(260, 230, (
           <div style={{ transform: "perspective(1600px) rotateY(-22deg) rotateX(14deg) rotateZ(-3deg)", transformOrigin: "30% 50%" }}>
             <AppWindow w={1500} h={860} tone={APP} active={1} title={b.trio[0]?.label ?? "Sales"}>
-              <DashBody f={f} live={T.grow} grow />
+              <DashBody f={f} live={T.grow} grow C={C} />
             </AppWindow>
           </div>
         ))}
@@ -216,9 +218,9 @@ export function DuskFilm({ f, b }: { f: number; b: Beats }) {
               <span>Seen</span>
             </div>
             {[
-              ["M", "Maya Chen", "Head of Sales", T.change - 2],
-              ["R", "Ravi Patel", "Finance lead", T.change + 8],
-              ["S", "Sara Kim", "Operations", T.view - 4],
+              [C.people[0].name[0], C.people[0].name, C.people[0].role, T.change - 2],
+              [C.people[1].name[0], C.people[1].name, C.people[1].role, T.change + 8],
+              [C.people[2].name[0], C.people[2].name, C.people[2].role, T.view - 4],
             ].map(([l, n, r, c], i) => (
               <div key={i} style={{ width: 760, display: "flex", alignItems: "center", gap: 22, padding: "20px 30px", borderRadius: 18, background: "#fff", boxShadow: "0 20px 60px rgba(80,50,160,0.12)", opacity: soft(f, (c as number) - 8, 20), transform: `translateY(${(1 - soft(f, (c as number) - 8, 22)) * 40}px)` }}>
                 <Person letter={l as string} size={64} color={["#7c4dff", "#e0475b", "#0f9e6e"][i]} />
@@ -305,50 +307,54 @@ function Star({ size, k, f }: { size: number; k: number; f: number }) {
 // A payment receipt; `scan` sweeps a light over it and boxes the key fields.
 function Receipt({ f, scan, b }: { f: number; scan: number; b: Beats }) {
   const T = b.t;
+  const C = b.content;
   const box = (k: number) => ({ boxShadow: `0 0 0 ${3 * k}px ${VIO}`, borderRadius: 8, padding: "2px 8px", background: k > 0 ? "rgba(139,92,246,0.08)" : undefined });
   const k1 = rise(f, T.updates, 10), k2 = rise(f, T.instantly, 10);
   return (
     <div style={{ width: 560, height: 700, background: "#fff", borderRadius: 10, padding: 40, boxSizing: "border-box", position: "relative", overflow: "hidden", color: "#1b1630", boxShadow: "0 40px 100px rgba(0,0,0,0.45)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 24, fontWeight: 700, color: "#6d28d9" }}>Lumen Co.</span>
+        <span style={{ fontSize: 24, fontWeight: 700, color: "#6d28d9" }}>{C.event.source}</span>
         <span style={{ fontSize: 15, color: "#8a85a0" }}>Receipt #1048</span>
       </div>
       <div style={{ marginTop: 30, display: "flex", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 16, color: "#8a85a0", lineHeight: 1.7 }}>Billed to<br /><b style={{ color: "#1b1630" }}>{b.brand.name}</b><br />Payment received</div>
+        <div style={{ fontSize: 16, color: "#8a85a0", lineHeight: 1.7 }}>Billed to<br /><b style={{ color: "#1b1630" }}>{b.brand.name}</b><br />{C.event.label}</div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 15, color: "#8a85a0" }}>Amount</div>
-          <div style={{ fontSize: 40, fontWeight: 700, color: "#6d28d9", ...box(k1) }}>$2,400</div>
+          <div style={{ fontSize: 40, fontWeight: 700, color: "#6d28d9", ...box(k1) }}>{C.event.detail}</div>
         </div>
       </div>
       <div style={{ marginTop: 34, borderTop: "1px solid #eee", paddingTop: 18 }}>
-        {[["Pro plan · annual", "$2,000"], ["Seats × 4", "$400"]].map(([a, b]) => (
+        {[[C.event.label, C.event.detail], ...C.rows.slice(0, 1).map((r) => [r.name, r.value])].map(([a, b]) => (
           <div key={a} style={{ display: "flex", justifyContent: "space-between", fontSize: 18, padding: "10px 0", borderBottom: "1px solid #f2f2f2" }}><span>{a}</span><span>{b}</span></div>
         ))}
       </div>
       <div style={{ marginTop: 28, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 18, color: "#8a85a0" }}>Revenue</span>
-        <span style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums", ...box(k2) }}>{money(count(f, T.updates, 20, 48300, 50700))}</span>
+        <span style={{ fontSize: 18, color: "#8a85a0" }}>{C.metric.label}</span>
+        <span style={{ fontSize: 28, fontWeight: 700, fontVariantNumeric: "tabular-nums", ...box(k2) }}>{show(C.metric.unit, count(f, T.updates, 20, C.metric.from, C.metric.to))}</span>
       </div>
-      <div style={{ marginTop: 30, display: "flex", gap: 10, alignItems: "center", fontSize: 17, color: "#12a150", fontWeight: 650, opacity: k2 }}><Check size={26} color="#22c983" k={k2} />Updated instantly</div>
+      <div style={{ marginTop: 30, display: "flex", gap: 10, alignItems: "center", fontSize: 17, color: "#12a150", fontWeight: 650, opacity: k2 }}><Check size={26} color="#22c983" k={k2} />{C.event.done}</div>
       <div style={{ position: "absolute", left: 0, right: 0, top: mix(-80, 720, scan), height: 80, background: "linear-gradient(180deg, transparent, rgba(139,92,246,0.22), transparent)", opacity: scan > 0 && scan < 1 ? 1 : 0 }} />
     </div>
   );
 }
 
 // The dashboard body of the app: KPIs, a sales chart, recent payments.
-function DashBody({ f, live, grow }: { f: number; live: number; grow?: boolean }) {
+function DashBody({ f, live, grow, C }: { f: number; live: number; grow?: boolean; C: FilmContent }) {
   const g = rise(f, live, 40, OUT);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-      <div style={{ fontSize: 32, fontWeight: 650 }}>Welcome back, <span style={{ color: APP.accent }}>Maya</span></div>
+      <div style={{ fontSize: 32, fontWeight: 650 }}>Welcome back, <span style={{ color: APP.accent }}>{C.people[0].name.split(" ")[0]}</span></div>
       <div style={{ display: "flex", gap: 18 }}>
-        <Kpi tone={APP} w={300} label="Revenue" value={money(count(f, live, 40, grow ? 50700 : 41200, grow ? 63900 : 50700))} delta={grow ? "+26%" : "+12%"} />
-        <Kpi tone={APP} w={260} label="Sales" value={String(count(f, live, 40, grow ? 312 : 280, grow ? 396 : 312))} />
-        <Kpi tone={APP} w={260} label="Reports" value="Live" />
+        {grow ? (
+          <Kpi tone={APP} w={300} label={C.growth.label} value={show(C.growth.unit, count(f, live, 40, C.growth.from, C.growth.to))} delta={`+${pct(C.growth)}%`} />
+        ) : (
+          <Kpi tone={APP} w={300} label={C.metric.label} value={show(C.metric.unit, count(f, live, 40, C.metric.from * 0.85, C.metric.from))} />
+        )}
+        {C.side.map((x) => <Kpi key={x.label} tone={APP} w={260} label={x.label} value={x.value} />)}
       </div>
       <div style={{ display: "flex", gap: 18 }}>
         <div style={{ flex: 1.4, borderRadius: 16, border: `1px solid ${APP.line}`, padding: 20 }}>
-          <div style={{ fontSize: 16, color: APP.sub, marginBottom: 12 }}>Sales this month</div>
+          <div style={{ fontSize: 16, color: APP.sub, marginBottom: 12 }}>{C.growth.label}</div>
           <svg width={620} height={240}>
             {(() => {
               const pts = [0.2, 0.28, 0.24, 0.36, 0.34, 0.46, 0.5, 0.62, 0.7, 0.86].map((v, i, a) => [i * (620 / (a.length - 1)), 230 - (grow ? v * g : v * 0.9) * 210]);
@@ -363,8 +369,8 @@ function DashBody({ f, live, grow }: { f: number; live: number; grow?: boolean }
           </svg>
         </div>
         <div style={{ flex: 1, borderRadius: 16, border: `1px solid ${APP.line}`, padding: 20 }}>
-          <div style={{ fontSize: 16, color: APP.sub, marginBottom: 10 }}>Latest payments</div>
-          {[["Lumen Co.", "$2,400"], ["Northwind", "$1,240"], ["Acme Studio", "$860"], ["Blue Harbor", "$2,150"]].map(([n, a], i) => (
+          <div style={{ fontSize: 16, color: APP.sub, marginBottom: 10 }}>Latest</div>
+          {[[C.event.source, C.event.detail], ...C.rows.map((r) => [r.name, r.value])].map(([n, a], i) => (
             <div key={n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 0", borderBottom: `1px solid ${APP.line}`, fontSize: 17 }}>
               <Person letter={n[0]} size={32} color={["#7c4dff", "#9aa3b8", "#9aa3b8", "#9aa3b8"][i]} />
               <span style={{ flex: 1, fontWeight: 600 }}>{n}</span>

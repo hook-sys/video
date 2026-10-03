@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { AbsoluteFill, interpolate } from "remotion";
 import { Icon } from "../../icons";
-import { count, IN_OUT, mix, money, OUT, pop, rise } from "../anim";
+import { count, IN_OUT, mix, OUT, pop, rise } from "../anim";
 import { Area, at, Check, float, FlowMark, glide, Logo, Person, Pointer, press, Shot, W, Words } from "./common";
+import { change, pct, show } from "../content";
 import type { KWord } from "../text";
 import { type Beats, type Moments, plainW } from "./beats";
 
@@ -62,6 +63,7 @@ const CW = 2400;
 const CH = 1500;
 function Canvas({ f, b }: { f: number; b: Beats }) {
   const T = b.t;
+  const C = b.content;
   const row = rise(f, T.payment, 16, OUT);
   const hi = rise(f, T.updates, 10) * (1 - rise(f, T.instantly + 26, 20));
   const chart = rise(f, T.when2 - 6, 30, OUT);
@@ -76,10 +78,10 @@ function Canvas({ f, b }: { f: number; b: Beats }) {
     </div>
   );
   const team = [
-    ["M", "Maya Chen", "Sales", "#2563eb", T.entire - 2],
-    ["R", "Ravi Patel", "Finance", "#e0475b", T.team],
-    ["S", "Sara Kim", "Operations", "#0f9e6e", T.change - 6],
-    ["J", "Jon Alvarez", "Support", "#f08a24", T.change + 2],
+    [C.people[0].name[0], C.people[0].name, C.people[0].role, "#2563eb", T.entire - 2],
+    [C.people[1].name[0], C.people[1].name, C.people[1].role, "#e0475b", T.team],
+    [C.people[2].name[0], C.people[2].name, C.people[2].role, "#0f9e6e", T.change - 6],
+    [C.people[3].name[0], C.people[3].name, C.people[3].role, "#f08a24", T.change + 2],
   ] as const;
   return (
     <div style={{ position: "absolute", left: 0, top: 0, width: CW, height: CH, borderRadius: 40, background: "#fbfcfe", boxShadow: "0 80px 200px rgba(30,50,120,0.25), 0 0 0 1px rgba(0,0,0,0.05)", overflow: "hidden", color: INK, fontFamily: "InterClean, system-ui, sans-serif" }}>
@@ -97,27 +99,25 @@ function Canvas({ f, b }: { f: number; b: Beats }) {
       </div>
       <div style={{ position: "absolute", left: 330, top: 40, fontSize: 40, fontWeight: 700, letterSpacing: "-0.03em" }}>Overview</div>
       <div style={{ position: "absolute", left: 330, top: 120, display: "flex", gap: 30 }}>
-        {kpi("Revenue", money(count(f, T.revenue, 26, 48300, 50700) + count(f, T.grow, 40, 0, 13200)), f > T.updates ? "+$2,400" : undefined, hi)}
-        {kpi("Payments today", String(f > T.payment + 6 ? 18 : 17))}
-        {kpi("Sales this month", String(count(f, T.grow, 40, 312, 396)), f > T.grow ? "+27%" : undefined)}
-        {kpi("Reports", "Live")}
+        {kpi(C.metric.label, show(C.metric.unit, count(f, T.revenue, 26, C.metric.from, C.metric.to)), f > T.updates ? change(C.metric) : undefined, hi)}
+        {kpi(C.side[0].label, C.side[0].value)}
+        {kpi(C.growth.label, show(C.growth.unit, count(f, T.grow, 40, C.growth.from, C.growth.to)), f > T.grow ? `+${pct(C.growth)}%` : undefined)}
+        {kpi(C.side[1].label, C.side[1].value)}
       </div>
       {/* payments */}
       <div style={{ position: "absolute", left: 330, top: 340, width: 900, height: 520, borderRadius: 24, background: "#fff", border: `1px solid ${LINE}`, overflow: "hidden" }}>
-        <div style={{ padding: "24px 30px", fontSize: 26, fontWeight: 650 }}>Latest payments</div>
+        <div style={{ padding: "24px 30px", fontSize: 26, fontWeight: 650 }}>Latest</div>
         <div style={{ height: row * 86, overflow: "hidden", background: `rgba(37,99,235,${0.08 * (1 - rise(f, T.instantly + 30, 30))})` }}>
-          <PRow n="Lumen Co." a="$2,400" s="Just now" c={BLUE} />
+          <PRow n={C.event.source} a={C.event.detail} s="Just now" c={BLUE} />
         </div>
-        <PRow n="Northwind" a="$1,240" s="2h ago" />
-        <PRow n="Acme Studio" a="$860" s="5h ago" />
-        <PRow n="Blue Harbor" a="$2,150" s="Yesterday" />
+        {C.rows.map((r, i) => <PRow key={r.name} n={r.name} a={r.value} s={["2h ago", "5h ago", "Yesterday"][i] ?? "Earlier"} />)}
       </div>
       {/* chart */}
       <div style={{ position: "absolute", left: 1270, top: 340, width: 1080, height: 520, borderRadius: 24, background: "#fff", border: `1px solid ${LINE}`, padding: 30, boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <div>
-            <div style={{ fontSize: 22, color: SUB }}>Sales this month</div>
-            <div style={{ fontSize: 46, fontWeight: 700, marginTop: 4 }}>{money(count(f, T.grow, 40, 41018, 52240))} <span style={{ fontSize: 20, color: "#16a34a", background: "#16a34a18", padding: "4px 10px", borderRadius: 99 }}>+{count(f, T.grow, 40, 4, 27)}%</span></div>
+            <div style={{ fontSize: 22, color: SUB }}>{C.growth.label}</div>
+            <div style={{ fontSize: 46, fontWeight: 700, marginTop: 4 }}>{show(C.growth.unit, count(f, T.grow, 40, C.growth.from, C.growth.to))} <span style={{ fontSize: 20, color: "#16a34a", background: "#16a34a18", padding: "4px 10px", borderRadius: 99 }}>+{count(f, T.grow, 40, Math.round(pct(C.growth) / 6), pct(C.growth))}%</span></div>
           </div>
           <div style={{ display: "flex", gap: 8, fontSize: 18, color: SUB }}>{["1D", "1W", "1M", "3M"].map((t, i) => <span key={t} style={{ padding: "6px 14px", borderRadius: 10, border: `1px solid ${LINE}`, background: i === 2 ? "#eef2ff" : undefined, color: i === 2 ? BLUE : SUB }}>{t}</span>)}</div>
         </div>
@@ -136,7 +136,7 @@ function Canvas({ f, b }: { f: number; b: Beats }) {
             <Person letter={l} size={60} color={c} />
             <span style={{ width: 380, fontWeight: 650 }}>{n}</span>
             <span style={{ width: 300, color: SUB }}>{r}</span>
-            <span style={{ flex: 1, color: SUB }}>Revenue · Sales · Reports</span>
+            <span style={{ flex: 1, color: SUB }}>{b.trio.map((x) => x.label).join(" · ")}</span>
             <span style={{ display: "flex", alignItems: "center", gap: 10, color: "#16a34a", fontWeight: 650, opacity: rise(f, cue, 10) }}>
               <Check size={36} color="#22c55e" k={pop(f, cue, 14)} />
               Seen
