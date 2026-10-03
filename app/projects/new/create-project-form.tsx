@@ -35,9 +35,10 @@ const area =
 const STYLE: StylePreset = "Auto";
 const AUTO_BG = "linear-gradient(135deg, #e0e7ff, #f5d0fe 50%, #0f172a 50.5%, #312e81)";
 
-export type Prefill = { script: string; brandName: string; websiteUrl: string; cta: string };
+export type Prefill = { script: string; brandName: string; websiteUrl: string; cta: string; voice?: string };
+type VoiceOption = { name: string; gender: "female" | "male"; label: string };
 
-export function CreateProjectForm({ maxTotalBytes, waiting, prefill }: { maxTotalBytes?: number; waiting: { plan: FlowPlan; captions: HeroCaption[] }; prefill?: Prefill }) {
+export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = [] }: { maxTotalBytes?: number; waiting: { plan: FlowPlan; captions: HeroCaption[] }; prefill?: Prefill; voices?: VoiceOption[] }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState(prefill?.script ?? "");
   const [format, setFormat] = useState<string>(FORMATS[0]);
@@ -161,6 +162,23 @@ export function CreateProjectForm({ maxTotalBytes, waiting, prefill }: { maxTota
                 </select>
               </Field>
               <Chips title="Voice" name="voice_gender" options={VOICE_GENDERS} defaultValue={VOICE_GENDERS[0]} format={(g) => (g === "male" ? "Male" : "Female")} />
+              {voices.length > 0 && (
+                <Field title="Voice character">
+                  <select name="voice_name" defaultValue={voices.some((v) => v.name === prefill?.voice) ? prefill?.voice : ""} className={input}>
+                    <option value="">Default for the voice above</option>
+                    {(["female", "male"] as const).filter((g) => voices.some((v) => v.gender === g)).map((g) => (
+                      <optgroup key={g} label={g === "female" ? "Female" : "Male"}>
+                        {voices.filter((v) => v.gender === g).map((v) => (
+                          <option key={v.name} value={v.name}>
+                            {v.name}
+                            {v.label ? ` — ${v.label}` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </Field>
+              )}
             </div>
           </Step>
 

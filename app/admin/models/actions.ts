@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { audit, requireAdmin } from "@/lib/admin";
-import { generateImage, generateVoice } from "@/lib/ai/fal";
+import { generateImage, generateVoice, timeWords } from "@/lib/ai/fal";
 import { type AiConfig, SETTING_KEY, TEXT_TASKS, forgetAiConfig, normalizeConfig, textClient, textCost, unitCost } from "@/lib/ai/models";
 
 // /admin/models: which AI model does each job. Super admins only; every save
@@ -43,7 +43,7 @@ export async function saveAiModels(formData: FormData) {
   const next = normalizeConfig({
     text: { provider: text(formData, "text_provider"), model: text(formData, "text_model"), backup: formData.get("text_backup") === "on" },
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: formData.get(`task_${t.id}_on`) === "on", provider: text(formData, `task_${t.id}_provider`), model: text(formData, `task_${t.id}_model`) }])),
-    voice: { on: formData.get("voice_on") === "on", model: text(formData, "voice_model"), template: text(formData, "voice_template", 2000), female: text(formData, "voice_female", 80), male: text(formData, "voice_male", 80) },
+    voice: { on: formData.get("voice_on") === "on", model: text(formData, "voice_model"), template: text(formData, "voice_template", 2000), female: text(formData, "voice_female", 80), male: text(formData, "voice_male", 80), choices: text(formData, "voice_choices", 4000) },
     image: { on: formData.get("image_on") === "on", model: text(formData, "image_model"), template: text(formData, "image_template", 2000) },
     prices,
   });
@@ -95,7 +95,17 @@ export async function testAiModel(_prev: TestResult | null, formData: FormData):
       const sample = "This is a MotionBrief voice test. Your product, explained in thirty seconds.";
       const r = await generateVoice({ script: sample, language: "English", style: "Friendly", gender: text(formData, "gender") || "female" }, { on: true, model, template: text(formData, "template", 2000), female: text(formData, "female", 80), male: text(formData, "male", 80) });
       const priced = unitCost(config, r.model, sample.length, () => NaN);
-      return { ok: true, ms: Date.now() - started, audioUrl: r.audioUrl, output: r.words?.length ? `Word timing: yes (${r.words.length} words) — the video's text and scenes stay in sync with this voice.` : "⚠ Word timing: NO. This model returns no word timestamps, so the video guesses when each word is spoken: text and scenes will drift from the voice. Not recommended for videos.", cost: Number.isFinite(priced) ? `${usd(priced)} for ${sample.length} characters (from your prices)` : `${sample.length} characters — add a price per character below` };
+      // Without the model's own word times, a video hears them with Whisper: try it here too.
+      let heard = "";
+      if (!r.words?.length) {
+        try {
+          const t = await timeWords(r.audioUrl, sample);
+          heard = t ? `Word timing: heard by Whisper (${t.words.length} words) — videos with this voice stay in sync.` : "⚠ Word timing: the model gives none and Whisper heard nothing — videos would use an even reading pace.";
+        } catch (e) {
+          heard = `⚠ Word timing: the model gives none and Whisper failed (${e instanceof Error ? e.message.slice(0, 200) : e}) — videos would use an even reading pace.`;
+        }
+      }
+      return { ok: true, ms: Date.now() - started, audioUrl: r.audioUrl, output: heard || `Word timing: yes, from the model (${r.words?.length ?? 0} words) — the video's text and scenes stay in sync with this voice.`, cost: Number.isFinite(priced) ? `${usd(priced)} for ${sample.length} characters (from your prices)` : `${sample.length} characters — add a price per character below` };
     }
     if (kind === "image") {
       const r = await generateImage({ prompt: "Soft abstract gradient shapes and floating glass panels, a calm SaaS product launch backdrop", format: "16:9" }, { on: true, model, template: text(formData, "template", 2000) });

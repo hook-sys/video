@@ -56,6 +56,11 @@ export const directionFor = (script: string, preset: StylePreset) => {
   const { visual_style, look } = STYLE_PRESETS[preset];
   return script.trim() ? `${script.trim()}\n\nVisual style: ${visual_style}${look === "Auto" ? "" : `\nLook: ${look}`}\n${SCRIPT_LOCK_LINE}` : "";
 };
+// The voice the customer picked (a "Voice: …" line after the script), or null.
+export const voiceChoiceOf = (direction: string | null | undefined) =>
+  (direction ?? "").split(/\r?\n\r?\nVisual style:/)[1]?.match(/^Voice:\s*(.+?)\s*$/m)?.[1] ?? null;
+export const withVoiceChoice = (direction: string, voice: string | null) =>
+  voice && /\r?\n\r?\nVisual style:/.test(direction) ? `${direction}\nVoice: ${voice}` : direction;
 // The theme a look forces on the video (null = the Director's choice).
 export const LOOK_THEME: Record<Look, "lavender" | "midnight" | null> = { Auto: null, "Light glass": null, "Dark glow": "midnight", "Warm brand": null };
 // The video's palette, deterministic (never a new theme):

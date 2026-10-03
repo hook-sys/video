@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/admin";
-import { SETTING_KEY, TEXT_TASKS, normalizeConfig } from "@/lib/ai/models";
+import { SETTING_KEY, TEXT_TASKS, normalizeConfig, voiceChoicesText } from "@/lib/ai/models";
 import { Badge, Card, Notice, PageHeader, btnPrimary, input } from "../_components/ui";
 import { daysAgo, usd } from "../_components/format";
 import { saveAiModels } from "./actions";
@@ -120,6 +120,11 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
                 <input name="voice_female" defaultValue={c.voice.female} placeholder="Female voice name (this model's)" className={input} />
                 <input name="voice_male" defaultValue={c.voice.male} placeholder="Male voice name (this model's)" className={input} />
               </div>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-zinc-300">Voices customers can pick</span>
+                <textarea name="voice_choices" rows={4} defaultValue={voiceChoicesText(c.voice.choices)} placeholder={"One per line: name, female or male, a short description\nKore, female, Warm and clear\nPuck, male, Upbeat"} className={`${input} font-mono text-xs`} />
+                <span className="text-xs text-zinc-500">Names of the voice model above. Shown on the new-video form; empty = customers only pick male or female. Test each name below first.</span>
+              </label>
               <p className="text-xs text-zinc-500">Every fal voice model takes its own input fields and voice names — copy them from the model&apos;s API page on fal, then use the test below.</p>
             </div>
           </Card>

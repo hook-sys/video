@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { VERCEL_SCREENSHOT_TOTAL_BYTES } from "@/lib/projects";
+import { VERCEL_SCREENSHOT_TOTAL_BYTES, voiceChoiceOf } from "@/lib/projects";
 import { heroPlan } from "@/components/landing/hero-plan";
 import { Logo } from "@/components/brand/logo";
 import { createClient } from "@/lib/supabase/server";
+import { getAiConfig } from "@/lib/ai/models";
 import { CreateProjectForm, type Prefill } from "./create-project-form";
 
 export const metadata: Metadata = { title: "New video" };
@@ -19,8 +20,11 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
   if (from && /^[0-9a-f-]{36}$/i.test(from)) {
     const supabase = await createClient();
     const { data } = await supabase.from("projects").select("direction, brand_name, website_url, call_to_action").eq("id", from).maybeSingle();
-    if (data?.direction) prefill = { script: data.direction.replace(/\n\nVisual style:[\s\S]*$/, ""), brandName: data.brand_name ?? "", websiteUrl: data.website_url ?? "", cta: data.call_to_action ?? "" };
+    if (data?.direction) prefill = { script: data.direction.replace(/\n\nVisual style:[\s\S]*$/, ""), brandName: data.brand_name ?? "", websiteUrl: data.website_url ?? "", cta: data.call_to_action ?? "", voice: voiceChoiceOf(data.direction) ?? "" };
   }
+  // The voices customers can pick (set on /admin/models; none = by gender only).
+  const { voice } = await getAiConfig();
+  const voices = voice.on ? voice.choices : [];
   return (
     <div className="flex min-h-full flex-1 flex-col bg-background">
       <header className="sticky top-0 z-20 border-b border-foreground/[0.07] bg-background/80 backdrop-blur-xl">
@@ -39,7 +43,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{prefill ? "A new video of the same script" : "Create your video"}</h1>
           <p className="max-w-xl text-foreground/60">{prefill ? "Your script and brand are filled in — change anything, add your icon, and create." : "Five quick steps. MotionBrief directs the scenes, records the voice and renders your promo."}</p>
         </div>
-        <CreateProjectForm maxTotalBytes={process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES : undefined} waiting={heroPlan()} prefill={prefill} />
+        <CreateProjectForm maxTotalBytes={process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES : undefined} waiting={heroPlan()} prefill={prefill} voices={voices} />
       </main>
     </div>
   );

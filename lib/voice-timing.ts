@@ -106,3 +106,51 @@ export function spokenCueTimes(cues: string[], words: WordTiming[]): (number | n
     return null;
   });
 }
+
+// The script's own words on the times a speech-to-text pass heard (heard words
+// may be spelled differently, merged or split): each script word is placed at
+// the same share of the letters, read off the heard words' times. Null when
+// nothing was heard.
+export function retimeScript(script: string, heard: WordTiming[]): WordTiming[] | null {
+  const letters = (w: string) => Math.max(1, w.replace(/[^\p{L}\p{M}\p{N}]/gu, "").length);
+  const said = heard.filter((w) => isTime(w.start) && isTime(w.end) && w.end >= w.start);
+  const words = script.split(/\s+/).filter(Boolean);
+  if (!said.length || !words.length) return null;
+  // (letter count so far → time) at every heard word's start and end
+  const pts: [number, number][] = [];
+  let c = 0;
+  for (const w of said) {
+    pts.push([c, w.start]);
+    c += letters(w.text);
+    pts.push([c, w.end]);
+  }
+  // the time at letter x; on a pause between heard words (two points at the
+  // same x) a start takes the pause's end and an end its beginning
+  const at = (x: number, late: boolean) => {
+    const eps = 1e-9;
+    if (late) {
+      for (let i = pts.length - 1; i > 0; i--) {
+        const [x0, t0] = pts[i - 1];
+        const [x1, t1] = pts[i];
+        if (x >= x0 - eps) return x >= x1 - eps ? t1 : t0 + ((x - x0) / (x1 - x0)) * (t1 - t0);
+      }
+      return pts[0][1];
+    }
+    if (x <= pts[0][0] + eps) return pts[0][1];
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, t0] = pts[i - 1];
+      const [x1, t1] = pts[i];
+      if (x <= x1 + eps) return x1 - x0 < eps ? t0 : t0 + ((x - x0) / (x1 - x0)) * (t1 - t0);
+    }
+    return pts[pts.length - 1][1];
+  };
+  const total = words.reduce((n, w) => n + letters(w), 0);
+  const scale = c / total;
+  let s = 0;
+  const out = words.map((text) => {
+    const start = at(s * scale, true);
+    s += letters(text);
+    return { text, start, end: Math.max(start, at(s * scale, false)) };
+  });
+  return out.every((w, i) => i === 0 || w.start >= out[i - 1].start) ? out : null;
+}

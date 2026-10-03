@@ -1,9 +1,10 @@
 import "server-only";
 import { createFalClient } from "@fal-ai/client";
-import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
+import { parseWordTimings, retimeScript, type WordTiming } from "@/lib/voice-timing";
 import { type AiConfig, getAiConfig } from "@/lib/ai/models";
 
-export type VoiceInput = { script: string; language: string; style: string; gender: string };
+// voice: the customer's pick (a name of the model's), else the gender's default.
+export type VoiceInput = { script: string; language: string; style: string; gender: string; voice?: string | null };
 export type VoiceResult = {
   model: string;
   requestId: string;
@@ -123,6 +124,7 @@ export async function generateVoice({
   language,
   style,
   gender,
+  voice: picked,
 }: VoiceInput, override?: Partial<AiConfig["voice"]>): Promise<VoiceResult> {
   // /admin/models first, then the environment
   const voice = { ...(await getAiConfig()).voice, ...override };
@@ -133,7 +135,7 @@ export async function generateVoice({
   const text = script.trim().slice(0, SCRIPT_MAX);
   if (!text) throw new Error("The brief has no script to narrate.");
   const speak = (m: string, template: string, names: { female?: string; male?: string }) => {
-    const input = buildInput(template || '{"text":"{{text}}"}', { text, language, style, gender, voice: voiceForGender(gender, names) });
+    const input = buildInput(template || '{"text":"{{text}}"}', { text, language, style, gender, voice: (names === voice && picked) || voiceForGender(gender, names) });
     // fal-ai/elevenlabs/tts/* return per-word timestamps only when asked.
     if (m.includes("elevenlabs/tts/") && input.timestamps === undefined) input.timestamps = true;
     return falRun(m, input, "audio");
@@ -155,6 +157,31 @@ export async function generateVoice({
   const words = parseWordTimings(raw);
   const timestampsSample = !words && raw != null ? JSON.stringify(raw).slice(0, 300) : undefined;
   return { model: used, requestId: result.requestId, audioUrl: result.url, words, timestampsSample };
+}
+
+// Word times for a voice that came without them: fal's Whisper hears the audio
+// word by word, and the script's own words are placed on those times
+// (lib/voice-timing.ts retimeScript). Null when nothing usable came back.
+export const WORD_TIMING_MODEL = "fal-ai/whisper";
+export async function timeWords(audioUrl: string, script: string): Promise<{ words: WordTiming[]; requestId: string; model: string; seconds: number } | null> {
+  const result = await falClient().subscribe(WORD_TIMING_MODEL, {
+    input: { audio_url: audioUrl, task: "transcribe", chunk_level: "word" },
+    abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  const chunks = ((result.data as { chunks?: unknown } | null)?.chunks ?? []) as { timestamp?: unknown; text?: unknown }[];
+  const heard: WordTiming[] = [];
+  for (const ch of Array.isArray(chunks) ? chunks : []) {
+    const ts = Array.isArray(ch.timestamp) ? ch.timestamp : [];
+    const [start, end] = [Number(ts[0]), Number(ts[1] ?? ts[0])];
+    const text = typeof ch.text === "string" ? ch.text.trim() : "";
+    if (!text || !Number.isFinite(start)) continue;
+    // a chunk of several words (segment level): its words share its time evenly
+    const parts = text.split(/\s+/);
+    const stop = Number.isFinite(end) && end >= start ? end : start + 0.3 * parts.length;
+    parts.forEach((t, i) => heard.push({ text: t, start: start + ((stop - start) * i) / parts.length, end: start + ((stop - start) * (i + 1)) / parts.length }));
+  }
+  const words = retimeScript(script, heard);
+  return words ? { words, requestId: result.requestId, model: WORD_TIMING_MODEL, seconds: heard.length ? heard[heard.length - 1].end : 0 } : null;
 }
 
 // One fal call that returns media; errors carry fal's reason (which input

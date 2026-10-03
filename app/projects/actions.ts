@@ -33,6 +33,8 @@ import {
   lockBriefScript,
   lockedScriptOf,
   lockedVoiceScript,
+  voiceChoiceOf,
+  withVoiceChoice,
   logoPath,
   parseHttpUrl,
   validateLogo,
@@ -65,7 +67,7 @@ import {
   collectBenchmarkMetrics,
 } from "@/lib/benchmark";
 import type { Resolution } from "@/components/video/types";
-import { generateVoice as generateFalVoice } from "@/lib/ai/fal";
+import { generateVoice as generateFalVoice, timeWords } from "@/lib/ai/fal";
 import { generateVisualStory } from "@/lib/ai/visual-story";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
 import { generateCleanScript } from "@/lib/ai/clean-director";
@@ -168,17 +170,19 @@ export async function createProject(
     }
   }
 
+  // A voice from the list on /admin/models (else the gender's default voice).
+  const chosenVoice = (await getAiConfig()).voice.choices.find((c) => c.name === String(formData.get("voice_name") ?? ""));
   const { data, error } = await supabase
     .from("projects")
     .insert({
       user_id: user.id,
       website_url: websiteUrl || null,
-      direction,
+      direction: withVoiceChoice(direction, chosenVoice?.name ?? null),
       duration_seconds: duration,
       format,
       voice_language: voiceLanguage,
       voice_style: voiceStyle,
-      voice_gender: voiceGender,
+      voice_gender: chosenVoice?.gender ?? voiceGender,
       creative_direction: creativeDirection,
       motion_level: motionLevel,
       visual_density: visualDensity,
@@ -721,15 +725,44 @@ export async function generateVoice(projectId: string) {
     // Voice turned off on /admin/models: no audio, and the words timed at an
     // even reading pace (about 2.6 words a second) so the visuals still follow them.
     const silent = !ai.voice.on;
-    const { model, requestId, audioUrl, words, timestampsSample } = silent
+    const voiced = silent
       ? { model: "none", requestId: null, audioUrl: null, words: estimateWords(script, Math.max(4, script.split(/\s+/).filter(Boolean).length / 2.6) / 0.92), timestampsSample: undefined }
       : await generateFalVoice({
           script,
           language: project.voice_language,
           style: project.voice_style,
           gender: project.voice_gender,
+          voice: voiceChoiceOf(project.direction),
         });
+    const { model, requestId, audioUrl, timestampsSample } = voiced;
+    let { words } = voiced;
+    let timingSource: "provider" | "heard" | "estimated" = silent ? "estimated" : "provider";
     const owner = { project_id: projectId, user_id: user.id };
+    // A voice without word times (most TTS models): Whisper hears them, else an
+    // even reading pace. The studio films need word times to follow the voice.
+    if (!words?.length && audioUrl) {
+      try {
+        const heard = await timeWords(audioUrl, script);
+        if (heard) {
+          words = heard.words;
+          timingSource = "heard";
+          await recordCost(admin, {
+            ...owner,
+            operation: "fal_voice",
+            model: heard.model,
+            quantity: Math.round(heard.seconds),
+            estimated_cost_usd: unitCost(ai, heard.model, Math.max(1, heard.seconds), () => 0),
+            metadata: { kind: "word_timing", unit: "audio seconds", request_id: heard.requestId },
+          });
+        }
+      } catch (e) {
+        console.warn("word timing failed:", projectId, e instanceof Error ? e.message.slice(0, 300) : e);
+      }
+      if (!words?.length) {
+        words = estimateWords(script, Math.max(4, script.split(/\s+/).filter(Boolean).length / 2.6) / 0.92);
+        timingSource = "estimated";
+      }
+    }
     let storagePath: string | undefined;
     if (audioUrl) {
       // Recorded as soon as Fal returns: the provider charges even if storing fails.
@@ -781,7 +814,7 @@ export async function generateVoice(projectId: string) {
         model,
         requestId,
         ...(storagePath && { storagePath }),
-        timing: words ? { source: silent ? "estimated" : "provider", words } : null,
+        timing: words ? { source: timingSource, words } : null,
         ...(timestampsSample && { timestampsSample }),
       },
     });

@@ -27,7 +27,9 @@ import { ProductBrief } from "@/lib/ai/product-brief";
 import http from "node:http";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import { countUsage, defaultConfig, normalizeConfig, textClient, textCost, usageCost } from "@/lib/ai/models";
+import { countUsage, defaultConfig, normalizeConfig, parseVoiceChoices, textClient, textCost, usageCost } from "@/lib/ai/models";
+import { retimeScript } from "@/lib/voice-timing";
+import { directionFor, lockedVoiceScript, voiceChoiceOf, withVoiceChoice } from "@/lib/projects";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -256,6 +258,25 @@ export async function runChecks(): Promise<Check[]> {
       const total = usageCost(cfg, u, () => -100);
       const old = usageCost(cfg, { model: "x", inputTokens: 5, outputTokens: 5 }, () => 7);
       add("a video's AI cost: fal's reported cost plus the rest priced", Math.abs(total - (0.003 + 0.3)) < 1e-9 && u.inputTokens === 1e6 + 110 && old === 7, `$${total.toFixed(4)} · no report → env pricing`);
+    }
+    {
+      // A voice without word times: the script's words on what Whisper heard
+      const script = "Bookwell puts your whole clinic in one app.";
+      const heard = [
+        { text: "Book", start: 0.2, end: 0.4 }, { text: "well", start: 0.4, end: 0.7 }, { text: "puts", start: 0.8, end: 1.0 },
+        { text: "your", start: 1.0, end: 1.2 }, { text: "whole", start: 1.2, end: 1.5 }, { text: "clinic", start: 1.6, end: 2.1 },
+        { text: "in", start: 2.2, end: 2.3 }, { text: "one", start: 2.3, end: 2.5 }, { text: "app.", start: 2.6, end: 3.0 },
+      ];
+      const w = retimeScript(script, heard);
+      const ok = !!w && w.length === 8 && w[0].text === "Bookwell" && Math.abs(w[0].start - 0.2) < 1e-9 && Math.abs(w[0].end - 0.7) < 0.05 && Math.abs(w[7].end - 3.0) < 1e-9 && w.every((x, i) => x.end >= x.start && (i === 0 || x.start >= w[i - 1].end - 1e-9));
+      add("Whisper's times carry the script's own words", ok && retimeScript(script, []) === null, w ? w.map((x) => `${x.text}@${x.start.toFixed(2)}`).slice(0, 4).join(" ") : "none");
+    }
+    {
+      // The customer's voice pick rides after the script; it never reaches the narration
+      const d = withVoiceChoice(directionFor("Hello there. Book now.", "Auto"), "Kore");
+      const picks = parseVoiceChoices("Kore, female, Warm and clear\nPuck, male\nKore, male, duplicate\n\n");
+      add("a picked voice is stored after the script, not spoken", voiceChoiceOf(d) === "Kore" && lockedVoiceScript(d) === "Hello there. Book now." && voiceChoiceOf(directionFor("Hi.", "Auto")) === null && withVoiceChoice("no suffix", "Kore") === "no suffix", d.split("\n").slice(-1)[0]);
+      add("the admin's voice list reads one voice per line", picks.length === 2 && picks[0].gender === "female" && picks[0].label === "Warm and clear" && picks[1].gender === "male", picks.map((p) => `${p.name}/${p.gender}`).join(", "));
     }
     // fal's OpenAI-compatible chat endpoint, here a local stand-in.
     const seen: { auth?: string; body: { messages: { role: string; content: unknown }[]; response_format?: { type: string } } }[] = [];
