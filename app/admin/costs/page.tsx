@@ -5,7 +5,7 @@ import { daysAgo, lastDays, usd } from "../_components/format";
 
 export const metadata = { title: "Costs" };
 
-const OPS: Record<string, string> = { openai_brief: "AI director (OpenAI)", fal_voice: "Voice (FAL)", fal_image: "Images (FAL)", remotion_render: "Rendering", storage: "Storage" };
+const OPS: Record<string, string> = { openai_brief: "Script & director (AI)", fal_voice: "Voice (FAL)", fal_image: "Images (FAL)", remotion_render: "Rendering", storage: "Storage" };
 
 export default async function CostsPage() {
   const { db } = await requireAdmin();
@@ -38,7 +38,7 @@ export default async function CostsPage() {
         </Notice>
       )}
       <Notice>
-        Today the ledger only records generated images and their storage. AI director (OpenAI), voice and rendering costs are not written yet, so real spend is higher than shown.
+        Script, director, voice and image calls are recorded at the prices on <Link href="/admin/models" className="underline">AI models</Link> (or the environment&apos;s pricing when a model has none, which may be $0). Downloads render in the customer&apos;s browser.
       </Notice>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Stat label="Total · 30 days" value={usd(total)} />

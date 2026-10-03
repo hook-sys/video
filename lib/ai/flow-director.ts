@@ -1,6 +1,6 @@
 import "server-only";
-import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
+import { textAi } from "@/lib/ai/models";
 import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import { compileFlowScript } from "@/components/video/flow/compile";
@@ -87,7 +87,9 @@ export type FlowDirectorResult = { script: FlowScript | null; attempts: number; 
 export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000): Promise<FlowDirectorResult> {
   const started = Date.now();
   const timing = input.words?.length ? "voice" : "estimated";
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
+  // the model chosen on /admin/models (null: the job is off; an Error: no key)
+  const picked = await textAi("flow").catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+  const model = picked && !(picked instanceof Error) ? picked.model : process.env.OPENAI_MODEL || "gpt-5-mini";
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(FlowScriptModel, "flow_script") };
   // Blockers reject a script; quality notes (dead time, overflowing text,
@@ -111,8 +113,9 @@ export async function generateFlowScript(input: FlowDirectorInput, onUsage?: (us
   let attempts = 0;
   let problems: string[] = [];
   try {
-    if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
-    const client = new OpenAI({ maxRetries: 0 });
+    if (picked instanceof Error) throw picked;
+    if (!picked) throw new Error("turned off on /admin/models");
+    const client = picked.client;
     attempts++;
     const first = await client.responses.parse(
       {

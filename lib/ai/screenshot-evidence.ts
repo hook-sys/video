@@ -1,6 +1,6 @@
 import "server-only";
-import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
+import { textAi } from "@/lib/ai/models";
 import { z } from "zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 
@@ -30,9 +30,10 @@ export async function analyzeScreenshots(
   imageUrls: string[],
   onUsage?: (usage: BriefUsage) => void,
 ): Promise<ScreenshotEvidence> {
-  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
-  const client = new OpenAI({ timeout: 50_000, maxRetries: 1 });
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
+  // the model chosen on /admin/models (the caller skips this job when it is off)
+  const ai = await textAi("screenshots", { timeout: 50_000, maxRetries: 1 });
+  if (!ai) throw new Error("Screenshot reading is turned off.");
+  const { client, model } = ai;
 
   const response = await client.responses.parse({
     model,

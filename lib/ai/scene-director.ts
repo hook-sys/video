@@ -1,6 +1,6 @@
 import "server-only";
-import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
+import { textAi } from "@/lib/ai/models";
 import LOTTIE_MANIFEST from "@/components/video/lottie/manifest.json";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import { cardCatalogText, deviceCatalogText } from "@/components/video/flow/cards/catalog";
@@ -121,13 +121,15 @@ export type SceneDirectorResult = { script: SceneScript | null; attempts: number
 export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000): Promise<SceneDirectorResult> {
   const started = Date.now();
   const timing = input.words?.length ? "voice" : "estimated";
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
+  // the model chosen on /admin/models (null: the job is off; an Error: no key)
+  const picked = await textAi("scene").catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+  const model = picked && !(picked instanceof Error) ? picked.model : process.env.OPENAI_MODEL || "gpt-5-mini";
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(SceneScriptModel, "scene_script") };
   const instructions = `${INSTRUCTIONS}\n\n${STYLE_DIRECTION}\n\nNEVER (mistakes found in earlier videos — every one is checked on your compiled script)\n${input.never || neverList()}`;
   // Reasoning models: a revision only has to fix listed problems, so it runs
   // with low effort (much faster).
-  const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
+  const quick = /(^|\/)(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
   // Blockers reject a script; rule violations (measured on the compiled
   // plan, lib/video-rules.ts) ask for one revision but do not reject it.
   const none = { notes: [] as string[], violations: [] as Violation[] };
@@ -150,8 +152,9 @@ export async function generateSceneScript(input: SceneDirectorInput, onUsage?: (
   let attempts = 0;
   let problems: string[] = [];
   try {
-    if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
-    const client = new OpenAI({ maxRetries: 0 });
+    if (picked instanceof Error) throw picked;
+    if (!picked) throw new Error("turned off on /admin/models");
+    const client = picked.client;
     attempts++;
     const first = await client.responses.parse(
       {

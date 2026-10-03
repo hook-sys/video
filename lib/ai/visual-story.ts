@@ -1,6 +1,6 @@
 import "server-only";
-import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
+import { textAi } from "@/lib/ai/models";
 import { z } from "zod";
 import { AREA_KINDS, ASSET_TYPES, INTENTS, MAX_STORY_ASSETS, MOODS, OBJECT_KINDS, SHOTS, SLOTS, storyBlockers, VERBS, VisualStory } from "@/lib/visual-story";
 import type { BriefUsage } from "@/lib/ai/product-brief";
@@ -230,14 +230,17 @@ function problemsOf(raw: unknown, narration: string, words?: WordTiming[] | null
 export async function generateVisualStory(input: StoryInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 110_000): Promise<StoryResult> {
   const started = Date.now();
   const timing = input.words?.length ? "voice" : "estimated";
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
+  // the model chosen on /admin/models (null: the job is off; an Error: no key)
+  const picked = await textAi("story").catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+  const model = picked && !(picked instanceof Error) ? picked.model : process.env.OPENAI_MODEL || "gpt-5-mini";
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(Output, "visual_story") };
   let attempts = 0;
   let problems: string[] = [];
   try {
-    if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
-    const client = new OpenAI({ maxRetries: 0 });
+    if (picked instanceof Error) throw picked;
+    if (!picked) throw new Error("turned off on /admin/models");
+    const client = picked.client;
     attempts++;
     const instructions = INSTRUCTIONS + (input.assets ? ASSET_GUIDANCE : NO_ASSETS);
     const first = await client.responses.parse({ model, instructions, input: JSON.stringify({

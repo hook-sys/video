@@ -24,6 +24,10 @@ import { BLOCK_IDS, BLOCK_TAGS, HANDS, LOOK_IDS as STUDIO_LOOK_IDS, LOOK_TAGS, R
 import { LOOKS } from "@/components/video/clean/studio/looks";
 import { handoffs, type StudioRecipe, studioVariants, toRecipe, tooClose } from "@/lib/studio-variants";
 import { ProductBrief } from "@/lib/ai/product-brief";
+import http from "node:http";
+import { z } from "zod";
+import { zodTextFormat } from "openai/helpers/zod";
+import { defaultConfig, normalizeConfig, textClient, textCost } from "@/lib/ai/models";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -234,6 +238,57 @@ export async function runChecks(): Promise<Check[]> {
   add("an older film video maps to its look and blocks", valid(legacy) && legacy.look === "dusk" && legacy.hue === 40 && legacy.blocks.hook === "hook.typed", JSON.stringify(legacy.blocks).slice(0, 80));
   const parsed = ProductBrief.shape.clean.safeParse({ script: {}, source: "ai", variants: [{ film: "glow", tint: "native", hue: 0 }, s1[0]], history: [[{ film: "fly", tint: "brand", hue: 12 }], s1], at: "now" });
   add("stored briefs with old and new videos both parse", parsed.success && !!parsed.data && parsed.data.variants.length === 2 && parsed.data.history.length === 2, parsed.success ? "ok" : String(parsed.error).slice(0, 120));
+
+  section = "AI models (/admin/models)";
+  {
+    // Nothing saved: the environment's models, every job on.
+    const d = normalizeConfig(null);
+    add("nothing saved keeps today's models", JSON.stringify(d) === JSON.stringify(defaultConfig()) && d.text.provider === "openai" && Object.values(d.tasks).every((t) => t.on) && d.voice.on && d.image.on, `${d.text.provider} ${d.text.model}`);
+    add("the brief can't be turned off", normalizeConfig({ tasks: { brief: { on: false }, shot: { on: false } } }).tasks.brief.on && !normalizeConfig({ tasks: { shot: { on: false } } }).tasks.shot.on, "brief stays on");
+    const cfg = normalizeConfig({ prices: { "google/gemini-2.5-flash": { in: 0.3, out: 2.5 } } });
+    add("a model's own price is used for its cost", Math.abs(textCost(cfg, "google/gemini-2.5-flash", 1e6, 1e6, () => -1) - 2.8) < 1e-9 && textCost(cfg, "other", 1, 1, () => -1) === -1, "0.30 in + 2.50 out per 1M");
+    // fal's OpenAI-compatible chat endpoint, here a local stand-in.
+    const seen: { auth?: string; body: { messages: { role: string; content: unknown }[]; response_format?: { type: string } } }[] = [];
+    let strict = true;
+    const server = http.createServer((req, res) => {
+      let raw = "";
+      req.on("data", (d) => (raw += d));
+      req.on("end", () => {
+        const body = JSON.parse(raw);
+        seen.push({ auth: req.headers.authorization, body });
+        if (!strict && body.response_format?.type === "json_schema") return res.writeHead(400, { "content-type": "application/json" }).end('{"error":{"message":"json_schema unsupported"}}');
+        const content = body.response_format?.type === "json_object" ? '```json\n{"tagline":"Ship faster","words":["ship"]}\n```' : '{"tagline":"Plan less","words":["plan","less"]}';
+        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ id: `c${seen.length}`, object: "chat.completion", created: 1, model: body.model, choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content } }], usage: { prompt_tokens: 120, completion_tokens: 30, total_tokens: 150, cost: 0.0004 } }));
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const saved = { url: process.env.FAL_LLM_BASE_URL, key: process.env.FAL_KEY };
+    process.env.FAL_LLM_BASE_URL = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    process.env.FAL_KEY = "check-key";
+    try {
+      const P = z.object({ tagline: z.string(), words: z.array(z.string()) });
+      const fmt = { format: zodTextFormat(P, "probe") };
+      const ai = textClient("fal", "google/gemini-2.5-flash", false);
+      const r1 = await ai.client.responses.parse({ model: ai.model, instructions: "SYS", input: "hello", text: fmt });
+      add("fal: structured answer parsed, tokens counted", r1.output_parsed?.tagline === "Plan less" && r1.usage?.input_tokens === 120 && r1.usage?.output_tokens === 30 && seen[0].auth === "Key check-key" && seen[0].body.response_format?.type === "json_schema", `${seen[0].auth} · ${seen[0].body.response_format?.type}`);
+      await ai.client.responses.parse({ model: ai.model, instructions: "SYS", previous_response_id: r1.id, input: "fix it", text: fmt });
+      const roles = seen[1].body.messages.map((m) => m.role).join(",");
+      add("fal: a revision carries the conversation", roles === "system,user,assistant,user", roles);
+      await ai.client.responses.parse({ model: ai.model, input: [{ role: "user", content: [{ type: "input_text", text: "see" }, { type: "input_image", image_url: "https://x/y.png", detail: "auto" }] }], text: fmt });
+      add("fal: screenshots go as image parts", JSON.stringify(seen[2].body.messages[0].content).includes('"image_url":{"url":"https://x/y.png"}'), "image_url part");
+      strict = false;
+      const r4 = await ai.client.responses.parse({ model: ai.model, instructions: "SYS", input: "x", text: fmt });
+      add("fal: a model without strict schemas falls back to JSON mode", r4.output_parsed?.tagline === "Ship faster" && seen.at(-1)?.body.response_format?.type === "json_object", "json_object, fences stripped");
+    } catch (e) {
+      add("fal: text calls", false, e instanceof Error ? e.message : String(e));
+    } finally {
+      server.close();
+      process.env.FAL_LLM_BASE_URL = saved.url;
+      process.env.FAL_KEY = saved.key;
+      if (saved.url === undefined) delete process.env.FAL_LLM_BASE_URL;
+      if (saved.key === undefined) delete process.env.FAL_KEY;
+    }
+  }
 
   section = "covered elsewhere";
   add("asset-type-swap, support-placement", true, "checked by npm run check:assets and check:recipe");

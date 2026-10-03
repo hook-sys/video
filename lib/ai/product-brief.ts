@@ -1,5 +1,5 @@
-import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
+import { textAi } from "@/lib/ai/models";
 import { z } from "zod";
 import { checkContinuity, keepOmittedObjects } from "@/lib/ai/blueprint-check";
 import { StoryAssetRecord, VisualStory } from "@/lib/visual-story";
@@ -346,10 +346,10 @@ export async function generateProductBrief(
   input: BriefInput,
   onUsage?: (usage: BriefUsage) => void,
 ): Promise<ProductBrief> {
-  if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
-  const client = new OpenAI({ timeout: 120_000, maxRetries: 1 });
-
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
+  // the model chosen on /admin/models (the brief is never off)
+  const ai = await textAi("brief", { timeout: 120_000, maxRetries: 1 });
+  if (!ai) throw new Error("The brief model is not configured.");
+  const { client, model } = ai;
   const scenes = sceneCountRange(input.duration_seconds);
   const response = await client.responses.parse({
     model,

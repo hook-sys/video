@@ -1,6 +1,7 @@
 import "server-only";
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
+import { textAi } from "@/lib/ai/models";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import type { AssetSelection } from "@/lib/asset-selection";
 import type { SceneDirectorInput, SceneDirectorResult } from "@/lib/ai/scene-director";
@@ -124,10 +125,12 @@ export function compilerMeasure(ctx: { narration: string; words?: WordTiming[] |
 export async function generateShotScript(input: SceneDirectorInput, onUsage?: (usage: BriefUsage) => void, budgetMs = 100_000, client?: Pick<OpenAI, "responses">, wanted: DirectionMode = directionMode()): Promise<ShotDirectorResult> {
   const started = Date.now();
   const timing = input.words?.length ? "voice" : "estimated";
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
+  // the model chosen on /admin/models (null: the job is off; an Error: no key)
+  const picked = client ? null : await textAi("shot").catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
+  const model = picked && !(picked instanceof Error) ? picked.model : process.env.OPENAI_MODEL || "gpt-5-mini";
   const usage = { model, inputTokens: 0, outputTokens: 0 };
   const format = { format: zodTextFormat(ShotScriptModel, "shot_script") };
-  const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
+  const quick = /(^|\/)(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
   const none = { violations: [] as ReturnType<typeof compositionCheck>, notes: [] as string[], variants: [] as ShotVariantOut[], status: "failed", directions: [] as DirectionDiagnostics[], assets: [] as AssetDiagnostics[] };
   // Each draft holds four creative directions; each is built a few ways, its
   // cleanest kept, and the directions that are truly different are offered
@@ -176,8 +179,9 @@ export async function generateShotScript(input: SceneDirectorInput, onUsage?: (u
   let mode: "four" | "single" = "four";
   let fourDirections: DirectionDiagnostics[] = []; // (kept when the one-direction answer replaces them)
   try {
-    if (!client && !process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
-    const ai = client ?? new OpenAI({ maxRetries: 0 });
+    if (picked instanceof Error) throw picked;
+    if (!client && !picked) throw new Error("turned off on /admin/models");
+    const ai = client ?? picked!.client;
     const request = JSON.stringify({
       NARRATION: input.narration,
       WORDS: input.words?.length ? input.words.filter((w) => tokenize(w.text).length).map((w) => [w.text, Math.round(w.start * 100) / 100]) : null,

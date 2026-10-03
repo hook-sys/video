@@ -1,6 +1,7 @@
 import "server-only";
 import { createFalClient } from "@fal-ai/client";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
+import { type AiConfig, getAiConfig } from "@/lib/ai/models";
 
 export type VoiceInput = { script: string; language: string; style: string; gender: string };
 export type VoiceResult = {
@@ -71,12 +72,16 @@ const IMAGE_GUARDRAILS =
   "Flat vector or clean 3D abstract style, not stock photography. " +
   "No animals, no animal characters, no mascots, no people, no readable text, no letters, no numbers, no logos.";
 
-export async function generateImage({ prompt, format, guardrails = IMAGE_GUARDRAILS }: ImageInput): Promise<ImageResult> {
-  const model = process.env.FAL_IMAGE_MODEL;
+// `override`: unsaved settings, for the admin page's test.
+export async function generateImage({ prompt, format, guardrails = IMAGE_GUARDRAILS }: ImageInput, override?: Partial<AiConfig["image"]>): Promise<ImageResult> {
+  // /admin/models first, then the environment
+  const image = { ...(await getAiConfig()).image, ...override };
+  if (!image.on) throw new Error("Image generation is turned off on /admin/models.");
+  const model = image.model || process.env.FAL_IMAGE_MODEL;
   if (!model) throw new Error("FAL_IMAGE_MODEL is not configured.");
   const fal = falClient();
 
-  const input = buildInput(process.env.FAL_IMAGE_INPUT_TEMPLATE || '{"prompt":"{{prompt}}"}', {
+  const input = buildInput(image.template || process.env.FAL_IMAGE_INPUT_TEMPLATE || '{"prompt":"{{prompt}}"}', {
     prompt: `${prompt.trim().slice(0, 1_000)} ${guardrails}`,
     format,
   });
@@ -93,10 +98,11 @@ export async function generateImage({ prompt, format, guardrails = IMAGE_GUARDRA
 
 // Model voice for the customer's gender choice. Defaults are ElevenLabs preset
 // voices (the configured fal-ai/elevenlabs model); override per model via env.
-export function voiceForGender(gender: string) {
+// /admin/models names win over the environment's.
+export function voiceForGender(gender: string, names: { female?: string; male?: string } = {}) {
   return gender === "female"
-    ? process.env.FAL_VOICE_FEMALE || "Sarah"
-    : process.env.FAL_VOICE_MALE || "Brian";
+    ? names.female || process.env.FAL_VOICE_FEMALE || "Sarah"
+    : names.male || process.env.FAL_VOICE_MALE || "Brian";
 }
 
 export async function generateVoice({
@@ -104,19 +110,22 @@ export async function generateVoice({
   language,
   style,
   gender,
-}: VoiceInput): Promise<VoiceResult> {
-  const model = process.env.FAL_VOICE_MODEL;
+}: VoiceInput, override?: Partial<AiConfig["voice"]>): Promise<VoiceResult> {
+  // /admin/models first, then the environment
+  const voice = { ...(await getAiConfig()).voice, ...override };
+  if (!voice.on) throw new Error("Voice is turned off on /admin/models.");
+  const model = voice.model || process.env.FAL_VOICE_MODEL;
   if (!model) throw new Error("FAL_VOICE_MODEL is not configured.");
 
   const text = script.trim().slice(0, SCRIPT_MAX);
   if (!text) throw new Error("The brief has no script to narrate.");
 
-  const input = buildInput(process.env.FAL_VOICE_INPUT_TEMPLATE || '{"text":"{{text}}"}', {
+  const input = buildInput(voice.template || process.env.FAL_VOICE_INPUT_TEMPLATE || '{"text":"{{text}}"}', {
     text,
     language,
     style,
     gender,
-    voice: voiceForGender(gender),
+    voice: voiceForGender(gender, voice),
   });
   // fal-ai/elevenlabs/tts/* return per-word timestamps only when asked.
   if (model.includes("elevenlabs/tts/") && input.timestamps === undefined) input.timestamps = true;

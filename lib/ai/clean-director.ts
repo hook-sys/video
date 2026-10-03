@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
+import { textAi } from "@/lib/ai/models";
 import { resolveIcon } from "@/components/video/icons";
 import { DEFAULT_CONTENT, type FilmContent } from "@/components/video/clean/content";
 import { buildPlan, type SevenPart } from "@/components/video/clean/plan";
@@ -116,8 +117,10 @@ export async function generateCleanScript(input: CleanDirectorInput, onUsage?: (
   const t0 = Date.now();
   const problems: string[] = [];
   let attempts = 0;
-  const model = process.env.OPENAI_MODEL || "gpt-5-mini";
-  const quick = /^(gpt-5|o\d)/.test(model) ? { reasoning: { effort: "low" as const } } : {};
+  // the model chosen on /admin/models (none: the job is off, or no key)
+  const picked = client ? null : await textAi("clean").catch(() => null);
+  const model = picked?.model ?? (process.env.OPENAI_MODEL || "gpt-5-mini");
+  const quick = (picked ? picked.quick : /^(gpt-5|o\d)/.test(model)) ? { reasoning: { effort: "low" as const } } : {};
   const format = { format: zodTextFormat(CleanScriptModel, "clean_script") };
   const narration = input.words.map((w) => w.text).join(" ").replace(/\s+([.,!?])/g, "$1");
   const request = `Product: ${input.brand.name}${input.product ? ` — ${input.product}` : ""}\nCall to action: ${input.brand.cta}\nNarration:\n${narration}`;
@@ -131,7 +134,7 @@ export async function generateCleanScript(input: CleanDirectorInput, onUsage?: (
     return { ...r, attempts, ms: Date.now() - t0 };
   };
 
-  const ai = client ?? (process.env.OPENAI_API_KEY ? new OpenAI() : null);
+  const ai = client ?? picked?.client ?? null;
   if (ai) {
     try {
       attempts++;
@@ -158,7 +161,7 @@ export async function generateCleanScript(input: CleanDirectorInput, onUsage?: (
     } catch (e) {
       problems.push(`model call failed: ${e instanceof Error ? e.message : String(e)}`);
     }
-  } else problems.push("no OpenAI key");
+  } else problems.push("no model (turned off on /admin/models, or no key)");
 
   const fb = fallbackScript(input.words, input.brand);
   if (fb) {

@@ -5,6 +5,7 @@ import type { AssetManifest } from "@/lib/asset-manifest";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { isPublicHost } from "@/lib/website-capture";
 import { falCost, storageCost } from "@/lib/costs/pricing";
+import { getAiConfig, unitCost } from "@/lib/ai/models";
 import { recordCost } from "@/lib/costs/record";
 
 type Asset = AssetManifest["assets"][number];
@@ -54,7 +55,7 @@ export async function generateAsset(
       operation: "fal_image",
       model,
       quantity: 1,
-      estimated_cost_usd: falCost(model, 1),
+      estimated_cost_usd: unitCost(await getAiConfig(), model, 1, () => falCost(model, 1)),
       metadata: { asset_id: asset.id, asset_type: asset.type, request_id: requestId },
     });
     const { body, type, ext } = await downloadImage(imageUrl);

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateImage, type ImageInput, type ImageResult } from "@/lib/ai/fal";
 import { downloadImage } from "@/lib/generated-assets";
 import { falCost, storageCost } from "@/lib/costs/pricing";
+import { getAiConfig, unitCost } from "@/lib/ai/models";
 import { recordCost } from "@/lib/costs/record";
 import { SCREENSHOTS_BUCKET } from "@/lib/projects";
 import { storyAssetsEnabled } from "@/lib/story-engine";
@@ -51,7 +52,7 @@ export async function generateStoryAssets(
       try {
         const { imageUrl, model, requestId } = await generate({ prompt: assetPrompt(a, ctx.visualStyle), format: assetFormat(a), guardrails: GUARDRAILS(a) });
         // Recorded as soon as Fal returns: the provider charges even if storing fails.
-        await recordCost(admin, { ...owner, operation: "fal_image", model, quantity: 1, estimated_cost_usd: falCost(model, 1), metadata: { kind: "story_asset", continuity_id: a.continuity_id, asset_type: a.type, request_id: requestId } });
+        await recordCost(admin, { ...owner, operation: "fal_image", model, quantity: 1, estimated_cost_usd: unitCost(await getAiConfig(), model, 1, () => falCost(model, 1)), metadata: { kind: "story_asset", continuity_id: a.continuity_id, asset_type: a.type, request_id: requestId } });
         const { body, type, ext } = await download(imageUrl);
         const path = `${ctx.userId}/${ctx.projectId}/story/${a.continuity_id}.${ext}`;
         const { error } = await admin.storage.from(SCREENSHOTS_BUCKET).upload(path, body, { contentType: type, upsert: true });

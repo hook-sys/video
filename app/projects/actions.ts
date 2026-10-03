@@ -50,6 +50,7 @@ import { renderStoryboardMp4 } from "@/lib/render-video";
 import { validateForRender } from "@/lib/render-validation";
 import { falCost, openaiCost, renderCost, storageCost } from "@/lib/costs/pricing";
 import { recordCost } from "@/lib/costs/record";
+import { getAiConfig, textCost, unitCost } from "@/lib/ai/models";
 import { canUseDevTools } from "@/lib/dev-tools";
 import {
   flowBudgetMs,
@@ -74,7 +75,7 @@ import { generateFlowScript } from "@/lib/ai/flow-director";
 import { generateSceneScript } from "@/lib/ai/scene-director";
 import { generateShotScript } from "@/lib/ai/shot-director";
 import { neverList } from "@/lib/video-rules";
-import type { FlowScript } from "@/lib/flow-script";
+import { estimateWords, type FlowScript } from "@/lib/flow-script";
 import type { SceneScript } from "@/lib/scene-script";
 import type { VisualStory } from "@/lib/visual-story";
 import { generateStoryAssets, planStoryAssets, storyAssetsEnabled } from "@/lib/story-assets";
@@ -322,7 +323,8 @@ export async function generateBrief(projectId: string) {
     // Screenshot evidence (vision) is extracted once and reused; it lets
     // screenshot-only projects support claims without website text.
     let evidence = project.screenshot_evidence as ScreenshotEvidence | null;
-    if (!evidence && screenshots?.length) {
+    // (turned off on /admin/models: the screenshots are shown, not read)
+    if (!evidence && screenshots?.length && (await getAiConfig()).tasks.screenshots.on) {
       const { data: signed } = await supabase.storage
         .from(SCREENSHOTS_BUCKET)
         .createSignedUrls(screenshots.map((s) => s.storage_path), 600);
@@ -372,6 +374,7 @@ export async function generateBrief(projectId: string) {
     console.error("brief generation failed:", projectId, e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : e);
     await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));
   } finally {
+    const ai = await getAiConfig();
     for (const [u, kind] of [
       [visionUsage, "screenshot_analysis"],
       [usage, "brief"],
@@ -383,7 +386,7 @@ export async function generateBrief(projectId: string) {
         operation: "openai_brief",
         model: u.model,
         quantity: u.inputTokens + u.outputTokens,
-        estimated_cost_usd: openaiCost(u.model, u.inputTokens, u.outputTokens),
+        estimated_cost_usd: textCost(ai, u.model, u.inputTokens, u.outputTokens, () => openaiCost(u.model, u.inputTokens, u.outputTokens)),
         metadata: { kind, input_tokens: u.inputTokens, output_tokens: u.outputTokens },
       });
     }
@@ -505,7 +508,15 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // Director v2 (scenes of product UI) first; the pattern Director is the
   // fallback when no usable SceneScript comes back and time remains.
   let usage: BriefUsage | undefined;
-  const addUsage = (u: BriefUsage) => (usage = usage ? { ...u, inputTokens: usage.inputTokens + u.inputTokens, outputTokens: usage.outputTokens + u.outputTokens } : u);
+  // Each job may use its own model (/admin/models): priced per call.
+  const ai = await getAiConfig();
+  let cost = 0;
+  const models = new Set<string>();
+  const addUsage = (u: BriefUsage) => {
+    cost += textCost(ai, u.model, u.inputTokens, u.outputTokens, () => openaiCost(u.model, u.inputTokens, u.outputTokens));
+    if (u.inputTokens || u.outputTokens) models.add(u.model);
+    usage = usage ? { ...u, inputTokens: usage.inputTokens + u.inputTokens, outputTokens: usage.outputTokens + u.outputTokens } : u;
+  };
   // The clean film templates first (one quick call): the narration in seven
   // parts and the four videos to offer, never a set this customer already had
   // for the same script. The engines below still run (fallback).
@@ -598,9 +609,9 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
       project_id: projectId,
       user_id: userId,
       operation: "openai_brief",
-      model: usage.model,
+      model: [...models].join(", ") || usage.model,
       quantity: usage.inputTokens + usage.outputTokens,
-      estimated_cost_usd: openaiCost(usage.model, usage.inputTokens, usage.outputTokens),
+      estimated_cost_usd: cost,
       metadata: { kind: "flow_director", engine: v2.script ? "scene" : "flow", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts, latency_ms: Date.now() - started, stored: !!script, timing: v2.timing },
     });
   }
@@ -666,7 +677,7 @@ async function generateStory(projectId: string, userId: string, budgetMs: number
       operation: "openai_brief",
       model: usage.model,
       quantity: usage.inputTokens + usage.outputTokens,
-      estimated_cost_usd: openaiCost(usage.model, usage.inputTokens, usage.outputTokens),
+      estimated_cost_usd: textCost(await getAiConfig(), usage.model, usage.inputTokens, usage.outputTokens, () => openaiCost(usage!.model, usage!.inputTokens, usage!.outputTokens)),
       metadata: { kind: "visual_story", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts: result.attempts, latency_ms: result.ms, stored: !!result.story, timing: result.timing },
     });
   }
@@ -706,32 +717,41 @@ export async function generateVoice(projectId: string) {
   if (!claimed?.length) return;
 
   try {
-    const { model, requestId, audioUrl, words, timestampsSample } = await generateFalVoice({
-      script,
-      language: project.voice_language,
-      style: project.voice_style,
-      gender: project.voice_gender,
-    });
+    const ai = await getAiConfig();
+    // Voice turned off on /admin/models: no audio, and the words timed at an
+    // even reading pace (about 2.6 words a second) so the visuals still follow them.
+    const silent = !ai.voice.on;
+    const { model, requestId, audioUrl, words, timestampsSample } = silent
+      ? { model: "none", requestId: null, audioUrl: null, words: estimateWords(script, Math.max(4, script.split(/\s+/).filter(Boolean).length / 2.6) / 0.92), timestampsSample: undefined }
+      : await generateFalVoice({
+          script,
+          language: project.voice_language,
+          style: project.voice_style,
+          gender: project.voice_gender,
+        });
     const owner = { project_id: projectId, user_id: user.id };
-    // Recorded as soon as Fal returns: the provider charges even if storing fails.
-    // Voice is priced per script character; the stored file costs storage.
-    await recordCost(admin, {
-      ...owner,
-      operation: "fal_voice",
-      model,
-      quantity: script.length,
-      estimated_cost_usd: falCost(model, script.length),
-      metadata: { unit: "characters", request_id: requestId },
-    });
-    const stored = await storeVoiceAudio(admin, audioUrl, user.id, projectId);
-    const storagePath = stored.path;
-    await recordCost(admin, {
-      ...owner,
-      operation: "storage",
-      quantity: stored.bytes,
-      estimated_cost_usd: storageCost(stored.bytes),
-      metadata: { kind: "voice", unit: "bytes" },
-    });
+    let storagePath: string | undefined;
+    if (audioUrl) {
+      // Recorded as soon as Fal returns: the provider charges even if storing fails.
+      // Voice is priced per script character; the stored file costs storage.
+      await recordCost(admin, {
+        ...owner,
+        operation: "fal_voice",
+        model,
+        quantity: script.length,
+        estimated_cost_usd: unitCost(ai, model, script.length, () => falCost(model, script.length)),
+        metadata: { unit: "characters", request_id: requestId },
+      });
+      const stored = await storeVoiceAudio(admin, audioUrl, user.id, projectId);
+      storagePath = stored.path;
+      await recordCost(admin, {
+        ...owner,
+        operation: "storage",
+        quantity: stored.bytes,
+        estimated_cost_usd: storageCost(stored.bytes),
+        metadata: { kind: "voice", unit: "bytes" },
+      });
+    }
     const previousPath = project.voice_result?.storagePath;
     if (previousPath && previousPath !== storagePath) {
       await admin.storage.from(AUDIO_BUCKET).remove([previousPath]);
@@ -760,8 +780,8 @@ export async function generateVoice(projectId: string) {
       voice_result: {
         model,
         requestId,
-        storagePath,
-        timing: words ? { source: "provider", words } : null,
+        ...(storagePath && { storagePath }),
+        timing: words ? { source: silent ? "estimated" : "provider", words } : null,
         ...(timestampsSample && { timestampsSample }),
       },
     });
@@ -817,11 +837,15 @@ export async function prepareAssets(projectId: string) {
       ...(capture?.screenshot_path ? [capture.screenshot_path] : []),
       ...(screenshots ?? []).map((s) => s.storage_path),
     ];
+    // The customer's chosen visual style (appended to the direction) shapes image prompts.
+    const manifest = buildAssetManifest(brief.data, paths, project.format, project.direction?.match(/Visual style:\s*(.+)\s*$/m)?.[1]);
+    // Images turned off on /admin/models: no generated images are planned (the
+    // scenes use screenshots, icons and shapes).
+    if (!(await getAiConfig()).image.on) manifest.assets = manifest.assets.filter((a) => a.source !== "generated");
     await assetsUpdate({
       assets_status: "completed",
       assets_error: null,
-      // The customer's chosen visual style (appended to the direction) shapes image prompts.
-      assets_manifest: buildAssetManifest(brief.data, paths, project.format, project.direction?.match(/Visual style:\s*(.+)\s*$/m)?.[1]),
+      assets_manifest: manifest,
     });
   }
   revalidatePath(`/projects/${projectId}`);
