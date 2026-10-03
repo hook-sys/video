@@ -59,3 +59,49 @@ export function shopnestPlan(): CleanPlan {
   if (!plan) throw new Error(`Shopnest fixture: ${problems.join("; ")}`);
   return plan;
 }
+
+// A third script (a clinic's booking app): the one used in the first real
+// test of the studio on Preview; long words and a different trade.
+export const BOOKWELL: SevenPart = {
+  brand: { name: "Bookwell", color: "#2f6fed", tagline: "Your whole clinic in one simple app", cta: "Book a free demo", url: "bookwell.app", icon: null },
+  hook: { text: "Most clinics still run their day on phone calls and paper notes.", key: "paper" },
+  trio: {
+    text: "Bookings in one diary. Patient files in a cabinet. Reminders on sticky notes.",
+    items: [
+      { label: "Bookings", sub: "in one diary", icon: "calendar" },
+      { label: "Patient files", sub: "in a cabinet", icon: "folder" },
+      { label: "Reminders", sub: "on sticky notes", icon: "sticky-note" },
+    ],
+  },
+  reveal: { name: "Bookwell", sub: "puts your whole clinic in one simple app.", key: "app." },
+  pay: { eyebrow: "When a patient books online,", title: "the slot fills itself.", key: "itself.", pay: "books online", rev: "slot fills", inst: "itself." },
+  growth: { eyebrow: "When the day gets busy,", title: "your whole team sees who is next.", key: "next.", grow: "gets busy", team: "whole team", zoom: "who is next" },
+  nomore: { a: "No more double bookings.", aKey: "double", b: "No more missed appointments.", bKey: "missed" },
+  cta: { tagline: "Just one calm screen for your entire clinic.", key: "calm" },
+  content: {
+    metric: { label: "Open slots today", from: 14, to: 13, unit: "" },
+    event: { label: "New booking", detail: "10:30 · Check-up", source: "Amira Khan", done: "Slot filled" },
+    rows: [
+      { name: "Daniel Okoye", value: "09:00" },
+      { name: "Priya Shah", value: "09:30" },
+      { name: "Marco Rossi", value: "10:00" },
+    ],
+    side: [
+      { label: "Patients today", value: "38" },
+      { label: "No-shows", value: "0" },
+    ],
+    growth: { label: "Visits this week", from: 164, to: 212, unit: "" },
+    people: [
+      { name: "Sara Haddad", role: "Front desk" },
+      { name: "Leo Brandt", role: "Doctor" },
+      { name: "Mina Cho", role: "Nurse" },
+      { name: "Omar Aziz", role: "Practice manager" },
+    ],
+  },
+};
+const BOOKWELL_TEXT = [BOOKWELL.hook.text, BOOKWELL.trio.text, `${BOOKWELL.reveal.name} ${BOOKWELL.reveal.sub}`, `${BOOKWELL.pay.eyebrow} ${BOOKWELL.pay.title}`, `${BOOKWELL.growth.eyebrow} ${BOOKWELL.growth.title}`, BOOKWELL.nomore.a, BOOKWELL.nomore.b, BOOKWELL.cta.tagline].join(" ");
+export function bookwellPlan(): CleanPlan {
+  const { plan, problems } = buildPlan(BOOKWELL, evenWords(BOOKWELL_TEXT));
+  if (!plan) throw new Error(`Bookwell fixture: ${problems.join("; ")}`);
+  return plan;
+}
