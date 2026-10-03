@@ -83,7 +83,6 @@ export async function generateImage({ prompt, format, guardrails = IMAGE_GUARDRA
   if (!image.on) throw new Error("Image generation is turned off on /admin/models.");
   const model = image.model || process.env.FAL_IMAGE_MODEL;
   if (!model) throw new Error("FAL_IMAGE_MODEL is not configured.");
-  const fal = falClient();
 
   const input = buildInput(image.template || process.env.FAL_IMAGE_INPUT_TEMPLATE || '{"prompt":"{{prompt}}"}', {
     prompt: `${prompt.trim().slice(0, 1_000)} ${guardrails}`,
@@ -97,11 +96,17 @@ export async function generateImage({ prompt, format, guardrails = IMAGE_GUARDRA
   if (model.includes("nano-banana") && input.aspect_ratio === undefined && ["16:9", "9:16", "1:1"].includes(format)) {
     input.aspect_ratio = format;
   }
-  const result = await fal.subscribe(model, { input, abortSignal: AbortSignal.timeout(TIMEOUT_MS) });
-
-  const imageUrl = findMediaUrl(result.data, "image");
-  if (!imageUrl) throw new Error("Image model returned no image URL.");
-  return { model, requestId: result.requestId, imageUrl };
+  try {
+    const result = await falRun(model, input, "image");
+    return { model, requestId: result.requestId, imageUrl: result.url };
+  } catch (e) {
+    // A model chosen on /admin/models that fails falls back to the
+    // environment's (not in the admin page's test).
+    const envModel = process.env.FAL_IMAGE_MODEL;
+    if (override || !image.model || !envModel || envModel === model) throw e;
+    console.warn("image model failed; environment model instead:", { model, error: e instanceof Error ? e.message.slice(0, 300) : String(e) });
+    return generateImage({ prompt, format, guardrails }, { model: envModel, template: process.env.FAL_IMAGE_INPUT_TEMPLATE || "" });
+  }
 }
 
 // Model voice for the customer's gender choice. Defaults are ElevenLabs preset
@@ -127,26 +132,48 @@ export async function generateVoice({
 
   const text = script.trim().slice(0, SCRIPT_MAX);
   if (!text) throw new Error("The brief has no script to narrate.");
-
-  const input = buildInput(voice.template || process.env.FAL_VOICE_INPUT_TEMPLATE || '{"text":"{{text}}"}', {
-    text,
-    language,
-    style,
-    gender,
-    voice: voiceForGender(gender, voice),
-  });
-  // fal-ai/elevenlabs/tts/* return per-word timestamps only when asked.
-  if (model.includes("elevenlabs/tts/") && input.timestamps === undefined) input.timestamps = true;
-
-  const fal = falClient();
-  const result = await fal.subscribe(model, { input, abortSignal: AbortSignal.timeout(TIMEOUT_MS) });
-
-  const audioUrl = findMediaUrl(result.data, "audio");
-  if (!audioUrl) throw new Error("Voice model returned no audio URL.");
+  const speak = (m: string, template: string, names: { female?: string; male?: string }) => {
+    const input = buildInput(template || '{"text":"{{text}}"}', { text, language, style, gender, voice: voiceForGender(gender, names) });
+    // fal-ai/elevenlabs/tts/* return per-word timestamps only when asked.
+    if (m.includes("elevenlabs/tts/") && input.timestamps === undefined) input.timestamps = true;
+    return falRun(m, input, "audio");
+  };
+  const envModel = process.env.FAL_VOICE_MODEL;
+  let used = model;
+  let result: Awaited<ReturnType<typeof falRun>>;
+  try {
+    result = await speak(model, voice.template || process.env.FAL_VOICE_INPUT_TEMPLATE || "", voice);
+  } catch (e) {
+    // A model chosen on /admin/models that fails never stops a video: the
+    // environment's voice speaks instead. (The admin page's test has no fallback.)
+    if (override || !voice.model || !envModel || envModel === model) throw e;
+    console.warn("voice model failed; environment voice instead:", { model, error: e instanceof Error ? e.message.slice(0, 300) : String(e) });
+    used = envModel;
+    result = await speak(envModel, process.env.FAL_VOICE_INPUT_TEMPLATE || "", {});
+  }
   const raw = (result.data as Record<string, unknown> | null)?.timestamps;
   const words = parseWordTimings(raw);
   const timestampsSample = !words && raw != null ? JSON.stringify(raw).slice(0, 300) : undefined;
-  return { model, requestId: result.requestId, audioUrl, words, timestampsSample };
+  return { model: used, requestId: result.requestId, audioUrl: result.url, words, timestampsSample };
+}
+
+// One fal call that returns media; errors carry fal's reason (which input
+// field it rejected), not just "Unprocessable Entity".
+async function falRun(model: string, input: Record<string, unknown>, kind: "audio" | "image") {
+  try {
+    const result = await falClient().subscribe(model, { input, abortSignal: AbortSignal.timeout(TIMEOUT_MS) });
+    const url = findMediaUrl(result.data, kind);
+    if (!url) throw new Error(`${model} returned no ${kind} URL. Its answer: ${JSON.stringify(result.data).slice(0, 300)}`);
+    return { data: result.data, requestId: result.requestId, url };
+  } catch (e) {
+    const err = e as { status?: number; body?: { detail?: unknown } | unknown; message?: string };
+    if (!err?.status) throw e;
+    const body = err.body as { detail?: unknown } | undefined;
+    const detail = Array.isArray(body?.detail)
+      ? (body!.detail as { loc?: unknown[]; msg?: string }[]).map((d) => `${(d.loc ?? []).filter((x) => x !== "body").join(".")}: ${d.msg ?? ""}`).join("; ")
+      : JSON.stringify(body?.detail ?? body ?? "");
+    throw new Error(`${model}: ${err.status} ${err.message ?? ""}${detail && detail !== '""' ? ` — ${detail}` : ""}`.slice(0, 600));
+  }
 }
 
 // One sound effect (fal-ai/elevenlabs/sound-effects/v2), for building the
