@@ -54,10 +54,13 @@ function GlowBg({ f, T }: { f: number; T: Moments }) {
 const white = (sz: number, extra = {}) => ({ size: sz, ink: "#effff8", weight: 650, ...extra });
 const pillKey = () => (_: unknown, k: number) => ({ color: "#04261b", padding: "0 0.28em", margin: "0 0.08em", borderRadius: 14, background: `rgba(70,242,176,${0.4 + 0.6 * k})`, boxShadow: `0 0 ${40 * k}px rgba(70,242,176,0.6)` });
 
+// The shot cuts, in shot order (each shot runs from its cut to the next).
+export const glowCuts = (T: Moments) => ({ data: T.data - 4, trio: T.sales - 4, logo: T.flowly - 10, cards: T.into - 6, app: T.when1 - 4, bars: T.when2 - 4, team: T.entire - 6, nomore: T.no1 - 4, slot: T.just - 4, check: T.every2 - 6, end: T.end + 6, dur: T.duration });
+
 export function GlowFilm({ f, b }: { f: number; b: Beats }) {
   const T = b.t;
   const L = b.line;
-  const cut = { data: T.data - 4, trio: T.sales - 4, logo: T.flowly - 10, cards: T.into - 6, app: T.when1 - 4, bars: T.when2 - 4, team: T.entire - 6, nomore: T.no1 - 4, slot: T.just - 4, check: T.every2 - 6, end: T.end + 6, dur: T.duration };
+  const cut = glowCuts(T);
   return (
     <AbsoluteFill style={{ fontFamily: "InterClean, system-ui, sans-serif" }}>
       <GlowBg f={f} T={T} />

@@ -97,6 +97,27 @@ export const CLEAN_RULES: CleanRule[] = [
     fix: "findPhrase joins up to three consecutive voice tokens to match one script word.",
     kept: ["code", "check"],
   },
+  {
+    id: "short-shot",
+    problem: "A shot collapsed to 3 frames when the cuts were computed from the voice's words (film Dusk).",
+    rule: "Never make a shot shorter than 16 frames (its way in plus its way out).",
+    fix: "The films' cuts sit a few frames before the sentence's word; check:clean measures every shot of every film on two scripts.",
+    kept: ["check"],
+  },
+  {
+    id: "bg-flip",
+    problem: "A dark ↔ light background change showed a flat grey frame (slow colour blend), then a flash (3-frame flip) (film Dusk).",
+    rule: "Never blend or flip a dark background into a light one: the light comes in as a soft band rising across the frame.",
+    fix: "DuskBg draws both fields and reveals the light one through a moving gradient mask, linear over 24 frames around the cut.",
+    kept: ["code", "review"],
+  },
+  {
+    id: "frame-jump",
+    problem: "Whole scenes vanished in 3–6 frames and cards popped from nothing (films Glow and Dusk: frame jumps of 62 and 194).",
+    rule: "Never pop a card or icon in from nothing or drop a scene at once: things ease in from slightly smaller, shots blur away over 12+ frames; on the render a frame-to-frame change stays at or under 25.",
+    fix: "appear()/grow() ease-ins (no overshoot), Shot in 16 / out 12 frames (longer for big bright panels); scripts/clean-check/frame-jumps.py measures a render.",
+    kept: ["code", "review"],
+  },
 ];
 
 export const CLEAN_RULE_BY_ID = Object.fromEntries(CLEAN_RULES.map((r) => [r.id, r]));
@@ -111,26 +132,5 @@ export const CLEAN_OPEN: OpenItem[] = [
     problem: "Icons and cards are on screen too briefly: one comes and goes before it can be seen (e.g. the trio slabs, the tokens, the circuit cards, the receipt, the team rows).",
     plan: "Give every card/icon a minimum time fully visible (about 1 s) before its shot leaves; measure it per element on the render; where the sentence is too short, show fewer things or keep them into the next shot instead of cutting them.",
     status: "open",
-  },
-  {
-    id: "short-shot",
-    seen: "Film 2 (Dusk): a shot of 3 frames when cuts were computed from the words",
-    problem: "A shot can collapse to a few frames.",
-    plan: "Rule: no shot shorter than 16 frames (IN + OUT); check:clean checks it.",
-    status: "proposed",
-  },
-  {
-    id: "bg-flip",
-    seen: "Film 2 (Dusk): a grey frame (slow blend) and then a flash (3-frame flip) between dark and light",
-    problem: "Dark ↔ light background changes show a grey frame or flash.",
-    plan: "Rule: a dark ↔ light change is a band of light that rises across the frame (done in Dusk).",
-    status: "proposed",
-  },
-  {
-    id: "frame-jump",
-    seen: "Films 1–2: whole scenes vanished in 3–6 frames, cards popped from nothing (jumps of 62 and 194)",
-    problem: "Cards and icons pop in, scenes vanish at once.",
-    plan: "Rule: things ease in (no pop from nothing), shots blur away over 12+ frames; a render's frame-to-frame jump stays at or under 25.",
-    status: "proposed",
   },
 ];

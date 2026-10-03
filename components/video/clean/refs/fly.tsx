@@ -182,10 +182,13 @@ function camera(f: number, T: Moments) {
   return { x: v(1), y: v(2), s: v(3), rx: v(4), ry: v(5), sy: v(6) };
 }
 
+// The shot cuts, in shot order (each shot runs from its cut to the next).
+export const flyCuts = (T: Moments) => ({ trio: T.sales - 8, reveal: T.flowly - 10, fly: T.when1 - 8, end: T.end + 6, dur: T.duration });
+
 export function FlyFilm({ f, b }: { f: number; b: Beats }) {
   const T = b.t;
   const L = b.line;
-  const cut = { trio: T.sales - 8, reveal: T.flowly - 10, fly: T.when1 - 8, end: T.end + 6, dur: T.duration };
+  const cut = flyCuts(T);
   const c = camera(f, T);
   const headK = (a: number) => rise(f, a, 14);
   return (

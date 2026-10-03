@@ -2,7 +2,7 @@ import { AbsoluteFill } from "remotion";
 import { Icon } from "../../icons";
 import { count, IN_OUT, mix, money, OUT, pop, rise } from "../anim";
 import { Area, at, Check, float, FlowMark, glide, Logo, Person, Pointer, press, Shot, useBrand, W, Words } from "./common";
-import { type Beats, plainW } from "./beats";
+import { type Beats, type Moments, plainW } from "./beats";
 
 // Film 4 — "Connect" (reference: a creator-platform film on soft lavender
 // white): depth-of-field tag pills around a question, a profile-style card
@@ -98,10 +98,13 @@ function Board({ f, title, rows, live }: { f: number; title: string; rows: { n: 
   );
 }
 
+// The shot cuts, in shot order (each shot runs from its cut to the next).
+export const connectCuts = (T: Moments) => ({ tools: T.sales - 8, reveal: T.flowly - 10, wall: T.when1 - 8, live: T.when2 - 8, board: T.no1 - 8, end: T.end + 6, dur: T.duration });
+
 export function ConnectFilm({ f, b }: { f: number; b: Beats }) {
   const T = b.t;
   const L = b.line;
-  const cut = { tools: T.sales - 8, reveal: T.flowly - 10, wall: T.when1 - 8, live: T.when2 - 8, board: T.no1 - 8, end: T.end + 6, dur: T.duration };
+  const cut = connectCuts(T);
   const people = [
     ["A", "Ava Brooks", "Sales lead", "#3b82f6"],
     ["N", "Noah Reed", "Finance", "#10b981"],

@@ -7,6 +7,10 @@ import { shopnestPlan } from "@/components/video/clean/fixtures/sample";
 import { beatsFromPlan } from "@/components/video/clean/refs/beats";
 import { FILM_TEMPLATES } from "@/components/video/clean/refs/catalog";
 import { FILM_IDS } from "@/components/video/clean/refs";
+import { connectCuts } from "@/components/video/clean/refs/connect";
+import { duskCuts } from "@/components/video/clean/refs/dusk";
+import { flyCuts } from "@/components/video/clean/refs/fly";
+import { glowCuts } from "@/components/video/clean/refs/glow";
 import { CLEAN_RULES } from "@/components/video/clean/rules";
 import type { KWord } from "@/components/video/clean/text";
 import { FPS } from "@/components/video/clean/types";
@@ -22,7 +26,7 @@ export async function runChecks(): Promise<Check[]> {
 
   section = "rulebook";
   const ids = CLEAN_RULES.map((r) => r.id);
-  add("12 rules, unique ids", ids.length >= 12 && new Set(ids).size === ids.length, `${ids.length} rules`);
+  add("rules have unique ids", ids.length >= 15 && new Set(ids).size === ids.length, `${ids.length} rules`);
   add("every rule has problem, rule and fix", CLEAN_RULES.every((r) => r.problem && r.rule && r.fix && r.kept.length), CLEAN_RULES.filter((r) => r.kept.includes("review")).map((r) => r.id).join(", ") + " kept by review");
 
   section = "camera-crop";
@@ -87,6 +91,11 @@ export async function runChecks(): Promise<Check[]> {
     const bad = Object.entries(T).filter(([, v]) => !Number.isFinite(v) || v < 0 || v > plan.duration).map(([k]) => k);
     add(`${name}: every moment inside the video`, !bad.length, bad.join(", ") || `${Object.keys(T).length} moments`);
     add(`${name}: three things`, b.trio.length === 3 && b.trio.every((x) => x.label && x.at > 0), b.trio.map((x) => x.label).join(", "));
+    for (const [film, cutsOf] of [["glow", glowCuts], ["dusk", duskCuts], ["fly", flyCuts], ["connect", connectCuts]] as const) {
+      const cuts = Object.entries(cutsOf(T) as Record<string, number>);
+      const short = cuts.slice(1).filter(([, v], k) => v - cuts[k][1] < 16).map(([k, v], i) => `${cuts[i][0]}→${k} ${v - cuts[i][1]}f`);
+      add(`${name}: ${film} shots all ≥ 16 frames (short-shot)`, !short.length, short.join(", ") || `${cuts.length - 1} shots, shortest ${Math.min(...cuts.slice(1).map(([, v], k) => v - cuts[k][1]))} frames`);
+    }
     add(`${name}: big word is not a small word`, !/^(a|an|the|in|on|of|to|for|with|and|or|your|at|by)$/i.test(b.line.hookBig.t), `"${b.line.hookBig.t}"`);
   }
 

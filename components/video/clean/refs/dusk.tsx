@@ -2,7 +2,7 @@ import { AbsoluteFill, interpolate } from "remotion";
 import { Icon } from "../../icons";
 import { count, IN_OUT, mix, money, OUT, rise } from "../anim";
 import { abs, AppWindow, at, Check, float, grow, Kpi, soft, LIGHT_APP, Logo, Person, Pointer, press, Shot, Typed, W, Words } from "./common";
-import { type Beats, keyAt, strikeKey } from "./beats";
+import { type Beats, keyAt, type Moments, strikeKey } from "./beats";
 
 // Film 2 — "Dusk" (reference: a payments-assistant explainer): a near-black
 // plum field lit purple from below, typed words with a caret, blurred UI
@@ -58,10 +58,13 @@ function Sheet({ x, y, w, h, r, blur, f, kind }: { x: number; y: number; w: numb
   );
 }
 
+// The shot cuts, in shot order (each shot runs from its cut to the next).
+export const duskCuts = (T: Moments) => ({ carousel: T.sales - 4, logo: T.flowly - 10, button: T.into - 6, app: T.dashboard - 4, scan: T.when1 - 4, star: T.when2 - 4, dash: T.grow - 2, team: T.change - 6, nomore: T.no1 - 4, approved: T.no2 - 4, save: T.just - 4, control: T.every2 - 6, end: T.end + 6, dur: T.duration });
+
 export function DuskFilm({ f, b }: { f: number; b: Beats }) {
   const T = b.t;
   const L = b.line;
-  const cut = { carousel: T.sales - 4, logo: T.flowly - 10, button: T.into - 6, app: T.dashboard - 4, scan: T.when1 - 4, star: T.when2 - 4, dash: T.grow - 2, team: T.change - 6, nomore: T.no1 - 4, approved: T.no2 - 4, save: T.just - 4, control: T.every2 - 6, end: T.end + 6, dur: T.duration };
+  const cut = duskCuts(T);
   const dark = "#f4f0ff";
   const ink = "#16121f";
   const bg = { light: cut.star, dark: cut.nomore, light2: cut.save };
