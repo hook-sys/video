@@ -35,7 +35,8 @@ function fillOf(box: Box, pal: Pal): CSSProperties {
   return { background: pal.panel, boxShadow: pal.dark ? "0 50px 120px rgba(0,0,0,0.45)" : "0 40px 100px rgba(40,40,110,0.16)" };
 }
 function Morph({ f, at: t, a, z, pa, pz }: { f: number; at: number; a: Box; z: Box; pa: Pal; pz: Pal }) {
-  const show = rise(f, t - 16, 4) * (1 - rise(f, t + 10, 8));
+  // it holds on the new object while the field opens out of it (t + 12)
+  const show = rise(f, t - 16, 4) * (1 - rise(f, t + 16, 10));
   if (show <= 0) return null;
   const m = rise(f, t - 12, 24, IN_OUT);
   const x = mix(a.x, z.x, m), y = mix(a.y, z.y, m), w = mix(a.w, z.w, m), h = mix(a.h, z.h, m), r = mix(a.r, z.r, m);
@@ -77,7 +78,7 @@ export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio }: St
           // white panels on a dark field change a lot of light: a longer exit, and a
           // slower entrance where the field turns dark ↔ light
           return (
-            <Shot key={p.role} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && look.mode(parts[i - 1].role) !== look.mode(p.role) ? 28 : 18} outDur={outHand ? 12 : c.pal.dark ? 20 : 14} cam={cam(look.camera)}>
+            <Shot key={p.role} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && look.mode(parts[i - 1].role) !== look.mode(p.role) ? 28 : 18} outDur={outHand ? 12 : c.pal.dark || c.pal.panelDark ? 20 : 14} cam={cam(look.camera)}>
               {block.draw(c)}
             </Shot>
           );
