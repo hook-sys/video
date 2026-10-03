@@ -238,7 +238,7 @@ function wipeEnd(c: BlockCtx) {
           <span style={{ clipPath: `inset(0 ${(1 - run) * 100}% 0 0)`, display: "inline-block" }}>{b.brand.tagline}</span>
           <span style={{ position: "absolute", top: 0, bottom: 0, left: `${run * 100}%`, width: 120, marginLeft: -60, background: `linear-gradient(90deg, transparent, ${pal.accent2}, transparent)`, opacity: run < 1 ? 1 : 0 }} />
         </div>
-      ), { opacity: soft(f, t + 18, 10) })}
+      ), { opacity: soft(f, t, 10) })}
       {at(W / 2, 750, <div style={{ fontSize: 30, color: pal.accent2 }}>{b.brand.url}</div>, { opacity: soft(f, t + 40, 14) })}
     </>
   );
@@ -691,7 +691,7 @@ export const R3: Block[] = [
   { id: "pay.query", role: "pay", name: "Tilted search → bars face camera", from: "Kitaabh", draw: query, obj: () => ({ z: box(960, 600, 1100, 460, 30, "card") }) },
   { id: "pay.route", role: "pay", name: "Coin runs, line branches, ticks", from: "Assembly", draw: route },
   { id: "pay.live", role: "pay", name: "Phone counts, LIVE pops", from: "FSS", draw: live, obj: () => ({ a: box(1180, 560, 460, 860, 64, "dark"), z: box(1180, 560, 460, 860, 64, "dark") }) },
-  { id: "growth.donut", role: "growth", name: "Ring chart with labels", from: "Kitaabh", draw: donut, obj: () => ({ a: box(960, 590, 520, 520, 260, "accent") }) },
+  { id: "growth.donut", role: "growth", name: "Ring chart with labels", from: "Kitaabh", draw: donut, obj: () => ({ a: box(960, 590, 520, 520, 260, "glass") }) },
   { id: "growth.city", role: "growth", name: "Buildings rise", from: "Assembly", draw: city },
   { id: "growth.bignum", role: "growth", name: "Huge figure, shards burst", from: "FSS", draw: bignum },
   { id: "nomore.reconcile", role: "nomore", name: "Missing → Matched", from: "Kitaabh", draw: reconcile, obj: () => ({ a: box(960, 600, 1300, 520, 30, "white"), z: box(960, 600, 1300, 520, 30, "white") }) },
@@ -700,6 +700,6 @@ export const R3: Block[] = [
   { id: "cta.checkout", role: "cta", name: "Checkout card, red sweep, Done", from: "FSS", draw: checkout, obj: () => ({ a: box(960, 600, 900, 470, 40, "dark"), z: box(960, 600, 900, 470, 40, "accent") }) },
   { id: "cta.atom", role: "cta", name: "Mark in a sphere with orbits", from: "FSS", draw: atom, obj: () => ({ a: box(960, 540, 240, 240, 120, "accent"), z: box(960, 540, 240, 240, 120, "accent") }) },
   { id: "end.wipe", role: "end", name: "Name from behind the mark, light runs", from: "Kitaabh", draw: wipeEnd, obj: () => ({ a: box(960, 640, 700, 80, 40, "glass") }) },
-  { id: "end.urlbar", role: "end", name: "Mark box, address in a bar", from: "Assembly", draw: urlbar, obj: () => ({ a: box(960, 380, 210, 210, 18, "card") }) },
+  { id: "end.urlbar", role: "end", name: "Mark box, address in a bar", from: "Assembly", draw: urlbar, obj: () => ({ a: box(960, 380, 210, 210, 18, "glass") }) },
   { id: "end.glossy", role: "end", name: "Mark in a glossy sphere", from: "FSS", draw: glossy, obj: () => ({ a: box(960, 360, 230, 230, 115, "accent") }) },
 ];

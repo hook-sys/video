@@ -15,7 +15,8 @@ export { partCuts };
 
 // A studio video: one look and one block per part, on the voice's moments.
 export type Recipe = { look: LookId; blocks: Partial<Record<Role, string>>; hue?: number };
-export type StudioProps = { plan: CleanPlan; recipe: Recipe; postHue?: number; audioUrl?: string | null; webAudio?: boolean };
+// `bare`: the background alone (checks measure what stands on it).
+export type StudioProps = { plan: CleanPlan; recipe: Recipe; postHue?: number; audioUrl?: string | null; webAudio?: boolean; bare?: boolean };
 
 const ENTER: Record<LookId, Enter> = { glow: "zoom", dusk: "blur", fly: "push", connect: "rise", ember: "blur", paper: "slide", pastel: "blur", warm: "blur", violet: "zoom", azure: "push", night: "push", line: "slide", crimson: "blur" };
 function cam(kind: Camera) {
@@ -37,20 +38,22 @@ function fillOf(box: Box, pal: Pal): CSSProperties {
 }
 function Morph({ f, at: t, a, z, pa, pz }: { f: number; at: number; a: Box; z: Box; pa: Pal; pz: Pal }) {
   // it holds on the new object while the field opens out of it (t + 12)
-  const show = rise(f, t - 12, 8) * (1 - rise(f, t + 16, 12));
+  // under both parts' content: it stands in for the object only while the
+  // one has gone and the other is still coming, never over either
+  const show = rise(f, t - 10, 4) * (1 - rise(f, t + 10, 8));
   if (show <= 0) return null;
-  const m = rise(f, t - 8, 22, IN_OUT);
+  const m = rise(f, t - 8, 16, IN_OUT);
   const x = mix(a.x, z.x, m), y = mix(a.y, z.y, m), w = mix(a.w, z.w, m), h = mix(a.h, z.h, m), r = mix(a.r, z.r, m);
   const geo: CSSProperties = { position: "absolute", left: x - w / 2, top: y - h / 2, width: w, height: h, borderRadius: r };
   return (
-    <AbsoluteFill style={{ opacity: show, zIndex: 40 }}>
+    <AbsoluteFill style={{ opacity: show }}>
       <div style={{ ...geo, ...fillOf(a, pa), opacity: 1 - m }} />
       <div style={{ ...geo, ...fillOf(z, pz), opacity: m }} />
     </AbsoluteFill>
   );
 }
 
-export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio }: StudioProps) {
+export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio, bare }: StudioProps) {
   useCleanFont();
   const f = useCurrentFrame();
   const b = beatsFromPlan(plan);
@@ -70,21 +73,22 @@ export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio }: St
     <BrandCtx.Provider value={brand}>
       <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: "InterClean, system-ui, sans-serif", filter: hue ? `hue-rotate(${hue}deg)` : undefined }}>
         <Backdrop f={f} look={look} parts={parts} origins={hands.map((h) => (h ? { x: h.z.x, y: h.z.y, w: h.z.w, h: h.z.h, r: h.z.r } : null))} />
+        {!bare && hands.map((h, i) => h && <Morph key={i} f={f} at={parts[i].from} a={h.a} z={h.z} pa={shots[i - 1].c.pal} pz={shots[i].c.pal} />)}
         {parts.map((p, i) => {
           const { block, c } = shots[i];
-          if (!block) return null;
+          if (!block || bare) return null;
           // an object that becomes the next one: the words fade around it
           const inHand = !!hands[i];
           const outHand = !!hands[i + 1];
           // white panels on a dark field change a lot of light: a longer exit, and a
-          // slower entrance where the field turns dark ↔ light
+          // slower entrance where the field turns dark ↔ light; every part
+          // leaves after the next has begun to come in (no empty frame)
           return (
-            <Shot key={p.role} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && look.mode(parts[i - 1].role) !== look.mode(p.role) ? 28 : 18} outDur={outHand ? 12 : c.pal.dark || c.pal.panelDark ? 20 : 14} cam={cam(look.camera)}>
+            <Shot key={p.role} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && look.mode(parts[i - 1].role) !== look.mode(p.role) ? 28 : 18} outDur={outHand ? 12 : c.pal.dark || c.pal.panelDark ? 20 : 14} tail={outHand ? 4 : 10} cam={cam(look.camera)}>
               {block.draw(c)}
             </Shot>
           );
         })}
-        {hands.map((h, i) => h && <Morph key={i} f={f} at={parts[i].from} a={h.a} z={h.z} pa={shots[i - 1].c.pal} pz={shots[i].c.pal} />)}
       </AbsoluteFill>
       {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
     </BrandCtx.Provider>

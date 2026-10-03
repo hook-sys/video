@@ -22,10 +22,13 @@ export const OUTF = 12;
 export type Enter = "blur" | "zoom" | "push" | "slide" | "rise" | "fade" | "none";
 // `inDur` / `outDur` lengthen the way in / out (big bright panels on a dark
 // field need longer, so the frame never flashes).
-export function Shot({ f, from, to, enter = "blur", exit = "blur", cam, last, children, style, inDur = IN, outDur = OUTF }: { f: number; from: number; to: number; enter?: Enter; exit?: Enter; cam?: (p: number, f: number) => string; last?: boolean; children: ReactNode; style?: CSSProperties; inDur?: number; outDur?: number }) {
-  if (f < from - 2 || f > to) return null;
+// `tail`: frames the shot lingers past `to` while it leaves, so it crosses
+// the next one instead of leaving an empty frame between them.
+export function Shot({ f, from, to, enter = "blur", exit = "blur", cam, last, children, style, inDur = IN, outDur = OUTF, tail = 0 }: { f: number; from: number; to: number; enter?: Enter; exit?: Enter; cam?: (p: number, f: number) => string; last?: boolean; children: ReactNode; style?: CSSProperties; inDur?: number; outDur?: number; tail?: number }) {
+  const end = last ? to : to + tail;
+  if (f < from - 2 || f > end) return null;
   const kin = enter === "none" ? 1 : rise(f, from - 2, inDur, IN_OUT);
-  const kout = last || exit === "none" ? 0 : rise(f, to - outDur, outDur, IN_OUT);
+  const kout = last || exit === "none" ? 0 : rise(f, end - outDur, outDur, IN_OUT);
   const p = IN_OUT(Math.min(1, Math.max(0, (f - from) / Math.max(1, to - from))));
   const fx: Record<Enter, (k: number, out: boolean) => { t: string; filter?: string; o: number }> = {
     blur: (k, out) => ({ t: `scale(${out ? mix(1.06, 1, k) : mix(0.97, 1, k)})`, filter: `blur(${(1 - k) * 18}px)`, o: k }),

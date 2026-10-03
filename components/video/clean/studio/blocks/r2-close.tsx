@@ -529,12 +529,13 @@ function pen(c: BlockCtx) {
             fontSize: 40,
             fontWeight: 650,
             boxShadow: `0 24px 60px ${pal.accent}66`,
-            transform: `scale(${grow(f, t + 18, 14) * (1 - p * 0.08)})`,
+            transform: `scale(${grow(f, t, 14) * (1 - p * 0.08)})`,
           }}
         >
           {b.brand.cta}
         </div>,
-        { opacity: soft(f, t + 18, 12) },
+        // there from the start: it is what the last part hands over
+        { opacity: soft(f, t, 12) },
       )}
       {at(W / 2, 790, <div style={{ fontSize: 34, color: pal.sub }}>{b.brand.url}</div>, { opacity: soft(f, t + 26, 14) })}
       <Pointer x={px} y={py} press={p} hand />
@@ -599,5 +600,5 @@ export const R2_CLOSE: Block[] = [
   { id: "cta.store", role: "cta", name: "App-store card, Get → Open", from: "Converse", draw: store, obj: () => ({ a: card$(960, 600, 1240, 370, 44, "glass"), z: card$(960, 600, 1240, 370, 44, "glass") }) },
   { id: "cta.rings", role: "cta", name: "Mark in rings, ticks", from: "UrVote", draw: rings, obj: () => ({ a: card$(960, 540, 280, 280, 140, "accent"), z: card$(960, 540, 280, 280, 140, "accent") }) },
   { id: "end.pen", role: "end", name: "Pen name + tapped pill", from: "Alex", draw: pen, obj: () => ({ a: card$(960, 660, 330, 100, 50, "accent") }) },
-  { id: "end.outline", role: "end", name: "Outline fills, two-tone name", from: "Converse", draw: outline, obj: () => ({ a: card$(960, 380, 230, 230, 60, "accent") }) },
+  { id: "end.outline", role: "end", name: "Outline fills, two-tone name", from: "Converse", draw: outline, obj: () => ({ a: card$(960, 380, 230, 230, 60, "glass") }) },
 ];
