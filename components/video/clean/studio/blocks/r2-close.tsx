@@ -591,7 +591,7 @@ function outline(c: BlockCtx) {
 const card$ = (x: number, y: number, w: number, h: number, r: number, fill: Box["fill"] = "card"): Box => ({ x, y, w, h, r, fill });
 
 export const R2_CLOSE: Block[] = [
-  { id: "growth.monitor", role: "growth", name: "Desktop + floating figures", from: "Alex", draw: monitor, obj: () => ({ a: card$(960, 546, 1060, 620, 34, "dark"), z: card$(960, 546, 1060, 620, 34, "dark") }) },
+  { id: "growth.monitor", role: "growth", name: "Desktop + floating figures", from: "Alex", draw: monitor, obj: () => ({ a: card$(960, 546, 1016, 576, 14), z: card$(960, 546, 1016, 576, 14) }) },
   { id: "growth.analytics", role: "growth", name: "Figures + bar chart", from: "Alex", draw: analytics, obj: () => ({ a: card$(960, 590, 1300, 620, 36), z: card$(960, 590, 1300, 620, 36) }) },
   { id: "nomore.pills", role: "nomore", name: '"No more" pills + icons', from: "UrVote", draw: pills },
   { id: "nomore.clear", role: "nomore", name: "Alerts cleared", from: "Alex", draw: clear, obj: () => ({ a: card$(960, 620, 760, 620, 36), z: card$(960, 620, 760, 620, 36) }) },

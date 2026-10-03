@@ -36,7 +36,7 @@ function fillOf(box: Box, pal: Pal): CSSProperties {
 }
 function Morph({ f, at: t, a, z, pa, pz }: { f: number; at: number; a: Box; z: Box; pa: Pal; pz: Pal }) {
   // it holds on the new object while the field opens out of it (t + 12)
-  const show = rise(f, t - 16, 4) * (1 - rise(f, t + 16, 10));
+  const show = rise(f, t - 18, 8) * (1 - rise(f, t + 16, 12));
   if (show <= 0) return null;
   const m = rise(f, t - 12, 24, IN_OUT);
   const x = mix(a.x, z.x, m), y = mix(a.y, z.y, m), w = mix(a.w, z.w, m), h = mix(a.h, z.h, m), r = mix(a.r, z.r, m);
