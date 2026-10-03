@@ -694,7 +694,7 @@ export const R3: Block[] = [
   { id: "growth.donut", role: "growth", name: "Ring chart with labels", from: "Kitaabh", draw: donut, obj: () => ({ a: box(960, 590, 520, 520, 260, "accent") }) },
   { id: "growth.city", role: "growth", name: "Buildings rise", from: "Assembly", draw: city },
   { id: "growth.bignum", role: "growth", name: "Huge figure, shards burst", from: "FSS", draw: bignum },
-  { id: "nomore.reconcile", role: "nomore", name: "Missing → Matched", from: "Kitaabh", draw: reconcile, obj: () => ({ a: box(960, 600, 1300, 520, 30, "card"), z: box(960, 600, 1300, 520, 30, "card") }) },
+  { id: "nomore.reconcile", role: "nomore", name: "Missing → Matched", from: "Kitaabh", draw: reconcile, obj: () => ({ a: box(960, 600, 1300, 520, 30, "white"), z: box(960, 600, 1300, 520, 30, "white") }) },
   { id: "nomore.stopwatch", role: "nomore", name: "Stopwatch sweeps", from: "Assembly", draw: stopwatch, obj: () => ({ a: box(620, 560, 380, 380, 190, "accent"), z: box(620, 560, 380, 380, 190, "accent") }) },
   { id: "nomore.flood", role: "nomore", name: "Warnings flood, one tick stays", from: "FSS", draw: flood, obj: () => ({ z: box(960, 580, 640, 190, 30, "card") }) },
   { id: "cta.checkout", role: "cta", name: "Checkout card, red sweep, Done", from: "FSS", draw: checkout, obj: () => ({ a: box(960, 600, 900, 470, 40, "dark"), z: box(960, 600, 900, 470, 40, "accent") }) },

@@ -11,7 +11,7 @@ export type BlockCtx = { f: number; from: number; to: number; role: Role; look: 
 // A block's main object (centre, size, corner radius, how it is filled):
 // where it stands when the part opens (`a`) and when it closes (`z`). Between
 // two parts the one becomes the other (film.tsx) instead of a cut.
-export type Box = { x: number; y: number; w: number; h: number; r: number; fill: "card" | "accent" | "glass" | "dark" };
+export type Box = { x: number; y: number; w: number; h: number; r: number; fill: "card" | "accent" | "glass" | "dark" | "white" };
 export const box = (x: number, y: number, w: number, h: number, r: number, fill: Box["fill"] = "card"): Box => ({ x, y, w, h, r, fill });
 export type Block = {
   id: string;

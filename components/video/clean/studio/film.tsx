@@ -31,6 +31,7 @@ function cam(kind: Camera) {
 function fillOf(box: Box, pal: Pal): CSSProperties {
   if (box.fill === "accent") return { background: `linear-gradient(140deg, ${pal.panelAccent ?? pal.accent}, ${pal.panelAccent ? "#8b78ff" : pal.accent2})`, boxShadow: `0 24px 60px ${pal.panelAccent ?? pal.accent}55` };
   if (box.fill === "glass") return { background: pal.dark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.62)", border: `1.5px solid ${pal.dark ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.95)"}`, boxShadow: pal.dark ? "0 30px 80px rgba(0,0,0,0.35)" : "0 30px 80px rgba(60,70,140,0.14)" };
+  if (box.fill === "white") return { background: "#f6f8ff", boxShadow: "0 40px 100px rgba(0,0,0,0.35)" };
   if (box.fill === "dark") return { background: "#111318", boxShadow: "0 60px 140px rgba(20,30,80,0.30)" };
   return { background: pal.panel, boxShadow: pal.dark ? "0 50px 120px rgba(0,0,0,0.45)" : "0 40px 100px rgba(40,40,110,0.16)" };
 }
