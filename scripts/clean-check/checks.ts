@@ -20,7 +20,7 @@ import { cleanVariants, FILM_HUE, hueOf } from "@/lib/clean-variants";
 import { buildPlan } from "@/components/video/clean/plan";
 import { DEFAULT_CONTENT } from "@/components/video/clean/content";
 import { BLOCKS } from "@/components/video/clean/studio/blocks";
-import { BLOCK_IDS, LOOK_IDS as STUDIO_LOOK_IDS, ROLES } from "@/components/video/clean/studio/ids";
+import { BLOCK_IDS, BLOCK_TAGS, LOOK_IDS as STUDIO_LOOK_IDS, LOOK_TAGS, ROLES } from "@/components/video/clean/studio/ids";
 import { LOOKS } from "@/components/video/clean/studio/looks";
 import { type StudioRecipe, studioVariants, toRecipe, tooClose } from "@/lib/studio-variants";
 import { ProductBrief } from "@/lib/ai/product-brief";
@@ -209,6 +209,8 @@ export async function runChecks(): Promise<Check[]> {
 
   section = "studio variation engine";
   add("the id list matches the drawn blocks and looks", JSON.stringify(ROLES.flatMap((r) => BLOCK_IDS[r])) === JSON.stringify(BLOCKS.map((b) => b.id)) && JSON.stringify([...STUDIO_LOOK_IDS]) === JSON.stringify(Object.keys(LOOKS)), `${BLOCKS.length} blocks, ${Object.keys(LOOKS).length} looks`);
+  const allIds = new Set(ROLES.flatMap((r) => BLOCK_IDS[r]));
+  add("every category tag names a real block or look", Object.keys(BLOCK_TAGS).every((id) => allIds.has(id)) && Object.keys(LOOK_TAGS).every((l) => (STUDIO_LOOK_IDS as readonly string[]).includes(l)), `${Object.keys(BLOCK_TAGS).length} blocks, ${Object.keys(LOOK_TAGS).length} looks tagged`);
   const valid = (v: StudioRecipe) => STUDIO_LOOK_IDS.includes(v.look) && ROLES.every((r) => BLOCK_IDS[r].includes(v.blocks[r]));
   const sets: StudioRecipe[][] = [];
   for (let g = 0; g < 6; g++) sets.push(studioVariants(4321, sets));

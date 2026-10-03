@@ -16,7 +16,7 @@ export { partCuts };
 export type Recipe = { look: LookId; blocks: Partial<Record<Role, string>>; hue?: number };
 export type StudioProps = { plan: CleanPlan; recipe: Recipe; postHue?: number; audioUrl?: string | null; webAudio?: boolean };
 
-const ENTER: Record<LookId, Enter> = { glow: "zoom", dusk: "blur", fly: "push", connect: "rise", ember: "blur", paper: "slide" };
+const ENTER: Record<LookId, Enter> = { glow: "zoom", dusk: "blur", fly: "push", connect: "rise", ember: "blur", paper: "slide", pastel: "blur", warm: "blur", violet: "zoom", azure: "push" };
 function cam(kind: Camera) {
   return (p: number, f: number) => {
     if (kind === "push") return `${float(f)} scale(${mix(0.97, 1.05, p)})`;

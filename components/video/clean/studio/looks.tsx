@@ -23,6 +23,8 @@ export type Pal = {
   panelSub: string;
   line: string; // hairlines on cards
   glass: string; // frosted-pill tint
+  panelDark?: boolean; // the product's cards are dark (Warm)
+  panelAccent?: string; // the accent on cards when `accent` is for the field (Violet's violet part)
 };
 
 export type KeyStyle = "pill" | "color" | "underline" | "gradient";
@@ -38,6 +40,9 @@ export type Look = {
   camera: Camera;
   // the field behind a part: drawn for dark and light; `i` is the part's index
   field: (f: number, mode: Mode, i: number) => ReactNode;
+  // how the field changes between dark and light: a rising band, or a circle
+  // that grows from an edge (Violet)
+  wipe?: "band" | "circle";
 };
 
 const glowPal: Pal = { dark: true, ink: "#effff8", sub: "#bff5df", accent: "#14b889", accent2: "#46f2b0", glow: "#46f2b0", panel: "#ffffff", panelInk: "#0d2a21", panelSub: "#5c7a6f", line: "#e2efe9", glass: "#bfffe6" };
@@ -148,6 +153,93 @@ function paperField(f: number, i: number) {
   );
 }
 
+// ── from the second set of references ─────────────────────────────────────
+const pastelLight: Pal = { dark: false, ink: "#1b2233", sub: "#6b7388", accent: "#1d3f94", accent2: "#e2583e", glow: "#4f7ff0", panel: "#ffffff", panelInk: "#1b2233", panelSub: "#7d8599", line: "#eceff6", glass: "#ffffff" };
+const pastelDark: Pal = { dark: true, ink: "#eef3ff", sub: "#9aa8c9", accent: "#5b8dff", accent2: "#a9c4ff", glow: "#6aa0ff", panel: "#ffffff", panelInk: "#141a2b", panelSub: "#7d8599", line: "#eceff6", glass: "#b8ccff" };
+const warmPal: Pal = { dark: false, ink: "#1d1512", sub: "#7a6b63", accent: "#f0532c", accent2: "#ff9a5a", glow: "#ff6a3d", panel: "#1b1716", panelInk: "#f6eee9", panelSub: "#a3928a", line: "#2f2826", glass: "#ffffff", panelDark: true };
+const violetLight: Pal = { dark: false, ink: "#1b1736", sub: "#6e6a85", accent: "#5a3ff0", accent2: "#8b78ff", glow: "#5a3ff0", panel: "#ffffff", panelInk: "#1b1736", panelSub: "#85829a", line: "#ececf3", glass: "#ffffff" };
+const violetDark: Pal = { dark: true, ink: "#ffffff", sub: "#ddd6ff", accent: "#ffffff", accent2: "#cfc6ff", glow: "#ffffff", panel: "#ffffff", panelInk: "#1b1736", panelSub: "#85829a", line: "#ececf3", glass: "#ffffff", panelAccent: "#5a3ff0" };
+const azureLight: Pal = { dark: false, ink: "#0f1530", sub: "#66708f", accent: "#3a64f0", accent2: "#9a5cf6", glow: "#4f7dff", panel: "#ffffff", panelInk: "#0f1530", panelSub: "#7a83a0", line: "#e9ecf5", glass: "#ffffff" };
+const azureDark: Pal = { dark: true, ink: "#f2f5ff", sub: "#a9b4d6", accent: "#6f8dff", accent2: "#b98cff", glow: "#7f9cff", panel: "#ffffff", panelInk: "#0f1530", panelSub: "#7a83a0", line: "#e9ecf5", glass: "#c3cfff" };
+
+// Pastel (Converse): white with blue and peach light in the corners, which
+// move part by part; a near-black part lit by curved blue light.
+const PASTEL = [[-200, 600, 1300, 300], [1200, 500, -300, -200], [900, -300, -100, 600], [-300, -200, 1300, 600]];
+function pastelField(f: number, mode: Mode, i: number) {
+  if (mode === "dark")
+    return (
+      <AbsoluteFill style={{ background: "#04060d", overflow: "hidden" }}>
+        <svg width={W} height={1080} style={{ position: "absolute", left: 0, top: 0, filter: "blur(2px)" }}>
+          {[0, 1, 2].map((k) => (
+            <path key={k} d={`M ${-200 + k * 60} ${1200 - k * 40} C ${500 + Math.sin(f / 50 + k) * 80} ${700 - k * 90}, ${700 + k * 40} ${200 + k * 60}, ${2100} ${-100 + k * 120}`} stroke={["#2f6bff", "#7aa6ff", "#1b3fd1"][k]} strokeWidth={[10, 3, 22][k]} fill="none" opacity={[0.9, 0.7, 0.35][k]} />
+          ))}
+        </svg>
+        <div style={{ position: "absolute", left: -200, top: 500, width: 1400, height: 900, filter: "blur(40px)" }}><Radial stops={[["rgba(47,107,255,0.35)", 0], ["transparent", 0.6]]} /></div>
+      </AbsoluteFill>
+    );
+  const [bx, by, px, py] = PASTEL[i % PASTEL.length];
+  return (
+    <AbsoluteFill style={{ background: "#f5f6fa", overflow: "hidden" }}>
+      {blob(bx + Math.sin(f / 80) * 120, by + Math.cos(f / 90) * 60, 1500, "rgba(110,150,255,0.45)", 50)}
+      {blob(px + Math.cos(f / 70) * 120, py + Math.sin(f / 85) * 60, 1300, "rgba(255,170,140,0.38)", 50)}
+      {blob(700 + Math.sin(f / 100) * 200, 300, 900, "rgba(255,255,255,0.8)", 30)}
+    </AbsoluteFill>
+  );
+}
+
+// Warm (UrVote): bright white with soft orange light drifting at the edges.
+const WARM = Array.from({ length: 6 }, (_, k) => ({ x: [-200, 1400, 300, 1500, -100, 900][k], y: [-200, -150, 700, 600, 350, 850][k], s: [900, 800, 700, 900, 600, 700][k] }));
+function warmField(f: number, i: number) {
+  return (
+    <AbsoluteFill style={{ background: "#fffaf7", overflow: "hidden" }}>
+      {WARM.map((b, k) => <div key={k}>{blob(b.x + Math.sin(f / (60 + k * 9) + i + k) * 140, b.y + Math.cos(f / (70 + k * 7) + k) * 80, b.s, `rgba(255,${130 + k * 12},${80 + k * 10},${0.32 - k * 0.025})`, 60)}</div>)}
+    </AbsoluteFill>
+  );
+}
+
+// Violet (Madison): flat light grey with violet half-circles at the edges,
+// a different pair each part; its dark mode is the violet itself.
+const DISCS = [[-260, 760, 1720, -200], [1660, 640, -320, -300], [-300, -260, 1700, 760], [1600, -280, -260, 700]];
+function violetField(f: number, mode: Mode, i: number) {
+  const [ax, ay, bx2, by2] = DISCS[i % DISCS.length];
+  const disc = (x: number, y: number, d: number, c: string) => <div style={{ position: "absolute", left: x, top: y, width: d, height: d, borderRadius: 9999, background: c }} />;
+  if (mode === "dark")
+    return (
+      <AbsoluteFill style={{ background: "#5a3ff0", overflow: "hidden" }}>
+        {disc(ax + Math.sin(f / 70) * 30, ay, 620, "#6a52f5")}
+        {disc(bx2, by2 + Math.cos(f / 80) * 30, 540, "#4e34e0")}
+      </AbsoluteFill>
+    );
+  return (
+    <AbsoluteFill style={{ background: "#f3f3f7", overflow: "hidden" }}>
+      {disc(ax + Math.sin(f / 70) * 30, ay, 560, "#5a3ff0")}
+      {disc(bx2, by2 + Math.cos(f / 80) * 30, 460, "#5a3ff0")}
+    </AbsoluteFill>
+  );
+}
+
+// Azure (Alex): white with blue and violet light rising from the corners;
+// its dark parts are deep night blue with a glow from below.
+function azureField(f: number, mode: Mode, i: number) {
+  if (mode === "dark")
+    return (
+      <AbsoluteFill style={{ background: "#03040b", overflow: "hidden" }}>
+        <div style={{ position: "absolute", left: -200 + Math.sin(f / 70) * 120, top: 520, width: 2300, height: 1100, filter: "blur(30px)" }}><Radial at={[50, 60]} stops={[["rgba(58,100,240,0.85)", 0], ["rgba(120,70,240,0.35)", 0.35], ["transparent", 0.62]]} /></div>
+        {Array.from({ length: 12 }, (_, k) => (
+          <div key={k} style={{ position: "absolute", left: 120 + k * 150, bottom: 0, width: 40, height: 260 + 180 * Math.abs(Math.sin(f / 18 + k * 0.9)), borderRadius: 30, background: "linear-gradient(180deg, rgba(120,150,255,0), rgba(120,150,255,0.16))" }} />
+        ))}
+      </AbsoluteFill>
+    );
+  const right = i % 2 === 0;
+  return (
+    <AbsoluteFill style={{ background: "#fbfcff", overflow: "hidden" }}>
+      {blob((right ? 1100 : -500) + Math.sin(f / 80) * 100, 520 + Math.cos(f / 90) * 50, 1500, "rgba(70,110,255,0.42)", 50)}
+      {blob((right ? 1300 : -300) + Math.cos(f / 70) * 100, 700, 1100, "rgba(160,90,250,0.32)", 50)}
+      {blob((right ? -400 : 1300), -400, 1000, "rgba(120,160,255,0.18)", 50)}
+    </AbsoluteFill>
+  );
+}
+
 const always = (m: Mode) => () => m;
 export const LOOKS: Record<LookId, Look> = {
   glow: { id: "glow", name: "Glow", mode: always("dark"), pal: { dark: glowPal, light: glowPal }, key: "pill", camera: "push", field: (f, _m, i) => glowField(f, i) },
@@ -156,6 +248,10 @@ export const LOOKS: Record<LookId, Look> = {
   connect: { id: "connect", name: "Connect", mode: always("light"), pal: { dark: connectPal, light: connectPal }, key: "color", camera: "float", field: (f) => connectField(f) },
   ember: { id: "ember", name: "Ember", mode: always("dark"), pal: { dark: emberPal, light: emberPal }, key: "gradient", camera: "drift", field: (f, _m, i) => emberField(f, i) },
   paper: { id: "paper", name: "Paper", mode: always("light"), pal: { dark: paperPal, light: paperPal }, key: "underline", camera: "push", field: (f, _m, i) => paperField(f, i) },
+  pastel: { id: "pastel", name: "Pastel", mode: (r) => (r === "nomore" ? "dark" : "light"), pal: { dark: pastelDark, light: pastelLight }, key: "color", camera: "drift", field: pastelField },
+  warm: { id: "warm", name: "Warm", mode: always("light"), pal: { dark: warmPal, light: warmPal }, key: "pill", camera: "push", field: (f, _m, i) => warmField(f, i) },
+  violet: { id: "violet", name: "Violet", mode: (r) => (r === "reveal" || r === "growth" ? "dark" : "light"), pal: { dark: violetDark, light: violetLight }, key: "color", camera: "float", field: violetField, wipe: "circle" },
+  azure: { id: "azure", name: "Azure", mode: (r) => (r === "reveal" || r === "pay" ? "dark" : "light"), pal: { dark: azureDark, light: azureLight }, key: "gradient", camera: "tilt", field: azureField },
 };
 export const LOOK_IDS = Object.keys(LOOKS) as LookId[];
 
@@ -168,10 +264,14 @@ export function Backdrop({ f, look, parts }: { f: number; look: Look; parts: { r
   const k = cur === prev ? 1 : interpolate(f, [parts[i].from - 16, parts[i].from + 20], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const y = k * 1400 - 320;
   const mask = `linear-gradient(to top, #000 ${y}px, transparent ${y + 320}px)`;
+  // a circle grows from the left or right edge (alternating), eased
+  const ck = k * k * (3 - 2 * k);
+  const clip = `circle(${Math.round(ck * 2300)}px at ${i % 2 ? 1920 : 0}px 540px)`;
+  const wipe = k < 1 ? (look.wipe === "circle" ? { clipPath: clip, WebkitClipPath: clip } : { maskImage: mask, WebkitMaskImage: mask }) : undefined;
   return (
     <AbsoluteFill>
       {k < 1 && <AbsoluteFill>{look.field(f, prev, Math.max(0, i - 1))}</AbsoluteFill>}
-      <AbsoluteFill style={k < 1 ? { maskImage: mask, WebkitMaskImage: mask } : undefined}>{look.field(f, cur, i)}</AbsoluteFill>
+      <AbsoluteFill style={wipe}>{look.field(f, cur, i)}</AbsoluteFill>
     </AbsoluteFill>
   );
 }

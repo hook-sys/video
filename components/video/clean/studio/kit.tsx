@@ -41,7 +41,11 @@ export const card = (pal: Pal, radius = 24): CSSProperties => ({
 });
 
 // The product's app colours from the palette.
-export const appTone = (pal: Pal): AppTone => ({ bg: "#ffffff", side: "#f6f6fb", ink: pal.panelInk, sub: pal.panelSub, line: pal.line, accent: pal.accent, accent2: pal.accent2, card: "#ffffff" });
+// (dark product cards when the look has them — Warm)
+export const appTone = (pal: Pal): AppTone =>
+  pal.panelDark
+    ? { bg: pal.panel, side: "#231e1c", ink: pal.panelInk, sub: pal.panelSub, line: pal.line, accent: pal.accent, accent2: pal.accent2, card: "#241f1d" }
+    : { bg: "#ffffff", side: "#f6f6fb", ink: pal.panelInk, sub: pal.panelSub, line: pal.line, accent: pal.panelAccent ?? pal.accent, accent2: pal.panelAccent ? "#8b78ff" : pal.accent2, card: "#ffffff" };
 
 // A part's progress 0..1 (eased by the caller).
 export const span = (c: BlockCtx) => Math.min(1, Math.max(0, (c.f - c.from) / Math.max(1, c.to - c.from)));
