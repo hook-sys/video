@@ -484,22 +484,6 @@ async function cleanSet(
   return { script: result.script as unknown as Record<string, unknown>, source: result.source, variants: studioVariants(seedFrom(projectId), history), history, at: new Date().toISOString() };
 }
 
-// The brief is written alongside (locked script): wait for it, so one write
-// never replaces the other. Then re-read; only these keys change, and only
-// while no engine result is stored yet.
-async function saveBriefKeys(admin: ReturnType<typeof createAdminClient>, projectId: string, userId: string, keys: Record<string, unknown>) {
-  for (let k = 0; k < 60; k++) {
-    const { data: b } = await admin.from("projects").select("brief_status").eq("id", projectId).single();
-    if (b?.brief_status === "completed" || b?.brief_status === "failed") break;
-    await new Promise((r) => setTimeout(r, 2_000));
-  }
-  const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
-  const current = (fresh?.brief ?? null) as { scene?: unknown; flow?: unknown; clean?: unknown } | null;
-  if (!current?.flow && !current?.scene && !current?.clean) {
-    await admin.from("projects").update({ brief: { ...((fresh?.brief as object | null) ?? {}), ...keys } }).eq("id", projectId).eq("user_id", userId);
-  }
-}
-
 async function generateFlow(projectId: string, userId: string, budgetMs: number) {
   const admin = createAdminClient();
   const { data: project } = await admin
@@ -526,25 +510,6 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // parts and the four videos to offer, never a set this customer already had
   // for the same script. The engines below still run (fallback).
   const clean = project.format === "16:9" && words?.length ? await cleanSet(admin, projectId, userId, project, words, narration, brief.success ? brief.data : null, addUsage) : null;
-  // With the studio set made, the older engines are off (they only ran as a
-  // fallback): they cost the most calls and their videos are not shown. They
-  // still run when no studio set came back, and for 9:16 and 1:1 until the
-  // studio draws those.
-  if (clean) {
-    await saveBriefKeys(admin, projectId, userId, { clean, diagnostics: { commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null, at: new Date().toISOString(), engine: "studio", director_ms: Date.now() - started } });
-    if (usage) {
-      await recordCost(admin, {
-        project_id: projectId,
-        user_id: userId,
-        operation: "openai_brief",
-        model: usage.model,
-        quantity: usage.inputTokens + usage.outputTokens,
-        estimated_cost_usd: openaiCost(usage.model, usage.inputTokens, usage.outputTokens),
-        metadata: { kind: "clean_director", engine: "studio", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, latency_ms: Date.now() - started, stored: true },
-      });
-    }
-    return;
-  }
   // Shot templates first (lib/shots.ts): tested shots, the Director only picks
   // and fills them (four directions, else one — inside generateShotScript).
   // The free-form scene Director is the fallback only when no shots came back.
@@ -597,7 +562,20 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     previews: variants.length > 1 ? variants.length : v2.script ? 1 : 0,
     problems: shot.errors.slice(0, 6),
   };
-  await saveBriefKeys(admin, projectId, userId, { ...(stored ?? {}), diagnostics });
+  {
+    // The brief is written alongside (locked script): wait for it, so one
+    // write never replaces the other. Then re-read; only these keys change.
+    for (let k = 0; k < 60; k++) {
+      const { data: b } = await admin.from("projects").select("brief_status").eq("id", projectId).single();
+      if (b?.brief_status === "completed" || b?.brief_status === "failed") break;
+      await new Promise((r) => setTimeout(r, 2_000));
+    }
+    const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
+    const current = (fresh?.brief ?? null) as { scene?: unknown; flow?: unknown } | null;
+    if (!current?.flow && !current?.scene) {
+      await admin.from("projects").update({ brief: { ...((fresh?.brief as object | null) ?? {}), ...(stored ?? {}), diagnostics } }).eq("id", projectId).eq("user_id", userId);
+    }
+  }
   // Direction library: what the Director made of the customer's direction.
   const script = v2.script ?? result.script;
   const attempts = v2.attempts + (v2.script ? 0 : result.attempts);
@@ -1265,18 +1243,13 @@ async function runPipeline(projectId: string, userId: string) {
     // With the story engine on, wait for the Visual Director first: a usable
     // story renders with StoryWorld, which never shows the legacy images.
     let usable: VisualStory | FlowScript | SceneScript | null = null;
-    let studio = false;
     if (story) {
       await story;
       const { data: row } = await admin.from("projects").select("brief, format, duration_seconds, voice_result").eq("id", projectId).single();
       const brief = ProductBrief.safeParse(row?.brief);
-      studio = brief.success && !!brief.data.clean;
       const words = parseWordTimings((row?.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
       usable = brief.success && row ? (usableStory(brief.data.story, brief.data.script, row.format) ?? usableScene(brief.data.scene, brief.data.script, row.format, words, row.duration_seconds) ?? usableFlow(brief.data.flow, brief.data.script, row.format, words, row.duration_seconds)) : null;
     }
-    // The studio's videos are drawn and rendered in the browser: no generated
-    // images and no server render for them.
-    if (studio) return void (await setPipeline({ pipeline_status: "completed", pipeline_step: null, pipeline_error: null }));
     if (p.assets_status === "completed" && needsLegacyImages(p.assets_manifest as AssetManifest | null, usable)) {
       await attempt(() => generateVisualAssets(projectId));
       p = await state();
