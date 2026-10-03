@@ -550,14 +550,15 @@ function outline(c: BlockCtx) {
   const t = c.from;
   const name = b.brand.name;
   const half = Math.ceil(name.length / 2);
-  const fill = rise(f, t + 18, 14);
+  // the box stands at once (the last part hands it over); it fills soon
+  const fill = rise(f, t + 10, 12);
   return (
     <>
       {at(
         W / 2,
         380,
         <div style={{ position: "relative", width: 230, height: 230 }}>
-          <div style={{ position: "absolute", inset: 0, borderRadius: 60, border: `4px solid ${pal.accent}`, opacity: 1 - fill, clipPath: `inset(0 ${(1 - rise(f, t, 22, IN_OUT)) * 100}% 0 0)` }} />
+          <div style={{ position: "absolute", inset: 0, borderRadius: 60, border: `4px solid ${pal.accent}`, opacity: 1 - fill, clipPath: `inset(0 ${(1 - rise(f, t - 6, 12, IN_OUT)) * 100}% 0 0)` }} />
           <div
             style={{
               position: "absolute",

@@ -23,7 +23,7 @@ export const CLEAN_RULES: CleanRule[] = [
   {
     id: "half-scenes",
     problem: "Two scenes were half-visible at once during cross-fades.",
-    rule: "Always one scene at a time: the old one goes in its last 6 frames, the new one comes in over 10 frames from 2 frames before its cut.",
+    rule: "Always one scene at a time: the old one goes in its last 6 frames, the new one comes in over 10 frames from 2 frames before its cut. (Studio videos: two parts cross for at most 10 frames while the next comes in — see no-empty-cut.)",
     fix: "Sequential transitions (OUTF 6 / IN 10 / LEAD_IN 2); scenes are contiguous, no overlap.",
     kept: ["code", "check"],
   },
@@ -107,8 +107,8 @@ export const CLEAN_RULES: CleanRule[] = [
   {
     id: "bg-flip",
     problem: "A dark ↔ light background change showed a flat grey frame (slow colour blend), then a flash (3-frame flip) (film Dusk).",
-    rule: "Never blend or flip a dark background into a light one: the light comes in as a soft band rising across the frame.",
-    fix: "DuskBg draws both fields and reveals the light one through a moving gradient mask, linear over 24 frames around the cut.",
+    rule: "Never blend or flip a dark background into a light one: the new field opens with a clean edge — out of the incoming object or a point (a circle for Violet and Line) — never through a soft band that turns grey.",
+    fix: "DuskBg revealed the light field through a moving gradient mask; the studio's Backdrop (2026-10-03) opens it through a clip that grows from the hand-off object (or the centre) over 22–36 frames, after the user saw the soft band go grey.",
     kept: ["code", "review"],
   },
   {
@@ -117,6 +117,27 @@ export const CLEAN_RULES: CleanRule[] = [
     rule: "Never pop a card or icon in from nothing or drop a scene at once: things ease in from slightly smaller, shots blur away over 12+ frames; on the render a frame-to-frame change stays at or under 25.",
     fix: "appear()/grow() ease-ins (no overshoot), Shot in 16 / out 12 frames (longer for big bright panels); scripts/clean-check/frame-jumps.py measures a render.",
     kept: ["code", "review"],
+  },
+  {
+    id: "no-empty-cut",
+    problem: "Studio videos showed nothing but the background for 0.3–0.6 s at a cut: the last part had gone before the next part's first object or words came in (Bookwell test on Preview, 2026-10-03).",
+    rule: "Never leave the frame empty at a cut: a part leaves only after the next one has begun to come in; on the render no run of more than 8 empty frames (≈0.27 s).",
+    fix: "Every studio part lingers 4–10 frames past its cut while it leaves (Shot `tail`); objects meant to be handed over stand from the part's first frame; scripts/clean-check/empty-frames.py measures a render against its background alone (StudioFilm `bare`).",
+    kept: ["code", "review"],
+  },
+  {
+    id: "hand-off-under",
+    problem: "In a hand-off (one part's object becoming the next one's) the stand-in box sat over everything: an empty box was on screen for about a second, even over the next part's cards (Bookwell test).",
+    rule: "Never let a hand-off stand-in cover content: it lies under both parts and stands alone only for the few frames between the one leaving and the other arriving.",
+    fix: "The stand-in is drawn under the shots, on screen 10 frames before to 18 frames after the cut, moving over 16 frames; the new field opens from it 4 frames after the cut.",
+    kept: ["code", "review"],
+  },
+  {
+    id: "hand-off-match",
+    problem: "Stand-ins did not match their objects: a filled disc became a ring chart, a filled square became an outline still being drawn, and some end-card objects came in late, leaving the stand-in alone (Bookwell test).",
+    rule: "Always hand off only objects that are on screen at the part's first frames (or last), with a stand-in of the same shape and fill.",
+    fix: "Ring chart, outline and address-box stand-ins are glass; the end pills and the outline box stand from the part's start; check:clean checks each block's hand-off list against its objects.",
+    kept: ["code", "check", "review"],
   },
 ];
 

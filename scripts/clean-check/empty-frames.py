@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # Empty frames of a studio video (rule "no-empty-cut" in
-# components/video/clean/rules.ts): a frame is empty when it differs from the
-# same frame of the background alone (StudioFilm `bare`) by less than EMPTY
-# (mean absolute difference at 192×108, 0–255). The rule allows no run of
-# more than LIMIT empty frames.
+# components/video/clean/rules.ts): a frame is empty when, against the same
+# frame of the background alone (StudioFilm `bare`), fewer than EMPTY of its
+# pixels (at 192×108) differ by more than STEP — a line of small text or a
+# dark card on a dark field still counts. The rule allows no run of more than
+# LIMIT empty frames.
 #
 #   python3 scripts/clean-check/empty-frames.py full.mp4 bare.mp4 [full2.mp4 bare2.mp4 …]
 #
@@ -14,8 +15,9 @@ import glob, os, shutil, subprocess, sys, tempfile
 import numpy as np
 from PIL import Image
 
-EMPTY = 4.0
-LIMIT = 6
+STEP = 30
+EMPTY = 0.002
+LIMIT = 8
 FF = "node_modules/@remotion/compositor-linux-x64-gnu/ffmpeg"
 
 
@@ -30,9 +32,9 @@ def frames(path):
 def runs(full, bare):
     a, b = frames(full), frames(bare)
     n = min(len(a), len(b))
-    diff = [float(np.abs(a[i] - b[i]).mean()) for i in range(n)]
+    diff = [float((np.abs(a[i] - b[i]) > STEP).mean()) for i in range(n)]
     found, start = [], None
-    for i, v in enumerate(diff + [99]):
+    for i, v in enumerate(diff + [1.0]):
         if v < EMPTY and start is None:
             start = i
         elif v >= EMPTY and start is not None:

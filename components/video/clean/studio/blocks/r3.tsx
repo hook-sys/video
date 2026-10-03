@@ -46,18 +46,20 @@ const Star = ({ size, color = "#fff", style }: { size: number; color?: string; s
 // goes through them.
 function tunnel(c: BlockCtx) {
   const { f, L, pal } = c;
-  const into = rise(f, c.to - 26, 26, IN_OUT);
+  // the camera goes in at the end, but the rings stay lit (the next part
+  // comes in over them)
+  const into = rise(f, c.to - 26, 36, IN_OUT);
   return (
     <>
-      <div style={{ position: "absolute", inset: 0, transform: `scale(${mix(1, 2.6, into)})`, opacity: 1 - into * 0.6 }}>
+      <div style={{ position: "absolute", inset: 0, transform: `scale(${mix(1, 1.5, into)})` }}>
         {[1640, 1320, 1040, 800, 600].map((d, k) => {
-          const k2 = soft(f, c.from + k * 4, 22);
+          const k2 = soft(f, c.from - 4 + k * 2, 14);
           const pulse = Math.sin(f / 18 - k * 0.7) * 10;
           return (
             <div key={d} style={{ position: "absolute", left: 960 - (d + pulse) / 2, top: 540 - (d + pulse) / 2, width: d + pulse, height: d + pulse, borderRadius: 9999, border: `${28 - k * 3}px solid rgba(${50 + k * 10},${90 + k * 12},255,${0.18 + k * 0.08})`, boxShadow: `0 0 60px rgba(60,100,255,${0.25 + k * 0.05}), inset 0 0 60px rgba(60,100,255,${0.2 + k * 0.05})`, opacity: k2, transform: `scale(${mix(0.7, 1, k2)}) rotate(${f * (k % 2 ? 0.3 : -0.3)}deg)` }} />
           );
         })}
-        <div style={{ position: "absolute", left: 960 - 300, top: 540 - 300, width: 600, height: 600, borderRadius: 9999, background: "linear-gradient(160deg, #2c56ff, #0f2bb0)", opacity: soft(f, c.from + 14, 20) * 0.9 }} />
+        <div style={{ position: "absolute", left: 960 - 300, top: 540 - 300, width: 600, height: 600, borderRadius: 9999, background: "linear-gradient(160deg, #2c56ff, #0f2bb0)", opacity: soft(f, c.from + 4, 16) * 0.9 }} />
       </div>
       {at(W / 2, 540, (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
