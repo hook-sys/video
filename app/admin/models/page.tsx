@@ -77,8 +77,12 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
                 <input name="text_model" list="text-models" defaultValue={c.text.model} className={input} />
               </div>
               <label className="flex items-center gap-3 text-zinc-300">
+                <Toggle name="text_openai_direct" on={c.text.openaiDirect} />
+                OpenAI direct (a separate OpenAI bill). Off: nothing is sent to OpenAI directly — an &quot;OpenAI&quot; job runs the same model through fal (openai/…).
+              </label>
+              <label className="flex items-center gap-3 text-zinc-300">
                 <Toggle name="text_backup" on={c.text.backup} />
-                Backup: when a fal call fails, try once on OpenAI ({env.text})
+                Backup: when a fal call fails, try once on OpenAI ({env.text}) — only while OpenAI direct is on
               </label>
             </div>
           </Card>

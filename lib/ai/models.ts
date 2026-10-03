@@ -8,7 +8,9 @@ import type { BriefUsage } from "@/lib/ai/product-brief";
 //
 // Text jobs run through fal (its OpenAI-compatible OpenRouter endpoint: GPT,
 // Gemini, Claude, Llama … by name, e.g. "google/gemini-2.5-flash") or OpenAI
-// directly. With "backup" on, a failed fal call is retried once on OpenAI.
+// directly — only while "OpenAI direct" is on (a separate OpenAI bill); off,
+// an "OpenAI" job runs the same model through fal ("openai/<model>"). With
+// "backup" on (and OpenAI direct on), a failed fal call is retried once on OpenAI.
 
 export const TEXT_TASKS = [
   { id: "brief", label: "Script & brief", help: "Reads the website, screenshots' text and the customer's script, and writes the brief. Every video needs it, so it can't be turned off.", canOff: false },
@@ -24,7 +26,7 @@ export type Provider = "fal" | "openai";
 
 export type ModelPrice = { in?: number; out?: number; unit?: number };
 export type AiConfig = {
-  text: { provider: Provider; model: string; backup: boolean };
+  text: { provider: Provider; model: string; backup: boolean; openaiDirect: boolean };
   // per job: on/off, and a model (and provider) other than the main one
   tasks: Record<TextTask, { on: boolean; provider: Provider | ""; model: string }>;
   // empty strings mean the environment's values
@@ -56,7 +58,7 @@ export const FAL_LLM_URL = "https://fal.run/openrouter/router/openai/v1";
 
 export function defaultConfig(): AiConfig {
   return {
-    text: { provider: "openai", model: process.env.OPENAI_MODEL || "gpt-5-mini", backup: true },
+    text: { provider: "openai", model: process.env.OPENAI_MODEL || "gpt-5-mini", backup: false, openaiDirect: false },
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: true, provider: "", model: "" }])) as AiConfig["tasks"],
     voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     image: { on: true, model: "", template: "" },
@@ -76,7 +78,7 @@ export function normalizeConfig(raw: unknown): AiConfig {
   const tasks = (r.tasks ?? {}) as Record<string, Record<string, unknown> | undefined>;
   const prices = (r.prices ?? {}) as Record<string, Record<string, unknown> | undefined>;
   return {
-    text: { provider: provider(r.text?.provider) || d.text.provider, model: str(r.text?.model) || d.text.model, backup: bool(r.text?.backup, true) },
+    text: { provider: provider(r.text?.provider) || d.text.provider, model: str(r.text?.model) || d.text.model, backup: bool(r.text?.backup, false), openaiDirect: bool(r.text?.openaiDirect, false) },
     tasks: Object.fromEntries(
       TEXT_TASKS.map((t) => [t.id, { on: t.canOff ? bool(tasks[t.id]?.on, true) : true, provider: provider(tasks[t.id]?.provider), model: str(tasks[t.id]?.model) }]),
     ) as AiConfig["tasks"],
@@ -164,11 +166,14 @@ export async function textAi(task: TextTask, opts: { timeout?: number; maxRetrie
   // named the way that provider names it ("openai/gpt-5-mini" on fal).
   const main = config.text.model;
   const model = t.model || (prov === config.text.provider ? main : prov === "fal" ? (main.includes("/") ? main : `openai/${main}`) : main.replace(/^openai\//, ""));
-  return textClient(prov, model, config.text.backup, opts);
+  return textClient(prov, model, config.text.backup, opts, config.text.openaiDirect);
 }
 
 // A client for any provider and model (also used by the admin page's test).
-export function textClient(prov: Provider, model: string, backupOn: boolean, opts: { timeout?: number; maxRetries?: number } = {}): TextAi {
+export function textClient(prov: Provider, model: string, backupOn: boolean, opts: { timeout?: number; maxRetries?: number } = {}, direct = false): TextAi {
+  // OpenAI direct off: the OpenAI model through fal, and no OpenAI backup
+  if (prov === "openai" && !direct) return textClient("fal", model.includes("/") ? model : `openai/${model}`, false, opts, false);
+  if (!direct) backupOn = false;
   if (prov === "openai") {
     if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
     return { client: new OpenAI({ timeout: opts.timeout, maxRetries: opts.maxRetries ?? 0 }), model, provider: prov, quick: reasoning(model) };
