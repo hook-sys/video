@@ -76,7 +76,10 @@ export function storyParts(plan: CleanPlan): StoryPart[] {
   const scenes = [...plan.scenes].sort((a, z) => a.from - z.from);
   const out: StoryPart[] = scenes.map((scene, i) => {
     const own = partBeats(plan, scenes, i, whole);
-    const b = i === 0 && scene.template !== "hook" ? earlier(own, scene.template, OPEN_LEAD) : own;
+    // a feature with no lead-in words ("When …,") would show its first stage
+    // (a spark, an empty card) alone: its things come in as the part begins
+    const bare = (scene.template === "pay" && !own.line.payA.length) || (scene.template === "growth" && !own.line.growA.length);
+    const b = (i === 0 && scene.template !== "hook") || bare ? earlier(own, scene.template, OPEN_LEAD) : own;
     return { role: scene.template, from: i === 0 ? 0 : cutAt(scene.template, b.t), b, scene };
   });
   for (let i = 1; i < out.length; i++) out[i].from = Math.max(out[i].from, out[i - 1].from + MIN);
