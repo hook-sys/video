@@ -61,8 +61,8 @@ function blockFor(recipe: Recipe, role: Role, nth: number): Block | undefined {
   if (!nth || !base) return base;
   const ids = BLOCK_IDS[role] as readonly string[];
   const at = ids.indexOf(base.id);
-  const id = ids[(Math.max(0, at) + nth * 5) % ids.length];
-  return BLOCK_BY_ID[id === base.id ? ids[(ids.indexOf(id) + 1) % ids.length] : id] ?? base;
+  // a step of 7 visits every block of a part (9–12 of them) before one returns
+  return BLOCK_BY_ID[ids[(Math.max(0, at) + nth * 7) % ids.length]] ?? base;
 }
 
 export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio, bare }: StudioProps) {
@@ -71,17 +71,26 @@ export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio, bare
   const b = useMemo(() => beatsFromPlan(plan), [plan]);
   const look = LOOKS[recipe.look] ?? LOOKS.glow;
   // the story's parts in the order spoken (any of the seven, left out or twice)
-  const parts = useMemo(() => storyParts(plan), [plan]);
+  const story = useMemo(() => storyParts(plan), [plan]);
+  // A run of features told again (pay/growth after pay/growth, one of them a
+  // repeat) keeps the field it is on: no dark ↔ light flip every few seconds.
+  const parts = useMemo(() => {
+    const out = story.map((p) => ({ ...p, mode: look.mode(p.role) }));
+    const feature = (r: Role) => r === "pay" || r === "growth";
+    const repeat = (j: number) => story.slice(0, j).some((q) => q.role === story[j].role);
+    for (let j = 1; j < out.length; j++) if (feature(out[j].role) && feature(out[j - 1].role) && (repeat(j) || repeat(j - 1))) out[j].mode = out[j - 1].mode;
+    return out;
+  }, [story, look]);
   const hue = recipe.hue ?? 0;
   const shots = parts.map((p, i) => {
     const block = blockFor(recipe, p.role, parts.slice(0, i).filter((q) => q.role === p.role).length);
     const to = parts[i + 1]?.from ?? plan.duration;
-    const c: BlockCtx = { f, from: p.from, to, role: p.role, look, pal: look.pal[look.mode(p.role)], b: p.b, T: p.b.t, L: p.b.line, C: p.b.content };
+    const c: BlockCtx = { f, from: p.from, to, role: p.role, look, pal: look.pal[p.mode], b: p.b, T: p.b.t, L: p.b.line, C: p.b.content };
     return { block, c, obj: block?.obj?.(c) ?? {} };
   });
   // a cut where the field turns dark ↔ light: the last part has gone before
   // the new field opens (its words would vanish on the new colour)
-  const flips = (j: number) => j > 0 && j < parts.length && look.mode(parts[j - 1].role) !== look.mode(parts[j].role);
+  const flips = (j: number) => j > 0 && j < parts.length && parts[j - 1].mode !== parts[j].mode;
   // where the last part's object (z) becomes this part's (a)
   const hands = shots.map((s, i) => (i && shots[i - 1].obj.z && s.obj.a ? { a: shots[i - 1].obj.z as Box, z: s.obj.a } : null));
   const brand = { name: plan.brand.name, icon: plan.brand.icon, tagline: plan.brand.tagline, cta: plan.brand.cta, url: plan.brand.url, hue: hue + postHue, things: b.trio.map((x) => ({ label: x.label, icon: x.icon })) };
@@ -100,7 +109,7 @@ export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio, bare
           // slower entrance where the field turns dark ↔ light; every part
           // leaves after the next has begun to come in (no empty frame)
           return (
-            <Shot key={i} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && look.mode(parts[i - 1].role) !== look.mode(p.role) ? 28 : 18} outDur={outHand ? 12 : flips(i + 1) ? (c.pal.dark ? 17 : 12) : c.pal.dark || c.pal.panelDark ? 20 : 14} tail={outHand ? 4 : flips(i + 1) ? 4 : 10} cam={cam(look.camera)}>
+            <Shot key={i} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && parts[i - 1].mode !== p.mode ? 28 : 18} outDur={outHand ? 12 : flips(i + 1) ? (c.pal.dark ? 17 : 12) : c.pal.dark || c.pal.panelDark ? 20 : 14} tail={outHand ? 4 : flips(i + 1) ? 4 : 10} cam={cam(look.camera)}>
               {block.draw(c)}
             </Shot>
           );

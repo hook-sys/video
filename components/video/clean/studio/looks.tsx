@@ -314,14 +314,18 @@ export const LOOK_IDS = Object.keys(LOOKS) as LookId[];
 // The background over the whole video: each part's field; where the mode
 // changes, the new field opens out of a card (or Violet's circle).
 export type Origin = { x: number; y: number; w: number; h: number; r: number } | null;
-export function Backdrop({ f, look, parts, origins }: { f: number; look: Look; parts: { role: Role; from: number }[]; origins?: Origin[] }) {
+// parts[].mode: the part's field when the film sets it (a story keeps one
+// field through a run of features), else the look's for the part.
+export function Backdrop({ f, look, parts, origins }: { f: number; look: Look; parts: { role: Role; from: number; mode?: Mode }[]; origins?: Origin[] }) {
+  const modeAt = (j: number) => parts[j].mode ?? look.mode(parts[j].role);
   // where the field changes: from 16 frames before a cut — or, when the new
-  // part's object grows out of the last one's, once it has arrived
+  // part's object grows out of the last one's, once it has arrived (then
+  // slower where it turns dark ↔ light: a whole frame of new light)
   const w0 = (j: number) => (origins?.[j] ? parts[j].from + 4 : parts[j].from - 2);
-  const dur = (j: number) => (origins?.[j] ? 22 : 30);
+  const dur = (j: number) => (origins?.[j] ? (j && modeAt(j) !== modeAt(j - 1) ? 34 : 22) : 30);
   const i = Math.max(0, parts.findLastIndex((_, j) => w0(j) <= f));
-  const cur = look.mode(parts[i].role);
-  const prev = i ? look.mode(parts[i - 1].role) : cur;
+  const cur = modeAt(i);
+  const prev = i ? modeAt(i - 1) : cur;
   const k = cur === prev ? 1 : interpolate(f, [w0(i), w0(i) + dur(i)], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const ck = k * k * (3 - 2 * k);
   let wipe: CSSProperties | undefined;

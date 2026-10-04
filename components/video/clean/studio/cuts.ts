@@ -55,11 +55,28 @@ function partBeats(plan: CleanPlan, scenes: Scene[], i: number, whole: Beats): B
   for (const k of LINES[scene.template]) (line as Record<string, unknown>)[k] = own.line[k];
   return { ...whole, t, line, trio: scene.template === "trio" ? own.trio : whole.trio, label: scene.template === "reveal" ? own.label : whole.label };
 }
+// A part's own moments and words, `d` frames earlier.
+function earlier(b: Beats, role: Part, d: number): Beats {
+  const t = { ...b.t };
+  for (const k of MOMENTS[role]) t[k] -= d;
+  const line = { ...b.line } as Record<string, unknown>;
+  for (const k of LINES[role]) {
+    const v = line[k];
+    line[k] = Array.isArray(v) ? v.map((w) => ({ ...w, at: w.at - d, ...(w.strike !== undefined ? { strike: w.strike - d } : {}) })) : v && typeof v === "object" ? { ...(v as { at: number }), at: (v as { at: number }).at - d } : v;
+  }
+  return { ...b, t, line: line as Beats["line"], trio: role === "trio" ? b.trio.map((x) => ({ ...x, at: x.at - d })) : b.trio };
+}
+// A story that opens on anything but the hook: its first part's things come
+// in this much earlier, so the opening frames are not the background alone
+// (the hook blocks show from the first frame; the others rise on their words).
+const OPEN_LEAD = 12;
+
 export function storyParts(plan: CleanPlan): StoryPart[] {
   const whole = beatsFromPlan(plan);
   const scenes = [...plan.scenes].sort((a, z) => a.from - z.from);
   const out: StoryPart[] = scenes.map((scene, i) => {
-    const b = partBeats(plan, scenes, i, whole);
+    const own = partBeats(plan, scenes, i, whole);
+    const b = i === 0 && scene.template !== "hook" ? earlier(own, scene.template, OPEN_LEAD) : own;
     return { role: scene.template, from: i === 0 ? 0 : cutAt(scene.template, b.t), b, scene };
   });
   for (let i = 1; i < out.length; i++) out[i].from = Math.max(out[i].from, out[i - 1].from + MIN);
