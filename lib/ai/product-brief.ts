@@ -158,7 +158,8 @@ const ProductBriefOutput = z.object({
 // One video of the clean set: a film template and its colour turn.
 export const FilmVariantRecord = z.object({ film: z.enum(["glow", "dusk", "fly", "connect"]), tint: z.enum(["native", "brand", "brand+120", "brand-120"]), hue: z.number() });
 // Since the studio: one look and one block per part (lib/studio-variants.ts).
-export const StudioRecipeRecord = z.object({ look: z.enum(LOOK_IDS), blocks: z.object(Object.fromEntries(ROLES.map((r) => [r, z.string()])) as Record<Role, z.ZodString>), hue: z.number() });
+// story / shape: which of the script's story shapes it tells (clean.stories), and that shape in words.
+export const StudioRecipeRecord = z.object({ look: z.enum(LOOK_IDS), blocks: z.object(Object.fromEntries(ROLES.map((r) => [r, z.string()])) as Record<Role, z.ZodString>), hue: z.number(), story: z.number().int().min(0).optional(), shape: z.string().optional() });
 export const CleanVariantRecord = z.union([StudioRecipeRecord, FilmVariantRecord]);
 
 export const ProductBrief = z.object({
@@ -202,6 +203,8 @@ export const ProductBrief = z.object({
   clean: z
     .object({
       script: z.record(z.string(), z.unknown()),
+      // story shapes (components/video/clean/plan.ts Story); a recipe's `story` picks one
+      stories: z.array(z.record(z.string(), z.unknown())).optional(),
       source: z.string(),
       variants: z.array(CleanVariantRecord),
       history: z.array(z.array(CleanVariantRecord)).default([]),

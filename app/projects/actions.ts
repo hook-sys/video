@@ -70,10 +70,11 @@ import type { Resolution } from "@/components/video/types";
 import { generateVoice as generateFalVoice, timeWords } from "@/lib/ai/fal";
 import { generateVisualStory } from "@/lib/ai/visual-story";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { generateCleanScript } from "@/lib/ai/clean-director";
 import { type StoredVariant, studioVariants } from "@/lib/studio-variants";
 import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { generateFlowScript } from "@/lib/ai/flow-director";
+import { generateStories } from "@/lib/ai/story-director";
+import { literalMisfits } from "@/components/video/clean/studio/ids";
 import { generateSceneScript } from "@/lib/ai/scene-director";
 import { generateShotScript } from "@/lib/ai/shot-director";
 import { neverList } from "@/lib/video-rules";
@@ -477,18 +478,29 @@ async function cleanSet(
     url: host,
     icon: null,
   };
-  const result = await generateCleanScript({ brand, words, product: brief?.product_summary ?? null }, addUsage);
-  console.info("clean director:", { projectId, source: result.source, attempts: result.attempts, ms: result.ms, problems: result.problems.slice(0, 6) });
-  if (!result.script || !result.plan) return null;
   const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   const { data: past } = await admin.from("projects").select("id, clean:brief->clean, script:brief->>script").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(40);
-  const history: StoredVariant[][] = (past ?? [])
-    .filter((p) => typeof p.script === "string" && norm(p.script) === norm(narration))
-    .flatMap((p) => {
-      const c = p.clean as { variants?: StoredVariant[]; history?: StoredVariant[][] } | null;
-      return c?.variants ? [...(c.history ?? []), c.variants] : [];
-    });
-  return { script: result.script as unknown as Record<string, unknown>, source: result.source, variants: studioVariants(seedFrom(projectId), history), history, at: new Date().toISOString() };
+  const setsOf = (p: { clean: unknown }) => {
+    const c = p.clean as { variants?: StoredVariant[]; history?: StoredVariant[][] } | null;
+    return c?.variants ? [...(c.history ?? []), c.variants] : [];
+  };
+  // the same script before: never a video close to those; other scripts (the
+  // last ten): their looks, blocks and openings are avoided where possible
+  const history: StoredVariant[][] = (past ?? []).filter((p) => typeof p.script === "string" && norm(p.script) === norm(narration)).flatMap(setsOf);
+  const recent: StoredVariant[] = (past ?? []).filter((p) => !(typeof p.script === "string" && norm(p.script) === norm(narration))).slice(0, 10).flatMap((p) => setsOf(p).flat());
+  const openings = [...[...history.flat(), ...recent].reduce((m, v) => {
+    const o = "shape" in v && v.shape ? v.shape.split("-")[0] : null;
+    if (o) m.set(o, (m.get(o) ?? 0) + 1);
+    return m;
+  }, new Map<string, number>())].sort((a, z) => z[1] - a[1]).slice(0, 2).map(([o]) => o);
+  // story shapes: two to four ways to tell this script (lib/ai/story-director.ts)
+  const result = await generateStories({ brand, words, product: brief?.product_summary ?? null, avoid: openings }, addUsage);
+  console.info("story director:", { projectId, source: result.source, attempts: result.attempts, ms: result.ms, shapes: result.stories.map((s) => s.story.shape), problems: result.problems.slice(0, 6) });
+  if (!result.stories.length) return null;
+  const stories = result.stories.map((s) => s.story);
+  const exclude = literalMisfits(`${narration} ${brief?.product_summary ?? ""}`);
+  const variants = studioVariants(seedFrom(projectId), history, 4, { recent, exclude, shapes: stories.map((s) => s.shape ?? "") });
+  return { script: stories[0] as unknown as Record<string, unknown>, stories: stories as unknown as Record<string, unknown>[], source: result.source, variants, history, at: new Date().toISOString() };
 }
 
 async function generateFlow(projectId: string, userId: string, budgetMs: number) {
@@ -1379,7 +1391,9 @@ export async function newCleanSet(projectId: string) {
   const clean = brief.success ? brief.data.clean : null;
   if (!project || !clean) return;
   const history = [...clean.history, clean.variants];
-  const variants = studioVariants(seedFrom(projectId), history);
+  // the same story shapes, the openings shown least so far first
+  const shapes = (clean.stories ?? []).map((st) => String((st as { shape?: unknown }).shape ?? ""));
+  const variants = studioVariants(seedFrom(projectId), history, 4, { shapes, exclude: literalMisfits(`${brief.success ? brief.data.script : ""} ${brief.success ? brief.data.product_summary : ""}`) });
   await createAdminClient()
     .from("projects")
     .update({ brief: { ...(project.brief as object), clean: { ...clean, variants, history, at: new Date().toISOString() } } })

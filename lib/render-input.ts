@@ -11,7 +11,7 @@ import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
 import { storyAssetsEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { compileFlowScript, type CompileBrand } from "@/components/video/flow/compile";
 import { compileSceneScript } from "@/components/video/flow/compile-scene";
-import { buildPlan, type SevenPart } from "@/components/video/clean/plan";
+import { buildPlan, buildStory, type SevenPart, type Story } from "@/components/video/clean/plan";
 import type { CleanPlan } from "@/components/video/clean/types";
 import { type StudioRecipe, toRecipe } from "@/lib/studio-variants";
 
@@ -158,16 +158,18 @@ export async function buildRenderInput(
       })
     : [];
 
-  // The clean film templates: the stored seven parts on the voice's words,
-  // with the customer's brand inputs; the four videos offered.
-  let clean: { plan: CleanPlan; variants: StudioRecipe[] } | null = null;
+  // The clean film templates: the stored story shapes (or, older, the seven
+  // parts) on the voice's words, with the customer's brand inputs; the four
+  // videos offered, each telling one of the shapes (recipe.story).
+  let clean: { plans: CleanPlan[]; variants: StudioRecipe[] } | null = null;
   const stored = brief.data.clean;
   if (stored && project.format === "16:9" && wordTimings?.length) {
     try {
-      const script = stored.script as unknown as SevenPart;
-      const brand = { ...script.brand, name: project.brand_name?.trim() || script.brand.name, color: project.brand_color || script.brand.color, cta: project.call_to_action?.trim() || script.brand.cta, icon: logoUrl ?? null };
-      const built = buildPlan({ ...script, brand }, wordTimings);
-      if (built.plan && stored.variants.length) clean = { plan: built.plan, variants: stored.variants.map(toRecipe) };
+      const rebrand = (b: SevenPart["brand"]) => ({ ...b, name: project.brand_name?.trim() || b.name, color: project.brand_color || b.color, cta: project.call_to_action?.trim() || b.cta, icon: logoUrl ?? null });
+      const scripts = (stored.stories?.length ? stored.stories : [stored.script]) as unknown as (Story | SevenPart)[];
+      const plans = scripts.map((sc) => ("parts" in sc ? buildStory({ ...sc, brand: rebrand(sc.brand) }, wordTimings).plan : buildPlan({ ...sc, brand: rebrand(sc.brand) }, wordTimings).plan));
+      const first = plans.find((pl): pl is CleanPlan => !!pl);
+      if (first && stored.variants.length) clean = { plans: plans.map((pl) => pl ?? first), variants: stored.variants.map(toRecipe) };
     } catch {
       clean = null;
     }

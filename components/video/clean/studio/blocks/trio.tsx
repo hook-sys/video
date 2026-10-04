@@ -1,13 +1,35 @@
 import { interpolate } from "remotion";
 import { Icon } from "../../../icons";
 import { IN_OUT, mix, OUT, rise } from "../../anim";
-import { Area, at, Glass, glide, grow, Pointer, press, soft, W } from "../../refs/common";
+import { at, Glass, glide, grow, Pointer, press, soft, W } from "../../refs/common";
 import { type Block, type BlockCtx, box, card, Say } from "../kit";
 import { Win } from "./parts";
 
 // The three things (each on its own spoken word). All three stay on screen
 // once they have come in.
 const COLORS = ["#16a34a", "#2563eb", "#9333ea"];
+
+// What a thing's window shows: its own icon large and a few entries drawing
+// in — never a chart, which would claim numbers the words never said
+// ("Patient files" is a list of files, not a graph).
+function Thing({ icon, color, w, h, draw, pal }: { icon: string; color: string; w: number; h: number; draw: number; pal: BlockCtx["pal"] }) {
+  const row = (n: number) => rise(draw, 0.15 + n * 0.22, 0.3);
+  return (
+    <div style={{ width: w, height: h, display: "flex", alignItems: "center", gap: 26 }}>
+      <div style={{ width: h * 0.82, height: h * 0.82, borderRadius: 24, background: `${color}1f`, display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${mix(0.7, 1, rise(draw, 0, 0.4))})` }}>
+        <Icon name={icon} size={h * 0.44} color={color} strokeWidth={2} />
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
+        {[0.92, 0.7, 0.82].map((wk, n) => (
+          <div key={n} style={{ display: "flex", alignItems: "center", gap: 10, opacity: row(n) }}>
+            <div style={{ width: 14, height: 14, borderRadius: 7, background: n ? `${color}66` : color }} />
+            <div style={{ height: 12, borderRadius: 6, width: `${wk * 100 * row(n)}%`, background: pal.dark ? "rgba(255,255,255,0.22)" : "rgba(20,24,40,0.14)" }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // From Glow: tilted glass slabs beside a glass notch with a "?".
 function slabs(c: BlockCtx) {
@@ -83,7 +105,7 @@ function windows(c: BlockCtx) {
         return (
           <div key={it.label} style={{ position: "absolute", left: xs[i], top: 400, opacity: k, transform: `translateY(${(1 - k) * 80}px) scale(${mix(0.9, 1, k)})` }}>
             <Win title={it.label} icon={it.icon} color={COLORS[i]} pal={pal} w={520} h={340}>
-              <Area w={480} h={150} draw={rise(f, it.at, 24)} color={COLORS[i]} pts={[0.3, 0.5, 0.35, 0.6, 0.45, 0.7]} />
+              <Thing icon={it.icon} color={COLORS[i]} w={480} h={150} draw={rise(f, it.at, 24)} pal={pal} />
             </Win>
             <div style={{ textAlign: "center", marginTop: 20, fontSize: 32, color: pal.sub, opacity: rise(f, it.at + 8, 12) }}>{it.sub}</div>
           </div>
@@ -115,7 +137,7 @@ function cards(c: BlockCtx) {
               </div>
             </div>
             <div style={{ padding: 28 }}>
-              <Area w={444} h={130} draw={rise(f, it.at, 26)} color={COLORS[i]} pts={[0.3, 0.42, 0.36, 0.55, 0.5, 0.66]} />
+              <Thing icon={it.icon} color={COLORS[i]} w={444} h={130} draw={rise(f, it.at, 26)} pal={pal} />
               <div style={{ marginTop: 18, fontSize: 28, color: pal.panelSub }}>{it.sub}</div>
             </div>
           </div>,

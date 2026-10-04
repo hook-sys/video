@@ -13,8 +13,12 @@ import type { StudioRecipe } from "@/lib/studio-variants";
 // The four clean videos of a project (one look + one block per part): watch
 // each, download one or all (rendered in this browser), or ask for four new
 // ones that differ from every earlier set.
-const keyOf = (r: StudioRecipe) => `${r.look}:${Object.values(r.blocks).join(",")}:${r.hue}`;
-const opening = (r: StudioRecipe) => BLOCK_BY_ID[r.blocks.hook]?.name.toLowerCase() ?? "";
+const keyOf = (r: StudioRecipe) => `${r.look}:${Object.values(r.blocks).join(",")}:${r.hue}:${r.story ?? 0}`;
+// the picture the video opens on: the first part of its story shape
+const opening = (r: StudioRecipe) => {
+  const first = (r.shape?.split("-")[0] ?? "hook") as keyof StudioRecipe["blocks"];
+  return BLOCK_BY_ID[r.blocks[first] ?? r.blocks.hook]?.name.toLowerCase() ?? "";
+};
 const W = 1920;
 const H = 1080;
 
@@ -59,7 +63,9 @@ async function renderFilmToFile({ props, file, signal, onProgress }: { props: St
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export function CleanStudio({ projectId, plan, variants, audioUrl, name, className, secondaryClassName }: { projectId: string; plan: CleanPlan; variants: StudioRecipe[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string }) {
+// plans: one per story shape of the script; a video plays the one its recipe tells.
+export function CleanStudio({ projectId, plans, variants, audioUrl, name, className, secondaryClassName }: { projectId: string; plans: CleanPlan[]; variants: StudioRecipe[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string }) {
+  const planOf = (r: StudioRecipe) => plans[r.story ?? 0] ?? plans[0];
   const [selected, setSelected] = useState(0);
   const [busy, setBusy] = useState<number | null>(null);
   const [all, setAll] = useState(false);
@@ -68,6 +74,7 @@ export function CleanStudio({ projectId, plan, variants, audioUrl, name, classNa
   const [pending, start] = useTransition();
   const abort = useRef<AbortController | null>(null);
   const v = variants[Math.min(selected, variants.length - 1)];
+  const plan = planOf(v);
 
   const download = async (indexes: number[]) => {
     setError(undefined);
@@ -79,7 +86,7 @@ export function CleanStudio({ projectId, plan, variants, audioUrl, name, classNa
         setBusy(i);
         setProgress(0);
         const file = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "video"}-${i + 1}-${variants[i].look}.mp4`;
-        await renderFilmToFile({ props: { plan, recipe: variants[i], audioUrl }, file, signal: controller.signal, onProgress: setProgress });
+        await renderFilmToFile({ props: { plan: planOf(variants[i]), recipe: variants[i], audioUrl }, file, signal: controller.signal, onProgress: setProgress });
       }
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));

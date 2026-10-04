@@ -79,10 +79,15 @@ const keyIndex = (ws: KWord[], fallback: number) => {
   return i >= 0 ? i : fallback < 0 ? ws.length + fallback : fallback;
 };
 
-export function beatsFromPlan(plan: CleanPlan): Beats {
-  const by = (t: Scene["template"]) => plan.scenes.find((s) => s.template === t);
+// The moments each part's words fall on. `only`: one part of a plan whose
+// parts come in any order, may be left out or come twice (a story shape):
+// its own moments are read from it, and every other part's are its end, as
+// if the next part followed it (what its blocks expect).
+export function beatsFromPlan(plan: CleanPlan, only?: Scene): Beats {
+  const by = (t: Scene["template"]) => (only ? (only.template === t ? only : undefined) : plan.scenes.find((s) => s.template === t));
   const hookS = by("hook"), trioS = by("trio"), revealS = by("reveal"), payS = by("pay"), growS = by("growth"), noS = by("nomore"), ctaS = by("cta");
   const end = plan.words.length ? Math.round(plan.words[plan.words.length - 1].end * FPS) : plan.duration - 66;
+  const rest = only ? only.to : 0;
 
   // hook: "<A> <big> <key…>" — the big word is the one before the keyword
   // ("data scattered"), or the one after it when that is a small word
@@ -92,7 +97,7 @@ export function beatsFromPlan(plan: CleanPlan): Beats {
   const named = typeof hookS?.data.big === "string" ? hook.findIndex((w) => norm(w.t) === norm(String(hookS.data.big))) : -1;
   const bi = named >= 0 ? named : SMALL.has(norm(hook[hk - 1]?.t ?? "")) && hk + 1 < hook.length ? hk + 1 : hk - 1;
   const hookA = plain(hook.slice(0, Math.min(bi, hk)));
-  const hookBig = { ...hook[bi], key: false, t: hook[bi].t.replace(/[.,!?]+$/, "") };
+  const hookBig = hook[bi] ? { ...hook[bi], key: false, t: hook[bi].t.replace(/[.,!?]+$/, "") } : { t: "", at: rest - 2, key: false };
   const hookB = hook.slice(Math.min(bi, hk)).filter((_, n) => n + Math.min(bi, hk) !== bi);
 
   const items = (trioS?.data.items ?? []) as { icon: string; label: string; sub: string; at: number }[];
@@ -153,6 +158,19 @@ export function beatsFromPlan(plan: CleanPlan): Beats {
     end,
     duration: plan.duration,
   };
+  // the parts this plan (or this one part) has not: their moments are its end
+  if (only) {
+    const ROLE_MOMENTS: [Scene | undefined, (keyof Moments)[]][] = [
+      [hookS, ["every", "data", "scattered", "tools"]],
+      [trioS, ["sales", "payments", "reports"]],
+      [revealS, ["flowly", "brings", "everything", "into", "live", "dashboard"]],
+      [payS, ["when1", "payment", "revenue", "updates", "instantly"]],
+      [growS, ["when2", "grow", "entire", "team", "change", "view"]],
+      [noS, ["no1", "switching", "between", "no2", "waiting", "reports2"]],
+      [ctaS, ["just", "live2", "every2", "answer", "need"]],
+    ];
+    for (const [sc, keys] of ROLE_MOMENTS) if (!sc) for (const k of keys) t[k] = rest;
+  }
 
   const line: Lines = {
     hook,
@@ -160,7 +178,7 @@ export function beatsFromPlan(plan: CleanPlan): Beats {
     hookBig,
     hookB,
     hookTail: plain(hook.slice(Math.min(bi, hk))),
-    trio: keyAt(span(plan, trioS?.from ?? 0, revealS?.from ?? 0), -1).map((w) => ({ ...w, key: trio.some((x) => norm(x.label) === norm(w.t)) })),
+    trio: keyAt(span(plan, trioS?.from ?? 0, trioS?.to ?? 0), -1).map((w) => ({ ...w, key: trio.some((x) => norm(x.label) === norm(w.t)) })),
     reveal,
     revealA: plain(revealA),
     revealB: plain(revealB),

@@ -1,7 +1,7 @@
 // The voiceover script (what the voice says) is at most 500 characters;
 // `direction` stores it with a short "Visual style: …" suffix.
-export const VOICE_SCRIPT_MAX = 500;
-export const DIRECTION_MAX = 560;
+export const VOICE_SCRIPT_MAX = 1000;
+export const DIRECTION_MAX = 1100;
 // The customer's voiceover script, exactly as typed: the form appends
 // "\n\nVisual style: …" (and "Look: …") to it in `direction`; only that suffix
 // is removed. This locked text is what the voice speaks and every Director reads.

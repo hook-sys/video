@@ -7,7 +7,7 @@ import type { CleanVariant } from "@/lib/clean-variants";
 // (history), a new video never repeats a look with three or more of the same
 // blocks, and the set as a whole prefers what has been seen least.
 
-export type StudioRecipe = { look: LookId; blocks: Record<Role, string>; hue: number };
+export type StudioRecipe = { look: LookId; blocks: Record<Role, string>; hue: number; story?: number; shape?: string };
 // What a project stores per video: a studio recipe, or (older) a film template.
 export type StoredVariant = CleanVariant | StudioRecipe;
 
@@ -44,11 +44,18 @@ export const tooClose = (a: StudioRecipe, b: StudioRecipe) => {
 // How many cuts of a recipe are hand-offs (one part's object becomes the next).
 export const handoffs = (v: StudioRecipe) => ROLES.slice(1).filter((r, i) => HANDS[v.blocks[ROLES[i]]]?.includes("z") && HANDS[v.blocks[r]]?.includes("a")).length;
 
-export function studioVariants(seed: number, history: StoredVariant[][], count = 4): StudioRecipe[] {
+// opts.recent: this customer's videos of other scripts (counted at half
+// weight: the same look or opening again is avoided, not forbidden);
+// opts.exclude: blocks whose pictures do not fit this script;
+// opts.shapes: the script's story shapes ("hook-trio-reveal-…"), spread over
+// the set so the videos tell it differently, the openings seen least first.
+export type VariantOpts = { recent?: StoredVariant[]; exclude?: Set<string>; shapes?: string[] };
+export function studioVariants(seed: number, history: StoredVariant[][], count = 4, opts: VariantOpts = {}): StudioRecipe[] {
   const past = history.flat().map(toRecipe);
+  const recent = (opts.recent ?? []).map(toRecipe);
   const r = rng(seed + history.length * 104729);
-  const seen = (role: Role, id: string) => past.filter((p) => p.blocks[role] === id).length;
-  const seenLook = (l: LookId) => past.filter((p) => p.look === l).length;
+  const seen = (role: Role, id: string) => past.filter((p) => p.blocks[role] === id).length + 0.5 * recent.filter((p) => p.blocks[role] === id).length + (opts.exclude?.has(id) ? 100 : 0);
+  const seenLook = (l: LookId) => past.filter((p) => p.look === l).length + 0.5 * recent.filter((p) => p.look === l).length;
   let best: StudioRecipe[] = [];
   let bestScore = Infinity;
   // seeded tries (until a set has nothing too close to the past); keep the
@@ -65,5 +72,15 @@ export function studioVariants(seed: number, history: StoredVariant[][], count =
       bestScore = score;
     }
   }
-  return best;
+  return withShapes(best, [...past, ...recent], opts.shapes ?? []);
+}
+
+// Each video a story shape: all shapes used before one repeats; the openings
+// (first kind of part) this customer has seen least go first.
+function withShapes(set: StudioRecipe[], seenBefore: StudioRecipe[], shapes: string[]): StudioRecipe[] {
+  if (!shapes.length) return set;
+  const opening = (shape: string) => shape.split("-")[0];
+  const seenOpen = (shape: string) => seenBefore.filter((p) => p.shape && opening(p.shape) === opening(shape)).length;
+  const order = shapes.map((sh, i) => ({ sh, i })).sort((a, z) => seenOpen(a.sh) - seenOpen(z.sh) || a.i - z.i);
+  return set.map((v, k) => ({ ...v, story: order[k % order.length].i, shape: order[k % order.length].sh }));
 }

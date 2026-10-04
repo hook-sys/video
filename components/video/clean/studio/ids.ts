@@ -88,3 +88,16 @@ export const HANDS: Record<string, "a" | "z" | "az"> = {
   "end.spotlight": "a", "end.pen": "a", "end.outline": "a",
  "reveal.searchwin": "az", "reveal.diagram": "a", "reveal.diamond": "a", "pay.query": "z", "pay.live": "az", "growth.donut": "a", "nomore.reconcile": "az", "nomore.stopwatch": "az", "nomore.flood": "z", "cta.checkout": "az", "cta.atom": "az", "end.wipe": "a", "end.urlbar": "a", "end.glossy": "a",
 };
+
+// Blocks that picture one literal thing (a shop front, a receipt, a coin…):
+// offered only when the script talks about it, so the picture matches the words.
+export const LITERAL: Record<string, RegExp> = {
+  "trio.storefront": /\b(shops?|stores?|retail|e-?commerce|boutiques?|carts?|merchants?|sellers?|storefronts?)\b/i,
+  "pay.receipt": /\b(receipts?|invoices?|expenses?|payments?|bills?|billing|paid|pay)\b/i,
+  "pay.route": /\b(payments?|money|revenue|invoices?|prices?|costs?|cash|pay|paid|sales)\b|\$/i,
+  "cta.checkout": /\b(checkout|carts?|orders?|buy|purchases?|payments?|pay)\b/i,
+  "cta.store": /\b(apps?|mobile|phones?|download|ios|android|iphone)\b/i,
+  "hook.bill": /\b(hours?|time|minutes?|weeks?|days?)\b/i,
+};
+// The literal blocks whose thing this script never mentions.
+export const literalMisfits = (text: string) => new Set(Object.entries(LITERAL).filter(([, re]) => !re.test(text)).map(([id]) => id));

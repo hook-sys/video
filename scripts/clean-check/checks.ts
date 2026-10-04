@@ -3,7 +3,12 @@
 // timings. Rules kept only by review are listed, not checked.
 import { cameraOf, captionGroups, IN, LEAD_IN, OUTF } from "@/components/video/clean/clean-video";
 import { FLOWLY_VARIANTS, flowlyPlan, WORDS } from "@/components/video/clean/fixtures/flowly";
-import { shopnestPlan } from "@/components/video/clean/fixtures/sample";
+import { BOOKWELL, bookwellPlan, shopnestPlan } from "@/components/video/clean/fixtures/sample";
+import { buildStory, storyOf, type Story } from "@/components/video/clean/plan";
+import { fallbackStories, generateStories, partsFor, type StoriesOut } from "@/lib/ai/story-director";
+import { LITERAL, literalMisfits } from "@/components/video/clean/studio/ids";
+import { estimateWords } from "@/lib/flow-script";
+import { partCuts, storyParts } from "@/components/video/clean/studio/cuts";
 import { beatsFromPlan } from "@/components/video/clean/refs/beats";
 import { FILM_TEMPLATES } from "@/components/video/clean/refs/catalog";
 import { FILM_IDS } from "@/components/video/clean/refs";
@@ -240,6 +245,61 @@ export async function runChecks(): Promise<Check[]> {
   add("an older film video maps to its look and blocks", valid(legacy) && legacy.look === "dusk" && legacy.hue === 40 && legacy.blocks.hook === "hook.typed", JSON.stringify(legacy.blocks).slice(0, 80));
   const parsed = ProductBrief.shape.clean.safeParse({ script: {}, source: "ai", variants: [{ film: "glow", tint: "native", hue: 0 }, s1[0]], history: [[{ film: "fly", tint: "brand", hue: 12 }], s1], at: "now" });
   add("stored briefs with old and new videos both parse", parsed.success && !!parsed.data && parsed.data.variants.length === 2 && parsed.data.history.length === 2, parsed.success ? "ok" : String(parsed.error).slice(0, 120));
+
+  section = "story shapes";
+  for (const [name, plan] of [["Shopnest", shopnestPlan()], ["Bookwell", bookwellPlan()]] as const) {
+    // the seven parts in the fixed order play exactly as before
+    const whole = beatsFromPlan(plan);
+    const parts = storyParts(plan);
+    const fixed = partCuts(whole.t);
+    const same = parts.length === fixed.length && parts.every((p, i) => p.role === fixed[i].role && p.from === fixed[i].from) && parts.every((p) => JSON.stringify(p.b.t) === JSON.stringify(whole.t) && JSON.stringify(p.b.line) === JSON.stringify(whole.line));
+    add(`${name}: the fixed seven-part story plays as before`, same, parts.map((p) => `${p.role}@${p.from}`).join(" "));
+  }
+
+  {
+    const bw = bookwellPlan();
+    const st = buildStory(storyOf(BOOKWELL), bw.words);
+    add("the seven parts as a story build the same plan", !!st.plan && JSON.stringify(st.plan.scenes) === JSON.stringify(bw.scenes) && st.plan.duration === bw.duration, st.plan ? `${st.plan.scenes.length} scenes` : st.problems[0]);
+    // another shape of the same narration: opens on a result, a feature told twice
+    const other: Story = { brand: BOOKWELL.brand, content: BOOKWELL.content, parts: [
+      { role: "growth", eyebrow: "", title: BOOKWELL.hook.text, key: "paper", grow: "Most", team: "clinics", zoom: "notes." },
+      { role: "trio", ...BOOKWELL.trio }, { role: "reveal", ...BOOKWELL.reveal }, { role: "pay", ...BOOKWELL.pay }, { role: "pay", eyebrow: BOOKWELL.growth.eyebrow, title: BOOKWELL.growth.title, key: BOOKWELL.growth.key, pay: "busy", rev: "team", inst: "next." },
+      { role: "nomore", ...BOOKWELL.nomore }, { role: "cta", ...BOOKWELL.cta },
+    ] };
+    const op = buildStory(other, bw.words);
+    const parts = op.plan ? storyParts(op.plan) : [];
+    const ordered = parts.every((p, i) => !i || p.from >= parts[i - 1].from + 16);
+    add("a story opening on a result, a part told twice, plays in order", !!op.plan && parts[0].role === "growth" && parts.filter((p) => p.role === "pay").length === 2 && ordered && parts.at(-1)?.role === "end", parts.map((p) => `${p.role}@${p.from}`).join(" "));
+    const bad = buildStory({ ...other, parts: [other.parts[1], other.parts[0]] }, bw.words);
+    add("a story out of the narration's order is refused, never thrown", !bad.plan && bad.problems.length > 0, bad.problems[0] ?? "");
+    // length fit and the sentence fallback, 15 s and 60 s
+    const short = "Still chasing late payments? Paylo sends the invoice, reminds your client, and collects the money. Automatically. Get paid in days, not months.";
+    const long = "Every week, your team spends hours in meetings. Then someone has to write it all down. Notes get lost, action items get forgotten, and nobody remembers who promised what. Notely fixes that. Here is how it works. First, connect your calendar in one click. Notely joins your calls on Zoom, Google Meet or Teams. Second, just talk. Notely listens and writes a clean summary while you focus on the conversation. Third, every decision and task is pulled out automatically, with an owner and a due date. After the call, the summary lands in Slack and your inbox within a minute. Search any meeting from last month in seconds. Your team stops taking notes and starts getting work done. Teams using Notely save four hours a week, per person. Notely. Every meeting, remembered.";
+    for (const [name, text] of [["Paylo 15 s", short], ["Notely 60 s", long]] as const) {
+      const words = estimateWords(text, text.split(/\s+/).length / 2.6 / 0.92);
+      const [lo, hi] = partsFor(words[words.length - 1].end);
+      const fb = fallbackStories(words, { name: name.split(" ")[0], color: "#000", tagline: "", cta: "", url: "", icon: null });
+      const built = fb.map((x) => buildStory(x, words));
+      add(`${name}: the fallback plays, ${lo}–${hi} parts, two shapes`, fb.length === 2 && built.every((b) => !!b.plan) && fb.every((x) => x.parts.length >= Math.min(lo, 3) && x.parts.length <= hi) && fb[0].shape !== fb[1].shape, fb.map((x) => `${x.parts.length}: ${x.shape}`).join(" | "));
+    }
+    // the Story Director: shapes kept only when they play and differ
+    const P = (kind: string, f: Partial<Record<string, unknown>>) => ({ kind, text: "", key: "", big: "", items: [], name: "", sub: "", eyebrow: "", title: "", pay: "", rev: "", inst: "", grow: "", team: "", zoom: "", a: "", aKey: "", b: "", bKey: "", ...f });
+    const B = BOOKWELL;
+    const A1 = [P("hook", { text: B.hook.text, key: "paper", big: "notes." }), P("trio", { text: B.trio.text, items: B.trio.items }), P("reveal", { name: "Bookwell", sub: B.reveal.sub, key: "app." }), P("pay", { ...B.pay }), P("growth", { ...B.growth }), P("nomore", { ...B.nomore }), P("cta", { text: B.cta.tagline, key: B.cta.key })];
+    const answer = { tagline: "Your clinic in one app", stories: [{ parts: A1 }, { parts: A1 }, { parts: [P("growth", { title: B.hook.text, key: "paper", grow: "Most", team: "clinics", zoom: "notes." }), ...A1.slice(1)] }], content: { ...DEFAULT_CONTENT } } as unknown as StoriesOut;
+    const client = { responses: { parse: async () => ({ id: "s1", usage: { input_tokens: 1, output_tokens: 1 }, output_parsed: answer }) } } as never;
+    const res = await generateStories({ brand: B.brand, words: bw.words }, undefined, client);
+    add("Story Director: repeated shapes dropped, the rest kept", res.source === "ai" && res.stories.length === 2 && res.stories[0].story.shape !== res.stories[1].story.shape && res.problems.some((p) => p.includes("repeats")), res.stories.map((x) => x.story.shape?.split("-")[0]).join(", ") + ` · ${res.problems[0] ?? ""}`);
+    // the four videos spread the shapes, the openings seen least first
+    const shapes = ["hook-trio-reveal-cta", "growth-trio-reveal-cta", "trio-reveal-cta"];
+    const fresh = studioVariants(11, [], 4, { shapes });
+    const seen = studioVariants(11, [], 4, { shapes, recent: fresh.slice(0, 2) });
+    add("the shapes spread over the set; seen openings go last", new Set(fresh.slice(0, 3).map((v) => v.shape)).size === 3 && seen[0].shape?.split("-")[0] === "trio", `${fresh.map((v) => v.shape?.split("-")[0]).join(",")} → after two seen: ${seen.map((v) => v.shape?.split("-")[0]).join(",")}`);
+    const clinic = literalMisfits("Most clinics still run their day on phone calls. Bookwell puts your whole clinic in one simple app.");
+    const shop = literalMisfits("Your shop's orders and stock in one place.");
+    const set = studioVariants(5, [], 4, { exclude: clinic });
+    add("literal pictures only when the script names them", Object.keys(LITERAL).every((id) => BLOCKS.some((b) => b.id === id)) && clinic.has("trio.storefront") && !shop.has("trio.storefront") && set.every((v) => !clinic.has(v.blocks.trio) && !clinic.has(v.blocks.pay) && !clinic.has(v.blocks.cta)), [...clinic].join(", "));
+  }
 
   section = "AI models (/admin/models)";
   {

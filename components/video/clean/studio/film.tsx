@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { type CSSProperties, useMemo } from "react";
 import { AbsoluteFill, Html5Audio, useCurrentFrame } from "remotion";
 import { Audio as MediaAudio } from "@remotion/media";
 import { useCleanFont } from "../clean-video";
@@ -7,8 +7,9 @@ import { beatsFromPlan } from "../refs/beats";
 import { BrandCtx, type Enter, float, Shot } from "../refs/common";
 import { IN_OUT, mix, rise } from "../anim";
 import { BLOCK_BY_ID, blocksFor } from "./blocks";
+import { BLOCK_IDS } from "./ids";
 import type { Block, BlockCtx, Box } from "./kit";
-import { partCuts } from "./cuts";
+import { partCuts, storyParts } from "./cuts";
 import { type Camera, LOOKS, type LookId, type Pal, type Role, Backdrop } from "./looks";
 
 export { partCuts };
@@ -53,17 +54,29 @@ function Morph({ f, at: t, a, z, pa, pz }: { f: number; at: number; a: Box; z: B
   );
 }
 
+// A part's block: the recipe's for the part's first time; a part told again
+// gets another block of the same part (never the same picture twice).
+function blockFor(recipe: Recipe, role: Role, nth: number): Block | undefined {
+  const base = BLOCK_BY_ID[recipe.blocks[role] ?? ""] ?? blocksFor(role)[0];
+  if (!nth || !base) return base;
+  const ids = BLOCK_IDS[role] as readonly string[];
+  const at = ids.indexOf(base.id);
+  const id = ids[(Math.max(0, at) + nth * 5) % ids.length];
+  return BLOCK_BY_ID[id === base.id ? ids[(ids.indexOf(id) + 1) % ids.length] : id] ?? base;
+}
+
 export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio, bare }: StudioProps) {
   useCleanFont();
   const f = useCurrentFrame();
-  const b = beatsFromPlan(plan);
+  const b = useMemo(() => beatsFromPlan(plan), [plan]);
   const look = LOOKS[recipe.look] ?? LOOKS.glow;
-  const parts = partCuts(b.t);
+  // the story's parts in the order spoken (any of the seven, left out or twice)
+  const parts = useMemo(() => storyParts(plan), [plan]);
   const hue = recipe.hue ?? 0;
   const shots = parts.map((p, i) => {
-    const block: Block | undefined = BLOCK_BY_ID[recipe.blocks[p.role] ?? ""] ?? blocksFor(p.role)[0];
+    const block = blockFor(recipe, p.role, parts.slice(0, i).filter((q) => q.role === p.role).length);
     const to = parts[i + 1]?.from ?? plan.duration;
-    const c: BlockCtx = { f, from: p.from, to, role: p.role, look, pal: look.pal[look.mode(p.role)], b, T: b.t, L: b.line, C: b.content };
+    const c: BlockCtx = { f, from: p.from, to, role: p.role, look, pal: look.pal[look.mode(p.role)], b: p.b, T: p.b.t, L: p.b.line, C: p.b.content };
     return { block, c, obj: block?.obj?.(c) ?? {} };
   });
   // a cut where the field turns dark ↔ light: the last part has gone before
@@ -87,7 +100,7 @@ export function StudioFilm({ plan, recipe, postHue = 0, audioUrl, webAudio, bare
           // slower entrance where the field turns dark ↔ light; every part
           // leaves after the next has begun to come in (no empty frame)
           return (
-            <Shot key={p.role} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && look.mode(parts[i - 1].role) !== look.mode(p.role) ? 28 : 18} outDur={outHand ? 12 : flips(i + 1) ? (c.pal.dark ? 17 : 12) : c.pal.dark || c.pal.panelDark ? 20 : 14} tail={outHand ? 4 : flips(i + 1) ? 4 : 10} cam={cam(look.camera)}>
+            <Shot key={i} f={f} from={p.from} to={c.to} last={i === parts.length - 1} enter={!i ? "none" : inHand ? "fade" : ENTER[look.id]} exit={outHand ? "fade" : ENTER[look.id]} inDur={inHand ? 14 : i && look.mode(parts[i - 1].role) !== look.mode(p.role) ? 28 : 18} outDur={outHand ? 12 : flips(i + 1) ? (c.pal.dark ? 17 : 12) : c.pal.dark || c.pal.panelDark ? 20 : 14} tail={outHand ? 4 : flips(i + 1) ? 4 : 10} cam={cam(look.camera)}>
               {block.draw(c)}
             </Shot>
           );

@@ -142,7 +142,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const ready = project.pipeline_status === "completed" || project.pipeline_status === "preview_ready";
   let preview: RenderProps | null = null;
   let variants: StudioVariant[] = [];
-  let clean: { plan: CleanPlan; variants: StudioRecipe[] } | null = null;
+  let clean: { plans: CleanPlan[]; variants: StudioRecipe[] } | null = null;
   if (ready && !video?.signedUrl) {
     try {
       const input = await buildRenderInput(supabase, project);
@@ -209,7 +209,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {/* The clean film templates: four different videos of the same script. */}
       {ready && clean && (
-        <CleanStudio projectId={id} plan={clean.plan} variants={clean.variants} audioUrl={preview?.audioUrl ?? null} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} />
+        <CleanStudio projectId={id} plans={clean.plans} variants={clean.variants} audioUrl={preview?.audioUrl ?? null} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} />
       )}
 
       {/* Several looks of the same video: watch each, download one or all. */}
