@@ -21,6 +21,8 @@ export type ImageResult = { model: string; requestId: string; imageUrl: string }
 
 const SCRIPT_MAX = 5_000;
 const TIMEOUT_MS = 55_000;
+// A whole script's voice: some models (Gemini TTS) take a minute or more.
+const VOICE_TIMEOUT_MS = 180_000; // (the whole pipeline has 300 s)
 
 // Input shape differs per Fal model, so it is configured, not guessed.
 // FAL_VOICE_INPUT_TEMPLATE is JSON with {{text}}, {{language}}, {{style}}, {{gender}}, {{voice}} placeholders,
@@ -197,12 +199,14 @@ export async function timeWords(audioUrl: string, script: string): Promise<{ wor
 // field it rejected), not just "Unprocessable Entity".
 async function falRun(model: string, input: Record<string, unknown>, kind: "audio" | "image") {
   try {
-    const result = await falClient().subscribe(model, { input, abortSignal: AbortSignal.timeout(TIMEOUT_MS) });
+    const result = await falClient().subscribe(model, { input, abortSignal: AbortSignal.timeout(kind === "audio" ? VOICE_TIMEOUT_MS : TIMEOUT_MS) });
     const url = findMediaUrl(result.data, kind);
     if (!url) throw new Error(`${model} returned no ${kind} URL. Its answer: ${JSON.stringify(result.data).slice(0, 300)}`);
     return { data: result.data, requestId: result.requestId, url };
   } catch (e) {
-    const err = e as { status?: number; body?: { detail?: unknown } | unknown; message?: string };
+    const err = e as { status?: number; body?: { detail?: unknown } | unknown; message?: string; name?: string };
+    if (err?.name === "TimeoutError" || /aborted due to timeout/i.test(err?.message ?? ""))
+      throw new Error(`${model} took longer than ${Math.round((kind === "audio" ? VOICE_TIMEOUT_MS : TIMEOUT_MS) / 1000)} s and was stopped.`);
     if (!err?.status) throw e;
     const body = err.body as { detail?: unknown } | undefined;
     const detail = Array.isArray(body?.detail)
