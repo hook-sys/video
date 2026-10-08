@@ -74,6 +74,8 @@ import { type StoredVariant, studioVariants } from "@/lib/studio-variants";
 import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { generateFlowScript } from "@/lib/ai/flow-director";
 import { generateStories } from "@/lib/ai/story-director";
+import { generateComposerIdeas } from "@/lib/ai/composer-director";
+import { type Ideas, type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { literalMisfits } from "@/components/video/clean/studio/ids";
 import { generateSceneScript } from "@/lib/ai/scene-director";
 import { generateShotScript } from "@/lib/ai/shot-director";
@@ -365,7 +367,7 @@ export async function generateBrief(projectId: string) {
     // With a locked script the voice and the Shot Director run alongside the
     // brief: keep what they already stored, and fit the storyboard to the voice.
     const { data: fresh } = await admin.from("projects").select("brief, voice_status, duration_seconds").eq("id", projectId).single();
-    const kept = Object.fromEntries(Object.entries((fresh?.brief as Record<string, unknown> | null) ?? {}).filter(([k]) => ["scene", "flow", "story", "shots", "variants", "diagnostics", "taste", "clean"].includes(k)));
+    const kept = Object.fromEntries(Object.entries((fresh?.brief as Record<string, unknown> | null) ?? {}).filter(([k]) => ["scene", "flow", "story", "shots", "variants", "diagnostics", "taste", "clean", "composer"].includes(k)));
     let next = lockBriefScript(brief, project);
     if (fresh?.voice_status === "completed" && fresh.duration_seconds) {
       try {
@@ -503,6 +505,34 @@ async function cleanSet(
   return { script: stories[0] as unknown as Record<string, unknown>, stories: stories as unknown as Record<string, unknown>[], source: result.source, variants, history, at: new Date().toISOString() };
 }
 
+// The Composer's four videos (when its engine is on for this customer): the
+// Director composes the narration scene by scene, with ways to picture each
+// and four art directions; each video takes its own. The faces and fields
+// this customer has seen are avoided. Null when the engine is off.
+async function composerSet(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string,
+  userId: string,
+  project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null; duration_seconds: number },
+  words: WordTiming[],
+  brief: { product_name?: string; product_summary?: string; cta?: string } | null,
+  addUsage: (u: BriefUsage) => void,
+) {
+  const ai = await getAiConfig();
+  const mode = ai.engine.composer;
+  if (mode === "off" || (mode === "admins" && !(await userAccess(admin, userId)).admin)) return null;
+  const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
+  const brand = { name: project.brand_name?.trim() || brief?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief?.cta || "Get started", url: host, icon: null };
+  const { data: past } = await admin.from("projects").select("composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(12);
+  const seenArts = (past ?? []).flatMap((p) => ((p.composer as { videos?: { script?: { art?: { display?: string; field?: string } } }[] } | null)?.videos ?? []).map((v) => v.script?.art ?? {}));
+  const seen = { display: [...new Set(seenArts.map((a) => a.display).filter((x): x is string => !!x))].slice(0, 12), field: [...new Set(seenArts.map((a) => a.field).filter((x): x is string => !!x))].slice(0, 6) };
+  const result = await generateComposerIdeas({ words, brand, product: brief?.product_summary ?? null, seen }, addUsage);
+  const { count: screens } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: result.ideas, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0 });
+  console.info("composer director:", { projectId, source: result.source, ms: result.ms, scenes: result.ideas?.scenes.length ?? 0, problems: [...result.problems, ...set.problems].slice(0, 8) });
+  return { videos: set.videos, ideas: result.ideas, source: result.source, history: [] as unknown[], problems: [...result.problems, ...set.problems].slice(0, 20), at: new Date().toISOString() };
+}
+
 async function generateFlow(projectId: string, userId: string, budgetMs: number) {
   const admin = createAdminClient();
   const { data: project } = await admin
@@ -536,7 +566,15 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // The clean film templates first (one quick call): the narration in seven
   // parts and the four videos to offer, never a set this customer already had
   // for the same script. The engines below still run (fallback).
-  const clean = project.format === "16:9" && words?.length ? await cleanSet(admin, projectId, userId, project, words, narration, brief.success ? brief.data : null, addUsage) : null;
+  const [clean, composer] = project.format === "16:9" && words?.length
+    ? await Promise.all([
+        cleanSet(admin, projectId, userId, project, words, narration, brief.success ? brief.data : null, addUsage),
+        composerSet(admin, projectId, userId, project, words, brief.success ? brief.data : null, addUsage).catch((e) => {
+          console.warn("composer failed:", e instanceof Error ? e.message : e);
+          return null;
+        }),
+      ])
+    : [null, null];
   // Shot templates first (lib/shots.ts): tested shots, the Director only picks
   // and fills them (four directions, else one — inside generateShotScript).
   // The free-form scene Director is the fallback only when no shots came back.
@@ -576,7 +614,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // The videos the customer chooses between: one per creative direction.
   const variants = shot.script && v2 === shot ? shot.variants.map((v) => ({ ...v, scene: { ...v.scene, theme: v2.script!.theme, pace: v2.script!.pace } })) : [];
   const engine = v2.script ? { scene: v2.script, ...(shot.script ? { shots: shot.shots } : {}), ...(variants.length > 1 ? { variants } : {}) } : result.script ? { flow: result.script } : null;
-  const stored = engine || clean ? { ...(engine ?? {}), ...(clean ? { clean } : {}) } : null;
+  const stored = engine || clean || composer ? { ...(engine ?? {}), ...(clean ? { clean } : {}), ...(composer ? { composer } : {}) } : null;
   // What the Shot Director's search did with each direction (why one was
   // dropped, its DNA, its behaviors) and which build made it — kept even
   // when nothing usable came back.
@@ -1418,6 +1456,36 @@ export async function newCleanSet(projectId: string) {
   await createAdminClient()
     .from("projects")
     .update({ brief: { ...(project.brief as object), clean: { ...clean, variants, history, at: new Date().toISOString() } } })
+    .eq("id", projectId)
+    .eq("user_id", user.id);
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// Four new Composer videos for the same script and voice: the Director's
+// ideas taken again with new art directions and other pictures per scene;
+// the faces and fields of every earlier set are avoided.
+export async function newComposerSet(projectId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+  // RLS: only returns the project if this user owns it.
+  const { data: project } = await supabase.from("projects").select("brief, brand_name, brand_color, call_to_action, website_url, duration_seconds, voice_result").eq("id", projectId).maybeSingle();
+  const raw = (project?.brief ?? null) as { composer?: { videos: StoredComposition[]; ideas: Ideas | null; history?: StoredComposition[][] }; product_name?: string; cta?: string } | null;
+  const composer = raw?.composer;
+  const words = parseWordTimings((project?.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
+  if (!project || !composer || !words?.length) return;
+  const history = [...(composer.history ?? []), composer.videos];
+  const arts = history.flat().map((v) => v.script.art);
+  const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
+  const brand = { name: project.brand_name?.trim() || raw?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || raw?.cta || "Get started", url: host, icon: null };
+  // the Director's own art directions are spent: new ones are drawn
+  const ideas = composer.ideas ? { ...composer.ideas, arts: [] } : null;
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: (seedFrom(projectId) + history.length * 7919) >>> 0, ideas, avoid: { display: arts.map((a) => a.display), field: arts.map((a) => a.field).slice(-6), key: arts.map((a) => a.key).slice(-4) } });
+  await createAdminClient()
+    .from("projects")
+    .update({ brief: { ...(project.brief as object), composer: { ...composer, videos: set.videos, history: history.slice(-6), at: new Date().toISOString() } } })
     .eq("id", projectId)
     .eq("user_id", user.id);
   revalidatePath(`/projects/${projectId}`);

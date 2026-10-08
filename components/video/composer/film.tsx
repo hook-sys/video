@@ -1,0 +1,189 @@
+import { type CSSProperties, useMemo, useState } from "react";
+import { AbsoluteFill, Html5Audio, continueRender, delayRender, staticFile, useCurrentFrame } from "remotion";
+import { Audio as MediaAudio } from "@remotion/media";
+import { DISPLAY_FACES, TEXT_FACES, faceOf, familyOf, fontUrl, palette, rng } from "./art";
+import { type Anchor, Field } from "./field";
+import { ItemBody, baseSize } from "./items";
+import { type Ctx, CtxC } from "./kit";
+import { isAccent } from "./layout";
+import { IN_OUT, TRANSITION_FRAMES, cameraOf, clamp01, enterK, enterStyle, mix, moverOf, ramp, sceneIn, sceneOut } from "./motion";
+import { Headline } from "./text";
+import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene } from "./types";
+
+// A Composer film: the Director's scenes on the voice's words. Every scene
+// is its own composition; one field of light runs under all of them and
+// moves to each scene's place; a thing named again travels to its new place.
+
+const loaded = new Set<string>();
+function useFaces(slugs: string[]) {
+  const [, setV] = useState(0);
+  useState(() => {
+    if (typeof document === "undefined") return;
+    const todo = [...new Set(slugs)].map((s) => [...DISPLAY_FACES, ...TEXT_FACES].find((f) => f.slug === s) ?? DISPLAY_FACES[0]).filter((f) => !loaded.has(f.family));
+    if (!todo.length) return;
+    const handle = delayRender("Loading faces");
+    Promise.all(
+      todo.map((f) =>
+        new FontFace(f.family, `url(${staticFile(fontUrl(f))}) format("woff2")`, { weight: f.fixed ? String(f.fixed) : "100 900" })
+          .load()
+          .then((ff) => {
+            document.fonts.add(ff);
+            loaded.add(f.family);
+          })
+          .catch(() => loaded.add(f.family)),
+      ),
+    )
+      .then(() => setV((v) => v + 1))
+      .finally(() => continueRender(handle));
+  });
+}
+
+const DEFAULT_ENTER: Record<ItemKind, EnterKind> = { card: "rise", icon: "pop", chips: "left", stat: "scale", chart: "rise", device: "rise", screenshot: "rise", logo: "blur", button: "pop", compare: "rise", flow: "blur", steps: "rise", avatars: "pop", badge: "pop", quote: "rise", shape: "scale", cursor: "blur" };
+
+function anchorOf(s: PlacedScene, i: number): Anchor {
+  const R = rng(s.seed ^ 0x9e3779b9);
+  // the light leans away from the scene's things (towards its words)
+  const tb = s.text?.box;
+  const x = tb ? mix(R.range(380, 1540), tb.x, 0.45) : R.range(380, 1540);
+  return { x, y: R.range(260, 820), s: R.range(0.8, 1.3), t: (i * 0.37 + R.next() * 0.3) % 1 };
+}
+
+// how far a line overflows its place once the face is really there
+const fixCache = new Map<string, number>();
+function measureFix(tb: NonNullable<PlacedScene["text"]>, family: string, weight: number, upper: boolean, tracking: number) {
+  if (typeof document === "undefined") return 1;
+  const key = `${family}|${weight}|${upper}|${tracking}|${tb.size}|${Math.round(tb.box.w)}|${tb.lines.map((l) => l.map((i) => tb.words[i].t).join(" ")).join("/")}`;
+  const hit = fixCache.get(key);
+  if (hit !== undefined) return hit;
+  const v = measureNow(tb, family, weight, upper, tracking);
+  fixCache.set(key, v);
+  return v;
+}
+function measureNow(tb: NonNullable<PlacedScene["text"]>, family: string, weight: number, upper: boolean, tracking: number) {
+  const ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return 1;
+  ctx.font = `${weight} ${tb.size}px ${family}`;
+  let worst = 1;
+  for (const line of tb.lines) {
+    const text = line.map((i) => (upper ? tb.words[i].t.toUpperCase() : tb.words[i].t)).join(" ");
+    const w = ctx.measureText(text).width + text.length * tracking * tb.size + line.length * tb.size * 0.02;
+    if (w > tb.box.w) worst = Math.min(worst, tb.box.w / w);
+  }
+  return worst;
+}
+
+export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: ComposerProps & { screens?: string[] }) {
+  const f = useCurrentFrame();
+  const { art } = plan;
+  const display = faceOf(art.display);
+  const textFace = faceOf(art.text, TEXT_FACES);
+  useFaces([display.slug, textFace.slug]);
+  const m = useMemo(() => moverOf(art), [art]);
+  const pals = useMemo(() => ({ dark: palette(art, true), light: palette(art, false) }), [art]);
+  const scenes = plan.scenes;
+  const anchors = useMemo(() => scenes.map(anchorOf), [scenes]);
+  const brand = plan.brand;
+  const ready = typeof document !== "undefined" && loaded.has(display.family);
+  const family = familyOf(display);
+  const weight = display.fixed ?? art.weight;
+  const upper = art.case === "upper" || !!display.upper;
+  const tracking = art.tracking;
+  const fixes = scenes.map((s) => (s.text && ready ? measureFix(s.text, family, weight, upper, tracking) : 1));
+  // the scene whose field is showing (it opens as the scene comes in)
+  const cur = Math.max(0, scenes.findLastIndex((s) => s.from - 2 <= f));
+  const s = scenes[cur];
+  const D = (i: number) => TRANSITION_FRAMES[scenes[i]?.enter ?? "fade"] ?? 16;
+  const flipping = cur > 0 && scenes[cur - 1].dark !== s.dark;
+  // a field turning dark ↔ light opens slowly from the scene's thing, its
+  // area growing evenly (never a flash of new light)
+  const tk = cur ? (flipping ? ramp(f, s.from - 4, 44) : IN_OUT(ramp(f, s.from - 2, Math.max(D(cur), 22)))) : 1;
+  const prevA = anchors[Math.max(0, cur - 1)];
+  const a = anchors[cur];
+  const anchor: Anchor = { x: mix(prevA.x, a.x, tk), y: mix(prevA.y, a.y, tk), s: mix(prevA.s, a.s, tk), t: mix(prevA.t, a.t, tk) };
+  const flip = flipping && tk < 1;
+  const origin = s.items.find((q) => !isAccent(q))?.box ?? s.text?.box ?? { x: 960, y: 540, w: 0, h: 0 };
+  const fieldOf = (dark: boolean, style?: CSSProperties) => <Field f={f} kind={art.field} pal={dark ? pals.dark : pals.light} hue={art.hue} anchor={anchor} energy={art.energy} overlay={art.overlay} style={style} />;
+  // (the circle's area grows evenly until it reaches the farthest corner)
+  const reach = Math.hypot(Math.max(origin.x, 1920 - origin.x), Math.max(origin.y, 1080 - origin.y));
+  const clip = flip ? `circle(${Math.round(Math.sqrt(tk) * reach)}px at ${Math.round(origin.x)}px ${Math.round(origin.y)}px)` : undefined;
+  return (
+    <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
+      {flip && fieldOf(scenes[cur - 1].dark)}
+      <AbsoluteFill style={clip ? { clipPath: clip, WebkitClipPath: clip } : undefined}>{fieldOf(s.dark)}</AbsoluteFill>
+      {!bare &&
+        scenes.map((sc, i) => {
+          const last = i === scenes.length - 1;
+          const dIn = i ? D(i) : 1;
+          // the last scene moves on with the next one where they travel
+          // together (push, whip); otherwise it is mostly gone before the
+          // next one's words arrive (two headlines never sit on each other)
+          const together = !last && /^(push|whip)/.test(scenes[i + 1].enter);
+          const dOut = last ? 0 : together ? D(i + 1) : 14;
+          const outAt = together ? sc.to - 2 : sc.to - 4;
+          const start = sc.from - 2;
+          const end = last ? plan.duration : outAt + dOut;
+          if (f < start || f > end) return null;
+          const kin = i ? IN_OUT(ramp(f, start, dIn)) : 1;
+          const kout = last ? 0 : IN_OUT(ramp(f, outAt, dOut));
+          const pal = sc.dark ? pals.dark : pals.light;
+          const c: Ctx = { f, pal, art, m, display: familyOf(display), text: familyOf(textFace), brand, screens };
+          const o = sc.items.find((q) => !isAccent(q))?.box ?? sc.text?.box ?? { x: 960, y: 540 };
+          const outStyle = kout > 0 ? sceneOut(scenes[i + 1].enter, kout) : undefined;
+          const inStyle = kin < 1 ? sceneIn(sc.enter, kin, o) : undefined;
+          const p = clamp01((f - sc.from) / Math.max(1, sc.to - sc.from));
+          const cam = cameraOf(sc.camera, p, f, art.energy);
+          const next = scenes[i + 1];
+          // things that travel on into the next scene leave this one as it goes
+          const travels = (it: PlacedItem) => !!(it.id && next?.items.some((q) => q.id === it.id && q.from)) && f >= next.from - 2;
+          const sorted = [...sc.items].sort((x, y) => x.z - y.z);
+          const still = sorted.filter((it) => !it.from);
+          const moving = sorted.filter((it) => it.from);
+          const textOut = 0;
+          return (
+            <AbsoluteFill key={i} style={outStyle}>
+              <AbsoluteFill style={inStyle}>
+                <AbsoluteFill style={{ perspective: 1800, perspectiveOrigin: "50% 45%" }}>
+                  <AbsoluteFill style={{ transform: cam, transformStyle: "preserve-3d" }}>
+                    <CtxC.Provider value={c}>
+                      {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} />)}
+                      {sc.text && <Headline c={c} tb={fixes[i] < 1 ? { ...sc.text, size: Math.floor(sc.text.size * fixes[i]) } : sc.text} out={textOut} plate={sc.layout === "over"} />}
+                      {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} />)}
+                    </CtxC.Provider>
+                  </AbsoluteFill>
+                </AbsoluteFill>
+              </AbsoluteFill>
+              <CtxC.Provider value={c}>
+                {moving.filter((it) => !travels(it)).map((it, j) => <Thing key={`m${j}`} c={c} it={it} idx={j + 20} travel={{ from: it.from!, start, dur: 22 }} />)}
+              </CtxC.Provider>
+            </AbsoluteFill>
+          );
+        })}
+      {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+    </AbsoluteFill>
+  );
+}
+
+function Thing({ c, it, idx, travel }: { c: Ctx; it: PlacedItem; idx: number; travel?: { from: { x: number; y: number; w: number; h: number }; start: number; dur: number } }) {
+  const [bw, bh] = baseSize(it);
+  let box = it.box;
+  let k = 1;
+  if (travel) {
+    const t = IN_OUT(ramp(c.f, travel.start, travel.dur));
+    box = { x: mix(travel.from.x, box.x, t), y: mix(travel.from.y, box.y, t), w: mix(travel.from.w, box.w, t), h: mix(travel.from.h, box.h, t) };
+  } else {
+    k = enterK(c.m, c.f, it.at);
+    if (k <= 0) return null;
+  }
+  const scale = box.w / bw;
+  const kind = it.enter ?? DEFAULT_ENTER[it.kind] ?? "rise";
+  const enter = travel ? {} : enterStyle(kind, k);
+  const bob = it.kind === "shape" || it.kind === "cursor" ? "" : ` translateY(${(Math.sin(c.f / (36 + (idx % 5) * 7) + idx) * 5).toFixed(1)}px)`;
+  const tilt = it.tilt ? ` perspective(1600px) rotateY(${it.tilt}deg) rotateX(${(Math.abs(it.tilt) * 0.3).toFixed(1)}deg)` : "";
+  return (
+    <div style={{ position: "absolute", left: box.x - bw / 2, top: box.y - bh / 2, width: bw, height: bh, transform: `scale(${scale.toFixed(4)})${tilt}${bob}`, zIndex: it.z }}>
+      <div style={{ width: bw, height: bh, ...enter, transform: `${(enter as CSSProperties).transform ?? ""}` }}>
+        <ItemBody c={c} it={it} w={bw} h={bh} />
+      </div>
+    </div>
+  );
+}

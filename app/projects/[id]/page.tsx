@@ -32,6 +32,8 @@ import { BackToDashboard } from "./back-to-dashboard";
 import { BrowserDownload } from "./browser-download";
 import { VariantStudio, type StudioVariant } from "./variant-studio";
 import { CleanStudio } from "./clean-studio";
+import { ComposerStudio } from "./composer-studio";
+import type { ComposerPlan } from "@/components/video/composer/types";
 import type { CleanPlan } from "@/components/video/clean/types";
 import type { StudioRecipe } from "@/lib/studio-variants";
 import { DIMENSIONS } from "@/components/video/types";
@@ -143,12 +145,14 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   let preview: RenderProps | null = null;
   let variants: StudioVariant[] = [];
   let clean: { plans: CleanPlan[]; variants: StudioRecipe[] } | null = null;
+  let composer: { plans: ComposerPlan[]; screens: string[] } | null = null;
   if (ready && !video?.signedUrl) {
     try {
       const input = await buildRenderInput(supabase, project);
       preview = input.props ?? null;
       variants = input.variants ?? [];
       clean = input.clean ?? null;
+      composer = input.composer ?? null;
     } catch {
       preview = null;
     }
@@ -206,6 +210,11 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       </div>
 
       {project.pipeline_status === "running" && <WaitingScreen step={project.pipeline_step} {...heroPlan()} />}
+
+      {/* The Composer (new engine): four videos composed scene by scene. */}
+      {ready && composer && (
+        <ComposerStudio projectId={id} plans={composer.plans} screens={composer.screens} audioUrl={preview?.audioUrl ?? null} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} />
+      )}
 
       {/* The clean film templates: four different videos of the same script. */}
       {ready && clean && (

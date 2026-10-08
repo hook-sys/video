@@ -14,6 +14,8 @@ import { compileSceneScript } from "@/components/video/flow/compile-scene";
 import { buildPlan, buildStory, type SevenPart, type Story } from "@/components/video/clean/plan";
 import type { CleanPlan } from "@/components/video/clean/types";
 import { type StudioRecipe, toRecipe } from "@/lib/studio-variants";
+import { placeAll } from "@/components/video/composer/layout";
+import { Script as ComposerScript, type ComposerPlan } from "@/components/video/composer/types";
 
 export type RenderProject = {
   id?: string;
@@ -29,10 +31,11 @@ export type RenderProject = {
   voice_result: { storagePath?: string; timing?: { words?: WordTiming[] } | null } | null;
   screenshot_evidence?: unknown;
   direction?: string;
+  website_url?: string | null;
 };
 
 export const RENDER_PROJECT_COLUMNS =
-  "id, user_id, format, duration_seconds, brand_name, brand_color, call_to_action, brief, assets_manifest, voice_status, voice_result, screenshot_evidence, direction";
+  "id, user_id, format, duration_seconds, brand_name, brand_color, call_to_action, brief, assets_manifest, voice_status, voice_result, screenshot_evidence, direction, website_url";
 
 // Resolves storyboard scenes, assets and narration into composition props with signed URLs.
 // `problems` lists anything missing that a final render must not proceed without.
@@ -116,7 +119,7 @@ export async function buildRenderInput(
   // (shown on the UI planes). Missing files simply leave them out.
   let logoUrl: string | undefined;
   let screenshotUrls: string[] = [];
-  if ((flowing || brief.data.clean) && project.id && project.user_id) {
+  if ((flowing || brief.data.clean || (project.brief as { composer?: unknown } | null)?.composer) && project.id && project.user_id) {
     const folder = `${project.user_id}/${project.id}`;
     const [{ data: files }, { data: shots }] = await Promise.all([
       supabase.storage.from(SCREENSHOTS_BUCKET).list(folder, { search: LOGO_FILE_PREFIX }),
@@ -175,10 +178,30 @@ export async function buildRenderInput(
     }
   }
 
+  // The Composer's videos: each stored script laid out on the voice's words
+  // with the customer's brand inputs (a script that no longer parses is left out).
+  let composer: { plans: ComposerPlan[]; screens: string[] } | null = null;
+  const storedComposer = (project.brief as { composer?: { videos?: { script: unknown; seed: number; source: ComposerPlan["source"] }[] } } | null)?.composer;
+  if (storedComposer?.videos?.length && project.format === "16:9" && wordTimings?.length) {
+    const brand = { name: project.brand_name?.trim() || brief.data.product_name, color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief.data.cta, url: (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, ""), icon: logoUrl ?? null };
+    const plans = storedComposer.videos.flatMap((v) => {
+      const sc = ComposerScript.safeParse(v.script);
+      if (!sc.success) return [];
+      try {
+        const { plan } = placeAll(sc.data, wordTimings, Math.round(project.duration_seconds * 30), brand, v.seed, screenshotUrls.length, v.source);
+        return [plan];
+      } catch {
+        return [];
+      }
+    });
+    if (plans.length) composer = { plans, screens: screenshotUrls };
+  }
+
   return {
     problems,
     variants,
     clean,
+    composer,
     props: {
       story: story ? { story, narration: brief.data.script, assets: storyAssets } : null,
       flow: flowing ? { plan: compilePlan() } : null,

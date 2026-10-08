@@ -15,6 +15,7 @@ import type { BriefUsage } from "@/lib/ai/product-brief";
 export const TEXT_TASKS = [
   { id: "brief", label: "Script & brief", help: "Reads the website, screenshots' text and the customer's script, and writes the brief. Every video needs it, so it can't be turned off.", canOff: false },
   { id: "screenshots", label: "Screenshot reading", help: "Reads uploaded screenshots (needs a model that accepts images). Off: screenshots are still shown in the video, just not read.", canOff: true },
+  { id: "composer", label: "Composer Director", help: "Composes the Composer engine's videos scene by scene (only when the Composer engine is on). Off: the Composer's own rule-based director composes them.", canOff: true },
   { id: "clean", label: "Studio Director", help: "Splits the narration into the studio's parts (new engine, 16:9). Off: a rule-based split is used instead.", canOff: true },
   { id: "shot", label: "Shot Director (old engine)", help: "Plans the old engine's shots. Off: skipped; the Scene Director is tried next.", canOff: true },
   { id: "scene", label: "Scene Director (old engine)", help: "Old engine, used when the Shot Director gave nothing. Off: skipped.", canOff: true },
@@ -35,7 +36,11 @@ export type AiConfig = {
   image: { on: boolean; model: string; template: string };
   // USD: per 1M input / output tokens (text), per character (voice), per image
   prices: Record<string, ModelPrice>;
+  // the Composer engine (every scene composed by its Director): off, for
+  // admins' projects only (to compare with the studio), or for everyone
+  engine: { composer: ComposerMode };
 };
+export type ComposerMode = "off" | "admins" | "all";
 
 // A voice customers can pick on the form (a name of the voice model's).
 export type VoiceChoice = { name: string; gender: "female" | "male"; label: string };
@@ -63,6 +68,7 @@ export function defaultConfig(): AiConfig {
     voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     image: { on: true, model: "", template: "" },
     prices: {},
+    engine: { composer: "off" },
   };
 }
 
@@ -89,6 +95,7 @@ export function normalizeConfig(raw: unknown): AiConfig {
         .filter(([k]) => k.trim())
         .map(([k, p]) => [k.trim().slice(0, 200), { in: price(p?.in), out: price(p?.out), unit: price(p?.unit) }]),
     ),
+    engine: { composer: (["off", "admins", "all"] as const).find((m) => m === r.engine?.composer) ?? "off" },
   };
 }
 

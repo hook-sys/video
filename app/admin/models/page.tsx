@@ -64,6 +64,19 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
 
       <form action={saveAiModels} className="flex flex-col gap-4">
         <fieldset disabled={!editable} className="flex flex-col gap-4">
+          <Card title="Video engine">
+            <div className="flex flex-col gap-3 text-sm">
+              <p className="text-zinc-500">
+                <b className="text-zinc-300">Composer</b> (new): every scene is composed by its Director from parts — layout, things, motion, background and transition chosen for its words; no fixed scenes. The studio videos keep running beside it until it is switched on for everyone.
+              </p>
+              <select name="engine_composer" defaultValue={c.engine.composer} className={`${input} md:w-80`}>
+                <option value="off">Off — studio videos only</option>
+                <option value="admins">Admins only — Composer videos on admins&apos; projects (compare)</option>
+                <option value="all">Everyone — Composer videos for every new project</option>
+              </select>
+            </div>
+          </Card>
+
           <Card title="Script & director — main model">
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">

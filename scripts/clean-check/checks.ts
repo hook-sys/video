@@ -35,6 +35,12 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { countUsage, defaultConfig, normalizeConfig, parseVoiceChoices, textClient, textCost, usageCost } from "@/lib/ai/models";
 import { retimeScript } from "@/lib/voice-timing";
 import { directionFor, lockedVoiceScript, voiceChoiceOf, withVoiceChoice } from "@/lib/projects";
+import { composeVariants, fitScript, scriptFromIdeas, type Ideas } from "@/components/video/composer/variants";
+import { placeAll } from "@/components/video/composer/layout";
+import { Script as ComposerScript } from "@/components/video/composer/types";
+import { clauses } from "@/components/video/composer/auto";
+import { generateComposerIdeas, ideaProblems } from "@/lib/ai/composer-director";
+import { livingStandIn } from "@/components/video/icons/living";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -381,6 +387,64 @@ export async function runChecks(): Promise<Check[]> {
       if (saved.url === undefined) delete process.env.FAL_LLM_BASE_URL;
       if (saved.key === undefined) delete process.env.FAL_KEY;
     }
+  }
+
+  section = "composer";
+  {
+    const scripts = [
+      { name: "Flowly", words: plans[0].words, brand: plans[0].brand },
+      { name: "Bookwell", words: bookwellPlan().words, brand: bookwellPlan().brand },
+    ];
+    for (const sc of scripts) {
+      const duration = Math.round((sc.words[sc.words.length - 1].end + 1.2) * FPS);
+      const set = composeVariants({ words: sc.words, brand: sc.brand, duration, seed: 4242 });
+      const narration = sc.words.map((w) => w.text).join(" ");
+      add(`${sc.name}: four videos, every scene laid out cleanly`, set.plans.length === 4 && !set.problems.length, set.problems.slice(0, 3).join("; ") || `${set.plans.map((p) => p.scenes.length).join("/")} scenes`);
+      const faces = new Set(set.plans.map((p) => p.art.display)), fields = new Set(set.plans.map((p) => p.art.field));
+      add(`${sc.name}: no two videos share a face or a field`, faces.size === 4 && fields.size === 4, `${[...faces].join(", ")} · ${[...fields].join(", ")}`);
+      const layouts = set.plans.map((p) => p.scenes.map((s) => `${s.layout}:${s.items.map((i) => i.kind).join("+")}`).join("|"));
+      add(`${sc.name}: no two videos are built alike`, new Set(layouts).size === 4, `${new Set(layouts).size} different scene sequences`);
+      const gaps = set.plans.flatMap((p) => p.scenes.slice(1).filter((s, k) => s.from !== p.scenes[k].to || s.to - s.from < 30));
+      add(`${sc.name}: scenes follow on, none shorter than a second`, !gaps.length && set.plans.every((p) => p.scenes[0].from === 0 && p.scenes.at(-1)!.to === duration), `${gaps.length} gaps`);
+      const late = set.plans.flatMap((p) => p.scenes.filter((s) => Math.min(s.text?.words[0]?.at ?? Infinity, ...s.items.filter((i) => !["badge", "shape", "cursor"].includes(i.kind)).map((i) => i.at)) > s.from + 3));
+      add(`${sc.name}: something is on screen from each scene's first frames`, !late.length, `${late.length} late scenes`);
+      const icons = set.plans.flatMap((p) => p.scenes.flatMap((s) => s.items.flatMap((i) => [i.icon, ...(i.rows ?? []).map((r) => r.icon)]))).filter((x): x is string => !!x);
+      add(`${sc.name}: no people or animals`, icons.every((i) => !livingStandIn(i)), `${icons.length} icons`);
+      const stats = set.plans.flatMap((p) => p.scenes.flatMap((s) => s.items.filter((i) => i.kind === "stat").map((i) => i.value ?? "")));
+      const unsaid = stats.filter((v) => /\d/.test(v) && !narration.includes(v.match(/\d+/)![0]) && !/\b(one|two|three|four|five|six|seven|eight|nine|ten)\b/i.test(narration));
+      add(`${sc.name}: a big number is one the voice says`, !unsaid.length, unsaid.join(", ") || `${stats.length} numbers`);
+      add(`${sc.name}: every video ends on the brand's ask`, set.plans.every((p) => p.scenes.at(-1)!.items.some((i) => i.kind === "button")), "button in the last scene");
+      add(`${sc.name}: what is stored passes the stored schema`, set.videos.every((v) => ComposerScript.safeParse(v.script).success), "4 scripts");
+      const again = composeVariants({ words: sc.words, brand: sc.brand, duration, seed: 4242, avoid: { display: [...faces] } });
+      add(`${sc.name}: the faces a customer has seen are not used again`, again.plans.every((p) => !faces.has(p.art.display)), again.plans.map((p) => p.art.display).join(", "));
+    }
+    const cs = clauses(plans[0].words);
+    add("lists stay whole, long sentences split", cs.length >= 6 && cs.every((c) => c.to - c.from < 16), cs.map((c) => c.to - c.from + 1).join(","));
+    // the Director's ideas (a model's answer, mended): out-of-range words and
+    // unknown parts never break a video
+    const words = plans[0].words;
+    const ideas: Ideas = {
+      arts: [{ name: "Night glass", hue: 250, harmony: "analogous", scheme: "dark", field: "aurora", overlay: "grain", surface: "glass", radius: 28, display: "no-such-font", text: "inter", weight: 800, case: "sentence", tracking: -0.04, key: "pill", motion: "snappy", pace: 1.1, camera: "push", icons: "tile", energy: 0.6 }],
+      scenes: [
+        { at: 0, text: { from: 0, to: 9, size: "l", key: ["scattered"] }, kicker: null, options: [{ layout: "split-left", arrange: null, items: [{ kind: "chips", at: 2, rows: [{ title: "Sales", icon: "trending-up" }, { title: "Payments", icon: "credit-card" }, { title: "Reports", icon: "user" }] }] }] },
+        { at: 10, text: { from: 10, to: 400, size: "xl", key: [] }, kicker: "Flowly", options: [{ layout: "nonsense", items: [{ kind: "dragon", at: 10 }, { kind: "device", variant: "phone", screen: "kpi", at: 12, rows: [{ title: "Revenue", meta: "$48k", tag: "+12%" }] }] }] },
+        { at: 30, text: { from: 30, to: 45, size: "m", key: [] }, kicker: null, options: [{ layout: "top", items: [] }] },
+      ],
+    };
+    const script = scriptFromIdeas(ideas, 0, 7, words, plans[0].brand);
+    const placed = placeAll(fitScript(script), words, plans[0].duration, plans[0].brand, 7, 0, "director");
+    const chips = placed.plan.scenes[0].items.find((i) => i.kind === "chips");
+    add("Director ideas: mended and laid out", placed.plan.scenes.length === 3 && placed.plan.art.display !== "no-such-font" && placed.plan.art.surface === "glass" && placed.plan.scenes[1].items.every((i) => i.kind !== ("dragon" as string)) && !!chips && chips.rows!.every((r) => !r.icon || !livingStandIn(r.icon) || r.icon === "id-card"), `${placed.plan.art.display}, ${placed.problems.length} problems`);
+    add("Director ideas: the last scene ends on the brand's ask", placed.plan.scenes[2].items.some((i) => i.kind === "button"), placed.plan.scenes[2].items.map((i) => i.kind).join("+"));
+    add("Director answer checked: order and start", ideaProblems({ arts: [], scenes: [{ at: 3, text: null, kicker: null, options: [] }, { at: 2, text: null, kicker: null, options: [] }] } as never, 50).length >= 4, "4 problems found");
+    // a model call, with a stand-in client: the answer is mended into order
+    const fake = { responses: { parse: async () => ({ id: "r1", usage: { input_tokens: 900, output_tokens: 1400 }, output_parsed: { arts: [ideas.arts[0], ideas.arts[0]], scenes: [{ ...ideas.scenes[1], at: 12 }, { ...ideas.scenes[0], at: 3 }] } }) } };
+    let billed = 0;
+    const res = await generateComposerIdeas({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try Flowly", url: "flowly.app" } }, (u) => (billed = u.inputTokens + u.outputTokens), fake as never, 30_000);
+    add("Composer Director: answer used, in order from word 0, tokens counted", !!res.ideas && res.ideas.scenes[0].at === 0 && res.ideas.scenes.length === 2 && billed === 4600, `${res.ideas?.scenes.map((x) => x.at).join(",")} · ${billed} tokens (two calls)`);
+    const none = await generateComposerIdeas({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" } }, undefined, { responses: { parse: async () => { throw new Error("down"); } } } as never, 10_000);
+    add("Composer Director: a failed call gives nothing (the Composer composes)", !none.ideas && none.problems.some((p) => p.includes("down")), none.problems[0] ?? "");
+    add("engine switch defaults off", normalizeConfig(null).engine.composer === "off" && normalizeConfig({ engine: { composer: "admins" } }).engine.composer === "admins" && normalizeConfig({ engine: { composer: "x" } }).engine.composer === "off", "off · admins · bad → off");
   }
 
   section = "covered elsewhere";

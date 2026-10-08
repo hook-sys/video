@@ -6,6 +6,8 @@ import { STORY_WORLD_ID, StoryWorld, type StoryWorldProps } from "@/components/v
 import { Storyboard } from "@/components/video/storyboard";
 import { FLOW_SCENE_ID, FlowScene, type FlowSceneProps } from "@/components/video/flow/flow-scene";
 import { CleanVideo } from "@/components/video/clean/clean-video";
+import { ComposerFilm } from "@/components/video/composer/film";
+import { COMPOSER_ID, type ComposerProps } from "@/components/video/composer/types";
 import { CLEAN_ID, type CleanVideoProps } from "@/components/video/clean/types";
 import { Film, FILM_ID, FILM_IDS, type FilmId, REF_DURATION, REF_ID, RefFilm } from "@/components/video/clean/refs";
 import { shopnestPlan } from "@/components/video/clean/fixtures/sample";
@@ -62,6 +64,17 @@ export function RemotionRoot() {
       durationInFrames={450}
       defaultProps={{ story: REFERENCE_STORY, narration: REFERENCE_NARRATION, durationSeconds: 15 } as StoryWorldProps}
       calculateMetadata={({ props }) => ({ durationInFrames: Math.max(1, Math.round(props.durationSeconds * FPS)) })}
+    />
+    {/* The Composer: every scene composed by its Director from parts. */}
+    <Composition
+      id={COMPOSER_ID}
+      component={ComposerFilm as unknown as React.ComponentType<Record<string, unknown>>}
+      fps={30}
+      width={1920}
+      height={1080}
+      durationInFrames={300}
+      defaultProps={{} as Record<string, unknown>}
+      calculateMetadata={({ props }) => ({ durationInFrames: Math.max(1, (props as unknown as ComposerProps).plan?.duration ?? 300) })}
     />
     {/* The clean explainer (flat UI, kinetic type, story-coloured background). */}
     <Composition
