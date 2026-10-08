@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { AbsoluteFill } from "remotion";
 import type { Pal } from "./art";
 import { hsl } from "./art";
+import { Radial, reachOf, Tiles } from "./radial";
 import type { FieldKind, Overlay } from "./types";
 
 // The background a Composer film plays on: a kind of light (aurora, arcs,
@@ -11,9 +12,12 @@ import type { FieldKind, Overlay } from "./types";
 
 export type Anchor = { x: number; y: number; s: number; t: number }; // centre (px), spread (0.6–1.4), turn (0–1)
 
-const glow = (x: number, y: number, w: number, h: number, color: string, blur = 40, at = "50% 50%", stop = 0.62): ReactNode => (
-  <div style={{ position: "absolute", left: x - w / 2, top: y - h / 2, width: w, height: h, filter: `blur(${blur}px)`, background: `radial-gradient(ellipse at ${at}, ${color} 0%, transparent ${Math.round(stop * 100)}%)` }} />
-);
+// (drawn as SVG — see radial.tsx; the gradient's own fall-off is the softness)
+const pct = (v: string) => Number(v.replace("%", "")) / 100;
+const glow = (x: number, y: number, w: number, h: number, color: string, _blur = 40, at = "50% 50%", stop = 0.62): ReactNode => {
+  const [ax, ay] = at.split(" ").map(pct);
+  return <Radial w={w} h={h} at={[ax, ay]} stops={[[0, color], [stop, color, 0]]} place={{ x: x - w / 2, y: y - h / 2 }} />;
+};
 
 export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: { f: number; kind: FieldKind; pal: Pal; hue: number; anchor: Anchor; energy: number; overlay: Overlay; style?: CSSProperties }) {
   const e = 0.6 + energy * 0.8;
@@ -50,7 +54,9 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
     case "grid":
       body = (
         <>
-          <AbsoluteFill style={{ backgroundImage: `linear-gradient(${hsl(hue, 30, d ? 60 : 30, d ? 0.09 : 0.07)} 1.5px, transparent 1.5px), linear-gradient(90deg, ${hsl(hue, 30, d ? 60 : 30, d ? 0.09 : 0.07)} 1.5px, transparent 1.5px)`, backgroundSize: `${Math.round(70 + a.s * 30)}px ${Math.round(70 + a.s * 30)}px`, backgroundPosition: `${(f * 0.5 * e).toFixed(1)}px ${(f * 0.25 * e).toFixed(1)}px`, WebkitMaskImage: `radial-gradient(ellipse at ${Math.round((a.x / 1920) * 100)}% ${Math.round((a.y / 1080) * 100)}%, #000 10%, transparent 75%)`, maskImage: `radial-gradient(ellipse at ${Math.round((a.x / 1920) * 100)}% ${Math.round((a.y / 1080) * 100)}%, #000 10%, transparent 75%)` }} />
+          <AbsoluteFill>
+            <Tiles w={1920} h={1080} kind="grid" gap={Math.round(70 + a.s * 30)} size={0.75} color={hsl(hue, 30, d ? 60 : 30, d ? 0.09 : 0.07)} dx={f * 0.5 * e} dy={f * 0.25 * e} fade={(([rx, ry]) => ({ x: a.x, y: a.y, rx, ry, inner: 0.1, outer: 0.75 }))(reachOf(a.x, a.y, false))} />
+          </AbsoluteFill>
           {glow(a.x + sway(1), a.y + sway(2, 40), 1400 * a.s, 900 * a.s, c1, 60)}
         </>
       );
@@ -59,7 +65,9 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
       body = (
         <>
           {glow(a.x + sway(3), a.y, 1600 * a.s, 1000 * a.s, c1, 60)}
-          <AbsoluteFill style={{ backgroundImage: `radial-gradient(${hsl(hue, 40, d ? 75 : 40, d ? 0.28 : 0.2)} 2px, transparent 2.5px)`, backgroundSize: "34px 34px", backgroundPosition: `${(f * 0.3).toFixed(1)}px 0px`, WebkitMaskImage: `radial-gradient(circle at ${Math.round((a.x / 1920) * 100)}% ${Math.round((a.y / 1080) * 100)}%, #000 0%, transparent ${Math.round(45 + a.s * 20)}%)`, maskImage: `radial-gradient(circle at ${Math.round((a.x / 1920) * 100)}% ${Math.round((a.y / 1080) * 100)}%, #000 0%, transparent ${Math.round(45 + a.s * 20)}%)` }} />
+          <AbsoluteFill>
+            <Tiles w={1920} h={1080} kind="dots" gap={34} size={2.2} color={hsl(hue, 40, d ? 75 : 40, d ? 0.28 : 0.2)} dx={f * 0.3} fade={(([rx, ry]) => ({ x: a.x, y: a.y, rx, ry, inner: 0, outer: (45 + a.s * 20) / 100 }))(reachOf(a.x, a.y, true))} />
+          </AbsoluteFill>
         </>
       );
       break;
@@ -125,7 +133,9 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
       body = (
         <>
           {glow(a.x + sway(1, 30), a.y + sway(2, 20), 1300 * a.s, 1300 * a.s, hsl(hue, 70, d ? 60 : 80, d ? 0.45 : 0.7), 30, "50% 50%", 0.5)}
-          <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 50%, transparent 40%, ${d ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.05)"} 100%)` }} />
+          <AbsoluteFill>
+            <Radial w={1920} h={1080} stops={[[0.4, d ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.05)", 0], [1, d ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.05)"]]} />
+          </AbsoluteFill>
         </>
       );
       break;
@@ -166,7 +176,14 @@ function OverlayLayer({ f, kind, pal, hue }: { f: number; kind: Overlay; pal: Pa
       </AbsoluteFill>
     );
   if (kind === "sheen") return <div style={{ position: "absolute", top: -200, height: 1500, width: 460, left: ((f * 2.2) % 2700) - 650, transform: "rotate(21deg)", background: `linear-gradient(90deg, transparent, ${pal.dark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.55)"}, transparent)` }} />;
-  if (kind === "vignette") return <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 50%, transparent 55%, ${pal.dark ? "rgba(0,0,0,0.55)" : hsl(hue, 30, 40, 0.12)} 100%)` }} />;
+  if (kind === "vignette") {
+    const edge = pal.dark ? "rgba(0,0,0,0.55)" : hsl(hue, 30, 40, 0.12);
+    return (
+      <AbsoluteFill>
+        <Radial w={1920} h={1080} stops={[[0.55, edge, 0], [1, edge]]} />
+      </AbsoluteFill>
+    );
+  }
   if (kind === "lines") return <AbsoluteFill style={{ backgroundImage: `repeating-linear-gradient(0deg, ${pal.dark ? "rgba(255,255,255,0.025)" : "rgba(0,0,0,0.025)"} 0 1px, transparent 1px 6px)` }} />;
   if (kind === "grain")
     return (

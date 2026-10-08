@@ -4,6 +4,7 @@ import { Icon } from "../icons";
 import { CARD_W, Card, cardHeight } from "./cards";
 export { baseSize } from "./sizes";
 import { LivingIcon, lottieFor } from "./lottie";
+import { Radial, Tiles } from "./radial";
 import { Connector, drawn, smoothPath } from "./paths";
 import { type Ctx, Glyph, Initial, Mark, Tick, countUp, kIn, show, surf } from "./kit";
 import { clamp01, mix } from "./motion";
@@ -470,8 +471,18 @@ function Quote({ c, it, w, h }: P) {
 function Shape({ c, it, w, h }: P) {
   const v = it.variant ?? "ring";
   const { pal, f } = c;
-  if (v === "orb") return <div style={{ width: w, height: h, borderRadius: 9999, background: `radial-gradient(circle at 35% 30%, ${pal.glow}, ${pal.fill} 45%, ${pal.fill2} 100%)`, boxShadow: `0 40px 120px ${pal.fill}66`, transform: `translateY(${Math.sin(f / 30) * 10}px)` }} />;
-  if (v === "grid") return <div style={{ width: w, height: h, backgroundImage: `radial-gradient(${pal.accent} 3px, transparent 3.5px)`, backgroundSize: "36px 36px", opacity: 0.5 }} />;
+  if (v === "orb")
+    return (
+      <div style={{ width: w, height: h, borderRadius: 9999, boxShadow: `0 40px 120px ${pal.fill}66`, transform: `translateY(${Math.sin(f / 30) * 10}px)` }}>
+        <Radial w={w} h={h} at={[0.35, 0.3]} circle round stops={[[0, pal.glow], [0.45, pal.fill], [1, pal.fill2]]} />
+      </div>
+    );
+  if (v === "grid")
+    return (
+      <div style={{ position: "relative", width: w, height: h, opacity: 0.5 }}>
+        <Tiles w={w} h={h} kind="dots" gap={36} size={3.2} color={pal.accent} />
+      </div>
+    );
   if (v === "plus") return <Icon name="plus" size={w} color={pal.accent} strokeWidth={1.5} />;
   if (v === "spark") return <Icon name="sparkles" size={w} color={pal.accent} strokeWidth={1.5} />;
   if (v === "arrow") return <Icon name="arrow-up-right" size={w} color={pal.accent} strokeWidth={1.6} draw={kIn(c, it.at, 24)} />;

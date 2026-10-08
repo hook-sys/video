@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
+import { AbsoluteFill } from "remotion";
 import { clockWipe } from "@remotion/transitions/clock-wipe";
-import { flip } from "@remotion/transitions/flip";
 import { wipe } from "@remotion/transitions/wipe";
 import type { TransitionPresentation } from "@remotion/transitions";
 import type { TransitionKind } from "./types";
@@ -15,8 +15,25 @@ const FLIPS = ["from-right", "from-left", "from-bottom"] as const;
 export function presentationOf(kind: TransitionKind, seed = 0): P | null {
   if (kind === "clock") return clockWipe({ width: W, height: H }) as unknown as P;
   if (kind === "wipe") return wipe({ direction: WIPES[seed % WIPES.length] }) as unknown as P;
-  if (kind === "flip") return flip({ direction: FLIPS[seed % FLIPS.length], perspective: 2400 }) as unknown as P;
+  if (kind === "flip") return { component: Flip, props: { direction: FLIPS[seed % FLIPS.length], perspective: 2400 } } as unknown as P;
   return null;
+}
+
+// Remotion's flip, with the perspective inside the transform: the browser's
+// download (web-renderer) reads an element's own transform but not a parent's
+// `perspective`, so @remotion/transitions' flip came out flat there.
+// Fades out as the scene turns edge-on (the download skips the last few
+// degrees before 90°, so it would vanish at once) and is gone past 90°.
+const edgeOn = (deg: number) => Math.max(0, Math.min(1, (Math.abs(Math.cos((deg * Math.PI) / 180)) - 0.15) / 0.3)) * (Math.abs(deg) < 90 ? 1 : 0);
+function Flip({ children, presentationDirection, presentationProgress: k, passedProps: { direction, perspective } }: { children: ReactNode; presentationDirection: "entering" | "exiting"; presentationProgress: number; passedProps: { direction: (typeof FLIPS)[number]; perspective: number } }) {
+  const sign = direction === "from-right" ? 1 : -1;
+  const turn = presentationDirection === "entering" ? sign * 180 * (1 - k) : -sign * 180 * k;
+  const axis = direction === "from-bottom" ? "rotateX" : "rotateY";
+  return (
+    <AbsoluteFill style={{ transform: `perspective(${perspective}px) ${axis}(${turn}deg)`, backfaceVisibility: "hidden", opacity: edgeOn(turn) }}>
+      {children}
+    </AbsoluteFill>
+  );
 }
 
 const noop = () => undefined;
