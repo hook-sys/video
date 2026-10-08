@@ -10,7 +10,6 @@ import type { PlacedItem, RowT } from "./types";
 // word its moment happens (a row is checked, a status turns, a slot fills).
 
 export { CARD_W, cardHeight } from "./sizes";
-import { CARD_W } from "./sizes";
 
 type Props = { c: Ctx; it: PlacedItem; w: number; h: number };
 const rowsOf = (it: PlacedItem, fallback: RowT[]) => (it.rows?.length ? it.rows : fallback).slice(0, 6);
