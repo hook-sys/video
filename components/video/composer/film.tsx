@@ -8,7 +8,8 @@ import { type Ctx, CtxC } from "./kit";
 import { isAccent } from "./layout";
 import { IN_OUT, TRANSITION_FRAMES, cameraOf, clamp01, enterK, enterStyle, mix, moverOf, ramp, sceneIn, sceneOut } from "./motion";
 import { Headline } from "./text";
-import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene } from "./types";
+import { measureText } from "@remotion/layout-utils";
+import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene, TextBlock } from "./types";
 
 // A Composer film: the Director's scenes on the voice's words. Every scene
 // is its own composition; one field of light runs under all of them and
@@ -48,28 +49,57 @@ function anchorOf(s: PlacedScene, i: number): Anchor {
   return { x, y: R.range(260, 820), s: R.range(0.8, 1.3), t: (i * 0.37 + R.next() * 0.3) % 1 };
 }
 
-// how far a line overflows its place once the face is really there
-const fixCache = new Map<string, number>();
-function measureFix(tb: NonNullable<PlacedScene["text"]>, family: string, weight: number, upper: boolean, tracking: number) {
-  if (typeof document === "undefined") return 1;
-  const key = `${family}|${weight}|${upper}|${tracking}|${tb.size}|${Math.round(tb.box.w)}|${tb.lines.map((l) => l.map((i) => tb.words[i].t).join(" ")).join("/")}`;
-  const hit = fixCache.get(key);
-  if (hit !== undefined) return hit;
-  const v = measureNow(tb, family, weight, upper, tracking);
-  fixCache.set(key, v);
-  return v;
-}
-function measureNow(tb: NonNullable<PlacedScene["text"]>, family: string, weight: number, upper: boolean, tracking: number) {
-  const ctx = document.createElement("canvas").getContext("2d");
-  if (!ctx) return 1;
-  ctx.font = `${weight} ${tb.size}px ${family}`;
-  let worst = 1;
-  for (const line of tb.lines) {
-    const text = line.map((i) => (upper ? tb.words[i].t.toUpperCase() : tb.words[i].t)).join(" ");
-    const w = ctx.measureText(text).width + text.length * tracking * tb.size + line.length * tb.size * 0.02;
-    if (w > tb.box.w) worst = Math.min(worst, tb.box.w / w);
+// The words laid out again with the face really measured (Remotion's
+// measureText): the same place, never larger than planned; lines re-broken
+// and the size lowered until they fit.
+const fitCache = new Map<string, TextBlock>();
+function fitWords(tb: TextBlock, family: string, weight: number, upper: boolean, tracking: number): TextBlock {
+  if (typeof document === "undefined") return tb;
+  const area = tb.area ?? tb.box;
+  const key = `${family}|${weight}|${upper}|${tracking}|${tb.size}|${Math.round(area.w)}x${Math.round(tb.box.h)}|${tb.kicker ?? ""}|${tb.words.map((w) => w.t).join(" ")}`;
+  const hit = fitCache.get(key);
+  if (hit) return { ...tb, size: hit.size, lines: hit.lines, box: hit.box };
+  const lh = upper ? 1.02 : 1.08;
+  const maxW = area.w;
+  const maxH = tb.box.h;
+  const kickerH = (size: number) => (tb.kicker ? Math.round(size * 0.26) + Math.round(size * 0.22) + 6 : 0);
+  let best: { size: number; lines: number[][]; width: number } | null = null;
+  for (let size = tb.size; size >= 34; size -= 2) {
+    const ws = tb.words.map((w) => measureText({ text: w.t, fontFamily: family, fontSize: size, fontWeight: weight, letterSpacing: `${tracking}em`, textTransform: upper ? "uppercase" : "none", validateFontIsLoaded: false }).width);
+    const space = size * (upper ? 0.24 : 0.26);
+    const lines: number[][] = [];
+    const widths: number[] = [];
+    let cur: number[] = [];
+    let cw = 0;
+    ws.forEach((w, i) => {
+      const add = (cur.length ? space : 0) + w;
+      if (cur.length && cw + add > maxW) {
+        lines.push(cur);
+        widths.push(cw);
+        cur = [i];
+        cw = w;
+      } else {
+        cur.push(i);
+        cw += add;
+      }
+    });
+    if (cur.length) {
+      lines.push(cur);
+      widths.push(cw);
+    }
+    const width = Math.max(0, ...widths);
+    best = { size, lines, width };
+    if (width <= maxW && lines.length * size * lh + kickerH(size) <= maxH + 1) break;
   }
-  return worst;
+  if (!best) return tb;
+  const h = best.lines.length * best.size * lh + kickerH(best.size);
+  const w = Math.min(maxW, best.width + 8);
+  const x = tb.align === "left" ? area.x - area.w / 2 + w / 2 : tb.align === "right" ? area.x + area.w / 2 - w / 2 : area.x;
+  const top = tb.box.y - tb.box.h / 2, bottom = tb.box.y + tb.box.h / 2;
+  const y = tb.anchor === "top" ? top + h / 2 : tb.anchor === "bottom" ? bottom - h / 2 : tb.box.y;
+  const out = { ...tb, size: best.size, lines: best.lines, box: { x, y, w, h } };
+  fitCache.set(key, out);
+  return out;
 }
 
 export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: ComposerProps & { screens?: string[] }) {
@@ -88,7 +118,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   const weight = display.fixed ?? art.weight;
   const upper = art.case === "upper" || !!display.upper;
   const tracking = art.tracking;
-  const fixes = scenes.map((s) => (s.text && ready ? measureFix(s.text, family, weight, upper, tracking) : 1));
+  const texts = scenes.map((s) => (s.text && ready ? fitWords(s.text, family, weight, upper, tracking) : s.text));
   // the scene whose field is showing (it opens as the scene comes in)
   const cur = Math.max(0, scenes.findLastIndex((s) => s.from - 2 <= f));
   const s = scenes[cur];
@@ -146,7 +176,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
                   <AbsoluteFill style={{ transform: cam, transformStyle: "preserve-3d" }}>
                     <CtxC.Provider value={c}>
                       {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} />)}
-                      {sc.text && <Headline c={c} tb={fixes[i] < 1 ? { ...sc.text, size: Math.floor(sc.text.size * fixes[i]) } : sc.text} out={textOut} plate={sc.layout === "over"} />}
+                      {texts[i] && <Headline c={c} tb={texts[i]!} out={textOut} plate={sc.layout === "over"} />}
                       {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} />)}
                     </CtxC.Provider>
                   </AbsoluteFill>

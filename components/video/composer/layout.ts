@@ -190,6 +190,8 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
       align,
       reveal: s.text!.reveal,
       kicker: s.kicker?.trim() || null,
+      area: { x: (reg.text.l + reg.text.r) / 2, y: (reg.text.t + reg.text.b) / 2, w: reg.text.r - reg.text.l, h: reg.text.b - reg.text.t },
+      anchor: layout === "top" || layout === "corner" ? "top" : layout === "bottom" || layout === "visual" ? "bottom" : "middle",
     };
     // give the things the room the words did not take
     if (reg.vis && (layout === "top" || layout === "center")) reg.vis.t = Math.max(reg.vis.t - 120, cy + bh / 2 + 56);

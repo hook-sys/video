@@ -15,6 +15,7 @@ import { buildPlan, buildStory, type SevenPart, type Story } from "@/components/
 import type { CleanPlan } from "@/components/video/clean/types";
 import { type StudioRecipe, toRecipe } from "@/lib/studio-variants";
 import { placeAll } from "@/components/video/composer/layout";
+import { pieceToWord, remapScript, scriptWords } from "@/components/video/composer/words";
 import { Script as ComposerScript, type ComposerPlan } from "@/components/video/composer/types";
 
 export type RenderProject = {
@@ -181,14 +182,18 @@ export async function buildRenderInput(
   // The Composer's videos: each stored script laid out on the voice's words
   // with the customer's brand inputs (a script that no longer parses is left out).
   let composer: { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[] } | null = null;
-  const storedComposer = (project.brief as { composer?: { videos?: { script: unknown; seed: number; source: ComposerPlan["source"] }[]; changes?: { direction: string; at: string; ok: boolean }[] } } | null)?.composer;
+  const storedComposer = (project.brief as { composer?: { videos?: { script: unknown; seed: number; source: ComposerPlan["source"] }[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] } } | null)?.composer;
   if (storedComposer?.videos?.length && project.format === "16:9" && wordTimings?.length) {
+    // the script's own words on the voice's times; videos written on the
+    // voice's pieces of words (before Oct 8) are moved onto them
+    const shown = scriptWords(brief.data.script, wordTimings);
+    const toWord = storedComposer.indexing === "script" ? null : pieceToWord(wordTimings, shown);
     const brand = { name: project.brand_name?.trim() || brief.data.product_name, color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief.data.cta, url: (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, ""), icon: logoUrl ?? null };
     const plans = storedComposer.videos.flatMap((v) => {
       const sc = ComposerScript.safeParse(v.script);
       if (!sc.success) return [];
       try {
-        const { plan } = placeAll(sc.data, wordTimings, Math.round(project.duration_seconds * 30), brand, v.seed, screenshotUrls.length, v.source);
+        const { plan } = placeAll(toWord ? remapScript(sc.data, toWord) : sc.data, shown, Math.round(project.duration_seconds * 30), brand, v.seed, screenshotUrls.length, v.source);
         return [plan];
       } catch {
         return [];

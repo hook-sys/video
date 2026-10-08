@@ -21,8 +21,10 @@
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
     "@remotion/bundler": "4.0.529",
+    "@remotion/layout-utils": "4.0.529",
     "@remotion/lottie": "4.0.529",
     "@remotion/media": "4.0.529",
+    "@remotion/paths": "4.0.529",
     "@remotion/player": "4.0.529",
     "@remotion/renderer": "4.0.529",
     "@remotion/web-renderer": "4.0.529",

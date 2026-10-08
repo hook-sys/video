@@ -77,6 +77,7 @@ import { generateStories } from "@/lib/ai/story-director";
 import { generateComposerIdeas, ideasOf, reviseComposerPlan } from "@/lib/ai/composer-director";
 import { CHANGE_WORDS, COMPOSER_CHANGES } from "@/components/video/composer/types";
 import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
+import { scriptWords } from "@/components/video/composer/words";
 import { literalMisfits } from "@/components/video/clean/studio/ids";
 import { generateSceneScript } from "@/lib/ai/scene-director";
 import { generateShotScript } from "@/lib/ai/shot-director";
@@ -521,11 +522,14 @@ async function composerSet(
   projectId: string,
   userId: string,
   project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null; duration_seconds: number },
-  words: WordTiming[],
+  voice: WordTiming[],
+  narration: string,
   brief: { product_name?: string; product_summary?: string; cta?: string } | null,
   addUsage: (u: BriefUsage) => void,
 ) {
   if (!(await composerOn(admin, userId))) return null;
+  // the script's own words on the voice's times (never pieces of words)
+  const words = scriptWords(narration, voice);
   const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
   const brand = { name: project.brand_name?.trim() || brief?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief?.cta || "Get started", url: host, icon: null };
   const { data: past } = await admin.from("projects").select("composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(12);
@@ -536,7 +540,7 @@ async function composerSet(
   // one video, the Director's best (its versions follow from "Change it")
   const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: result.ideas, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, count: 1 });
   console.info("composer director:", { projectId, source: result.source, ms: result.ms, scenes: result.ideas?.scenes.length ?? 0, problems: [...result.problems, ...set.problems].slice(0, 8) });
-  return { videos: set.videos, ideas: result.ideas, source: result.source, changes: [] as { direction: string; at: string; ok: boolean }[], problems: [...result.problems, ...set.problems].slice(0, 20), at: new Date().toISOString() };
+  return { videos: set.videos, ideas: result.ideas, indexing: "script" as const, source: result.source, changes: [] as { direction: string; at: string; ok: boolean }[], problems: [...result.problems, ...set.problems].slice(0, 20), at: new Date().toISOString() };
 }
 
 async function generateFlow(projectId: string, userId: string, budgetMs: number) {
@@ -581,7 +585,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // Director only when it is off (or the Composer failed).
   const sixteen = project.format === "16:9" && !!words?.length;
   const composer = sixteen
-    ? await composerSet(admin, projectId, userId, project, words!, brief.success ? brief.data : null, meterOf("composer")).catch((e) => {
+    ? await composerSet(admin, projectId, userId, project, words!, narration, brief.success ? brief.data : null, meterOf("composer")).catch((e) => {
         console.warn("composer failed:", e instanceof Error ? e.message : e);
         return null;
       })
@@ -1502,9 +1506,11 @@ export async function changeComposerVideo(projectId: string, direction: string):
   if (!(await composerOn(admin, user.id))) return { ok: false, message: "Changes are not available yet." };
   // RLS: only returns the project if this user owns it.
   const { data: project } = await supabase.from("projects").select("brief, brand_name, brand_color, call_to_action, website_url, duration_seconds, voice_result").eq("id", projectId).maybeSingle();
-  const raw = (project?.brief ?? null) as { composer?: { videos: StoredComposition[]; changes?: { direction: string; at: string; ok: boolean }[] }; product_name?: string; product_summary?: string; cta?: string } | null;
+  const raw = (project?.brief ?? null) as { composer?: { videos: StoredComposition[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] }; product_name?: string; product_summary?: string; cta?: string; script?: string } | null;
   const composer = raw?.composer;
-  const words = parseWordTimings((project?.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
+  const voice = parseWordTimings((project?.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
+  // the words its versions are written on (older videos: the voice's own pieces)
+  const words = voice && composer?.indexing === "script" ? scriptWords(raw?.script, voice) : voice;
   if (!project || !composer?.videos?.length || !words?.length) return { ok: false, message: "This video can't be changed." };
   const done = (composer.changes ?? []).filter((c) => c.ok).length;
   if (done >= COMPOSER_CHANGES) return { ok: false, message: `All ${COMPOSER_CHANGES} changes for this video are used.` };

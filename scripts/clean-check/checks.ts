@@ -42,6 +42,7 @@ import { clauses } from "@/components/video/composer/auto";
 import { generateComposerIdeas, ideaProblems, ideasOf, reviewNotes, reviseComposerPlan } from "@/lib/ai/composer-director";
 import { livingStandIn } from "@/components/video/icons/living";
 import { spelledNumbers } from "@/lib/render-validation";
+import { pieceToWord, scriptWords } from "@/components/video/composer/words";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -461,6 +462,16 @@ export async function runChecks(): Promise<Check[]> {
     const failed = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "blue" }, undefined, { responses: { parse: async () => ({ id: "r", usage: null, output_parsed: null }) } } as never);
     add("Change it: no answer → nothing changes", !failed.ideas, failed.problems[0] ?? "");
     add("engine switch defaults off", normalizeConfig(null).engine.composer === "off" && normalizeConfig({ engine: { composer: "admins" } }).engine.composer === "admins" && normalizeConfig({ engine: { composer: "x" } }).engine.composer === "off", "off · admins · bad → off");
+  }
+
+  section = "composer words";
+  {
+    // a voice that times pieces of words and the stops on their own
+    const pieces = [["Your", 0, 0.14], ["s", 0.16, 0.24], ["upport", 0.24, 0.51], ["i", 0.56, 0.64], ["nbox", 0.64, 0.96], ["is", 1.04, 1.2], ["full", 1.28, 1.6], [".", 1.6, 1.8], ["No", 2, 2.1], ["more", 2.2, 2.4], ["ang", 2.5, 2.6], ["ry", 2.6, 2.7], ["users.", 2.8, 3.2]].map(([text, start, end]) => ({ text: String(text), start: Number(start), end: Number(end) }));
+    const shown = scriptWords("Your support inbox is full. No more angry users.", pieces);
+    add("pieces of words become the script's words", shown.map((w) => w.text).join(" ") === "Your support inbox is full. No more angry users." && shown[1].start >= 0.15 && shown[1].start <= 0.25, shown.map((w) => `${w.text}@${w.start.toFixed(2)}`).join(" "));
+    const to = pieceToWord(pieces, shown);
+    add("older videos on pieces move onto the words", to(0) === 0 && to(1) === 1 && to(3) === 2 && to(8) === 5 && to(11) === 7 && to(12) === 8, [0, 1, 3, 8, 11, 12].map(to).join(","));
   }
 
   section = "claims";

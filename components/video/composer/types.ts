@@ -118,7 +118,8 @@ export type Word = { text: string; start: number; end: number };
 export type Brand = { name: string; color: string; tagline: string; cta: string; url: string; icon?: string | null };
 export type Box = { x: number; y: number; w: number; h: number }; // centre, size
 export type PlacedItem = Omit<ItemT, "at" | "hit"> & { at: number; hit: number | null; box: Box; scale: number; z: number; from?: Box | null };
-export type TextBlock = { words: { t: string; at: number; key: boolean }[]; box: Box; size: number; lines: number[][]; align: "left" | "center" | "right"; reveal: Reveal; kicker: string | null };
+// area: the place the layout gave the words; anchor: where in it they sit
+export type TextBlock = { words: { t: string; at: number; key: boolean }[]; box: Box; size: number; lines: number[][]; align: "left" | "center" | "right"; reveal: Reveal; kicker: string | null; area?: Box; anchor?: "top" | "middle" | "bottom" };
 export type PlacedScene = {
   from: number;
   to: number;
