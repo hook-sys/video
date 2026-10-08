@@ -74,8 +74,9 @@ import { type StoredVariant, studioVariants } from "@/lib/studio-variants";
 import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
 import { generateFlowScript } from "@/lib/ai/flow-director";
 import { generateStories } from "@/lib/ai/story-director";
-import { generateComposerIdeas } from "@/lib/ai/composer-director";
-import { type Ideas, type StoredComposition, composeVariants } from "@/components/video/composer/variants";
+import { generateComposerIdeas, ideasOf, reviseComposerPlan } from "@/lib/ai/composer-director";
+import { CHANGE_WORDS, COMPOSER_CHANGES } from "@/components/video/composer/types";
+import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { literalMisfits } from "@/components/video/clean/studio/ids";
 import { generateSceneScript } from "@/lib/ai/scene-director";
 import { generateShotScript } from "@/lib/ai/shot-director";
@@ -509,6 +510,12 @@ async function cleanSet(
 // Director composes the narration scene by scene, with ways to picture each
 // and four art directions; each video takes its own. The faces and fields
 // this customer has seen are avoided. Null when the engine is off.
+// The Composer engine for this customer: off, admins only, or everyone (/admin/models).
+async function composerOn(admin: ReturnType<typeof createAdminClient>, userId: string) {
+  const mode = (await getAiConfig()).engine.composer;
+  return mode === "all" || (mode === "admins" && (await userAccess(admin, userId)).admin);
+}
+
 async function composerSet(
   admin: ReturnType<typeof createAdminClient>,
   projectId: string,
@@ -518,9 +525,7 @@ async function composerSet(
   brief: { product_name?: string; product_summary?: string; cta?: string } | null,
   addUsage: (u: BriefUsage) => void,
 ) {
-  const ai = await getAiConfig();
-  const mode = ai.engine.composer;
-  if (mode === "off" || (mode === "admins" && !(await userAccess(admin, userId)).admin)) return null;
+  if (!(await composerOn(admin, userId))) return null;
   const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
   const brand = { name: project.brand_name?.trim() || brief?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief?.cta || "Get started", url: host, icon: null };
   const { data: past } = await admin.from("projects").select("composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(12);
@@ -528,9 +533,10 @@ async function composerSet(
   const seen = { display: [...new Set(seenArts.map((a) => a.display).filter((x): x is string => !!x))].slice(0, 12), field: [...new Set(seenArts.map((a) => a.field).filter((x): x is string => !!x))].slice(0, 6) };
   const result = await generateComposerIdeas({ words, brand, product: brief?.product_summary ?? null, seen }, addUsage);
   const { count: screens } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
-  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: result.ideas, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0 });
+  // one video, the Director's best (its versions follow from "Change it")
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: result.ideas, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, count: 1 });
   console.info("composer director:", { projectId, source: result.source, ms: result.ms, scenes: result.ideas?.scenes.length ?? 0, problems: [...result.problems, ...set.problems].slice(0, 8) });
-  return { videos: set.videos, ideas: result.ideas, source: result.source, history: [] as unknown[], problems: [...result.problems, ...set.problems].slice(0, 20), at: new Date().toISOString() };
+  return { videos: set.videos, ideas: result.ideas, source: result.source, changes: [] as { direction: string; at: string; ok: boolean }[], problems: [...result.problems, ...set.problems].slice(0, 20), at: new Date().toISOString() };
 }
 
 async function generateFlow(projectId: string, userId: string, budgetMs: number) {
@@ -571,15 +577,16 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // The clean film templates first (one quick call): the narration in seven
   // parts and the four videos to offer, never a set this customer already had
   // for the same script. The engines below still run (fallback).
-  const [clean, composer] = project.format === "16:9" && words?.length
-    ? await Promise.all([
-        cleanSet(admin, projectId, userId, project, words, narration, brief.success ? brief.data : null, meterOf("story")),
-        composerSet(admin, projectId, userId, project, words, brief.success ? brief.data : null, meterOf("composer")).catch((e) => {
-          console.warn("composer failed:", e instanceof Error ? e.message : e);
-          return null;
-        }),
-      ])
-    : [null, null];
+  // The Composer when it is on for this customer; the studio's Story
+  // Director only when it is off (or the Composer failed).
+  const sixteen = project.format === "16:9" && !!words?.length;
+  const composer = sixteen
+    ? await composerSet(admin, projectId, userId, project, words!, brief.success ? brief.data : null, meterOf("composer")).catch((e) => {
+        console.warn("composer failed:", e instanceof Error ? e.message : e);
+        return null;
+      })
+    : null;
+  const clean = sixteen && !composer ? await cleanSet(admin, projectId, userId, project, words!, narration, brief.success ? brief.data : null, meterOf("story")) : null;
   // Shot templates first (lib/shots.ts): tested shots, the Director only picks
   // and fills them (four directions, else one — inside generateShotScript).
   // The free-form scene Director is the fallback only when no shots came back.
@@ -1477,34 +1484,53 @@ export async function newCleanSet(projectId: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
-// Four new Composer videos for the same script and voice: the Director's
-// ideas taken again with new art directions and other pictures per scene;
-// the faces and fields of every earlier set are avoided.
-export async function newComposerSet(projectId: string) {
+// "Change it": the customer's direction (up to 1000 words) revises the
+// Composer video; the voice and script stay. Each change is a new version
+// (the earlier ones are kept); three changes per video. Returns a message
+// for the form.
+export async function changeComposerVideo(projectId: string, direction: string): Promise<{ ok: boolean; message: string }> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  const text = String(direction ?? "").trim();
+  const count = text.split(/\s+/).filter(Boolean).length;
+  if (!text) return { ok: false, message: "Write what you want changed." };
+  if (count > CHANGE_WORDS) return { ok: false, message: `Keep it to ${CHANGE_WORDS} words (now ${count}).` };
+  const admin = createAdminClient();
+  if (!(await composerOn(admin, user.id))) return { ok: false, message: "Changes are not available yet." };
   // RLS: only returns the project if this user owns it.
   const { data: project } = await supabase.from("projects").select("brief, brand_name, brand_color, call_to_action, website_url, duration_seconds, voice_result").eq("id", projectId).maybeSingle();
-  const raw = (project?.brief ?? null) as { composer?: { videos: StoredComposition[]; ideas: Ideas | null; history?: StoredComposition[][] }; product_name?: string; cta?: string } | null;
+  const raw = (project?.brief ?? null) as { composer?: { videos: StoredComposition[]; changes?: { direction: string; at: string; ok: boolean }[] }; product_name?: string; product_summary?: string; cta?: string } | null;
   const composer = raw?.composer;
   const words = parseWordTimings((project?.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
-  if (!project || !composer || !words?.length) return;
-  const history = [...(composer.history ?? []), composer.videos];
-  const arts = history.flat().map((v) => v.script.art);
+  if (!project || !composer?.videos?.length || !words?.length) return { ok: false, message: "This video can't be changed." };
+  const done = (composer.changes ?? []).filter((c) => c.ok).length;
+  if (done >= COMPOSER_CHANGES) return { ok: false, message: `All ${COMPOSER_CHANGES} changes for this video are used.` };
+  const current = composer.videos[composer.videos.length - 1];
   const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
   const brand = { name: project.brand_name?.trim() || raw?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || raw?.cta || "Get started", url: host, icon: null };
-  // the Director's own art directions are spent: new ones are drawn
-  const ideas = composer.ideas ? { ...composer.ideas, arts: [] } : null;
-  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: (seedFrom(projectId) + history.length * 7919) >>> 0, ideas, avoid: { display: arts.map((a) => a.display), field: arts.map((a) => a.field).slice(-6), key: arts.map((a) => a.key).slice(-4) } });
-  await createAdminClient()
+  const ai = await getAiConfig();
+  let usage: BriefUsage | null = null;
+  const result = await reviseComposerPlan({ words, brand, product: raw?.product_summary ?? null, plan: ideasOf(current.script), direction: text }, (u) => (usage = u));
+  const seed = (current.seed + 7919) >>> 0;
+  const set = result.ideas ? composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed, ideas: result.ideas, count: 1 }) : null;
+  const video = set?.videos[0]?.source === "director" ? set.videos[0] : null;
+  const changes = [...(composer.changes ?? []), { direction: text.slice(0, 9000), at: new Date().toISOString(), ok: !!video }];
+  await admin
     .from("projects")
-    .update({ brief: { ...(project.brief as object), composer: { ...composer, videos: set.videos, history: history.slice(-6), at: new Date().toISOString() } } })
+    .update({ brief: { ...(project.brief as object), composer: { ...composer, videos: video ? [...composer.videos, video] : composer.videos, changes } } })
     .eq("id", projectId)
     .eq("user_id", user.id);
+  const u = usage as BriefUsage | null;
+  if (u && (u.inputTokens || u.outputTokens)) {
+    await recordCost(admin, { project_id: projectId, user_id: user.id, operation: "openai_brief", model: u.model, quantity: u.inputTokens + u.outputTokens, estimated_cost_usd: usageCost(ai, u, (i, o) => openaiCost(u.model, i, o)), metadata: { kind: "composer_change", input_tokens: u.inputTokens, output_tokens: u.outputTokens, words: count, ok: !!video } });
+  }
+  console.info("composer change:", { projectId, ok: !!video, ms: result.ms, words: count, problems: [...result.problems, ...(set?.problems ?? [])].slice(0, 8) });
   revalidatePath(`/projects/${projectId}`);
+  if (!video) return { ok: false, message: "The change didn't work this time — your video is as it was, and no change was used. Try again or say it differently." };
+  return { ok: true, message: `Done — version ${composer.videos.length + 1}. ${COMPOSER_CHANGES - done - 1} change${COMPOSER_CHANGES - done - 1 === 1 ? "" : "s"} left.` };
 }
 
 // A video the customer downloaded (of the ones offered): kept on the project

@@ -39,7 +39,7 @@ import { composeVariants, fitScript, scriptFromIdeas, type Ideas } from "@/compo
 import { placeAll } from "@/components/video/composer/layout";
 import { Script as ComposerScript } from "@/components/video/composer/types";
 import { clauses } from "@/components/video/composer/auto";
-import { generateComposerIdeas, ideaProblems } from "@/lib/ai/composer-director";
+import { generateComposerIdeas, ideaProblems, ideasOf, reviewNotes, reviseComposerPlan } from "@/lib/ai/composer-director";
 import { livingStandIn } from "@/components/video/icons/living";
 import { spelledNumbers } from "@/lib/render-validation";
 
@@ -445,6 +445,21 @@ export async function runChecks(): Promise<Check[]> {
     add("Composer Director: answer used, in order from word 0, tokens counted", !!res.ideas && res.ideas.scenes[0].at === 0 && res.ideas.scenes.length === 2 && billed === 4600, `${res.ideas?.scenes.map((x) => x.at).join(",")} · ${billed} tokens (two calls)`);
     const none = await generateComposerIdeas({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" } }, undefined, { responses: { parse: async () => { throw new Error("down"); } } } as never, 10_000);
     add("Composer Director: a failed call gives nothing (the Composer composes)", !none.ideas && none.problems.some((p) => p.includes("down")), none.problems[0] ?? "");
+    // one video; the review sees our layout check and repetition
+    const one = composeVariants({ words, brand: plans[0].brand, duration: plans[0].duration, seed: 9, count: 1 });
+    add("Composer: one video per project", one.plans.length === 1 && one.videos.length === 1, `${one.plans[0].scenes.length} scenes`);
+    const same = { ...ideas, scenes: [0, 10, 20, 30].map((at) => ({ at, text: { from: at, to: at + 5, size: "m", key: [] }, kicker: null, options: [{ layout: "top", arrange: null, items: [{ kind: "icon", at, icon: "bell" }] }] })) };
+    const notes = reviewNotes(same, words, { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" });
+    add("review notes: repeated layouts and things are named", notes.some((n) => n.includes("top layout")) && notes.some((n) => n.includes("all show icon")), notes.slice(0, 2).join("; "));
+    // "Change it": the stored plan goes to the model with the direction; a bad answer changes nothing
+    const plan0 = ideasOf(one.videos[0].script);
+    let sent = "";
+    const reviser = { responses: { parse: async (req: { input: string }) => { sent = req.input; return { id: "r", usage: { input_tokens: 5000, output_tokens: 3000 }, output_parsed: { arts: [{ ...ideas.arts[0], scheme: "dark" }], scenes: plan0.scenes } }; } } };
+    const changed = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "Make it darker. ".repeat(600) }, undefined, reviser as never);
+    const kept = (sent.split("<<<")[1] ?? "").split(/\s+/).filter(Boolean).length;
+    add("Change it: direction capped at 1000 words, plan revised", !!changed.ideas && (changed.ideas.arts[0] as { scheme?: string }).scheme === "dark" && kept <= 1001 && sent.includes("THE CURRENT PLAN"), `${kept} words sent`);
+    const failed = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "blue" }, undefined, { responses: { parse: async () => ({ id: "r", usage: null, output_parsed: null }) } } as never);
+    add("Change it: no answer → nothing changes", !failed.ideas, failed.problems[0] ?? "");
     add("engine switch defaults off", normalizeConfig(null).engine.composer === "off" && normalizeConfig({ engine: { composer: "admins" } }).engine.composer === "admins" && normalizeConfig({ engine: { composer: "x" } }).engine.composer === "off", "off · admins · bad → off");
   }
 

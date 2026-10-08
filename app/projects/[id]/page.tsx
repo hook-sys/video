@@ -145,7 +145,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   let preview: RenderProps | null = null;
   let variants: StudioVariant[] = [];
   let clean: { plans: CleanPlan[]; variants: StudioRecipe[] } | null = null;
-  let composer: { plans: ComposerPlan[]; screens: string[] } | null = null;
+  let composer: { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[] } | null = null;
   if (ready && !video?.signedUrl) {
     try {
       const input = await buildRenderInput(supabase, project);
@@ -213,7 +213,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {/* The Composer (new engine): four videos composed scene by scene. */}
       {ready && composer && (
-        <ComposerStudio projectId={id} plans={composer.plans} screens={composer.screens} audioUrl={preview?.audioUrl ?? null} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} />
+        <ComposerStudio projectId={id} plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={preview?.audioUrl ?? null} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} />
       )}
 
       {/* The clean film templates: four different videos of the same script. */}
@@ -222,7 +222,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       )}
 
       {/* Several looks of the same video: watch each, download one or all. */}
-      {ready && !clean && variants.length > 1 && preview && (
+      {ready && !clean && !composer && variants.length > 1 && preview && (
         <VariantStudio
           projectId={id}
           variants={variants}
@@ -235,7 +235,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         />
       )}
 
-      {ready && !clean && !(variants.length > 1 && preview) && (
+      {ready && !clean && !composer && !(variants.length > 1 && preview) && (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <section className="flex min-w-0 flex-col gap-3">
             <div id="video" className="overflow-hidden rounded-3xl border border-foreground/10 bg-black shadow-2xl shadow-violet-900/20">

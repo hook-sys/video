@@ -180,8 +180,8 @@ export async function buildRenderInput(
 
   // The Composer's videos: each stored script laid out on the voice's words
   // with the customer's brand inputs (a script that no longer parses is left out).
-  let composer: { plans: ComposerPlan[]; screens: string[] } | null = null;
-  const storedComposer = (project.brief as { composer?: { videos?: { script: unknown; seed: number; source: ComposerPlan["source"] }[] } } | null)?.composer;
+  let composer: { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[] } | null = null;
+  const storedComposer = (project.brief as { composer?: { videos?: { script: unknown; seed: number; source: ComposerPlan["source"] }[]; changes?: { direction: string; at: string; ok: boolean }[] } } | null)?.composer;
   if (storedComposer?.videos?.length && project.format === "16:9" && wordTimings?.length) {
     const brand = { name: project.brand_name?.trim() || brief.data.product_name, color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief.data.cta, url: (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, ""), icon: logoUrl ?? null };
     const plans = storedComposer.videos.flatMap((v) => {
@@ -194,7 +194,8 @@ export async function buildRenderInput(
         return [];
       }
     });
-    if (plans.length) composer = { plans, screens: screenshotUrls };
+    // the versions in order (the first is the Director's; each change adds one)
+    if (plans.length) composer = { plans, screens: screenshotUrls, changes: (storedComposer.changes ?? []).filter((c) => c.ok).map((c) => ({ direction: c.direction, at: c.at })) };
   }
 
   return {

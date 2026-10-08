@@ -2,17 +2,16 @@
 
 import { useRef, useState, useTransition } from "react";
 import { Player } from "@remotion/player";
-import { newComposerSet } from "@/app/projects/actions";
+import { changeComposerVideo } from "@/app/projects/actions";
 import { ComposerFilm } from "@/components/video/composer/film";
-import type { ComposerPlan, ComposerProps } from "@/components/video/composer/types";
+import { CHANGE_WORDS, COMPOSER_CHANGES, type ComposerPlan, type ComposerProps } from "@/components/video/composer/types";
 
-// The Composer's four videos of a project (each scene composed by its
-// Director): watch each, download one (rendered in this browser), or ask for
-// four new ones. Shown beside the studio while the engine is being compared.
+// The Composer's video of a project (each scene composed by its Director):
+// watch it, download it (rendered in this browser), or "Change it" with your
+// own direction — each change is a new version, the earlier ones are kept.
 const W = 1920;
 const H = 1080;
 type Props = ComposerProps & { screens?: string[] };
-const nameOf = (p: ComposerPlan) => p.art.name || `${p.art.display.replace(/-/g, " ")} · ${p.art.field}`;
 
 async function renderToFile({ props, file, signal, onProgress }: { props: Props; file: string; signal: AbortSignal; onProgress: (p: number) => void }) {
   const { renderMediaOnWeb, canRenderMediaOnWeb, getEncodableVideoCodecs } = await import("@remotion/web-renderer");
@@ -42,39 +41,67 @@ async function renderToFile({ props, file, signal, onProgress }: { props: Props;
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export function ComposerStudio({ projectId, plans, screens, audioUrl, name, className, secondaryClassName }: { projectId: string; plans: ComposerPlan[]; screens: string[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string }) {
-  const [selected, setSelected] = useState(0);
-  const [busy, setBusy] = useState<number | null>(null);
+// Quick directions (added to the box; the customer can edit them).
+const QUICK = [
+  ["Darker", "Make it darker and more premium: a deep, dark background with glowing accents."],
+  ["Brighter", "Make it brighter and lighter: a clean, light background with soft colours."],
+  ["Calmer", "Make it calmer: slower, smoother motion and gentler cuts."],
+  ["Bolder", "Make it bolder: bigger type, stronger colours and punchier cuts."],
+  ["More product", "Show the product's screens (phone, browser, dashboard) in more scenes."],
+  ["Less text", "Put fewer words on screen; let the pictures carry the scenes."],
+] as const;
+const wordsIn = (t: string) => t.split(/\s+/).filter(Boolean).length;
+
+export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, name, className, secondaryClassName }: { projectId: string; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string }) {
+  // the newest version unless the customer picks an earlier one
+  const [picked, setPicked] = useState<number | null>(null);
+  const selected = Math.min(picked ?? plans.length - 1, plans.length - 1);
+  const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string>();
+  const [direction, setDirection] = useState("");
+  const [note, setNote] = useState<{ ok: boolean; message: string } | null>(null);
   const [pending, start] = useTransition();
   const abort = useRef<AbortController | null>(null);
-  const plan = plans[Math.min(selected, plans.length - 1)];
+  const plan = plans[selected];
+  const left = Math.max(0, COMPOSER_CHANGES - changes.length);
+  const count = wordsIn(direction);
 
-  const download = async (i: number) => {
+  const download = async () => {
     setError(undefined);
     const controller = new AbortController();
     abort.current = controller;
     try {
-      setBusy(i);
+      setBusy(true);
       setProgress(0);
-      const file = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "video"}-composer-${i + 1}.mp4`;
-      await renderToFile({ props: { plan: plans[i], audioUrl, screens }, file, signal: controller.signal, onProgress: setProgress });
+      const file = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "video"}${selected ? `-v${selected + 1}` : ""}.mp4`;
+      await renderToFile({ props: { plan, audioUrl, screens }, file, signal: controller.signal, onProgress: setProgress });
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(null);
+      setBusy(false);
       abort.current = null;
     }
   };
 
+  const change = () =>
+    start(async () => {
+      setNote(null);
+      const r = await changeComposerVideo(projectId, direction);
+      setNote(r);
+      if (r.ok) {
+        setDirection("");
+        setPicked(null);
+      }
+    });
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-semibold text-violet-600 dark:text-violet-300">Composer · new engine</span>
-        <span className="text-xs text-foreground/50">Every scene composed by the Director — compare with the studio videos below.</span>
+        <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-semibold text-violet-600 dark:text-violet-300">Composer</span>
+        <span className="text-xs text-foreground/50">Every scene composed by the Director for your words.</span>
       </div>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="flex min-w-0 flex-col gap-3">
           <div className="overflow-hidden rounded-3xl border border-foreground/10 bg-black shadow-2xl shadow-violet-900/20">
             <Player
@@ -89,22 +116,24 @@ export function ComposerStudio({ projectId, plans, screens, audioUrl, name, clas
               style={{ width: "100%", maxHeight: "75vh", aspectRatio: `${W} / ${H}` }}
             />
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {plans.map((p, i) => (
-              <button key={`${i}:${p.seed}`} type="button" onClick={() => setSelected(i)} className={`flex flex-col items-start gap-0.5 rounded-2xl border px-3 py-2.5 text-left transition ${i === selected ? "border-violet-500 bg-violet-500/10" : "border-foreground/10 hover:bg-foreground/5"}`}>
-                <span className="text-sm font-semibold">Video {i + 1}</span>
-                <span className="truncate text-xs capitalize text-foreground/55">{nameOf(p)}</span>
-              </button>
-            ))}
-          </div>
+          {plans.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              {plans.map((p, i) => (
+                <button key={`${i}:${p.seed}`} type="button" onClick={() => setPicked(i)} title={i ? changes[i - 1]?.direction.slice(0, 300) : "The Director's video"} className={`flex flex-col items-start rounded-2xl border px-3 py-2 text-left transition ${i === selected ? "border-violet-500 bg-violet-500/10" : "border-foreground/10 hover:bg-foreground/5"}`}>
+                  <span className="text-sm font-semibold">Version {i + 1}</span>
+                  <span className="max-w-[180px] truncate text-xs text-foreground/55">{i ? changes[i - 1]?.direction ?? "" : "Original"}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </section>
         <aside className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
             <h2 className="text-sm font-semibold">Download</h2>
-            <button type="button" disabled={busy !== null} onClick={() => download(selected)} className={className}>
-              {busy !== null ? `Rendering video ${busy + 1} · ${Math.round(progress * 100)}%…` : `↓ Download video ${selected + 1}`}
+            <button type="button" disabled={busy} onClick={download} className={className}>
+              {busy ? `Rendering · ${Math.round(progress * 100)}%…` : plans.length > 1 ? `↓ Download version ${selected + 1}` : "↓ Download video"}
             </button>
-            {busy !== null && (
+            {busy && (
               <>
                 <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
                   <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
@@ -117,21 +146,29 @@ export function ComposerStudio({ projectId, plans, screens, audioUrl, name, clas
             {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
             <p className="text-xs text-foreground/50">Rendered in this browser (1080p). Keep this tab open until it finishes.</p>
           </div>
-          <div className="flex flex-col gap-2 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
-            <button
-              type="button"
-              disabled={pending || busy !== null}
-              onClick={() =>
-                start(async () => {
-                  setSelected(0);
-                  await newComposerSet(projectId);
-                })
-              }
-              className={secondaryClassName}
-            >
-              {pending ? "Composing 4 new videos…" : "↻ 4 new Composer videos"}
+          <div className="flex flex-col gap-3 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-sm font-semibold">Change it</h2>
+              <span className="text-xs text-foreground/50">{left} of {COMPOSER_CHANGES} left</span>
+            </div>
+            <p className="text-xs text-foreground/55">Tell the Director what to change — colours, mood, pace, any scene, what to show. Your script and voice stay the same.</p>
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK.map(([label, line]) => (
+                <button key={label} type="button" disabled={!left || pending} onClick={() => setDirection((d) => (d.trim() ? `${d.trim()}\n${line}` : line))} className="rounded-full border border-foreground/10 px-2.5 py-1 text-xs hover:bg-foreground/5 disabled:opacity-40">
+                  {label}
+                </button>
+              ))}
+            </div>
+            <textarea value={direction} onChange={(e) => setDirection(e.target.value)} disabled={!left || pending} rows={6} placeholder={'e.g. "Make the opening darker and more dramatic. In the scene about reminders show a phone with the notification. Use blue instead of purple."'} className="w-full resize-y rounded-xl border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-violet-500 disabled:opacity-50" />
+            <div className="flex items-center justify-between text-xs">
+              <span className={count > CHANGE_WORDS ? "text-rose-600 dark:text-rose-400" : "text-foreground/50"}>
+                {count} / {CHANGE_WORDS} words
+              </span>
+            </div>
+            <button type="button" disabled={!left || pending || !count || count > CHANGE_WORDS || busy} onClick={change} className={secondaryClassName}>
+              {pending ? "Changing your video…" : left ? "✎ Change it" : "No changes left"}
             </button>
-            <p className="text-xs text-foreground/50">Same script and voice: new art directions and other pictures for each scene.</p>
+            {note && <p className={`text-xs ${note.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>{note.message}</p>}
           </div>
         </aside>
       </div>
