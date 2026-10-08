@@ -23,6 +23,7 @@ const SCRIPT_MAX = 5_000;
 const TIMEOUT_MS = 55_000;
 // A whole script's voice: some models (Gemini TTS) take a minute or more.
 const VOICE_TIMEOUT_MS = 180_000; // (the whole pipeline has 300 s)
+const WORD_TIMING_TIMEOUT_MS = 120_000;
 
 // Input shape differs per Fal model, so it is configured, not guessed.
 // FAL_VOICE_INPUT_TEMPLATE is JSON with {{text}}, {{language}}, {{style}}, {{gender}}, {{voice}} placeholders,
@@ -177,7 +178,8 @@ export const WORD_TIMING_MODEL = "fal-ai/whisper";
 export async function timeWords(audioUrl: string, script: string): Promise<{ words: WordTiming[]; requestId: string; model: string; seconds: number } | null> {
   const result = await falClient().subscribe(WORD_TIMING_MODEL, {
     input: { audio_url: audioUrl, task: "transcribe", chunk_level: "word" },
-    abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+    // a minute of speech took Whisper over 55 s (queue included)
+    abortSignal: AbortSignal.timeout(WORD_TIMING_TIMEOUT_MS),
   });
   const chunks = ((result.data as { chunks?: unknown } | null)?.chunks ?? []) as { timestamp?: unknown; text?: unknown }[];
   const heard: WordTiming[] = [];

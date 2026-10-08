@@ -806,7 +806,10 @@ export async function generateVoice(projectId: string) {
     // timing is rescaled to it.
     const lastEnd = words?.length ? Math.max(...words.map((w) => w.end)) : null;
     const seconds = lastEnd ? voiceVideoSeconds(lastEnd) : null;
-    const parsedBrief = ProductBrief.safeParse(project.brief);
+    // (re-read: a brief written alongside may have finished while the voice spoke)
+    const { data: latest } = await admin.from("projects").select("brief").eq("id", projectId).single();
+    const briefNow = (latest?.brief ?? project.brief) as object | null;
+    const parsedBrief = ProductBrief.safeParse(briefNow);
     let rescaled: ReturnType<typeof fitDurations> | null = null;
     if (seconds && parsedBrief.success) {
       try {
@@ -818,7 +821,7 @@ export async function generateVoice(projectId: string) {
     // Only the permanent path is persisted, never the temporary provider URL.
     await voiceUpdate({
       ...(seconds && { duration_seconds: seconds }),
-      ...(rescaled && { brief: { ...(project.brief as object), scenes: rescaled.scenes } }),
+      ...(rescaled && { brief: { ...(briefNow as object), scenes: rescaled.scenes } }),
       voice_status: "completed",
       voice_error: null,
       // Word timing drives narration-synced motion; null = none available.
@@ -1179,6 +1182,20 @@ export async function runBenchmark(sourceProjectId: string, formData: FormData) 
 const STALE_PIPELINE_MS = 15 * 60 * 1000;
 
 // Marks the pipeline running; returns false if a run is already in progress.
+async function fitBriefToVoice(admin: ReturnType<typeof createAdminClient>, projectId: string) {
+  const { data } = await admin.from("projects").select("brief, duration_seconds, voice_status").eq("id", projectId).single();
+  const brief = ProductBrief.safeParse(data?.brief);
+  if (!data || data.voice_status !== "completed" || !brief.success || !data.duration_seconds) return;
+  const total = brief.data.scenes.reduce((n, sc) => n + sc.duration_seconds, 0);
+  if (Math.abs(total - data.duration_seconds) < 0.01) return;
+  try {
+    const fitted = fitDurations(brief.data, data.duration_seconds);
+    await admin.from("projects").update({ brief: { ...(data.brief as object), scenes: fitted.scenes } }).eq("id", projectId);
+  } catch (e) {
+    console.warn("brief not fitted to the voice:", projectId, e instanceof Error ? e.message : e);
+  }
+}
+
 async function claimPipeline(projectId: string, userId: string) {
   const staleBefore = new Date(Date.now() - STALE_PIPELINE_MS).toISOString();
   const { data } = await createAdminClient()
@@ -1302,6 +1319,10 @@ async function runPipeline(projectId: string, userId: string) {
       if (story) await story;
       return void (await fail(p.brief_error ?? "Brief failed."));
     }
+
+    // The brief and the voice may each have finished before the other (a slow
+    // voice model): the storyboard always lasts as long as the voice.
+    await fitBriefToVoice(admin, projectId);
 
     // 4. Visual asset manifest, then generated assets.
     await enter("visuals");
