@@ -4,6 +4,7 @@ import { Icon } from "../icons";
 import { CARD_W, Card, cardHeight } from "./cards";
 export { baseSize } from "./sizes";
 import { LivingIcon, lottieFor } from "./lottie";
+import { Connector, drawn, smoothPath } from "./paths";
 import { type Ctx, Glyph, Initial, Mark, Tick, countUp, kIn, show, surf } from "./kit";
 import { clamp01, mix } from "./motion";
 import type { PlacedItem } from "./types";
@@ -154,7 +155,9 @@ function Chart({ c, it, w, h }: P) {
   }
   const cw = w - 64, ch = h - 150;
   const pts = vals.map((x, i) => [(i / Math.max(1, vals.length - 1)) * cw, ch - (x / max) * ch * 0.92] as const);
-  const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  // the line is a smooth curve that draws itself; the area fills in behind it
+  const line = smoothPath(pts);
+  const ink = drawn(line, draw);
   return (
     <div style={{ width: w, height: h, ...surf(c), fontFamily: c.text, boxSizing: "border-box", position: "relative", overflow: "hidden" }}>
       {head}
@@ -172,18 +175,15 @@ function Chart({ c, it, w, h }: P) {
           <svg width={cw} height={ch} style={{ position: "absolute", inset: 0, overflow: "visible" }}>
             <defs>
               <linearGradient id={`cg${it.at}`} x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor={pal.fill} stopOpacity={0.35} /><stop offset="1" stopColor={pal.fill} stopOpacity={0} /></linearGradient>
-              <clipPath id={`cc${it.at}`}><rect x={-10} y={-20} width={(cw + 20) * draw} height={ch + 40} /></clipPath>
+              <clipPath id={`cc${it.at}`}><rect x={-10} y={-20} width={ink.head ? ink.head.x + 10 : 0} height={ch + 40} /></clipPath>
             </defs>
-            <g clipPath={`url(#cc${it.at})`}>
-              {v !== "spark" && <path d={`${line} L${cw},${ch} L0,${ch} Z`} fill={`url(#cg${it.at})`} />}
-              <path d={line} stroke={pal.fill} strokeWidth={6} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </g>
-            {draw > 0.05 && (() => {
-              const i = Math.min(pts.length - 1, Math.floor(draw * (pts.length - 1) + 0.0001));
-              const t = draw * (pts.length - 1) - i;
-              const a = pts[i], b = pts[Math.min(pts.length - 1, i + 1)];
-              return <circle cx={mix(a[0], b[0], t)} cy={mix(a[1], b[1], t)} r={11} fill={pal.panel} stroke={pal.fill} strokeWidth={5} />;
-            })()}
+            {v !== "spark" && (
+              <g clipPath={`url(#cc${it.at})`}>
+                <path d={`${line} L${cw},${ch} L0,${ch} Z`} fill={`url(#cg${it.at})`} />
+              </g>
+            )}
+            <path d={line} stroke={pal.fill} strokeWidth={6} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={ink.strokeDasharray} strokeDashoffset={ink.strokeDashoffset} />
+            {draw > 0.05 && ink.head && <circle cx={ink.head.x} cy={ink.head.y} r={11} fill={pal.panel} stroke={pal.fill} strokeWidth={5} />}
           </svg>
         )}
       </div>
@@ -338,21 +338,16 @@ function Flow({ c, it, w, h }: P) {
     const gap = 80;
     return (
       <div style={{ width: w, height: h, display: "flex", alignItems: "flex-start", gap, position: "relative" }}>
-        {rows.map((r, i) => {
-          const at = stepAt(c, it, i, rows.length);
-          const k = kIn(c, at);
-          const link = kIn(c, at + 4, 16);
-          return (
-            <div key={i} style={{ position: "relative" }}>
-              {node(r, i, k)}
-              {i < rows.length - 1 && (
-                <div style={{ position: "absolute", left: 250 - 30, top: 80, width: gap + 60, height: 4 }}>
-                  <div style={{ height: 4, borderRadius: 4, width: `${link * 100}%`, background: `linear-gradient(90deg, ${pal.accent}, ${pal.accent2})` }} />
-                </div>
-              )}
-            </div>
-          );
-        })}
+        <svg width={w} height={h} style={{ position: "absolute", inset: 0, overflow: "visible" }}>
+          {rows.slice(0, -1).map((_, i) => {
+            const x0 = i * (250 + gap) + 125 + 92, x1 = (i + 1) * (250 + gap) + 125 - 92;
+            const link = kIn(c, stepAt(c, it, i, rows.length) + 4, 18);
+            return <Connector key={i} d={`M${x0},80 Q${(x0 + x1) / 2},${i % 2 ? 118 : 42} ${x1},80`} k={link} f={c.f} color={pal.accent} seed={i} />;
+          })}
+        </svg>
+        {rows.map((r, i) => (
+          <div key={i} style={{ position: "relative" }}>{node(r, i, kIn(c, stepAt(c, it, i, rows.length)))}</div>
+        ))}
       </div>
     );
   }
@@ -376,8 +371,8 @@ function Flow({ c, it, w, h }: P) {
           {pos.map(([, y], i) => {
             const k = kIn(c, stepAt(c, it, i, n) - 2, 18);
             const x0 = centre[0] + side * 90, x1 = v === "fan" ? w * 0.46 : w * 0.54;
-            const d = `M${x0},${centre[1]} C${(x0 + x1) / 2},${centre[1]} ${(x0 + x1) / 2},${y} ${x1},${y}`;
-            return <path key={i} d={d} stroke={pal.accent} strokeWidth={4} fill="none" strokeLinecap="round" pathLength={1} strokeDasharray={`${k} 1`} opacity={0.75} />;
+            const d = v === "fan" ? `M${x0},${centre[1]} C${(x0 + x1) / 2},${centre[1]} ${(x0 + x1) / 2},${y} ${x1},${y}` : `M${x1},${y} C${(x0 + x1) / 2},${y} ${(x0 + x1) / 2},${centre[1]} ${x0},${centre[1]}`;
+            return <Connector key={i} d={d} k={k} f={c.f} color={pal.accent} seed={i} />;
           })}
         </svg>
         <div style={{ position: "absolute", left: centre[0], top: centre[1], transform: "translate(-50%,-50%)" }}><Mark c={c} size={170} k={ck} /></div>
@@ -398,7 +393,7 @@ function Flow({ c, it, w, h }: P) {
       <svg width={w} height={h} style={{ position: "absolute", inset: 0 }}>
         {pos.map(([x, y], i) => {
           const k = kIn(c, stepAt(c, it, i, n) + 2, 18);
-          return <line key={i} x1={centre[0]} y1={centre[1]} x2={mix(centre[0], x, k)} y2={mix(centre[1], y, k)} stroke={pal.accent} strokeWidth={4} strokeDasharray={v === "ring" ? "2 12" : undefined} strokeLinecap="round" opacity={0.7} />;
+          return <Connector key={i} d={`M${x},${y} L${centre[0]},${centre[1]}`} k={k} f={c.f} color={pal.accent} dash={v === "ring"} seed={i} />;
         })}
         {v === "ring" && <circle cx={cx} cy={cy} r={Math.min(w, h) * 0.36} fill="none" stroke={pal.faint} strokeWidth={2} opacity={ck * 0.5} />}
       </svg>
