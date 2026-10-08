@@ -3,6 +3,7 @@ import { Img } from "remotion";
 import { Icon } from "../icons";
 import { CARD_W, Card, cardHeight } from "./cards";
 export { baseSize } from "./sizes";
+import { LivingIcon, lottieFor } from "./lottie";
 import { type Ctx, Glyph, Initial, Mark, Tick, countUp, kIn, show, surf } from "./kit";
 import { clamp01, mix } from "./motion";
 import type { PlacedItem } from "./types";
@@ -47,11 +48,18 @@ const label = (c: Ctx, size: number, color = c.pal.ink) => ({ fontFamily: c.text
 function IconThing({ c, it, w }: P) {
   const hk = hitK(c, it, 20);
   const s = it.title ? 200 : 220;
+  const living = lottieFor(it.icon);
   return (
     <div style={{ width: w, display: "flex", flexDirection: "column", alignItems: "center", gap: 22 }}>
       <div style={{ position: "relative", transform: `scale(${1 + Math.sin(clamp01(hk) * Math.PI) * 0.12})` }}>
         {hk > 0 && hk < 1 && <div style={{ position: "absolute", inset: -40 * hk, borderRadius: 9999, border: `3px solid ${c.pal.accent}`, opacity: 1 - hk }} />}
-        <Glyph c={c} name={it.icon} size={s} k={kIn(c, it.at, 30)} />
+        {living ? (
+          <div style={{ width: s, height: s, ...surf(c, 0.8, Math.min(s * 0.3, c.art.radius * 0.7 + 10)), borderRadius: c.art.icons === "round" ? 9999 : Math.min(s * 0.3, c.art.radius * 0.7 + 10), display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <LivingIcon c={c} name={living} size={s * 0.92} at={it.at} />
+          </div>
+        ) : (
+          <Glyph c={c} name={it.icon} size={s} k={kIn(c, it.at, 30)} />
+        )}
       </div>
       {it.title && <div style={{ ...label(c, 34), textAlign: "center", whiteSpace: "nowrap" }}>{it.title}</div>}
     </div>
@@ -445,7 +453,7 @@ function Badge({ c, it, w }: P) {
   const hk = hitK(c, it, 16);
   return (
     <div style={{ width: w, height: 96, display: "flex", alignItems: "center", gap: 14, padding: "0 26px 0 14px", boxSizing: "border-box", ...surf(c, 0.7, 999), transform: `scale(${1 + Math.sin(hk * Math.PI) * 0.1})` }}>
-      <Glyph c={c} name={it.icon ?? "sparkles"} size={68} />
+      {lottieFor(it.icon) ? <LivingIcon c={c} name={lottieFor(it.icon)!} size={76} at={it.at} /> : <Glyph c={c} name={it.icon ?? "sparkles"} size={68} />}
       <div style={{ fontFamily: c.text, fontSize: 30, fontWeight: 750, color: c.pal.panelInk, whiteSpace: "nowrap" }}>{it.value ? countUp(it.value, kIn(c, it.at, 26)) : ""}{it.value && it.title ? " " : ""}<span style={{ fontWeight: it.value ? 550 : 750, color: it.value ? c.pal.panelSub : c.pal.panelInk }}>{it.title ?? ""}</span></div>
     </div>
   );

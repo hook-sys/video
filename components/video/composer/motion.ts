@@ -1,31 +1,36 @@
 import type { CSSProperties } from "react";
-import { Easing, interpolate } from "remotion";
+import { Easing, interpolate, spring } from "remotion";
 import type { ArtT, EnterKind, TransitionKind } from "./types";
 
 // How things move in a Composer film: the art direction's motion character
 // (soft, snappy, springy, glide) sets every curve and duration.
 
 const SOFT = Easing.bezier(0.22, 1, 0.36, 1);
-const SNAP = Easing.bezier(0.16, 1, 0.3, 1);
-const GLIDE = Easing.bezier(0.45, 0, 0.15, 1);
 export const IN_OUT = Easing.bezier(0.65, 0, 0.35, 1);
-// a spring that settles (no wobble past one small overshoot)
-const spring = (t: number) => (t >= 1 ? 1 : 1 - Math.exp(-6.2 * t) * Math.cos(5.2 * t));
 
 export const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
 export const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 export const ramp = (f: number, at: number, dur: number) => clamp01((f - at) / Math.max(1, dur));
 
-export type Mover = { ease: (t: number) => number; dur: number; stagger: number };
+// Things come in on Remotion's physical spring: each motion character is a
+// spring (soft: no overshoot; snappy: quick with a hair of overshoot;
+// springy: a visible settle; glide: heavy and slow), stretched to the pace.
+type SpringCfg = { damping: number; stiffness: number; mass: number; overshootClamping?: boolean };
+export type Mover = { cfg: SpringCfg; dur: number; stagger: number; ease: (t: number) => number };
+const CFG: Record<ArtT["motion"], SpringCfg> = {
+  soft: { damping: 200, stiffness: 100, mass: 1 },
+  snappy: { damping: 22, stiffness: 220, mass: 0.7 },
+  springy: { damping: 11, stiffness: 140, mass: 0.9 },
+  glide: { damping: 200, stiffness: 60, mass: 1.6 },
+};
 export function moverOf(art: Pick<ArtT, "motion" | "pace">): Mover {
   const p = art.pace || 1;
-  if (art.motion === "snappy") return { ease: SNAP, dur: Math.round(13 / p), stagger: Math.round(3 / p) };
-  if (art.motion === "springy") return { ease: spring, dur: Math.round(24 / p), stagger: Math.round(4 / p) };
-  if (art.motion === "glide") return { ease: GLIDE, dur: Math.round(26 / p), stagger: Math.round(6 / p) };
-  return { ease: SOFT, dur: Math.round(20 / p), stagger: Math.round(4 / p) };
+  const base = { soft: 22, snappy: 16, springy: 26, glide: 30 }[art.motion] ?? 22;
+  const stagger = { soft: 4, snappy: 3, springy: 4, glide: 6 }[art.motion] ?? 4;
+  return { cfg: CFG[art.motion] ?? CFG.soft, dur: Math.round(base / p), stagger: Math.round(stagger / p), ease: SOFT };
 }
-// 0 → 1 from `at`, on the art's curve
-export const enterK = (m: Mover, f: number, at: number, dur = m.dur) => (f < at ? 0 : m.ease(ramp(f, at, dur)));
+// 0 → 1 from `at` on the art's spring (a springy one passes 1 and settles)
+export const enterK = (m: Mover, f: number, at: number, dur = m.dur) => (f < at ? 0 : spring({ frame: f - at, fps: 30, config: m.cfg, durationInFrames: Math.max(4, dur) }));
 
 // A thing coming in (k 0 → 1): never from nothing, never with a jump.
 export function enterStyle(kind: EnterKind, k: number, tilt = 0): CSSProperties {
