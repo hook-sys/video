@@ -1419,16 +1419,19 @@ export async function retryPipeline(projectId: string) {
   // RLS: only returns the project if this user owns it.
   const { data: project } = await supabase
     .from("projects")
-    .select("pipeline_status, pipeline_step")
+    .select("pipeline_status, pipeline_step, direction, advanced_direction")
     .eq("id", projectId)
     .maybeSingle();
   // Failed runs resume; projects created before the pipeline existed can start.
   if (!project || !["failed", "idle"].includes(project.pipeline_status)) return;
 
   if (project.pipeline_step === "validating") {
+    // The customer's own script never changes, so its voice is kept (it was
+    // paid for); only the brief and visuals are made again.
+    const locked = !!lockedScriptOf(project);
     await createAdminClient()
       .from("projects")
-      .update({ brief_status: "none", voice_status: "none", assets_status: "none", assets_manifest: null })
+      .update({ brief_status: "none", ...(locked ? {} : { voice_status: "none" }), assets_status: "none", assets_manifest: null })
       .eq("id", projectId)
       .eq("user_id", user.id);
   }

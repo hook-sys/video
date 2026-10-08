@@ -41,11 +41,38 @@ const digits = (s: string) => s.replace(/[^\d.]/g, "").replace(/\.$/, "");
 // Ignore negated guardrail phrases such as "no animals, no people".
 const stripNegations = (s: string) => s.replace(/\bno\s+[^,.;]+/gi, " ");
 
+// Numbers the source spells out ("thirty percent", "fourteen days", "two
+// and a half"): their figures are as supported as written digits.
+const UNITS: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };
+const TENS: Record<string, number> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+export function spelledNumbers(text: string): string[] {
+  const out: string[] = [];
+  const words = text.toLowerCase().replace(/-/g, " ").split(/[^a-z]+/).filter(Boolean);
+  for (let i = 0; i < words.length; i++) {
+    let n: number | null = null;
+    let j = i;
+    if (words[j] in TENS) {
+      n = TENS[words[j]];
+      if (words[j + 1] in UNITS && UNITS[words[j + 1]] < 10) n += UNITS[words[++j]];
+    } else if (words[j] in UNITS) n = UNITS[words[j]];
+    else if (words[j] === "twice" || words[j] === "double") n = 2;
+    else if (words[j] === "triple") n = 3;
+    else if (words[j] === "half") out.push("50", "0.5");
+    if (n === null) continue;
+    if (words[j + 1] === "hundred") n *= 100;
+    else if (words[j + 1] === "thousand") n *= 1000;
+    else if (words[j + 1] === "million") n *= 1_000_000;
+    out.push(String(n));
+    if (words[j + 1] === "and" && words[j + 2] === "a" && words[j + 3] === "half") out.push(`${n}.5`);
+  }
+  return out;
+}
+
 /** Deterministic pre-render checks. Returns concise problems; empty means OK to render. */
 export function validateForRender(input: ValidationInput): string[] {
   const problems = [...input.missing];
   const source = norm(input.sourceText);
-  const sourceDigits = new Set((source.match(FIGURES) ?? []).map(digits).filter(Boolean));
+  const sourceDigits = new Set([...(source.match(FIGURES) ?? []).map(digits), ...spelledNumbers(source)].filter(Boolean));
 
   if (!(FORMATS as readonly string[]).includes(input.format)) problems.push("Invalid video format.");
   if (!(input.resolution in RESOLUTIONS)) problems.push("Resolution must be 1080p or 4K.");

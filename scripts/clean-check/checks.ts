@@ -41,6 +41,7 @@ import { Script as ComposerScript } from "@/components/video/composer/types";
 import { clauses } from "@/components/video/composer/auto";
 import { generateComposerIdeas, ideaProblems } from "@/lib/ai/composer-director";
 import { livingStandIn } from "@/components/video/icons/living";
+import { spelledNumbers } from "@/lib/render-validation";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -445,6 +446,12 @@ export async function runChecks(): Promise<Check[]> {
     const none = await generateComposerIdeas({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" } }, undefined, { responses: { parse: async () => { throw new Error("down"); } } } as never, 10_000);
     add("Composer Director: a failed call gives nothing (the Composer composes)", !none.ideas && none.problems.some((p) => p.includes("down")), none.problems[0] ?? "");
     add("engine switch defaults off", normalizeConfig(null).engine.composer === "off" && normalizeConfig({ engine: { composer: "admins" } }).engine.composer === "admins" && normalizeConfig({ engine: { composer: "x" } }).engine.composer === "off", "off · admins · bad → off");
+  }
+
+  section = "claims";
+  {
+    const said = spelledNumbers("Shops cut waste by thirty percent in three months. Try it free for fourteen days, twice as fast, two and a half hours, twenty-five teams.");
+    add("a number the script spells out is a supported figure", ["30", "3", "14", "2", "2.5", "25"].every((n) => said.includes(n)) && !said.includes("40"), said.join(", "));
   }
 
   section = "covered elsewhere";
