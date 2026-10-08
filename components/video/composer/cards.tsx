@@ -9,24 +9,8 @@ import type { PlacedItem, RowT } from "./types";
 // come from the Director; they arrive one by one, and on the item's `hit`
 // word its moment happens (a row is checked, a status turns, a slot fills).
 
-export const CARD_W = 640;
-export function cardHeight(variant: string, rows: number): number {
-  const n = Math.max(1, rows);
-  switch (variant) {
-    case "notify": return 120 + Math.min(3, n) * 112;
-    case "kpi": return 120 + Math.ceil(Math.min(4, n) / 2) * 150;
-    case "calendar": return 470;
-    case "kanban": return 440;
-    case "pay": return 470;
-    case "profile": return 420;
-    case "doc": return 480;
-    case "chat": return 130 + Math.min(5, n) * 92;
-    case "form": return 150 + Math.min(4, n) * 96 + 90;
-    case "invoice": return 230 + Math.min(4, n) * 62 + 80;
-    case "search": return 170 + Math.min(4, n) * 82;
-    default: return 120 + Math.min(6, n) * 84;
-  }
-}
+export { CARD_W, cardHeight } from "./sizes";
+import { CARD_W } from "./sizes";
 
 type Props = { c: Ctx; it: PlacedItem; w: number; h: number };
 const rowsOf = (it: PlacedItem, fallback: RowT[]) => (it.rows?.length ? it.rows : fallback).slice(0, 6);

@@ -51,7 +51,7 @@ const blurOf = (px: number) => (px > 0.3 ? `blur(${px.toFixed(1)}px)` : undefine
 // ── scenes in and out ─────────────────────────────────────────────────────
 // A scene comes in over `dur` frames from just before its first word while
 // the last one goes (they cross: there is never an empty frame).
-export const TRANSITION_FRAMES: Record<TransitionKind, number> = { blur: 16, fade: 14, "push-left": 22, "push-right": 22, "push-up": 22, "push-down": 22, "zoom-in": 20, "zoom-out": 20, whip: 14, iris: 26, wipe: 22, flip: 22, morph: 20, drop: 20 };
+export { TRANSITION_FRAMES } from "./sizes";
 
 export function sceneIn(kind: TransitionKind, k: number, origin: { x: number; y: number }): CSSProperties {
   const r = 1 - k;

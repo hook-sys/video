@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Img } from "remotion";
 import { Icon } from "../icons";
 import { CARD_W, Card, cardHeight } from "./cards";
+export { baseSize } from "./sizes";
 import { type Ctx, Glyph, Initial, Mark, Tick, countUp, kIn, show, surf } from "./kit";
 import { clamp01, mix } from "./motion";
 import type { PlacedItem } from "./types";
@@ -9,36 +10,6 @@ import type { PlacedItem } from "./types";
 // The Composer's things (besides cards): each is drawn at its own natural
 // size and scaled into the box the layout gives it.
 
-export function baseSize(it: Pick<PlacedItem, "kind" | "variant" | "rows" | "title" | "sub" | "value" | "screen">): [number, number] {
-  const n = Math.max(1, it.rows?.length ?? 0);
-  switch (it.kind) {
-    case "icon": return it.title ? [320, 340] : [240, 240];
-    case "chips": return it.variant === "row" ? [Math.min(4, n) * 330, 110] : [600, n * 96 + (n - 1) * 16];
-    case "stat": return [640, it.sub ? 360 : 300];
-    case "chart": return it.variant === "ring" || it.variant === "donut" ? [560, 560] : [720, 480];
-    case "card": return [CARD_W, cardHeight(it.variant ?? "list", it.rows?.length ?? 3)];
-    case "device":
-      if (it.variant === "browser") return [1120, 720];
-      if (it.variant === "laptop") return [1240, 780];
-      if (it.variant === "tablet") return [900, 660];
-      if (it.variant === "watch") return [300, 380];
-      return [420, 860];
-    case "screenshot": return [1120, 720];
-    case "logo": return [1000, it.sub ? 400 : 300];
-    case "button": return [760, it.sub ? 250 : 190];
-    case "compare": return [1080, 120 + Math.min(4, n) * 86 + 40];
-    case "flow":
-      if (it.variant === "hub" || it.variant === "ring") return [920, 720];
-      if (it.variant === "fan" || it.variant === "merge") return [1100, Math.max(420, Math.min(5, n) * 150)];
-      return [Math.min(5, n) * 250 + (Math.min(5, n) - 1) * 80, 330];
-    case "steps": return [Math.min(4, n) * 330, 330];
-    case "avatars": return [600, 150];
-    case "badge": return [Math.max(260, 120 + ((it.title ?? it.value ?? "").length * 17)), 96];
-    case "quote": return [820, 400];
-    case "cursor": return [90, 90];
-    default: return [420, 420];
-  }
-}
 
 type P = { c: Ctx; it: PlacedItem; w: number; h: number };
 

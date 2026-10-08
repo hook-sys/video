@@ -1,6 +1,5 @@
 import { emWidth, faceOf, rng } from "./art";
-import { baseSize } from "./items";
-import { TRANSITION_FRAMES } from "./motion";
+import { TRANSITION_FRAMES, baseSize } from "./sizes";
 import type { ArrangeKind, ArtT, Box, Brand, ComposerPlan, ItemT, LayoutKind, PlacedItem, PlacedScene, SceneT, ScriptT, TextBlock, Word } from "./types";
 import { FPS, H, W } from "./types";
 
