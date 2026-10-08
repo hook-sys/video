@@ -207,8 +207,8 @@ export function autoScript({ words, brand, seed, lens: lensIn, avoid, screens = 
   const drawn = drawArt(R, brand.color, avoid);
   const art = artIn ?? drawn;
   // this video's ways in: two or three it keeps coming back to, one it saves
-  const family = R.shuffle(["blur", "push-left", "push-up", "zoom-in", "zoom-out", "iris", "wipe", "drop", "whip", "flip", "push-right", "push-down"] as TransitionKind[]).slice(0, 3);
-  const accentT = R.pick(["iris", "zoom-in", "whip", "flip", "wipe"] as TransitionKind[]);
+  const family = R.shuffle(["blur", "push-left", "push-up", "zoom-in", "zoom-out", "iris", "wipe", "drop", "whip", "flip", "push-right", "push-down", "clock"] as TransitionKind[]).slice(0, 3);
+  const accentT = R.pick(["iris", "zoom-in", "whip", "flip", "wipe", "clock"] as TransitionKind[]);
   const reveals = R.shuffle(["word", "rise", "mask", "scale", "blur", "slide", "type", "line"] as Reveal[]).slice(0, 2);
   const cs = clauses(words);
   // scenes: clauses joined until each has room to be seen

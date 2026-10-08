@@ -54,4 +54,4 @@ export function baseSize(it: Pick<PlacedItem, "kind" | "variant" | "rows" | "tit
 }
 
 // frames a scene takes to come in, by its way in
-export const TRANSITION_FRAMES: Record<TransitionKind, number> = { blur: 16, fade: 14, "push-left": 22, "push-right": 22, "push-up": 22, "push-down": 22, "zoom-in": 20, "zoom-out": 20, whip: 14, iris: 26, wipe: 22, flip: 22, morph: 20, drop: 20 };
+export const TRANSITION_FRAMES: Record<TransitionKind, number> = { blur: 16, fade: 14, "push-left": 22, "push-right": 22, "push-up": 22, "push-down": 22, "zoom-in": 20, "zoom-out": 20, whip: 14, iris: 26, wipe: 22, flip: 30, morph: 20, drop: 20, clock: 32 };

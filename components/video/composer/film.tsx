@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo, useState } from "react";
+import { type CSSProperties, type ReactNode, useMemo, useState } from "react";
 import { AbsoluteFill, Html5Audio, continueRender, delayRender, staticFile, useCurrentFrame } from "remotion";
 import { Audio as MediaAudio } from "@remotion/media";
 import { DISPLAY_FACES, TEXT_FACES, faceOf, familyOf, fontUrl, palette, rng } from "./art";
@@ -8,6 +8,8 @@ import { type Ctx, CtxC } from "./kit";
 import { isAccent } from "./layout";
 import { IN_OUT, TRANSITION_FRAMES, cameraOf, clamp01, enterK, enterStyle, mix, moverOf, ramp, sceneIn, sceneOut } from "./motion";
 import { Headline } from "./text";
+import { Trail } from "@remotion/motion-blur";
+import { Present, presentationOf } from "./present";
 import { measureText } from "@remotion/layout-utils";
 import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene, TextBlock } from "./types";
 
@@ -112,7 +114,6 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   const pals = useMemo(() => ({ dark: palette(art, true), light: palette(art, false) }), [art]);
   const scenes = plan.scenes;
   const anchors = useMemo(() => scenes.map(anchorOf), [scenes]);
-  const brand = plan.brand;
   const ready = typeof document !== "undefined" && loaded.has(display.family);
   const family = familyOf(display);
   const weight = display.fixed ?? art.weight;
@@ -142,55 +143,100 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
     <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
       {flip && fieldOf(scenes[cur - 1].dark)}
       <AbsoluteFill style={clip ? { clipPath: clip, WebkitClipPath: clip } : undefined}>{fieldOf(s.dark)}</AbsoluteFill>
-      {!bare &&
-        scenes.map((sc, i) => {
-          const last = i === scenes.length - 1;
-          const dIn = i ? D(i) : 1;
-          // the last scene moves on with the next one where they travel
-          // together (push, whip); otherwise it is mostly gone before the
-          // next one's words arrive (two headlines never sit on each other)
-          const together = !last && /^(push|whip)/.test(scenes[i + 1].enter);
-          const dOut = last ? 0 : together ? D(i + 1) : sc.dark ? 20 : 14;
-          const outAt = together ? sc.to - 2 : sc.to - 4;
-          const start = sc.from - 2;
-          const end = last ? plan.duration : outAt + dOut;
-          if (f < start || f > end) return null;
-          const kin = i ? IN_OUT(ramp(f, start, dIn)) : 1;
-          const kout = last ? 0 : IN_OUT(ramp(f, outAt, dOut));
-          const pal = sc.dark ? pals.dark : pals.light;
-          const c: Ctx = { f, pal, art, m, display: familyOf(display), text: familyOf(textFace), brand, screens };
-          const o = sc.items.find((q) => !isAccent(q))?.box ?? sc.text?.box ?? { x: 960, y: 540 };
-          const outStyle = kout > 0 ? sceneOut(scenes[i + 1].enter, kout) : undefined;
-          const inStyle = kin < 1 ? sceneIn(sc.enter, kin, o) : undefined;
-          const p = clamp01((f - sc.from) / Math.max(1, sc.to - sc.from));
-          const cam = cameraOf(sc.camera, p, f, art.energy);
-          const next = scenes[i + 1];
-          // things that travel on into the next scene leave this one as it goes
-          const travels = (it: PlacedItem) => !!(it.id && next?.items.some((q) => q.id === it.id && q.from)) && f >= next.from - 2;
-          const sorted = [...sc.items].sort((x, y) => x.z - y.z);
-          const still = sorted.filter((it) => !it.from);
-          const moving = sorted.filter((it) => it.from);
-          const textOut = 0;
-          return (
-            <AbsoluteFill key={i} style={outStyle}>
-              <AbsoluteFill style={inStyle}>
-                <AbsoluteFill style={{ perspective: 1800, perspectiveOrigin: "50% 45%" }}>
-                  <AbsoluteFill style={{ transform: cam, transformStyle: "preserve-3d" }}>
-                    <CtxC.Provider value={c}>
-                      {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} />)}
-                      {texts[i] && <Headline c={c} tb={texts[i]!} out={textOut} plate={sc.layout === "over"} />}
-                      {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} />)}
-                    </CtxC.Provider>
-                  </AbsoluteFill>
-                </AbsoluteFill>
-              </AbsoluteFill>
-              <CtxC.Provider value={c}>
-                {moving.filter((it) => !travels(it)).map((it, j) => <Thing key={`m${j}`} c={c} it={it} idx={j + 20} travel={{ from: it.from!, start, dur: 22 }} />)}
-              </CtxC.Provider>
-            </AbsoluteFill>
-          );
-        })}
+      {!bare && scenes.map((sc, i) => <SceneLayer key={i} i={i} plan={plan} pals={pals} m={m} display={familyOf(display)} textFamily={familyOf(textFace)} screens={screens} texts={texts} D={D} field={fieldOf} />)}
       {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+    </AbsoluteFill>
+  );
+}
+
+type SceneProps = { i: number; plan: ComposerProps["plan"]; pals: { dark: ReturnType<typeof palette>; light: ReturnType<typeof palette> }; m: ReturnType<typeof moverOf>; display: string; textFamily: string; screens: string[]; texts: (TextBlock | null)[]; D: (i: number) => number; field: (dark: boolean) => ReactNode };
+
+// A scene; during a fast way in or out it leaves a short trail (Remotion's
+// motion blur as layers — it renders the same in the browser's download).
+function SceneLayer(props: SceneProps) {
+  const f = useCurrentFrame();
+  const { i, plan } = props;
+  const sc = plan.scenes[i], next = plan.scenes[i + 1];
+  const moves = (k: string) => /^(push|whip|zoom)/.test(k);
+  const fast = (i > 0 && moves(sc.enter) && f >= sc.from - 2 && f <= sc.from + 24) || (!!next && moves(next.enter) && f >= sc.to - 4 && f <= sc.to + 30);
+  return fast ? (
+    <Trail layers={3} lagInFrames={0.5} trailOpacity={0.55}>
+      <SceneBody {...props} />
+    </Trail>
+  ) : (
+    <SceneBody {...props} />
+  );
+}
+
+// One scene, reading the frame itself (so the trail can sample it a moment
+// earlier): its way in and out, camera, words and things.
+function SceneBody({ i, plan, pals, m, display, textFamily, screens, texts, D, field }: SceneProps) {
+  const f = useCurrentFrame();
+  const scenes = plan.scenes;
+  const sc = scenes[i];
+  const { art, brand } = plan;
+  const last = i === scenes.length - 1;
+  const next = scenes[i + 1];
+  const dIn = i ? D(i) : 1;
+  // the last scene moves on with the next one where they travel together
+  // (push, whip, a Remotion transition); otherwise it is mostly gone before
+  // the next one's words arrive (two headlines never sit on each other)
+  const together = !last && (/^(push|whip)/.test(next.enter) || !!presentationOf(next.enter));
+  const dOut = last ? 0 : together ? D(i + 1) : sc.dark ? 20 : 14;
+  const outAt = together ? sc.to - 2 : sc.to - 4;
+  const start = sc.from - 2;
+  const end = last ? plan.duration : outAt + dOut;
+  if (f < start || f > end) return null;
+  const kin = i ? IN_OUT(ramp(f, start, dIn)) : 1;
+  const kout = last ? 0 : IN_OUT(ramp(f, outAt, dOut));
+  const pal = sc.dark ? pals.dark : pals.light;
+  const c: Ctx = { f, pal, art, m, display, text: textFamily, brand, screens };
+  const o = sc.items.find((q) => !isAccent(q))?.box ?? sc.text?.box ?? { x: 960, y: 540 };
+  const pin = presentationOf(sc.enter, sc.seed);
+  const pout = next ? presentationOf(next.enter, next.seed) : null;
+  const outStyle = kout > 0 && !pout ? sceneOut(next.enter, kout) : undefined;
+  const inStyle = kin < 1 && !pin ? sceneIn(sc.enter, kin, o) : undefined;
+  const p = clamp01((f - sc.from) / Math.max(1, sc.to - sc.from));
+  const cam = cameraOf(sc.camera, p, f, art.energy);
+  // things that travel on into the next scene leave this one as it goes
+  const travels = (it: PlacedItem) => !!(it.id && next?.items.some((q) => q.id === it.id && q.from)) && f >= next.from - 2;
+  const sorted = [...sc.items].sort((x, y) => x.z - y.z);
+  const still = sorted.filter((it) => !it.from);
+  const moving = sorted.filter((it) => it.from);
+  let body = (
+    <AbsoluteFill style={inStyle}>
+      <AbsoluteFill style={{ perspective: 1800, perspectiveOrigin: "50% 45%" }}>
+        <AbsoluteFill style={{ transform: cam, transformStyle: "preserve-3d" }}>
+          <CtxC.Provider value={c}>
+            {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} />)}
+            {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over"} />}
+            {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} />)}
+          </CtxC.Provider>
+        </AbsoluteFill>
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+  // Remotion's own transitions (clock wipe, wipe, flip) on our timing
+  // (a wipe brings the new scene's own background with it, so the last
+  // scene is covered where the new one is revealed — never the two mixed)
+  // (a flip turns at an even speed — eased, its edge-on moment flashes past)
+  const lin = (k: number, kind: string) => (kind === "flip" ? clamp01((Math.asin(clamp01(k) * 2 - 1) / Math.PI) + 0.5) : k);
+  if (pin && kin < 1)
+    body = (
+      <Present p={pin} dir="entering" k={lin(kin, sc.enter)} dur={dIn}>
+        <AbsoluteFill>
+          {(sc.enter === "clock" || sc.enter === "wipe") && field(sc.dark)}
+          {body}
+        </AbsoluteFill>
+      </Present>
+    );
+  if (pout && kout > 0) body = <Present p={pout} dir="exiting" k={lin(kout, next.enter)} dur={dOut}>{body}</Present>;
+  return (
+    <AbsoluteFill style={outStyle}>
+      {body}
+      <CtxC.Provider value={c}>
+        {moving.filter((it) => !travels(it)).map((it, j) => <Thing key={`m${j}`} c={c} it={it} idx={j + 20} travel={{ from: it.from!, start, dur: 22 }} />)}
+      </CtxC.Provider>
     </AbsoluteFill>
   );
 }

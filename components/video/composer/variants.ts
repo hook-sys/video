@@ -89,7 +89,7 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
   const R = rng(seed);
   const art = mendArt(ideas.arts[v % Math.max(1, ideas.arts.length)], drawArt(R, brand.color, avoid));
   const family = R.shuffle(TRANSITIONS.filter((t) => t !== "morph" && t !== "fade")).slice(0, 3) as TransitionKind[];
-  const accentT = R.pick(["iris", "zoom-in", "whip", "flip", "wipe"] as TransitionKind[]);
+  const accentT = R.pick(["iris", "zoom-in", "whip", "flip", "wipe", "clock"] as TransitionKind[]);
   const reveals = R.shuffle(REVEALS).slice(0, 2) as Reveal[];
   const n = words.length;
   let prevT: TransitionKind | null = null;

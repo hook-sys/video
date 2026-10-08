@@ -27,7 +27,7 @@ export const ICON_STYLES = ["tile", "round", "bare", "duotone", "outline", "glas
 export const LAYOUTS = ["center", "split-left", "split-right", "top", "bottom", "type", "visual", "corner", "over"] as const;
 export const ARRANGES = ["single", "row", "column", "grid", "cascade", "orbit", "scatter", "diagonal"] as const;
 export const REVEALS = ["word", "rise", "mask", "type", "scale", "blur", "slide", "line"] as const;
-export const TRANSITIONS = ["blur", "fade", "push-left", "push-right", "push-up", "push-down", "zoom-in", "zoom-out", "whip", "iris", "wipe", "flip", "morph", "drop"] as const;
+export const TRANSITIONS = ["blur", "fade", "push-left", "push-right", "push-up", "push-down", "zoom-in", "zoom-out", "whip", "iris", "wipe", "flip", "morph", "drop", "clock"] as const;
 export const ENTERS = ["rise", "drop", "left", "right", "scale", "pop", "blur", "flip", "unfold", "draw", "swing"] as const;
 export const ITEM_KINDS = ["icon", "chips", "stat", "chart", "card", "device", "logo", "button", "compare", "flow", "avatars", "badge", "cursor", "shape", "screenshot", "steps", "quote"] as const;
 // What a card shows (the product's UI, drawn).
