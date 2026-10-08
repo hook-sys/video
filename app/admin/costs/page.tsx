@@ -5,13 +5,15 @@ import { daysAgo, lastDays, usd } from "../_components/format";
 
 export const metadata = { title: "Costs" };
 
+// What each AI text call was for (cost_events.metadata.kind).
+const JOBS: Record<string, string> = { brief: "Script & brief", composer_director: "Composer Director", story_director: "Studio Director", flow_director: "Old Shot/Scene Director", screenshots: "Screenshot reading" };
 const OPS: Record<string, string> = { openai_brief: "Script & director (AI)", fal_voice: "Voice (FAL)", fal_image: "Images (FAL)", remotion_render: "Rendering", storage: "Storage" };
 
 export default async function CostsPage() {
   const { db } = await requireAdmin();
   const d30 = daysAgo(30);
   const [{ data: events }, { data: users }, { count: videos30 }, { data: bench }] = await Promise.all([
-    db.from("cost_events").select("user_id, operation, model, estimated_cost_usd, created_at").gte("created_at", d30).limit(50000),
+    db.from("cost_events").select("user_id, project_id, operation, model, estimated_cost_usd, created_at, kind:metadata->>kind").gte("created_at", d30).limit(50000),
     db.from("profiles").select("id, email"),
     db.from("projects").select("id", { count: "exact", head: true }).gte("created_at", d30),
     db.from("benchmark_runs").select("duration_seconds, resolution, estimated_cost_usd, render_ms, status").eq("status", "completed").order("started_at", { ascending: false }).limit(20),
@@ -26,6 +28,14 @@ export default async function CostsPage() {
   const byOp = sum((e) => e.operation);
   const byModel = sum((e) => e.model ?? "—").slice(0, 8);
   const byUser = sum((e) => e.user_id).slice(0, 10);
+  // AI text jobs: total, and per video that ran the job
+  const jobs = [...list.filter((e) => e.operation === "openai_brief").reduce((m, e) => {
+    const k = String(e.kind ?? "other");
+    const j = m.get(k) ?? { cost: 0, videos: new Set<string>() };
+    j.cost += Number(e.estimated_cost_usd);
+    if (e.project_id) j.videos.add(e.project_id);
+    return m.set(k, j);
+  }, new Map<string, { cost: number; videos: Set<string> }>())].sort((a, b) => b[1].cost - a[1].cost);
   const email = new Map((users ?? []).map((u) => [u.id, u.email]));
   const days = lastDays(30).map((d) => ({ label: d.label.split(" ")[0], a: Math.round(list.filter((e) => e.created_at.startsWith(d.key)).reduce((a, e) => a + Number(e.estimated_cost_usd), 0) * 100) / 100 }));
 
@@ -62,6 +72,19 @@ export default async function CostsPage() {
           </div>
         </Card>
       </div>
+      <Card title="AI text jobs · 30 days">
+        <Table head={["Job", "Total", "Videos", "Per video"]} empty="No AI text calls recorded.">
+          {jobs.map(([k, j]) => (
+            <tr key={k}>
+              <td className={td}>{JOBS[k] ?? k}</td>
+              <td className={`${td} tabular-nums`}>{usd(j.cost)}</td>
+              <td className={`${td} tabular-nums`}>{j.videos.size}</td>
+              <td className={`${td} tabular-nums text-zinc-400`}>{j.videos.size ? usd(j.cost / j.videos.size) : "—"}</td>
+            </tr>
+          ))}
+        </Table>
+        <p className="mt-2 text-xs text-zinc-500">Before Oct 8 the three Directors were recorded together as &quot;Old Shot/Scene Director&quot;.</p>
+      </Card>
       <Card title="Benchmark runs (measured, latest 20)">
         <Table head={["Length", "Resolution", "Render time", "Cost", "Cost / minute"]} empty="No completed benchmark runs.">
           {(bench ?? []).map((b, i) => (

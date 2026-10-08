@@ -543,9 +543,9 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     .maybeSingle();
   const brief = ProductBrief.safeParse(project?.brief);
   // (With a locked script this runs while the brief is still being written.)
-  const raw = (project?.brief ?? null) as { scene?: unknown; flow?: unknown } | null;
+  const raw = (project?.brief ?? null) as { scene?: unknown; flow?: unknown; clean?: unknown; composer?: unknown } | null;
   const narration = brief.success ? brief.data.script : project ? lockedScriptOf(project) : "";
-  if (!project || project.voice_status !== "completed" || !narration || raw?.flow || raw?.scene || project.format !== "16:9") return;
+  if (!project || project.voice_status !== "completed" || !narration || raw?.flow || raw?.scene || raw?.clean || raw?.composer || project.format !== "16:9") return;
   const words = parseWordTimings((project.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
   const { count: screenshots } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
   const input = { narration, words, duration_seconds: project.duration_seconds, product_name: (brief.success ? brief.data.product_name : project.brand_name?.trim()) || undefined, screenshots: screenshots ?? 0, creative_preferences: creativePreferences(project), never: await loadNeverList(admin), seed: seedFrom(projectId), taste: await loadTaste(admin) };
@@ -554,22 +554,27 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // Director v2 (scenes of product UI) first; the pattern Director is the
   // fallback when no usable SceneScript comes back and time remains.
   let usage: BriefUsage | undefined;
-  // Each job may use its own model (/admin/models): priced per call.
+  // Each job may use its own model (/admin/models): priced per call, and
+  // recorded per Director (Composer, studio Story, old Shot/Scene/Flow).
   const ai = await getAiConfig();
-  let cost = 0;
-  const models = new Set<string>();
-  const addUsage = (u: BriefUsage) => {
-    cost += usageCost(ai, u, (i, o) => openaiCost(u.model, i, o));
-    if (u.inputTokens || u.outputTokens) models.add(u.model);
+  type Meter = { cost: number; models: Set<string>; input: number; output: number };
+  const meters: Record<"composer" | "story" | "shot", Meter> = { composer: { cost: 0, models: new Set(), input: 0, output: 0 }, story: { cost: 0, models: new Set(), input: 0, output: 0 }, shot: { cost: 0, models: new Set(), input: 0, output: 0 } };
+  const meterOf = (k: keyof typeof meters) => (u: BriefUsage) => {
+    const m = meters[k];
+    m.cost += usageCost(ai, u, (i, o) => openaiCost(u.model, i, o));
+    if (u.inputTokens || u.outputTokens) m.models.add(u.model);
+    m.input += u.inputTokens;
+    m.output += u.outputTokens;
     usage = usage ? { ...u, inputTokens: usage.inputTokens + u.inputTokens, outputTokens: usage.outputTokens + u.outputTokens } : u;
   };
+  const addUsage = meterOf("shot");
   // The clean film templates first (one quick call): the narration in seven
   // parts and the four videos to offer, never a set this customer already had
   // for the same script. The engines below still run (fallback).
   const [clean, composer] = project.format === "16:9" && words?.length
     ? await Promise.all([
-        cleanSet(admin, projectId, userId, project, words, narration, brief.success ? brief.data : null, addUsage),
-        composerSet(admin, projectId, userId, project, words, brief.success ? brief.data : null, addUsage).catch((e) => {
+        cleanSet(admin, projectId, userId, project, words, narration, brief.success ? brief.data : null, meterOf("story")),
+        composerSet(admin, projectId, userId, project, words, brief.success ? brief.data : null, meterOf("composer")).catch((e) => {
           console.warn("composer failed:", e instanceof Error ? e.message : e);
           return null;
         }),
@@ -578,9 +583,13 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // Shot templates first (lib/shots.ts): tested shots, the Director only picks
   // and fills them (four directions, else one — inside generateShotScript).
   // The free-form scene Director is the fallback only when no shots came back.
-  const shot = await generateShotScript(input, addUsage, budgetMs);
+  // The old engines are only a fallback: with Composer or studio videos they
+  // never show, so they are not run (or paid for).
+  const skipOld = !!(clean || composer);
+  if (skipOld) console.info("shot director: skipped (Composer/studio videos ready)", { projectId, composer: !!composer, studio: !!clean });
+  const shot = skipOld ? { script: null, shots: null, variants: [], attempts: 0, ms: 0, errors: [] as string[], diagnostics: null, timing: null, violations: [] } as unknown as Awaited<ReturnType<typeof generateShotScript>> : await generateShotScript(input, addUsage, budgetMs);
   console.info("shot director:", { projectId, outcome: shot.script ? "stored" : "none", directions: shot.variants.map((v) => v.variant), attempts: shot.attempts, ms: shot.ms, shots: shot.shots?.shots.map((s) => `${s.shot}@${s.cue}`), creative: shot.shots?.creative, concepts: shot.shots?.concepts?.map((c) => `${c.cue} → ${c.hero}: ${c.see}`), problems: shot.errors.slice(0, 6) });
-  const v2 = shot.script || budgetMs - (Date.now() - started) < 60_000 ? shot : await generateSceneScript(input, addUsage, Math.min(budgetMs - (Date.now() - started), 130_000));
+  const v2 = skipOld || shot.script || budgetMs - (Date.now() - started) < 60_000 ? shot : await generateSceneScript(input, addUsage, Math.min(budgetMs - (Date.now() - started), 130_000));
   console.info("scene director:", {
     projectId,
     outcome: v2.script ? "stored" : "none",
@@ -591,7 +600,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     problems: v2.errors.slice(0, 6),
   });
   const left = budgetMs - (Date.now() - started);
-  const fallback = !v2.script && left > 40_000;
+  const fallback = !skipOld && !v2.script && left > 40_000;
   const result = fallback ? await generateFlowScript(input, addUsage, left) : { ...v2, script: null };
   if (!v2.script && !fallback) console.info("flow director: skipped (no time left)", { projectId, left });
   if (fallback)
@@ -658,15 +667,19 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
     const { error: mistakesError } = await admin.from("video_mistakes").insert(v2.violations.map((v) => ({ project_id: projectId, rule_id: v.rule, detail: v.detail.slice(0, 300) })));
     if (mistakesError) console.warn("video mistakes not logged:", mistakesError.message);
   }
-  if (usage) {
+  // One cost line per Director that ran (admin → Costs shows each).
+  const KIND = { composer: "composer_director", story: "story_director", shot: "flow_director" } as const;
+  for (const k of ["composer", "story", "shot"] as const) {
+    const m = meters[k];
+    if (!m.input && !m.output) continue;
     await recordCost(admin, {
       project_id: projectId,
       user_id: userId,
       operation: "openai_brief",
-      model: [...models].join(", ") || usage.model,
-      quantity: usage.inputTokens + usage.outputTokens,
-      estimated_cost_usd: cost,
-      metadata: { kind: "flow_director", engine: v2.script ? "scene" : "flow", input_tokens: usage.inputTokens, output_tokens: usage.outputTokens, attempts, latency_ms: Date.now() - started, stored: !!script, timing: v2.timing },
+      model: [...m.models].join(", ") || usage?.model || "",
+      quantity: m.input + m.output,
+      estimated_cost_usd: m.cost,
+      metadata: { kind: KIND[k], ...(k === "shot" ? { engine: v2.script ? "scene" : "flow", attempts, stored: !!script, timing: v2.timing } : {}), input_tokens: m.input, output_tokens: m.output, latency_ms: Date.now() - started },
     });
   }
 }
