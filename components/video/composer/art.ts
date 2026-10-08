@@ -129,16 +129,17 @@ export function palette(art: Pick<ArtT, "hue" | "harmony" | "surface">, dark: bo
   const fill = hsl(h, 78, dark ? 58 : 52);
   const fill2 = hsl(h2, 76, dark ? 60 : 56);
   const onFill = contrast("#ffffff", fill) >= 3 ? "#ffffff" : hsl(h, 40, 10);
-  // the product's cards: white on light fields; on dark ones they are dark
-  // glass / ink panels, or white for a solid surface
-  const panelDark = dark && art.surface !== "solid" && art.surface !== "soft";
-  const panel = panelDark ? (art.surface === "ink" ? hsl(h, 30, 10) : hsl(h, 30, 13)) : art.surface === "tinted" ? hsl(h, 50, 98) : "#ffffff";
+  // the product's cards are always bright — white on a light field, and
+  // bright (lit) on a dark one: on a dark background the subject is the light
+  const panelDark = false;
+  const panel = art.surface === "tinted" || art.surface === "ink" ? hsl(h, 50, 98) : "#ffffff";
   const panelInk = panelDark ? hsl(h, 25, 95) : hsl(h, 35, 12);
   const panelSub = panelDark ? hsl(h, 16, 66) : hsl(h, 12, 46);
   const panelLine = panelDark ? hsl(h, 24, 22) : hsl(h, 22, 92);
   const panelSoft = panelDark ? hsl(h, 26, 17) : hsl(h, 30, 96.5);
   const glow = hsl(h, 90, dark ? 70 : 60);
-  const shadow = dark ? "rgba(0,0,0,0.45)" : hsl(h, 40, 30, 0.16);
+  // on a dark field the bright things glow faintly in the key colour
+  const shadow = dark ? hsl(h, 80, 55, 0.28) : hsl(h, 40, 30, 0.16);
   return { dark, bg, bg2, ink, sub, faint: dark ? hsl(h, 20, 40) : hsl(h, 15, 75), accent, accent2, accent3, fill, fill2, onFill, glow, panel, panelInk, panelSub, panelLine, panelSoft, panelDark, shadow };
 }
 
@@ -215,7 +216,7 @@ export function surfaceStyle(surface: Surface, pal: Pal, radius: number, lift = 
   if (surface === "glass")
     return pal.panelDark
       ? { background: "linear-gradient(160deg, rgba(255,255,255,0.13), rgba(255,255,255,0.04))", border: "1.5px solid rgba(255,255,255,0.16)", boxShadow: `inset 0 1px 0 rgba(255,255,255,0.22), ${shade}`, backdropFilter: "blur(18px)", borderRadius: r }
-      : { background: "linear-gradient(160deg, rgba(255,255,255,0.92), rgba(255,255,255,0.72))", border: "1.5px solid rgba(255,255,255,0.95)", boxShadow: `inset 0 1px 0 #fff, ${shade}`, backdropFilter: "blur(18px)", borderRadius: r };
+      : { background: pal.dark ? "linear-gradient(160deg, rgba(255,255,255,0.99), rgba(250,250,255,0.93))" : "linear-gradient(160deg, rgba(255,255,255,0.92), rgba(255,255,255,0.72))", border: "1.5px solid rgba(255,255,255,0.95)", boxShadow: `inset 0 1px 0 #fff, ${shade}`, backdropFilter: "blur(18px)", borderRadius: r };
   if (surface === "outline") return { background: pal.panelDark ? "rgba(255,255,255,0.02)" : pal.panel, border: `2px solid ${pal.panelDark ? pal.faint : pal.panelInk}`, boxShadow: pal.panelDark ? "none" : `8px 8px 0 ${pal.panelInk}`, borderRadius: r };
   if (surface === "soft") return { background: pal.panel, boxShadow: `0 2px 0 ${pal.panelLine}, ${shade}`, borderRadius: r };
   if (surface === "tinted") return { background: pal.panel, border: `1.5px solid ${pal.panelLine}`, boxShadow: shade, borderRadius: r };

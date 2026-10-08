@@ -301,7 +301,7 @@ function Compare({ c, it, w, h }: P) {
   return (
     <div style={{ width: w, height: h, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 26, fontFamily: c.text }}>
       {[0, 1].map((side) => (
-        <div key={side} style={{ ...surf(c, side ? 1 : 0.5), padding: "26px 28px", opacity: side ? clamp01(kIn(c, hk - 6) * 1.4) : 1, transform: side ? `translateX(${(1 - kIn(c, hk - 6)) * 40}px)` : undefined, background: side ? undefined : pal.panelDark ? "rgba(255,255,255,0.04)" : pal.panelSoft, boxSizing: "border-box" }}>
+        <div key={side} style={{ ...surf(c, side ? 1 : 0.5), padding: "26px 28px", opacity: side ? clamp01(kIn(c, hk - 6) * 1.4) : 1, transform: side ? `translateX(${(1 - kIn(c, hk - 6)) * 40}px)` : undefined, ...(side ? {} : { background: pal.panelSoft }), boxSizing: "border-box" }}>
           <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: "0.1em", color: side ? pal.fill : pal.panelSub, marginBottom: 12 }}>{side ? (it.sub ?? "NOW").toUpperCase() : (it.title ?? "BEFORE").toUpperCase()}</div>
           {rows.map((r, i) => {
             const k = kIn(c, stepAt(c, { ...it, hit: side ? null : hk - 8 } as PlacedItem, i, rows.length) + (side ? hk - it.at : 0));

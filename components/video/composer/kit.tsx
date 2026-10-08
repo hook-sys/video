@@ -30,11 +30,14 @@ export function Glyph({ c, name, size, tone = "accent", k = 1 }: { c: Ctx; name:
     </div>
   );
   const onPanel = tone === "panel";
+  // on a dark field an icon is a bright thing too (a lit tile)
+  if (pal.dark && !onPanel && art.icons !== "tile" && art.icons !== "round" && art.icons !== "bare")
+    return box("rgba(255,255,255,0.94)", fill, { border: "1.5px solid #ffffff", boxShadow: `0 ${size * 0.12}px ${size * 0.4}px ${pal.shadow}` });
   switch (art.icons) {
     case "bare": return <Icon name={icon} size={size * 0.86} color={onPanel ? pal.accent : pal.accent} strokeWidth={2} draw={k} />;
     case "outline": return box("transparent", onPanel ? pal.panelInk : pal.accent, { border: `2px solid ${onPanel ? pal.panelLine : pal.accent}` });
     case "duotone": return box(onPanel ? pal.panelSoft : `${fill}22`, fill, { boxShadow: `inset 0 0 0 1.5px ${fill}33` });
-    case "glass": return box(pal.panelDark || pal.dark ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.85)", pal.accent, { border: `1.5px solid ${pal.dark ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,1)"}`, boxShadow: `0 10px 30px ${pal.shadow}` });
+    case "glass": return box(onPanel ? pal.panelSoft : "rgba(255,255,255,0.92)", pal.fill, { border: "1.5px solid rgba(255,255,255,1)", boxShadow: `0 10px 30px ${pal.shadow}` });
     default: return box(`linear-gradient(140deg, ${fill}, ${tone === "fill2" ? pal.fill : pal.fill2})`, pal.onFill, { boxShadow: `0 ${size * 0.14}px ${size * 0.4}px ${fill}55` });
   }
 }

@@ -122,7 +122,9 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   // the scene whose field is showing (it opens as the scene comes in)
   const cur = Math.max(0, scenes.findLastIndex((s) => s.from - 2 <= f));
   const s = scenes[cur];
-  const D = (i: number) => TRANSITION_FRAMES[scenes[i]?.enter ?? "fade"] ?? 16;
+  // bright things on a dark field change a lot of light: their ways in and
+  // out take longer there (never a flash)
+  const D = (i: number) => Math.round((TRANSITION_FRAMES[scenes[i]?.enter ?? "fade"] ?? 16) * (scenes[i]?.dark || scenes[i - 1]?.dark ? 1.5 : 1));
   const flipping = cur > 0 && scenes[cur - 1].dark !== s.dark;
   // a field turning dark ↔ light opens slowly from the scene's thing, its
   // area growing evenly (never a flash of new light)
@@ -148,7 +150,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
           // together (push, whip); otherwise it is mostly gone before the
           // next one's words arrive (two headlines never sit on each other)
           const together = !last && /^(push|whip)/.test(scenes[i + 1].enter);
-          const dOut = last ? 0 : together ? D(i + 1) : 14;
+          const dOut = last ? 0 : together ? D(i + 1) : sc.dark ? 20 : 14;
           const outAt = together ? sc.to - 2 : sc.to - 4;
           const start = sc.from - 2;
           const end = last ? plan.duration : outAt + dOut;

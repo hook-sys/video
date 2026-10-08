@@ -78,11 +78,13 @@ function regions(layout: LayoutKind, ratio: number, hasText: boolean, hasVis: bo
   }
 }
 
-const SIZE_MAX = { s: 1.05, m: 1.5, l: 1.9 } as const;
+const SIZE_MAX = { s: 1.15, m: 1.7, l: 2.1 } as const;
 function fit(it: ItemT, cell: Rect, k = 1): { box: Box; scale: number } {
   const [bw, bh] = baseSize(it as PlacedItem);
   const cw = cell.r - cell.l, ch = cell.b - cell.t;
-  const s = Math.min(cw / bw, ch / bh, SIZE_MAX[it.size ?? "m"]) * k;
+  // a call to action, a logo or a number reads best at a set size, never blown up
+  const kindMax = it.kind === "button" ? 1.2 : it.kind === "logo" ? 1.3 : it.kind === "badge" ? 1.2 : it.kind === "stat" ? 1.5 : 9;
+  const s = Math.min(cw / bw, ch / bh, SIZE_MAX[it.size ?? "m"], kindMax) * k;
   return { box: { x: (cell.l + cell.r) / 2, y: (cell.t + cell.b) / 2, w: bw * s, h: bh * s }, scale: s };
 }
 
@@ -270,6 +272,9 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   };
 }
 
+// How much of the frame the scene's things take (accents aside).
+const fillOf = (p: PlacedScene) => p.items.filter((q) => !isAccent(q)).reduce((a, q) => a + q.box.w * q.box.h, 0) / ((SAFE.r - SAFE.l) * (SAFE.b - SAFE.t));
+
 // The layouts tried, in order, when a scene's own has problems.
 const RETRY: LayoutKind[] = ["top", "split-left", "split-right", "bottom", "center", "visual"];
 
@@ -318,7 +323,33 @@ export function placeAll(script: ScriptT, words: Word[], duration: number, brand
         if (tryIt.problems.length <= best.problems.length) best = tryIt;
       }
     }
+    // the things should own the frame: when they fill little of it (a wide
+    // row squeezed into a narrow side, small icons in a big field), another
+    // layout that fills it far better — with words no smaller — is taken
+    if (!best.problems.length && best.placed.items.some((q) => !isAccent(q))) {
+      const own = fillOf(best.placed);
+      if (own < 0.26) {
+        let pick = best, score = own;
+        for (const layout of ["top", "bottom", "split-left", "split-right", "center"] as LayoutKind[]) {
+          for (const arrangeK of [s.arrange ?? null, "row", "grid", "column"] as (ArrangeKind | null)[]) {
+            const t = placeScene({ ...input, scene: { ...s, layout, arrange: arrangeK } });
+            if (t.problems.length) continue;
+            const fill = fillOf(t.placed);
+            const words = (t.placed.text?.size ?? 0) >= (best.placed.text?.size ?? 0) * 0.8;
+            if (words && fill > score * 1.25) {
+              pick = t;
+              score = fill;
+            }
+          }
+        }
+        best = pick;
+      }
+    }
     best.placed.dark = mixed ? (s.dark ?? i % 2 === 0) : (s.dark ?? script.art.scheme === "dark");
+    // the ask's button shows the customer's own address, or none (never one made up)
+    for (const q of best.placed.items) if (q.kind === "button") q.sub = brand.url?.trim() || null;
+    // a whip is too sudden for bright things on a dark field: a push instead
+    if (best.placed.dark && best.placed.enter === "whip") best.placed.enter = "push-left";
     // the very first scene has no way in; a match cut needs a thing to carry
     if (i === 0) best.placed.enter = "fade";
     if (best.placed.enter === "morph" && !best.placed.items.some((q) => q.from)) best.placed.enter = "blur";
