@@ -4,8 +4,8 @@ import type { ComposerPlan, GuideKind, JourneyKind, LinkKind, PlacedScene } from
 
 // How a video is staged. A studio's rule: ONE camera language for the whole
 // video — variety comes from one video to the next, never inside one — and
-// one signature move kept for the hero moment. The language is the Creative
-// Director's choice (lib/ai/creative-director.ts, or by rule in lib/studio.ts
+// one signature move kept for the hero moment. The language is the Motion
+// Director's choice (lib/ai/motion-director.ts, or by rule in lib/studio.ts
 // from the brand's mood); without one it is drawn here from the seed. Each
 // move uses the language's way wherever its two scenes allow it (a thing to
 // carry, a word to keep, a window to go into), else the language's plain way.
@@ -67,7 +67,7 @@ const stir = (x: number) => {
 
 // The scene a word is in (the hero moment's scene).
 export const sceneAt = (plan: ComposerPlan, frame: number) => Math.max(0, plan.scenes.findLastIndex((s) => s.from <= frame));
-// Without a hero from the Creative Director: the first scene showing a big
+// Without a hero from the Motion Director: the first scene showing a big
 // number or chart, else the one ~55% of the way in.
 const heroOf = (plan: ComposerPlan) => {
   const i = plan.scenes.findIndex((s, k) => k > 0 && s.items.some((it) => it.kind === "stat" || it.kind === "chart"));
@@ -78,7 +78,7 @@ export function stageOf(plan: ComposerPlan, seed: number, recent: (Staging | nul
   const R = rng(stir(seed ^ 0x5bd1e995) || 1);
   const sc = plan.scenes;
   const n = sc.length;
-  // the language: the Creative Director's, else drawn (what this customer had lately counts against it)
+  // the language: the Motion Director's, else drawn (what this customer had lately counts against it)
   let language = direction?.language;
   if (!language) {
     const list = LANGUAGES.filter((l) => (l === "map" ? n >= 5 : ["timeline", "tiles"].includes(l) ? n >= 4 : true)).map((l) => [l, recent.reduce((w, s, i) => (s && stagingName(s) === l ? w * (0.15 + 0.5 * (i / Math.max(1, recent.length))) : w), 1)] as const);

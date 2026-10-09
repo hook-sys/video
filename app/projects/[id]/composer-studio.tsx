@@ -55,7 +55,7 @@ const wordsIn = (t: string) => t.split(/\s+/).filter(Boolean).length;
 
 // byRule ("AI only for the voice"): nothing reads a written direction, so a
 // change is a new version, staged and composed anew by rule.
-export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, name, className, secondaryClassName, byRule = false, about }: { projectId: string; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string; byRule?: boolean; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null; judge: string | null } }) {
+export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, name, className, secondaryClassName, byRule = false, about }: { projectId: string; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string; byRule?: boolean; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null } }) {
   // the newest version unless the customer picks an earlier one
   const [picked, setPicked] = useState<number | null>(null);
   const selected = Math.min(picked ?? plans.length - 1, plans.length - 1);
@@ -125,7 +125,7 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
               <span className="font-semibold text-foreground/80">Idea:</span> {about.idea}
               {about.mood && <> · {about.mood}</>}
               {about.language && <> · camera: {about.language}</>}
-              {about.score != null && <> · Judge {about.score.toFixed(1)}/10{about.judge === "rule" ? " (rule)" : ""}</>}
+              {about.score != null && <> · score {about.score.toFixed(1)}/10</>}
             </p>
           )}
           {plans.length > 1 && (

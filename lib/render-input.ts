@@ -28,8 +28,8 @@ export type RenderProject = {
 
 export const RENDER_PROJECT_COLUMNS = "id, user_id, format, duration_seconds, brand_name, brand_color, call_to_action, brief, voice_status, voice_result, direction, website_url";
 
-// What the studio shows beside the video: what its Directors decided.
-export type ComposerAbout = { idea: string | null; mood: string | null; language: string | null; score: number | null; judge: string | null };
+// What the studio shows beside the video: what its Motion Director decided.
+export type ComposerAbout = { idea: string | null; mood: string | null; language: string | null; score: number | null };
 export type ComposerView = { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[]; about?: ComposerAbout };
 type StoredComposer = { videos?: { script: unknown; seed: number; source: ComposerPlan["source"]; staging?: Staging | null }[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] };
 
@@ -99,11 +99,12 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
     plans.push(...composeVariants({ words: shown, brand, duration, seed, count: 1, screens: screenshotUrls.length, size }).plans);
   }
 
-  // what the studio's Directors decided (the idea, the camera language, the Judge's score)
-  const sc = stored as { creative?: { idea?: string; language?: string }; profile?: { mood?: string; category?: string }; judge?: { source?: string; best?: number; scores?: { candidate: number; total: number }[]; rule?: { total: number }[] } } | undefined;
+  // what the Motion Director decided (the idea, the camera language) and the code's score
+  const sc = stored as { creative?: { idea?: string; language?: string }; profile?: { mood?: string; category?: string }; score?: { total?: number }; judge?: { best?: number; scores?: { candidate: number; total: number }[]; rule?: { total: number }[] } } | undefined;
+  // (videos made before the Motion Director kept a Judge's score)
   const best = sc?.judge?.best ?? 0;
-  const score = sc?.judge?.scores?.find((x) => x.candidate === best)?.total ?? sc?.judge?.rule?.[best]?.total ?? null;
-  const about = sc?.creative ? { idea: sc.creative.idea ?? null, mood: [sc.profile?.category, sc.profile?.mood].filter(Boolean).join(" · ") || null, language: stored?.videos?.at(-1)?.staging?.language ?? sc.creative.language ?? null, score, judge: sc.judge?.source ?? null } : undefined;
+  const score = sc?.score?.total ?? sc?.judge?.scores?.find((x) => x.candidate === best)?.total ?? sc?.judge?.rule?.[best]?.total ?? null;
+  const about = sc?.creative ? { idea: sc.creative.idea ?? null, mood: [sc.profile?.category, sc.profile?.mood].filter(Boolean).join(" · ") || null, language: stored?.videos?.at(-1)?.staging?.language ?? sc.creative.language ?? null, score } : undefined;
   const changes = (stored?.changes ?? []).filter((c) => c.ok).map((c) => ({ direction: c.direction, at: c.at }));
   return { problems, composer: { plans, screens: screenshotUrls, changes, about }, audioUrl };
 }

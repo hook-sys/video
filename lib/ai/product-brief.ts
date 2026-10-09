@@ -3,9 +3,8 @@ import { countUsage, textAi } from "@/lib/ai/models";
 import { z } from "zod";
 
 // The brief: what the video may say about the product (only what the
-// sources support) and the narration. The Composer's Directors picture the
-// narration (lib/ai/brand-analyst.ts, creative-director.ts,
-// composer-director.ts); the brief never plans visuals.
+// sources support) and the narration. The Motion Director pictures the
+// narration (lib/ai/motion-director.ts); the brief never plans visuals.
 
 const briefFields = {
   product_name: z.string(),

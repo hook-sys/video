@@ -4,10 +4,9 @@ import { stagingName } from "./staging";
 import type { ComposerPlan, ScriptT } from "./types";
 import { H, W } from "./frame";
 
-// The Judge's rule score (0–10) of a video as it would play: the house rules
-// that can be measured on the plan, the creative plan kept, and how unlike
-// this brand's earlier videos it is. The AI Judge (lib/ai/judge.ts) weighs
-// the candidates with this in hand; without it this score decides.
+// The rule score (0–10) of a video as it would play: the house rules that
+// can be measured on the plan, the creative plan kept, and how unlike this
+// brand's earlier videos it is. Shown in the studio beside the video.
 
 export type Score = { total: number; notes: string[] };
 type Ctx = { staging?: Staging | null; motif?: { icon: string } | null; heroScene?: number | null; recent?: { staging?: Staging | null; display?: string | null }[]; problems?: number };

@@ -2,8 +2,8 @@ import { rng } from "@/components/video/composer/art";
 import { LANGUAGES, type Language } from "@/components/video/composer/staging";
 import type { GuideKind, JourneyKind, Word } from "@/components/video/composer/types";
 
-// The studio's shared vocabulary: what the Brand Analyst and the Creative
-// Director write (lib/ai/brand-analyst.ts, lib/ai/creative-director.ts), and
+// The studio's shared vocabulary: the brand profile and the creative plan the
+// Motion Director writes (lib/ai/motion-director.ts), and
 // how each is written by rule when AI is off ("AI only for the voice") or
 // fails — so every video has a brand profile and a creative plan.
 

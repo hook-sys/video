@@ -6,7 +6,7 @@ import { daysAgo, lastDays, usd } from "../_components/format";
 export const metadata = { title: "Costs" };
 
 // What each AI text call was for (cost_events.metadata.kind).
-const JOBS: Record<string, string> = { brief: "Script & brief", composer_director: "Composer Director", composer_change: "Composer · Change it", story_director: "Studio Director", flow_director: "Old Shot/Scene Director", screenshots: "Screenshot reading" };
+const JOBS: Record<string, string> = { brief: "Script & brief", motion_director: "Motion Director", composer_director: "Composer Director (before Oct 2026)", composer_change: "Change it", story_director: "Studio Director", flow_director: "Old Shot/Scene Director", screenshots: "Screenshot reading" };
 const OPS: Record<string, string> = { openai_brief: "Script & director (AI)", fal_voice: "Voice (FAL)", fal_image: "Images (FAL)", remotion_render: "Rendering", storage: "Storage" };
 
 export default async function CostsPage() {

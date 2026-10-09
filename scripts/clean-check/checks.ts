@@ -11,20 +11,17 @@ import { countUsage, defaultConfig, effectiveConfig, normalizeConfig, parseVoice
 import { ruleBrief } from "@/lib/rule-brief";
 import { RECAP, stageOf, staged, stagingName } from "@/components/video/composer/staging";
 import { ruleCreative, ruleProfile } from "@/lib/studio";
-import { analyzeBrand } from "@/lib/ai/brand-analyst";
-import { directCreative } from "@/lib/ai/creative-director";
-import { judge, playOf } from "@/lib/ai/judge";
 import { scorePlan } from "@/components/video/composer/score";
 import { houseRules, varyLayouts } from "@/components/video/composer/rules";
 import { highlightOf, SHOWN } from "@/components/video/composer/highlight";
 import { COMPOSED, layoutFits } from "@/components/video/composer/layout";
 import { retimeScript } from "@/lib/voice-timing";
 import { directionFor, lockedVoiceScript, voiceChoiceOf, withVoiceChoice } from "@/lib/projects";
-import { composeVariants, fitScript, reviseCreative, scriptFromIdeas, type Ideas } from "@/components/video/composer/variants";
+import { composeVariants, fitScript, scriptFromIdeas, type Ideas } from "@/components/video/composer/variants";
 import { placeAll } from "@/components/video/composer/layout";
 import { Script as ComposerScript } from "@/components/video/composer/types";
 import { clauses } from "@/components/video/composer/auto";
-import { generateComposerIdeas, ideaProblems, ideasOf, reviewNotes, reviseComposerPlan } from "@/lib/ai/composer-director";
+import { answerOf, directMotion, ideaProblems, reviewMotion, reviewNotes, reviseMotion, scenesOf } from "@/lib/ai/motion-director";
 import { livingStandIn } from "@/components/video/icons/living";
 import { pieceToWord, scriptWords } from "@/components/video/composer/words";
 
@@ -39,7 +36,7 @@ export async function runChecks(): Promise<Check[]> {
     // Nothing saved: the environment's models, every job on.
     const d = normalizeConfig(null);
     add("nothing saved keeps today's models", JSON.stringify(d) === JSON.stringify(defaultConfig()) && d.text.provider === "openai" && Object.values(d.tasks).every((t) => t.on) && d.voice.on, `${d.text.provider} ${d.text.model}`);
-    add("the brief can't be turned off", normalizeConfig({ tasks: { brief: { on: false }, judge: { on: false } } }).tasks.brief.on && !normalizeConfig({ tasks: { judge: { on: false } } }).tasks.judge.on, "brief stays on");
+    add("the brief can't be turned off", normalizeConfig({ tasks: { brief: { on: false }, composer: { on: false } } }).tasks.brief.on && !normalizeConfig({ tasks: { composer: { on: false } } }).tasks.composer.on, "brief stays on");
     const cfg = normalizeConfig({ prices: { "google/gemini-2.5-flash": { in: 0.3, out: 2.5 } } });
     add("a model's own price is used for its cost", Math.abs(textCost(cfg, "google/gemini-2.5-flash", 1e6, 1e6, () => -1) - 2.8) < 1e-9 && textCost(cfg, "other", 1, 1, () => -1) === -1, "0.30 in + 2.50 out per 1M");
     {
@@ -165,39 +162,12 @@ export async function runChecks(): Promise<Check[]> {
     add("Director ideas: mended and laid out", placed.plan.scenes.length === 3 && placed.plan.art.display !== "no-such-font" && placed.plan.art.surface === "glass" && placed.plan.scenes[1].items.every((i) => i.kind !== ("dragon" as string)) && !!chips && chips.rows!.every((r) => !r.icon || !livingStandIn(r.icon) || r.icon === "id-card"), `${placed.plan.art.display}, ${placed.problems.length} problems`);
     add("Director ideas: the last scene ends on the brand's ask", placed.plan.scenes[2].items.some((i) => i.kind === "button"), placed.plan.scenes[2].items.map((i) => i.kind).join("+"));
     add("Director answer checked: order and start", ideaProblems({ arts: [], scenes: [{ at: 3, text: null, kicker: null, options: [] }, { at: 2, text: null, kicker: null, options: [] }] } as never, 50).length >= 4, "4 problems found");
-    // a model call, with a stand-in client: the answer is mended into order
-    const fake = { responses: { parse: async () => ({ id: "r1", usage: { input_tokens: 900, output_tokens: 1400 }, output_parsed: { arts: [ideas.arts[0], ideas.arts[0]], scenes: [{ ...ideas.scenes[1], at: 12 }, { ...ideas.scenes[0], at: 3 }] } }) } };
-    let billed = 0;
-    const res = await generateComposerIdeas({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try Flowly", url: "flowly.app" } }, (u) => (billed = u.inputTokens + u.outputTokens), fake as never, 30_000);
-    add("Composer Director: answer used, in order from word 0, tokens counted", !!res.ideas && res.ideas.scenes[0].at === 0 && res.ideas.scenes.length === 2 && billed === 4600, `${res.ideas?.scenes.map((x) => x.at).join(",")} · ${billed} tokens (two calls)`);
-    const none = await generateComposerIdeas({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" } }, undefined, { responses: { parse: async () => { throw new Error("down"); } } } as never, 10_000);
-    add("Composer Director: a failed call gives nothing (the Composer composes)", !none.ideas && none.problems.some((p) => p.includes("down")), none.problems[0] ?? "");
     // one video; the review sees our layout check and repetition
     const one = composeVariants({ words, brand: plans[0].brand, duration: plans[0].duration, seed: 9, count: 1 });
     add("Composer: one video per project", one.plans.length === 1 && one.videos.length === 1, `${one.plans[0].scenes.length} scenes`);
     const same = { ...ideas, scenes: [0, 10, 20, 30].map((at) => ({ at, text: { from: at, to: at + 5, size: "m", key: [] }, kicker: null, options: [{ layout: "top", arrange: null, items: [{ kind: "icon", at, icon: "bell" }] }] })) };
     const notes = reviewNotes(same, words, { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" });
     add("review notes: repeated layouts and things are named", notes.some((n) => n.includes("top layout")) && notes.some((n) => n.includes("all show icon")), notes.slice(0, 2).join("; "));
-    // "Change it": the stored plan goes to the model with the direction; a bad answer changes nothing
-    const plan0 = ideasOf(one.videos[0].script);
-    let sent = "";
-    const reviser = { responses: { parse: async (req: { input: string }) => { sent = req.input; return { id: "r", usage: { input_tokens: 5000, output_tokens: 3000 }, output_parsed: { arts: [{ ...ideas.arts[0], scheme: "dark" }], scenes: plan0.scenes } }; } } };
-    const changed = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "Make it darker. ".repeat(600) }, undefined, reviser as never);
-    const kept = (sent.split("<<<")[1] ?? "").split(/\s+/).filter(Boolean).length;
-    add("Change it: direction capped at 1000 words, plan revised", !!changed.ideas && (changed.ideas.arts[0] as { scheme?: string }).scheme === "dark" && kept <= 1001 && sent.includes("THE CURRENT PLAN"), `${kept} words sent`);
-    // the direction may change how the video moves; what it leaves (null) is kept, and the first plan no longer undoes it
-    const mover = { responses: { parse: async (req: { input: string }) => { sent = req.input; return { id: "r", usage: null, output_parsed: { arts: [{ ...ideas.arts[0], scheme: "mixed" }], scenes: plan0.scenes, staging: { language: "carry", journey: null, guide: null, recap: null, scheme: "mixed", turn: 6, hero: 9999 } } }; } } };
-    const moved = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "Calm, open dark and turn bright when Flowly appears", staging: { language: "depth", scheme: "light", turn: 3, hero: 8 } }, undefined, mover as never);
-    add("Change it: the current staging goes to the model, its staging change comes back", sent.includes("THE CURRENT STAGING") && sent.includes('"depth"') && moved.staging?.language === "carry" && moved.staging.scheme === "mixed" && moved.staging.turn === 6 && moved.staging.hero == null, JSON.stringify(moved.staging));
-    const firstPlan = { language: "depth" as const, journey: null, guide: null, recap: false, scheme: "light" as const, hero: 8, turn: 3 };
-    const merged = reviseCreative(firstPlan, { family: "depth", language: "depth", journey: null, link: "tunnel", links: null, guide: null, recap: false }, moved.staging, "mixed");
-    const rebuilt = composeVariants({ words, brand: plans[0].brand, duration: plans[0].duration, seed: 11, ideas: moved.ideas, count: 1, creative: merged });
-    const sc = rebuilt.plans[0].scenes;
-    add("Change it: new camera language and dark → light turn are built (not undone by the first plan)", rebuilt.videos[0].staging?.language === "carry" && rebuilt.plans[0].art.scheme === "mixed" && sc[0].dark && !sc[sc.length - 1].dark && merged?.hero === 8, `${rebuilt.videos[0].staging?.language} · ${sc.map((x) => (x.dark ? "D" : "L")).join("")}`);
-    const kept2 = reviseCreative(firstPlan, { family: "depth", language: "depth", journey: null, link: "tunnel", links: null, guide: null, recap: false }, null, "dark");
-    add("Change it: no staging change keeps the language; the revised art's scheme wins", kept2?.language === "depth" && kept2.scheme === "dark" && kept2.turn === 3, `${kept2?.language} · ${kept2?.scheme}`);
-    const failed = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "blue" }, undefined, { responses: { parse: async () => ({ id: "r", usage: null, output_parsed: null }) } } as never);
-    add("Change it: no answer → nothing changes", !failed.ideas, failed.problems[0] ?? "");
     // the Download button renders in the browser (web-renderer), which can't paint
     // CSS radial gradients or backdrop blur — the Composer draws those as SVG
     const dir = "components/video/composer";
@@ -231,27 +201,60 @@ export async function runChecks(): Promise<Check[]> {
     add("staged recap adds its seconds; cuts change nothing", recap.duration === bare.duration + RECAP && staged(bare, { family: "cuts", journey: null, link: null, links: null, guide: null, recap: true }) === bare, `+${recap.duration - bare.duration} frames`);
   }
 
-  section = "studio directors (Brand Analyst → Creative Director → Composer → Judge)";
+  section = "Motion Director (one director for the whole video)";
   {
     const bw = BOOKWELL;
     const script = bw.words.map((w) => w.text).join(" ");
     const dur = Math.round((bw.words[bw.words.length - 1].end + 1.2) * FPS);
-    // the profile by rule
+    const n = bw.words.length;
+    // the profile and the plan by rule (no model, or a failed call)
     const rp = ruleProfile({ name: "Bookwell", script });
     add("rule profile: kind of business and mood from the words", rp.category === "clinic & health" && rp.mood === "calm" && rp.source === "rule", `${rp.category} · ${rp.mood} · ${rp.look.scheme}/${rp.look.face}`);
-    // the Brand Analyst: what the script does not say is dropped; a failed call → by rule
-    const fakeProfile = { category: "clinic & health", personality: ["calm", "caring", "precise"], mood: "calm", audience: "clinic owners", promise: "Your whole clinic in one app", features: ["online booking"], before: ["phone calls"], keywords: ["clinic", "rocket"], numbers: ["99%"], look: { scheme: "light", face: "humanist", energy: 2 } };
-    const asked: string[] = [];
-    const ok = await analyzeBrand({ name: "Bookwell", color: "#4f46e5", script }, undefined, { responses: { parse: async (r: { input: string }) => (asked.push(r.input), { id: "a", usage: null, output_parsed: fakeProfile }) } } as never);
-    add("Brand Analyst: profile kept, unsaid words and numbers dropped", ok.profile.source === "ai" && ok.profile.keywords.includes("clinic") && !ok.profile.keywords.includes("rocket") && !ok.profile.numbers.length && ok.profile.look.energy <= 0.85 && asked[0].includes("SCRIPT"), `${ok.profile.keywords.join(", ")} · energy ${ok.profile.look.energy}`);
-    const down = await analyzeBrand({ name: "Bookwell", color: "#4f46e5", script }, undefined, { responses: { parse: async () => { throw new Error("down"); } } } as never);
-    add("Brand Analyst: a failed call → the profile by rule", down.profile.source === "rule" && down.problems[0].includes("down"), down.problems[0]);
-    // the Creative Director: one language; a hero out of range → by rule
-    const fakePlan = { idea: "a calendar that fills itself", motif: { icon: "calendar-check", label: "Booked" }, hero: 9999, turn: 12, beats: [{ at: 0, beat: "hook" }], language: "depth", journey: "snake", guide: null, recap: true, scheme: "mixed" };
-    const cp = await directCreative({ profile: rp, words: bw.words, brandName: "Bookwell", seed: 7, earlier: [{ idea: "old idea", language: "line" }] }, undefined, { responses: { parse: async (r: { input: string }) => (asked.push(r.input), { id: "c", usage: null, output_parsed: fakePlan }) } } as never);
-    add("Creative Director: plan kept, bad hero mended, earlier ideas sent", cp.plan.source === "ai" && cp.plan.language === "depth" && cp.plan.journey === null && cp.plan.hero < bw.words.length && asked[1].includes("old idea") && asked[1].includes("EARLIER"), `${cp.plan.language} · hero word ${cp.plan.hero} · turn ${cp.plan.turn}`);
     const rc = ruleCreative(rp, bw.words, "Bookwell", 7, []);
-    add("Creative Director by rule: turn on the brand's name, hero after it", rc.source === "rule" && bw.words[rc.turn].text.toLowerCase().includes("bookwell") && rc.hero >= rc.turn && rc.beats[0].beat === "hook" && rc.beats.at(-1)!.beat === "cta", `turn "${bw.words[rc.turn].text}" · hero word ${rc.hero} · ${rc.language} · idea "${rc.idea}"`);
+    add("plan by rule: turn on the brand's name, hero after it", rc.source === "rule" && bw.words[rc.turn].text.toLowerCase().includes("bookwell") && rc.hero >= rc.turn && rc.beats[0].beat === "hook" && rc.beats.at(-1)!.beat === "cta", `turn "${bw.words[rc.turn].text}" · hero word ${rc.hero} · ${rc.language} · idea "${rc.idea}"`);
+    // ONE answer: the brand, the concept, the staging, the art and the scenes
+    const ruleVideo = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 5, count: 1 }).videos[0].script;
+    const sceneIdeas = scenesOf(ruleVideo);
+    const art = { ...(sceneIdeas.arts[0] as Record<string, unknown>) };
+    delete art.scheme;
+    const turnAt = rc.turn;
+    const answer = (staging: Record<string, unknown>, scenes: unknown[] = sceneIdeas.scenes) => ({
+      brand: { category: "clinic & health", personality: ["calm", "caring", "precise"], mood: "calm", audience: "clinic owners", promise: "Your whole clinic in one app", features: ["online booking"], before: ["phone calls"], keywords: ["clinic", "rocket"], numbers: ["99%"], look: { face: "humanist", energy: 2 } },
+      concept: { idea: "a calendar that fills itself", motif: { icon: "calendar-check", label: "Booked" }, turn: turnAt, hero: 9999, beats: [{ at: 0, beat: "hook" }] },
+      staging: { language: "carry", journey: null, guide: null, recap: true, scheme: "mixed", ...staging },
+      arts: [art],
+      scenes,
+    });
+    const sent: { instructions: string; input: string }[] = [];
+    const client = (out: unknown) => ({ responses: { parse: async (r: { instructions: string; input: string }) => (sent.push(r), { id: "m", usage: { input_tokens: 1000, output_tokens: 2000 }, output_parsed: out }) } });
+    const input = { name: "Bookwell", color: "#4f46e5", cta: "Book a demo", words: bw.words, earlier: [{ idea: "old idea", language: "line" as const }], never: "- never use red", seed: 7 };
+    let billed = 0;
+    const md = await directMotion(input, (u) => (billed = u.inputTokens + u.outputTokens), client(answer({})) as never);
+    const pl = md.plan;
+    add("Motion Director: one call writes the brand, the concept, the staging, the art and every scene", sent.length === 1 && billed === 3000 && pl.source === "ai" && !!pl.ideas && pl.ideas.scenes.length === sceneIdeas.scenes.length && pl.creative.idea === "a calendar that fills itself" && pl.creative.language === "carry", `1 call · ${pl.ideas?.scenes.length} scenes · ${pl.creative.language}`);
+    add("Motion Director: gets the rulebook, the team's never list and this brand's earlier videos", sent[0].instructions.includes("HOUSE RULES") && sent[0].instructions.includes("never use red") && sent[0].instructions.includes("STAGING") && sent[0].input.includes("old idea") && sent[0].input.includes("EARLIER"), "rules · never list · earlier ideas");
+    add("Motion Director: unsaid words and numbers dropped, a bad hero mended", pl.profile.keywords.includes("clinic") && !pl.profile.keywords.includes("rocket") && !pl.profile.numbers.length && pl.profile.look.energy <= 0.85 && pl.creative.hero < n && pl.creative.journey === "right", `${pl.profile.keywords.join(", ")} · hero word ${pl.creative.hero}`);
+    add("Motion Director: dark or light is decided once (the staging), everywhere the same", pl.creative.scheme === "mixed" && pl.profile.look.scheme === "mixed" && (pl.ideas!.arts[0] as { scheme?: string }).scheme === "mixed", "staging · brand look · art: mixed");
+    const built = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 11, ideas: pl.ideas, count: 1, creative: pl.creative });
+    const bsc = built.plans[0].scenes;
+    add("its video is built as it decided (nothing else overrides it)", built.videos[0].source === "director" && built.videos[0].staging?.language === "carry" && built.plans[0].art.scheme === "mixed" && bsc[0].dark && !bsc[bsc.length - 1].dark, `${built.videos[0].staging?.language} · ${bsc.map((x) => (x.dark ? "D" : "L")).join("")}`);
+    const down = await directMotion(input, undefined, { responses: { parse: async () => { throw new Error("down"); } } } as never);
+    add("Motion Director: a failed call → the plan by rule (the Composer pictures the scenes)", down.plan.source === "rule" && !down.plan.ideas && down.problems[0].includes("down"), down.problems[0]);
+    // its review on the voice's times: kept when not worse; the brand stays
+    sent.length = 0;
+    const better = await reviewMotion(pl, input, undefined, client({ ...answer({ language: "line", journey: "snake" }), brand: { ...answer({}).brand, mood: "energetic" } }) as never);
+    add("review: sees our checks, its improved plan is kept, the brand stays", sent.length === 1 && sent[0].input.includes("YOUR PLAN") && sent[0].input.includes("Problems found") && better.plan.creative.language === "line" && better.plan.creative.journey === "snake" && better.plan.profile.mood === pl.profile.mood, `${better.plan.creative.language}/${better.plan.creative.journey} · mood ${better.plan.profile.mood}`);
+    const empty = await reviewMotion(pl, input, undefined, client(answer({}, [])) as never);
+    add("review: an answer without scenes changes nothing", empty.plan === pl && empty.problems[0].includes("no scenes"), empty.problems[0]);
+    // "Change it": the same director revises its plan (the direction capped at 1000 words)
+    sent.length = 0;
+    const changed = await reviseMotion(pl, "Make it dark. ".repeat(600), input, undefined, client(answer({ scheme: "dark", language: "cuts" })) as never);
+    const kept = (sent[0]?.input.split("<<<")[1] ?? "").split(/\s+/).filter(Boolean).length;
+    add("Change it: the plan revised (staging too), direction capped at 1000 words", changed.ok && changed.plan.creative.scheme === "dark" && changed.plan.creative.language === "cuts" && changed.plan.profile.look.scheme === "dark" && kept <= 1001 && sent[0].input.includes("THE CURRENT PLAN"), `${kept} words sent · ${changed.plan.creative.language}, ${changed.plan.creative.scheme}`);
+    const failed = await reviseMotion(pl, "blue", input, undefined, client(null) as never);
+    add("Change it: no answer → nothing changes", !failed.ok && failed.plan === pl, failed.problems[0] ?? "");
+    const back = answerOf(pl, ruleVideo);
+    add("Change it: a stored video goes back to the director in its own format", (back.staging as { scheme: string }).scheme === "mixed" && !("scheme" in (back.arts as Record<string, unknown>[])[0]) && (back.scenes as unknown[]).length === ruleVideo.scenes.length, "brand · concept · staging · art · scenes");
     // one camera language per video, its signature at the hero
     const langs = new Set<string>();
     let single = true;
@@ -267,26 +270,16 @@ export async function runChecks(): Promise<Check[]> {
     }
     add("one camera language per video; the hero's move its own", single && langs.size === 5, [...langs].join(", "));
     // the house rules kept by construction
-    const sample = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 5, count: 1 }).videos[0].script;
-    const crowded = { art: { ...sample.art, scheme: "mixed" as const, field: "beams" as const, overlay: "particles" as const }, scenes: sample.scenes.map((sc, i) => ({ ...sc, enter: (["fade", "blur", "whip", "iris", "drop", "clock"] as const)[i % 6], items: [...sc.items, ...sc.items, ...sc.items, ...sc.items].slice(0, 5) })) };
+    const crowded = { art: { ...ruleVideo.art, scheme: "mixed" as const, field: "beams" as const, overlay: "particles" as const }, scenes: ruleVideo.scenes.map((sc, i) => ({ ...sc, enter: (["fade", "blur", "whip", "iris", "drop", "clock"] as const)[i % 6], items: [...sc.items, ...sc.items, ...sc.items, ...sc.items].slice(0, 5) })) };
     const ruled = houseRules(crowded, 2);
     const kinds = new Set(ruled.scenes.slice(1).map((x) => x.enter));
     const flips = ruled.scenes.slice(1).filter((x, i) => x.dark !== ruled.scenes[i].dark).length;
     add("house rules: ≤3 things, ≤3 ways in, one dark → light turn, calm background", ruled.scenes.every((x) => x.items.filter((it) => !["badge", "shape", "cursor"].includes(it.kind)).length <= 3) && kinds.size <= 3 && flips === 1 && ruled.art.field !== "beams" && ruled.art.overlay !== "particles", `${kinds.size} ways in · ${flips} turn · ${ruled.art.field}/${ruled.art.overlay}`);
-    // the Composer Director works inside the plan, with the house rules
-    let sentInstr = "", sentReq = "";
-    const comp = { responses: { parse: async (r: { instructions: string; input: string }) => ((sentInstr = r.instructions), (sentReq = r.input), { id: "x", usage: null, output_parsed: null }) } };
-    await generateComposerIdeas({ words: bw.words, brand: bw.brand, profile: rp, creative: rc, never: "- never use red" }, undefined, comp as never, 10_000);
-    add("Composer Director gets the profile, the plan and the rulebook", sentInstr.includes("HOUSE RULES") && sentInstr.includes("never use red") && sentReq.includes("CREATIVE PLAN") && sentReq.includes(rc.idea) && sentReq.includes("BRAND PROFILE"), "profile · plan · house rules · team's never list");
-    // the Judge: scores, picks; a bad answer → the rule score
-    const set = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 31, count: 2, creative: rc });
-    const cands = set.videos.map((v, i) => ({ plan: set.plans[i], staging: v.staging, score: scorePlan(set.plans[i], v.script, { staging: v.staging, motif: rc.motif, heroScene: v.staging?.hero }) }));
-    const picked = await judge({ candidates: cands, profile: rp, creative: rc }, undefined, { responses: { parse: async () => ({ id: "j", usage: null, output_parsed: { best: 1, scores: [{ candidate: 0, story: 7, clarity: 7, brand: 7, rules: 7, total: 7, note: "flat" }, { candidate: 1, story: 9, clarity: 8, brand: 9, rules: 9, total: 8.6, note: "strong" }] } }) } } as never);
-    const bad = await judge({ candidates: cands }, undefined, { responses: { parse: async () => ({ id: "j", usage: null, output_parsed: { best: 9, scores: [] } }) } } as never);
-    add("Judge: picks the best; a bad answer → the rule score", picked.best === 1 && picked.source === "ai" && bad.source === "rule" && cands.every((c) => c.score.total > 0 && c.score.total <= 10), `rule scores ${cands.map((c) => c.score.total).join(" / ")}`);
+    // the code's score (shown in the studio)
+    const set = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 31, count: 1, creative: rc });
+    const sc0 = scorePlan(set.plans[0], set.videos[0].script, { staging: set.videos[0].staging, motif: rc.motif, heroScene: set.videos[0].staging?.hero });
     const noCta = scorePlan({ ...set.plans[0], scenes: set.plans[0].scenes.map((sc, i, xs) => (i === xs.length - 1 ? { ...sc, items: sc.items.filter((it) => it.kind !== "button") } : sc)) }, set.videos[0].script);
-    add("rule score: a video without its call to action loses 2", noCta.notes.some((n) => n.includes("call to action")), noCta.notes.slice(0, 2).join("; "));
-    add("Judge's view of a candidate reads as it plays", playOf(set.plans[0], set.videos[0].staging).split("\n").length === set.plans[0].scenes.length + 1, playOf(set.plans[0], set.videos[0].staging).split("\n")[0]);
+    add("rule score: 0–10; a video without its call to action loses 2", sc0.total > 0 && sc0.total <= 10 && noCta.notes.some((x) => x.includes("call to action")), `${sc0.total} · ${noCta.notes.slice(0, 1).join("; ")}`);
   }
 
   section = "composer highlights and compositions";

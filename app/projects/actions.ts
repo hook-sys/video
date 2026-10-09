@@ -46,16 +46,13 @@ import { getAiConfig, unitCost, usageCost } from "@/lib/ai/models";
 import { COMPOSE_MESSAGE, NEEDS_SCREENSHOTS_MESSAGE, OWN_SCRIPT_MESSAGE, type PipelineStep } from "@/lib/pipeline";
 import { generateVoice as generateFalVoice, timeWords } from "@/lib/ai/fal";
 import { estimateWords, parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { generateComposerIdeas, ideasOf, reviseComposerPlan } from "@/lib/ai/composer-director";
+import { type MotionInput, type MotionPlan, type MotionResult, directMotion, reviewMotion, reviseMotion, rulePlan, scenesOf } from "@/lib/ai/motion-director";
 import { ruleBrief } from "@/lib/rule-brief";
-import { analyzeBrand } from "@/lib/ai/brand-analyst";
-import { directCreative } from "@/lib/ai/creative-director";
-import { judge } from "@/lib/ai/judge";
 import { scorePlan } from "@/components/video/composer/score";
 import { pickLanguage, type BrandProfile, type CreativePlan } from "@/lib/studio";
 import { frameOf } from "@/components/video/composer/frame";
 import { CHANGE_WORDS, COMPOSER_CHANGES } from "@/components/video/composer/types";
-import { type StoredComposition, composeVariants, reviseCreative } from "@/components/video/composer/variants";
+import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { scriptWords } from "@/components/video/composer/words";
 import { neverList } from "@/lib/video-rules";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
@@ -403,42 +400,73 @@ async function loadNeverList(admin: ReturnType<typeof createAdminClient>) {
 }
 
 
-// The studio's first two Directors (before the voice is even ready): the
-// Brand Analyst writes the brand's profile — reused for the brand's later
-// videos — and the Creative Director the video's idea, motif, hero moment and
-// one camera language, unlike the brand's earlier videos. By rule when their
-// AI is off. Usage is handed on (the Composer's meter counts it).
-type StudioDirection = { profile: BrandProfile; creative: CreativePlan; problems: string[]; ms: number; usage: BriefUsage[] };
-async function studioDirection(
+// What the Motion Director is given: the brand, the script, the website, and
+// what this customer has had before (the next video is unlike those).
+type Past = { seen: { display: string[]; field: string[] }; seenStaging: (NonNullable<StoredComposition["staging"]> | null)[]; recent: { staging: NonNullable<StoredComposition["staging"]> | null; display: string | null }[] };
+type MotionDirection = { input: MotionInput; result: MotionResult; past: Past; usage: BriefUsage[] };
+
+async function pastOf(admin: ReturnType<typeof createAdminClient>, projectId: string, userId: string, name: string) {
+  const { data: past } = await admin.from("projects").select("brand_name, composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(20);
+  const rows = (past ?? []).map((p) => ({ brand: (p.brand_name ?? "").trim().toLowerCase(), composer: p.composer as { profile?: BrandProfile; creative?: CreativePlan; videos?: StoredComposition[] } | null }));
+  const same = rows.filter((p) => p.brand === name.toLowerCase());
+  const known = same.map((p) => p.composer?.profile).find((x): x is BrandProfile => !!x?.category) ?? null;
+  const earlier = same.flatMap((p) => (p.composer?.creative ? [{ idea: p.composer.creative.idea, language: p.composer.videos?.at(-1)?.staging?.language ?? p.composer.creative.language }] : [])).slice(0, 6);
+  const pastVideos = rows.slice(0, 12).flatMap((p) => p.composer?.videos ?? []);
+  const seenArts = pastVideos.map((v) => (v.script as { art?: { display?: string; field?: string } } | undefined)?.art ?? {});
+  const seen = { display: [...new Set(seenArts.map((x) => x.display).filter((x): x is string => !!x))].slice(0, 12), field: [...new Set(seenArts.map((x) => x.field).filter((x): x is string => !!x))].slice(0, 6) };
+  // how this customer's last videos were staged (the next is staged otherwise)
+  const seenStaging = pastVideos.map((v) => v.staging ?? null).slice(0, 8).reverse();
+  const recent = pastVideos.slice(0, 8).map((v) => ({ staging: v.staging ?? null, display: (v.script as { art?: { display?: string } } | undefined)?.art?.display ?? null }));
+  return { known, earlier, past: { seen, seenStaging, recent } };
+}
+
+const brandOf = (project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null }, brief: { product_name?: string; cta?: string } | null) => {
+  const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
+  return { name: project.brand_name?.trim() || brief?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief?.cta || "Get started", url: host, icon: null };
+};
+
+// The Motion Director plans the whole video from the script: it needs no
+// voice, so it works while the voice is made.
+async function motionDirection(
   admin: ReturnType<typeof createAdminClient>,
   projectId: string,
   userId: string,
-  project: { brand_name?: string | null; brand_color?: string | null; website_url?: string | null },
+  project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null },
   narration: string,
-): Promise<StudioDirection> {
-  const t0 = Date.now();
+  brief: { product_name?: string; product_summary?: string; cta?: string } | null,
+): Promise<MotionDirection> {
   const usage: BriefUsage[] = [];
-  const name = project.brand_name?.trim() || "Your product";
-  const { data: past } = await admin.from("projects").select("brand_name, composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(20);
-  const same = (past ?? []).filter((p) => (p.brand_name ?? "").trim().toLowerCase() === name.toLowerCase());
-  const known = same.map((p) => (p.composer as { profile?: BrandProfile } | null)?.profile).find((x): x is BrandProfile => !!x?.category);
-  const earlier = same
-    .flatMap((p) => {
-      const c = p.composer as { creative?: CreativePlan; videos?: StoredComposition[] } | null;
-      return c?.creative ? [{ idea: c.creative.idea, language: c.videos?.at(-1)?.staging?.language ?? c.creative.language }] : [];
-    })
-    .slice(0, 6);
-  const { data: capture } = await admin.from("website_captures").select("url, title, meta_description, visible_text").eq("project_id", projectId).eq("status", "completed").order("created_at", { ascending: false }).limit(1).maybeSingle();
-  const analyst = known
-    ? { profile: known, problems: ["profile: this brand's earlier one"] }
-    : await analyzeBrand({ name, color: project.brand_color || "#6a5bff", script: narration, website: capture ? { url: capture.url, title: capture.title, description: capture.meta_description, text: capture.visible_text } : null }, (u) => usage.push(u));
-  // the script's own words (the same split the voice's words are put on)
+  const brand = brandOf(project, brief);
+  const [{ known, earlier, past }, { data: capture }, never] = await Promise.all([
+    pastOf(admin, projectId, userId, brand.name),
+    admin.from("website_captures").select("url, title, meta_description, visible_text").eq("project_id", projectId).eq("status", "completed").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    loadNeverList(admin),
+  ]);
+  // the script's own words (the same split the voice's words are put on), at a reading pace
   const words = narration.split(/\s+/).filter(Boolean).map((text, i) => ({ text, start: i * 0.4, end: i * 0.4 + 0.35 }));
-  const creative = await directCreative({ profile: analyst.profile, words, brandName: name, seed: seedFrom(projectId), earlier }, (u) => usage.push(u));
-  console.info("studio direction:", { projectId, profile: analyst.profile.source, category: analyst.profile.category, mood: analyst.profile.mood, creative: creative.plan.source, idea: creative.plan.idea, language: creative.plan.language, problems: [...analyst.problems, ...creative.problems] });
-  return { profile: analyst.profile, creative: creative.plan, problems: [...analyst.problems, ...creative.problems], ms: Date.now() - t0, usage };
+  const input: MotionInput = {
+    name: brand.name,
+    color: brand.color,
+    cta: brand.cta,
+    url: brand.url,
+    product: brief?.product_summary ?? null,
+    words,
+    website: capture ? { url: capture.url, title: capture.title, description: capture.meta_description, text: capture.visible_text } : null,
+    seen: past.seen,
+    earlier,
+    known,
+    never,
+    seed: seedFrom(projectId),
+  };
+  const result = await directMotion(input, (u) => usage.push(u));
+  console.info("motion director:", { projectId, source: result.plan.source, ms: result.ms, category: result.plan.profile.category, mood: result.plan.profile.mood, idea: result.plan.creative.idea, language: result.plan.creative.language, scheme: result.plan.creative.scheme, scenes: result.plan.ideas?.scenes.length ?? 0, problems: result.problems.slice(0, 6) });
+  return { input, result, past, usage };
 }
 
+// The video, once the voice is timed: the Motion Director reviews its plan on
+// the voice's times (with what our layout check found), and the video is
+// built from it. Its video is the video; the Composer composes by rule only
+// when there is no plan or the plan does not lay out.
 async function composerSet(
   admin: ReturnType<typeof createAdminClient>,
   projectId: string,
@@ -448,56 +476,41 @@ async function composerSet(
   narration: string,
   brief: { product_name?: string; product_summary?: string; cta?: string } | null,
   addUsage: (u: BriefUsage) => void,
-  direction?: Promise<StudioDirection | null> | null,
+  direction?: Promise<MotionDirection | null> | null,
 ) {
   // the script's own words on the voice's times (never pieces of words)
   const words = scriptWords(narration, voice);
-  const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
-  const brand = { name: project.brand_name?.trim() || brief?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief?.cta || "Get started", url: host, icon: null };
-  const { data: past } = await admin.from("projects").select("composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(12);
-  const pastVideos = (past ?? []).flatMap((p) => (p.composer as { videos?: StoredComposition[] } | null)?.videos ?? []);
-  const seenArts = pastVideos.map((v) => (v.script as { art?: { display?: string; field?: string } } | undefined)?.art ?? {});
-  // how this customer's last videos were staged (the next is staged otherwise)
-  const seenStaging = pastVideos.map((v) => v.staging ?? null).slice(0, 8).reverse();
-  const seen = { display: [...new Set(seenArts.map((a) => a.display).filter((x): x is string => !!x))].slice(0, 12), field: [...new Set(seenArts.map((a) => a.field).filter((x): x is string => !!x))].slice(0, 6) };
-  // 1–2. the brand's profile and the creative plan (started alongside the voice)
-  const dir = (await direction?.catch(() => null)) ?? (await studioDirection(admin, projectId, userId, project, narration));
+  const brand = brandOf(project, brief);
+  const dir = (await direction?.catch(() => null)) ?? (await motionDirection(admin, projectId, userId, project, narration, brief));
   dir.usage.forEach(addUsage);
-  // 3. the Composer Director pictures every scene inside that plan, with the house rules
-  const result = await generateComposerIdeas({ words, brand, product: brief?.product_summary ?? null, seen, profile: dir.profile, creative: dir.creative, never: await loadNeverList(admin) }, addUsage, undefined, 95_000);
+  const input: MotionInput = { ...dir.input, words, name: brand.name, cta: brand.cta, url: brand.url, product: brief?.product_summary ?? dir.input.product };
+  const reviewed = await reviewMotion(dir.result.plan, input, addUsage);
+  const plan = reviewed.plan;
   const { count: screens } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
-  // 4. candidates: the Director's video and two composed by rule, all in the plan's camera language
-  const seed = seedFrom(projectId);
-  const base = { words, brand, duration: Math.round(project.duration_seconds * 30), avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, creative: dir.creative, look: { scheme: dir.profile.look.scheme, energy: dir.profile.look.energy }, size: frameOf(project.format) };
-  const sets = [result.ideas ? composeVariants({ ...base, seed, ideas: result.ideas, count: 1 }) : null, composeVariants({ ...base, seed: (seed + 7919) >>> 0, ideas: null, count: result.ideas ? 2 : 3 })].filter((x): x is NonNullable<typeof x> => !!x);
-  const candidates = sets.flatMap((set) => set.videos.map((video, v) => ({ video, plan: set.plans[v], problems: set.problems.filter((p) => p.startsWith(`video ${v + 1},`) || p.startsWith(`video ${v + 1}:`)).length })));
-  // 5. the Judge scores them and keeps the best
-  const heroSceneOf = (st: StoredComposition["staging"]) => st?.hero ?? null;
-  const recent = pastVideos.slice(0, 8).map((v) => ({ staging: v.staging ?? null, display: (v.script as { art?: { display?: string } } | undefined)?.art?.display ?? null }));
-  const scores = candidates.map((c) => scorePlan(c.plan, c.video.script, { staging: c.video.staging, motif: dir.creative.motif, heroScene: heroSceneOf(c.video.staging), recent, problems: c.problems }));
-  const verdict = await judge({ candidates: candidates.map((c, i) => ({ plan: c.plan, staging: c.video.staging, score: scores[i] })), profile: dir.profile, creative: dir.creative, earlier: recent.slice(0, 4).map((r) => `${r.staging?.language ?? "cuts"}, ${r.display ?? "?"} type`) }, addUsage);
-  const chosen = candidates[verdict.best] ?? candidates[0];
-  const problems = [...dir.problems, ...result.problems, ...verdict.problems, ...sets.flatMap((x) => x.problems)].slice(0, 20);
-  console.info("composer:", { projectId, director: result.source, ms: result.ms, scenes: result.ideas?.scenes.length ?? 0, judge: verdict.source, best: verdict.best, of: candidates.length, scores: scores.map((x) => x.total), problems: problems.slice(0, 8) });
+  const { seen, seenStaging, recent } = dir.past;
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
+  const video = set.videos[0];
+  // the code's own check of what was built (shown in the studio; it picks nothing)
+  const score = scorePlan(set.plans[0], video.script, { staging: video.staging, motif: plan.creative.motif, heroScene: video.staging?.hero ?? null, recent, problems: set.problems.length });
+  const problems = [...dir.result.problems, ...reviewed.problems, ...set.problems].slice(0, 20);
+  console.info("composer:", { projectId, director: plan.source, built: video.source, review_ms: reviewed.ms, scenes: plan.ideas?.scenes.length ?? 0, score: score.total, problems: problems.slice(0, 8) });
   return {
-    videos: [chosen.video],
-    ideas: result.ideas,
+    videos: [video],
     indexing: "script" as const,
-    source: result.source,
-    profile: dir.profile,
-    creative: dir.creative,
-    judge: { source: verdict.source, best: verdict.best, scores: verdict.scores, rule: scores.map((x) => ({ total: x.total, notes: x.notes.slice(0, 6) })), kept: chosen.video.source },
+    source: plan.source,
+    profile: plan.profile,
+    creative: plan.creative,
+    score: { total: score.total, notes: score.notes.slice(0, 6), built: video.source },
     changes: [] as { direction: string; at: string; ok: boolean }[],
     problems,
     at: new Date().toISOString(),
   };
 }
 
-// The Composer's video for the project, after the voice: the Brand Analyst
-// and the Creative Director (started alongside the voice), the Composer
-// Director, candidates by rule, the Judge (composerSet). Stored on the brief
-// (brief.composer). True when a video was stored.
-async function generateComposer(projectId: string, userId: string, direction?: Promise<StudioDirection | null> | null): Promise<boolean> {
+// The Composer's video for the project, after the voice: the Motion
+// Director's plan (started alongside the voice), its review, the video
+// (composerSet). Stored on the brief (brief.composer). True when stored.
+async function generateComposer(projectId: string, userId: string, direction?: Promise<MotionDirection | null> | null): Promise<boolean> {
   const admin = createAdminClient();
   const { data: project } = await admin
     .from("projects")
@@ -513,7 +526,7 @@ async function generateComposer(projectId: string, userId: string, direction?: P
   const words = parseWordTimings((project.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
   if (project.voice_status !== "completed" || !narration || !words?.length) return false;
   const started = Date.now();
-  // Each Director may use its own model (/admin/models): priced per call.
+  // The Motion Director's model (/admin/models): priced per call.
   const ai = await getAiConfig();
   const meter = { cost: 0, models: new Set<string>(), input: 0, output: 0 };
   const addUsage = (u: BriefUsage) => {
@@ -550,7 +563,7 @@ async function generateComposer(projectId: string, userId: string, direction?: P
       model: [...meter.models].join(", "),
       quantity: meter.input + meter.output,
       estimated_cost_usd: meter.cost,
-      metadata: { kind: "composer_director", input_tokens: meter.input, output_tokens: meter.output, latency_ms: Date.now() - started },
+      metadata: { kind: "motion_director", input_tokens: meter.input, output_tokens: meter.output, latency_ms: Date.now() - started },
     });
   }
   return !!composer;
@@ -748,7 +761,7 @@ async function runPipeline(projectId: string, userId: string) {
     // for the voice or the Directors, so it is written alongside them.
     await enter("writing");
     let p = await state();
-    const { data: row } = await admin.from("projects").select("brief, format, direction, advanced_direction, brand_name, brand_color, website_url").eq("id", projectId).single();
+    const { data: row } = await admin.from("projects").select("brief, format, direction, advanced_direction, brand_name, brand_color, call_to_action, website_url").eq("id", projectId).single();
     const alongside = !!row && !!lockedScriptOf(row);
     const briefRun = p.brief_status !== "completed" ? attempt(() => generateBrief(projectId)) : null;
     const briefDone = async () => {
@@ -758,12 +771,11 @@ async function runPipeline(projectId: string, userId: string) {
     };
     if (!alongside && !(await briefDone())) return void (await fail(p.brief_error ?? "Brief failed."));
 
-    // The studio's Brand Analyst and Creative Director need only the script:
-    // they work while the voice is made.
+    // The Motion Director needs only the script: it plans while the voice is made.
     const { data: now } = await admin.from("projects").select("brief, direction, advanced_direction").eq("id", projectId).single();
     const b = ProductBrief.safeParse(now?.brief);
     const script = b.success ? b.data.script : now ? lockedScriptOf(now) : "";
-    const direction: Promise<StudioDirection | null> | null = row && script ? studioDirection(admin, projectId, userId, row, script).catch((e) => (console.warn("studio direction failed:", e instanceof Error ? e.message : e), null)) : null;
+    const direction: Promise<MotionDirection | null> | null = row && script ? motionDirection(admin, projectId, userId, row, script, b.success ? b.data : null).catch((e) => (console.warn("motion director failed:", e instanceof Error ? e.message : e), null)) : null;
 
     // 3. Voice: one track for the locked script, with word timestamps.
     await enter("voice");
@@ -835,36 +847,55 @@ export async function changeComposerVideo(projectId: string, direction: string):
   const done = (composer.changes ?? []).filter((c) => c.ok).length;
   if (done >= COMPOSER_CHANGES) return { ok: false, message: `All ${COMPOSER_CHANGES} changes for this video are used.` };
   const current = composer.videos[composer.videos.length - 1];
-  const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
-  const brand = { name: project.brand_name?.trim() || raw?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || raw?.cta || "Get started", url: host, icon: null };
+  const brand = brandOf(project, raw ?? null);
   let usage: BriefUsage | null = null;
-  const stored = composer.creative ?? null;
-  // how the video moves now (the reviser may change it: camera language, scheme, turn, hero)
-  const now = current.staging ?? null;
-  const staging = { language: now?.language ?? stored?.language ?? "cuts", journey: now?.journey ?? null, guide: now?.guide ?? null, recap: now?.recap ?? null, scheme: current.script.art.scheme, turn: stored?.turn ?? null, hero: stored?.hero ?? null };
-  const result = byRule ? { ideas: null, ms: 0, problems: [] as string[], staging: null } : await reviseComposerPlan({ words, brand, product: raw?.product_summary ?? null, plan: ideasOf(current.script), direction: text, staging }, (u) => (usage = u));
   const seed = (current.seed + 7919) >>> 0;
-  // by rule: the plan stays, the new version takes another camera language than the ones before;
-  // by the Director: the version before it, with what the direction changed (its staging and scheme)
-  const artScheme = (result.ideas?.arts[0] as { scheme?: string } | undefined)?.scheme;
-  const creative = byRule
-    ? stored && composer.profile ? { ...stored, language: pickLanguage(composer.profile.mood, seed, composer.videos.map((v) => v.staging?.language)) } : stored
-    : reviseCreative(stored, now, result.staging, artScheme === "dark" || artScheme === "light" || artScheme === "mixed" ? artScheme : null);
-  const look = composer.profile ? { scheme: composer.profile.look.scheme, energy: composer.profile.look.energy } : null;
-  const set = result.ideas || byRule ? composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed, ideas: result.ideas ?? undefined, count: 1, avoidStaging: composer.videos.map((v) => v.staging ?? null), creative, look, size: frameOf(project.format) }) : null;
-  const video = set?.videos[0] && (byRule || set.videos[0].source === "director") ? set.videos[0] : null;
+  const duration = Math.round(project.duration_seconds * 30);
+  // the plan the current version was built from: the brand, its concept and
+  // how it moves now, its scenes (a video made before the Motion Director: by rule)
+  const ruled = rulePlan({ name: brand.name, words, seed: current.seed });
+  const now = current.staging ?? null;
+  const before = composer.creative ?? ruled.creative;
+  const plan: MotionPlan = {
+    profile: composer.profile ?? ruled.profile,
+    creative: { ...before, language: now?.language ?? before.language, journey: now?.journey && now.journey !== "scroll" && !["timeline", "map", "tiles"].includes(now.journey) ? now.journey : before.journey, guide: now?.guide ?? before.guide, recap: now?.recap ?? before.recap, scheme: current.script.art.scheme },
+    ideas: scenesOf(current.script),
+    source: "ai",
+  };
+  let video: StoredComposition | null = null;
+  let creative = plan.creative;
+  const problems: string[] = [];
+  let ms = 0;
+  if (byRule) {
+    // by rule: the plan stays, the new version takes another camera language than the ones before
+    creative = { ...plan.creative, language: pickLanguage(plan.profile.mood, seed, composer.videos.map((v) => v.staging?.language)) };
+    video = composeVariants({ words, brand, duration, seed, count: 1, avoidStaging: composer.videos.map((v) => v.staging ?? null), creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) }).videos[0] ?? null;
+  } else {
+    // the Motion Director revises its own plan (anything the direction asks: the
+    // concept, the staging, the art, the scenes) and the new version is built from it
+    const rev = await reviseMotion(plan, text, { name: brand.name, color: brand.color, cta: brand.cta, url: brand.url, product: raw?.product_summary ?? null, words, never: await loadNeverList(admin), seed }, (u) => (usage = u));
+    problems.push(...rev.problems);
+    ms = rev.ms;
+    if (rev.ok) {
+      creative = rev.plan.creative;
+      const set = composeVariants({ words, brand, duration, seed, ideas: rev.plan.ideas, count: 1, creative, size: frameOf(project.format) });
+      problems.push(...set.problems);
+      // (a plan that does not lay out is not a change: the video stays as it was)
+      video = set.videos[0]?.source === "director" ? set.videos[0] : null;
+    }
+  }
   const changes = [...(composer.changes ?? []), { direction: text.slice(0, 9000), at: new Date().toISOString(), ok: !!video }];
   await admin
     .from("projects")
-    // (the plan changed with it: the next change starts from this version)
-    .update({ brief: { ...(project.brief as object), composer: { ...composer, videos: video ? [...composer.videos, video] : composer.videos, changes, ...(video && !byRule && stored && creative ? { creative: { ...stored, ...creative } } : {}) } } })
+    // (the plan changes with it: the next change starts from this version)
+    .update({ brief: { ...(project.brief as object), composer: { ...composer, videos: video ? [...composer.videos, video] : composer.videos, changes, ...(video && !byRule ? { creative } : {}) } } })
     .eq("id", projectId)
     .eq("user_id", user.id);
   const u = usage as BriefUsage | null;
   if (u && (u.inputTokens || u.outputTokens)) {
     await recordCost(admin, { project_id: projectId, user_id: user.id, operation: "openai_brief", model: u.model, quantity: u.inputTokens + u.outputTokens, estimated_cost_usd: usageCost(ai, u, (i, o) => openaiCost(u.model, i, o)), metadata: { kind: "composer_change", input_tokens: u.inputTokens, output_tokens: u.outputTokens, words: count, ok: !!video } });
   }
-  console.info("composer change:", { projectId, ok: !!video, ms: result.ms, words: count, staging: result.staging ?? null, problems: [...result.problems, ...(set?.problems ?? [])].slice(0, 8) });
+  console.info("composer change:", { projectId, ok: !!video, ms, words: count, language: creative.language, scheme: creative.scheme, problems: problems.slice(0, 8) });
   revalidatePath(`/projects/${projectId}`);
   if (!video) return { ok: false, message: "The change didn't work this time — your video is as it was, and no change was used. Try again or say it differently." };
   return { ok: true, message: `Done — version ${composer.videos.length + 1}. ${COMPOSER_CHANGES - done - 1} change${COMPOSER_CHANGES - done - 1 === 1 ? "" : "s"} left.` };

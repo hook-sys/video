@@ -3,7 +3,7 @@
 // made from the reference promos he picked and from our own failures),
 // written in the Composer's own words. Before this they reached only the old
 // Scene Director. What can be kept by construction is also kept in code
-// (components/video/composer/rules.ts); the Judge checks the rest.
+// (components/video/composer/rules.ts) or measured by its score (score.ts).
 
 export const HOUSE_RULES = `HOUSE RULES (the owner's rulebook — every video keeps them)
 STORY
