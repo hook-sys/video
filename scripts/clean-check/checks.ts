@@ -41,7 +41,9 @@ import { analyzeBrand } from "@/lib/ai/brand-analyst";
 import { directCreative } from "@/lib/ai/creative-director";
 import { judge, playOf } from "@/lib/ai/judge";
 import { scorePlan } from "@/components/video/composer/score";
-import { houseRules } from "@/components/video/composer/rules";
+import { houseRules, varyLayouts } from "@/components/video/composer/rules";
+import { highlightOf, SHOWN } from "@/components/video/composer/highlight";
+import { COMPOSED, layoutFits } from "@/components/video/composer/layout";
 import { retimeScript } from "@/lib/voice-timing";
 import { directionFor, lockedVoiceScript, voiceChoiceOf, withVoiceChoice } from "@/lib/projects";
 import { composeVariants, fitScript, scriptFromIdeas, type Ideas } from "@/components/video/composer/variants";
@@ -560,6 +562,54 @@ export async function runChecks(): Promise<Check[]> {
     const noCta = scorePlan({ ...set.plans[0], scenes: set.plans[0].scenes.map((sc, i, xs) => (i === xs.length - 1 ? { ...sc, items: sc.items.filter((it) => it.kind !== "button") } : sc)) }, set.videos[0].script);
     add("rule score: a video without its call to action loses 2", noCta.notes.some((n) => n.includes("call to action")), noCta.notes.slice(0, 2).join("; "));
     add("Judge's view of a candidate reads as it plays", playOf(set.plans[0], set.videos[0].staging).split("\n").length === set.plans[0].scenes.length + 1, playOf(set.plans[0], set.videos[0].staging).split("\n")[0]);
+  }
+
+  section = "composer highlights and compositions";
+  {
+    const bw = bookwellPlan();
+    const dur = Math.round((bw.words[bw.words.length - 1].end + 1.2) * FPS);
+    const w = (t: string) => t.split(" ").map((text, i) => ({ text, start: i * 0.3, end: i * 0.3 + 0.25 }));
+    const line = w("Every booking, reminder and payment now lands in one calm place for the whole team.");
+    const [a, b] = highlightOf(line, 0, line.length - 1, new Set(["place"]));
+    const hl = line.slice(a, b + 1).map((x) => x.text).join(" ");
+    add("a long line shows its highlight (≤6 words, the key word, no little word at its ends)", b - a + 1 <= SHOWN && b - a + 1 >= 2 && hl.includes("place") && !/^(and|the|in|for|now)\b/i.test(hl), hl);
+    const num = w("Clinics that switched saved four hours every single week on calls.");
+    const [na, nb] = highlightOf(num, 0, num.length - 1, new Set());
+    add("a spoken number is in the highlight", num.slice(na, nb + 1).some((x) => x.text === "four"), num.slice(na, nb + 1).map((x) => x.text).join(" "));
+    // every scene of every video shows at most six words; compositions vary
+    let most = 0, repeats = 0, over = 0, composed = 0, problems = 0;
+    for (const seed of [3, 11, 19, 27, 35, 43]) {
+      const set = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed, count: 2 });
+      problems += set.problems.length;
+      for (const [k, plan] of set.plans.entries()) {
+        plan.scenes.forEach((sc) => (most = Math.max(most, sc.text?.words.length ?? 0)));
+        const sc = set.videos[k].script.scenes;
+        const withThings = sc.map((x, i) => ({ x, i })).filter(({ x, i }) => i < sc.length - 1 && x.items.some((it) => !["badge", "shape", "cursor"].includes(it.kind)));
+        for (let i = 1; i < sc.length - 1; i++) if (withThings.some((t) => t.i === i) && sc[i].layout === sc[i - 1].layout) repeats++;
+        const count = new Map<string, number>();
+        withThings.forEach(({ x }) => count.set(x.layout, (count.get(x.layout) ?? 0) + 1));
+        over += [...count.values()].filter((n) => n > 2).length;
+        composed += plan.scenes.filter((x) => COMPOSED.has(x.layout)).length;
+      }
+    }
+    add("on screen: never more than 6 words in a scene", most <= SHOWN, `most ${most}`);
+    add("compositions: never twice in a row, none more than twice a video", repeats === 0 && over === 0, `${repeats} repeats · ${over} over-used`);
+    add("words, cards and icons composed together in the videos", composed >= 6, `${composed} composed scenes in 12 videos · ${problems} layout problems`);
+    // each composed layout lays out cleanly where it fits
+    const base = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 7, count: 1 }).videos[0].script;
+    const it = (kind: string, extra: Record<string, unknown> = {}) => ({ kind, at: 0, hit: null, id: null, enter: null, variant: null, title: null, sub: null, icon: "calendar", value: null, values: null, rows: [{ title: "Check-up", meta: "9:00", tag: null, icon: null }, { title: "Review", meta: "11:30", tag: null, icon: null }], screen: null, size: "m", tilt: null, ...extra }) as never;
+    const cases: [string, unknown[]][] = [["inline", [it("icon"), it("card", { variant: "calendar" })]], ["label", [it("card", { variant: "list" }), it("badge", { title: "Booked" })]], ["caption", [it("device", { variant: "browser", screen: "calendar" })]], ["around", [it("icon"), it("stat", { value: "4 hours", title: "Saved" }), it("icon", { icon: "bell" })]], ["between", [it("card", { variant: "notify" }), it("icon", { icon: "bell-ring" })]]];
+    const bad: string[] = [];
+    for (const [layout, items] of cases) {
+      const sc = { ...base.scenes[1], layout, arrange: null, text: { ...base.scenes[1].text!, size: "l" as const }, items } as never;
+      const { plan, problems: pr } = placeAll({ art: base.art, scenes: [base.scenes[0], sc, ...base.scenes.slice(2)] }, bw.words, dur, bw.brand, 7);
+      if (plan.scenes[1].layout !== layout || pr.some((x) => x.scene === 1)) bad.push(`${layout}${plan.scenes[1].layout !== layout ? `→${plan.scenes[1].layout}` : ""}: ${pr.filter((x) => x.scene === 1).map((x) => x.what).join(", ")}`);
+    }
+    add("inline, label, caption, around, between lay out cleanly", !bad.length, bad.join(" | ") || "all five");
+    add("a composed layout is only used where it fits", !layoutFits("inline", [it("card")], true) && !layoutFits("between", [it("icon")], true) && layoutFits("around", [it("icon"), it("icon")], true), "inline needs an icon · between needs two things");
+    const same = { ...base, scenes: base.scenes.map((x) => ({ ...x, layout: "split-left" as const, items: x.items.length ? x.items : [it("icon")] })) };
+    const varied = varyLayouts(same, 5).scenes;
+    add("the same layout everywhere is varied", varied.slice(0, -1).every((x, i) => i === 0 || x.layout !== varied[i - 1].layout), varied.map((x) => x.layout).join(" "));
   }
 
   section = "composer words";

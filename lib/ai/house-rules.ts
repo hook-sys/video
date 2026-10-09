@@ -14,7 +14,9 @@ STORY
 - Every noun the voice says gets a literal visual; never show what the voice is not saying; never write a caption the voice does not say.
 FRAME
 - One hero per frame — the biggest and brightest; at most 2 supporting things, smaller or softer. Never two things of equal weight.
-- Nothing behind or over the hero; text never on top of the hero (beside it: words big on one side, the subject on the other).
+- Nothing behind or over the hero; text never on top of the hero (beside it, as its label above it, or — when the hero fills the frame — a small caption on a plate in a corner).
+- On screen only the highlight: 2–6 of the words the voice says (the key phrase, the number, the thing named), never the whole sentence.
+- Vary the compositions: the words, a card and an icon composed together (an icon beside the words, the words as a card's label, small things around the words) — not always words on one side and a card on the other; never the same composition twice in a row.
 - Never a lone small caption or a lone icon in an empty frame: a caption alone is large; an icon alone is big and named.
 - One effect per line of text and at most one lit keyword per line.
 - Show the part of a screen the voice talks about (a card, its row, its button), not a whole screen to read.

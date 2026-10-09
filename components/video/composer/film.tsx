@@ -515,7 +515,7 @@ function SceneBody(props: SceneProps) {
         <AbsoluteFill style={{ transform: cam, transformStyle: J ? undefined : "preserve-3d" }}>
           <CtxC.Provider value={c}>
             {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} />)}
-            {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over"} hide={J?.hiddenWord} out={J?.dim} />}
+            {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over" || sc.layout === "caption"} hide={J?.hiddenWord} out={J?.dim} />}
             {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} />)}
           </CtxC.Provider>
         </AbsoluteFill>

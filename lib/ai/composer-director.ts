@@ -24,11 +24,13 @@ export const COMPOSER_INSTRUCTIONS = `You are the director and art director of s
 
 SCENES
 - A scene starts on a word ("at": the index of its first word) and lasts until the next scene. Scenes follow the narration in order and cover it all; the first scene starts at 0. A scene is at least ~1.4 s of speech; usually one sentence or one clause. 15 s → 4–6 scenes, 30 s → 7–10, 60 s → 12–18.
-- "text": the words of the scene shown on screen as kinetic type: { from, to } word indexes inside the scene (usually all of its words; null for a scene that is pictured only — rare), "size" s|m|l|xl (xl for short punchy lines), "key": 1–2 words of it to light up (exact words).
+- "text": the scene's HIGHLIGHT shown on screen as kinetic type — never the whole sentence the voice says: { from, to } word indexes of the 2–6 words inside the scene that carry it (its key phrase, its number, the thing named: "All your bookings", "Paid in 2 days"; at most 6 words — more are cut to the strongest 6), "size" s|m|l|xl (xl for short punchy lines), "key": 1–2 words of it to light up (exact words). null for a scene that is pictured only (rare).
 - "kicker": optional 1–3 word eyebrow above the text ("Step 1", the product's name, "Before") or null.
 - "options": exactly ONE — the best way to picture the scene: { layout, arrange, items }. Think through the alternatives (a phone with the app, three chips, a big number, a before/after…) and keep only the strongest, picturing THAT scene's words literally.
 
 LAYOUTS: center (text above things), top (text band on top, big things below), bottom, split-left (text left, things right), split-right, corner, type (only big kinetic text; no things except a badge), visual (things fill the frame, text as a caption), over (text on a glass plate over a big thing).
+COMPOSED LAYOUTS (the words composed WITH the things, not beside them — use them often): inline (an icon beside the words on one line, e.g. [calendar] "All your bookings"; with a card or phone too, the card on the other side — needs an icon item), label (the words as the label on top of a card, a phone or a chart, a badge on its corner), caption (one card/phone/chart fills the frame, the words a small caption on a plate in a corner), around (the words in the middle, 2–4 small things — icons, stats, small cards — around them), between (the words between two things, one left, one right).
+Never the same layout twice in a row, and no layout more than twice in a video (the closing ask aside).
 ARRANGE (for 2+ things): single, row, column, grid, cascade (overlapping, fanned), orbit (one in the middle, others around), scatter, diagonal.
 
 ITEMS (the parts). Every item: { kind, at (word index it appears on, inside the scene), hit (word index of its moment or null), id (same id on an item in the NEXT scene = it travels there: a match cut; else null), variant, title, sub, icon, value, values, rows, screen, size (s|m|l), tilt (-12..12 degrees or 0), enter (null) }.
@@ -47,7 +49,7 @@ ITEMS (the parts). Every item: { kind, at (word index it appears on, inside the 
 Icons: Lucide names that picture the thing LITERALLY (calendar, file-text, bell-ring, credit-card, receipt, messages-square, search, video, list-checks, clock, zap, shield-check, package…). Never people, faces, hands or animals.
 - 1–3 items per scene (a badge may be added). Fewer, bigger things read better than many small ones. Use a phone/browser/laptop for "the app does X" moments; chips/flow/steps for spoken lists; stat/chart only for spoken numbers; compare for "no more …"; logo when the product is named first; button on the closing line.
 - Never write on screen a number or claim the narration does not make (UI rows may carry realistic sample data).
-- Vary the layouts scene to scene; never the same layout three scenes in a row.
+- Vary the layouts scene to scene: text + card + icon composed together (inline, label, around, between), not always words on one side and a card on the other.
 
 ART DIRECTION: write exactly 1 "art" in "arts": the one coherent visual identity that suits THIS product and narration best:
 { name (2–3 words), hue 0–360 (the key colour; close to the brand colour unless another serves the story better), harmony mono|analogous|complement|split|triad, scheme dark|light|mixed, field ${FIELDS.join("|")}, overlay none|grain|particles|sheen|vignette|lines, surface glass|solid|outline|soft|tinted|ink, radius 0–40, display (headline face) one of: ${DISPLAY_FACES.map((f) => f.slug).join(", ")}, text (UI face) one of: ${TEXT_FACES.map((f) => f.slug).join(", ")}, weight 500–850, case sentence|upper|lower, tracking -0.05..0.02, key color|pill|underline|gradient|box|outline|italic|glow, motion soft|snappy|springy|glide, pace 0.85–1.25, camera drift|push|pull|tilt|float|orbit|rise, icons tile|round|bare|duotone|outline|glass, energy 0.2–0.85 }.
@@ -151,7 +153,8 @@ export function reviewNotes(ideas: Ideas, words: Word[], brand: ComposerDirector
 const REVIEW = `Now review your plan as a senior motion designer before it is built. Check every scene:
 - Does the picture show what THESE words say, literally? Would a viewer understand the product from it?
 - Is it strong and clear — one big idea, not a crowd of small things? Is the product's UI shown where the words describe what the app does?
-- Do neighbouring scenes vary (layout, kind of thing, size), and does the video build to the reveal and the call to action?
+- Do neighbouring scenes vary (layout, kind of thing, size) — words, cards and icons composed together in some scenes (inline, label, around, between, caption) — and does the video build to the reveal and the call to action?
+- Is every scene's text a 2–6 word highlight, never the whole spoken sentence?
 - Is every UI row realistic for THIS product, every icon literal, every number spoken?
 - Does it follow the creative plan (the idea, the motif in 2–3 scenes, the hero scene the strongest) and every house rule (one hero per frame, at most 2 supporting things, nothing over the hero, one lit keyword per line)?
 Fix every weak scene and every problem listed below, keep what is already strong, and return the WHOLE improved plan (same format).`;

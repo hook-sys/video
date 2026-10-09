@@ -3,7 +3,7 @@ import { DISPLAY_FACES, TEXT_FACES, rng } from "./art";
 import { LENSES, autoScript, drawArt } from "./auto";
 import { placeAll, type Problem } from "./layout";
 import { type Language, type Staging, sceneAt, stageOf, staged } from "./staging";
-import { houseRules } from "./rules";
+import { houseRules, varyLayouts } from "./rules";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
 import type { ArtT, Brand, ComposerPlan, GuideKind, ItemT, JourneyKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
 
@@ -136,8 +136,9 @@ export type Creative = { language: Language; journey?: JourneyKind | null; guide
 
 // A script shaped by the plan and the house rules (rules.ts): the plan's
 // scheme, the brand's energy; a motif badge where the story turns and at the
-// hero moment (the AI Director places its own); one dark → light turn.
-function shaped(script: ScriptT, creative: Creative | null | undefined, look: ComposeInput["look"], byRule: boolean): ScriptT {
+// hero moment (the AI Director places its own); one dark → light turn; the
+// scenes' compositions varied.
+function shaped(script: ScriptT, creative: Creative | null | undefined, look: ComposeInput["look"], byRule: boolean, seed: number): ScriptT {
   let out: ScriptT = { ...script, art: { ...script.art } };
   const scheme = creative?.scheme ?? look?.scheme;
   if (scheme) out.art.scheme = scheme;
@@ -150,7 +151,7 @@ function shaped(script: ScriptT, creative: Creative | null | undefined, look: Co
     const marks = [...new Set([turn, hero, turn != null ? turn + 1 : null].filter((x): x is number => x != null && x > 0 && x < out.scenes.length - 1))];
     out = { ...out, scenes: out.scenes.map((sc, i) => (marks.includes(i) && !sc.items.some((it) => it.kind === "badge") && sc.items.length ? { ...sc, items: [...sc.items, { kind: "badge", at: sc.at, icon: resolveIcon(creative.motif!.icon) ?? "sparkles", title: creative.motif!.label, size: "s" }] } : sc)) };
   }
-  return houseRules(out, turn);
+  return varyLayouts(houseRules(out, turn), seed);
 }
 
 // A video as stored: its script and seed (laid out again on the voice's words
@@ -167,11 +168,11 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
     // each video avoids the faces, fields and schemes of the ones before it
     const avoidNow: Partial<Record<keyof ArtT, unknown[]>> = { display: [...(used.display ?? [])], field: [...(used.field ?? [])], key: [...(used.key ?? [])], surface: [...(used.surface ?? [])], hue: [...(used.hue ?? [])] };
     let script: ScriptT = ideas?.scenes.length ? scriptFromIdeas(ideas, v, s, words, brand, avoidNow) : autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens });
-    script = fitScript(shaped(script, creative, look, !ideas?.scenes.length));
+    script = fitScript(shaped(script, creative, look, !ideas?.scenes.length, s));
     let placed = placeAll(script, words, duration, brand, s, screens, ideas ? "director" : "auto");
     if (ideas && tooBroken(placed.problems, placed.plan)) {
       problems.push(`video ${v + 1}: the Director's scenes did not lay out (${placed.problems.slice(0, 3).map((p) => p.what).join("; ")}) — composed by the Composer instead`);
-      script = fitScript(shaped(autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens }), creative, look, true));
+      script = fitScript(shaped(autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens }), creative, look, true, s));
       placed = placeAll(script, words, duration, brand, s, screens, "auto");
     }
     placed.problems.forEach((p) => problems.push(`video ${v + 1}, scene ${p.scene + 1}: ${p.what}`));

@@ -251,7 +251,8 @@ export function autoScript({ words, brand, seed, lens: lensIn, avoid, screens = 
         if (concept && R.chance(lens === "object" ? 0.9 : lens === "type" ? 0.25 : 0.5)) {
           const ic = concept.icon;
           items.push(base("icon", c.from, { icon: ic, size: "m" }));
-          layoutW = { "split-right": 2, center: 2, corner: 1, "split-left": 1 };
+          // the icon beside the words, or the words beside it
+          layoutW = { inline: 3, "split-right": 1, center: 1, corner: 1, "split-left": 1 };
         }
         if (kind === "question" && R.chance(0.5) && concept) items.push(base("badge", c.from + 1, { icon: concept.icon, title: concept.label }));
         break;
@@ -270,6 +271,7 @@ export function autoScript({ words, brand, seed, lens: lensIn, avoid, screens = 
           layoutW = { "split-left": 2, "split-right": 2, top: 1 };
           carry = R.chance(0.5) ? "hero" : null;
           if (carry) items[items.length - 1].id = carry;
+          layoutW = { "split-left": 2, "split-right": 2, top: 1, caption: 1, label: 1 };
         }
         kicker = R.chance(0.4) ? "Meet" : null;
         break;
@@ -292,7 +294,7 @@ export function autoScript({ words, brand, seed, lens: lensIn, avoid, screens = 
           items.push(base("card", p.at, { variant: cc?.card ?? "list", icon: cc?.icon ?? iconFor(p.text), title: cc?.label ?? headOf(p.text), rows: (cc?.rows(R, brand.name) ?? []).slice(0, 2), value: cc?.value?.(R) ?? null, size: "s" }));
         });
         else items.push(base("chips", c.from, { rows, variant: rows.every((x) => x.title.length <= 16) && R.chance(0.5) ? "row" : null, hit: parts[parts.length - 1].at }));
-        layoutW = v === "chips" && items[0]?.variant !== "row" ? { "split-left": 3, "split-right": 3 } : { top: 3, bottom: 2 };
+        layoutW = v === "chips" && items[0]?.variant !== "row" ? { "split-left": 3, "split-right": 3 } : v === "icons" || v === "cards" ? { around: 3, top: 2, bottom: 1 } : { top: 3, bottom: 2 };
         break;
       }
       case "step": {
@@ -303,7 +305,7 @@ export function autoScript({ words, brand, seed, lens: lensIn, avoid, screens = 
         else items.push(base("icon", c.from, { icon: iconFor(c.text), size: "l" }));
         if (items[0].kind === "device") items[0].variant = R.pick(["phone", "browser", "laptop"]);
         else if (items[0].kind === "card") items[0].variant = cc?.card ?? "list";
-        layoutW = { "split-left": 3, "split-right": 3, corner: 1 };
+        layoutW = { "split-left": 3, "split-right": 3, corner: 1, label: 2 };
         break;
       }
       case "number": {
@@ -314,7 +316,7 @@ export function autoScript({ words, brand, seed, lens: lensIn, avoid, screens = 
         if (pct && R.chance(0.5)) items.push(base("chart", c.from, { variant: "ring", title: headOf(c.text), values: [Number(pct[1] ?? pct[2])], value: `${pct[1] ?? pct[2]}%`, hit: c.to }));
         else if (v === "chart") items.push(base("chart", c.from, { variant: R.pick(["bars", "line", "area", "columns"]), title: headOf(c.text), value: said.value, values: Array.from({ length: R.int(6, 9) }, (_, k) => 3 + k * R.range(0.4, 1.4) + R.range(0, 2)), hit: c.to }));
         else items.push(base("stat", c.from, { value: said.value, title: headOf(c.text), icon: conceptOf(t)?.icon ?? "trending-up", hit: c.to }));
-        layoutW = { "split-left": 2, "split-right": 2, top: 1, center: 1 };
+        layoutW = { "split-left": 2, "split-right": 2, top: 1, center: 1, label: 1 };
         break;
       }
       case "negation": {
@@ -343,24 +345,33 @@ export function autoScript({ words, brand, seed, lens: lensIn, avoid, screens = 
         size = "m";
         const dev = lens === "product" ? 0.55 : lens === "type" ? 0.15 : 0.3;
         const r = R.next();
+        layoutW = { "split-left": 3, "split-right": 3, corner: 1, top: 1 };
         if (r < dev) {
           items.push(base("device", c.from, { variant: R.pick(["phone", "browser", "laptop", "tablet"]), screen: cc.card as ItemT["screen"], title: cc.label, icon: cc.icon, rows: cc.rows(R, brand.name), value: cc.value?.(R) ?? null, hit: c.to, tilt: R.pick([0, 0, -10, 10]) }));
           if (screens && R.chance(0.5)) items[0] = base("screenshot", c.from, { tilt: R.pick([0, -8, 8]) });
+          layoutW = { "split-left": 3, "split-right": 3, caption: 2, label: 1, top: 1 };
         } else if (lens === "object" && r < 0.8) {
           items.push(base("icon", c.from, { icon: cc.icon, size: "l" }));
           items.push(base("badge", Math.min(c.to, c.from + 2), { icon: "check", title: R.pick(cc.badge) }));
+          layoutW = { inline: 3, "split-left": 1, "split-right": 1, center: 1 };
         } else {
           items.push(base("card", c.from, { variant: cc.card, title: cc.label, icon: cc.icon, rows: cc.rows(R, brand.name), value: cc.value?.(R) ?? null, hit: c.to, tilt: R.pick([0, 0, -6, 6]) }));
-          if (R.chance(0.35)) items.push(base("badge", Math.min(c.to, c.from + 3), { icon: "zap", title: R.pick(cc.badge) }));
+          if (R.chance(0.35)) {
+            // the card on one side, its icon beside the words on the other
+            items.push(base("icon", c.from, { icon: cc.icon, size: "s" }));
+            layoutW = { inline: 3, between: 1 };
+          } else {
+            if (R.chance(0.35)) items.push(base("badge", Math.min(c.to, c.from + 3), { icon: "zap", title: R.pick(cc.badge) }));
+            layoutW = { "split-left": 3, "split-right": 3, label: 3, corner: 1, top: 1 };
+          }
         }
         if (carry && items[0] && items[0].kind !== "badge" && R.chance(0.6)) items[0].id = carry;
-        layoutW = { "split-left": 3, "split-right": 3, corner: 1, top: 1 };
       }
     }
     const layout = weighted(R, layoutW, [prevLayout]);
     const solid = items.filter((x) => x.kind !== "badge" && x.kind !== "shape" && x.kind !== "cursor").length;
     const arrange = solid > 1 ? weighted<ArrangeKind>(R, layout.startsWith("split") ? { column: 2, cascade: 2, grid: 1 } : { row: 3, scatter: 1, diagonal: 1, cascade: 1 }, [prevArrange]) : "single";
-    // the text: the scene's spoken words (the whole group), key words lit
+    // the text: the scene's spoken words (layout.ts shows their highlight), key words lit
     const trans: TransitionKind = gi === 0 ? "fade" : items.some((x) => x.id && scenes.some((s) => s.items.some((q) => q.id === x.id))) ? "morph" : R.chance(0.18) ? accentT : weighted<TransitionKind>(R, Object.fromEntries(family.map((x, k) => [x, 3 - k])) as Weights<TransitionKind>, [prevT]);
     const keys = c.text.split(/\s+/).map(clean).filter((w) => w.length > 3 && !STOP.has(w.toLowerCase()) && w.toLowerCase() !== brand.name.toLowerCase());
     const keyPick = kind === "brand" ? [brand.name] : keys.sort((a, b) => b.length - a.length).slice(0, 1);

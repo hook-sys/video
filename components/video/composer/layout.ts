@@ -1,4 +1,5 @@
 import { emWidth, faceOf, rng } from "./art";
+import { highlightOf, shownWord } from "./highlight";
 import { TRANSITION_FRAMES, baseSize } from "./sizes";
 import type { ArrangeKind, ArtT, Box, Brand, ComposerPlan, ItemT, LayoutKind, PlacedItem, PlacedScene, SceneT, ScriptT, TextBlock, Word } from "./types";
 import { FPS, H, W } from "./types";
@@ -157,6 +158,106 @@ const overlap = (a: Box, b: Box) => {
 
 export type SceneInput = { scene: SceneT; index: number; from: number; to: number; words: Word[]; wordFrom: number; wordTo: number; art: ArtT; seed: number; prev: PlacedScene | null; screens: number };
 
+// The layouts that compose the words with the things (not side by side):
+// inline — an icon beside the words (and the other things beside them);
+// label — the words as the label of a card, a phone, a chart;
+// caption — one thing filling the frame, the words a caption on a plate;
+// around — the words in the middle, the things around them;
+// between — the words between two things.
+export const COMPOSED: ReadonlySet<LayoutKind> = new Set<LayoutKind>(["inline", "label", "caption", "around", "between"]);
+// what a label or a caption can sit on
+const FRAMED = new Set(["card", "device", "chart", "screenshot", "compare", "stat", "flow", "steps", "quote", "chips"]);
+const FILLS = new Set(["card", "device", "chart", "screenshot", "compare", "flow"]);
+
+// Whether a layout can be made from a scene's things (and words).
+export function layoutFits(layout: LayoutKind, items: ItemT[], hasText: boolean): boolean {
+  const vis = items.filter((it) => !isAccent(it));
+  switch (layout) {
+    case "type": return !vis.length;
+    case "inline": return hasText && vis.some((it) => it.kind === "icon") && vis.length <= 3;
+    case "label": return hasText && vis.some((it) => FRAMED.has(it.kind)) && vis.length <= 3;
+    case "caption": return hasText && vis.length >= 1 && vis.length <= 2 && FILLS.has(vis[0].kind);
+    case "around": return hasText && vis.length >= 2 && vis.length <= 4 && vis.every((it) => baseSize(it as PlacedItem)[0] <= 760);
+    case "between": return hasText && vis.length === 2 && vis.every((it) => baseSize(it as PlacedItem)[0] <= 1120);
+    default: return vis.length > 0;
+  }
+}
+
+type Align = "left" | "center" | "right";
+type Anchor = "top" | "middle" | "bottom";
+type TextIn = (region: Rect, cap: number, maxLines: number, align: Align, anchor: Anchor) => TextBlock;
+type Spot = { box: Box; scale: number; z: number };
+
+// Left-aligned words moved to start at `left` (the film measures the face
+// again inside `area`, so the area moves with them).
+const startAt = (tb: TextBlock, left: number, y: number, room: number): TextBlock => ({ ...tb, box: { ...tb.box, x: left + tb.box.w / 2, y }, area: { x: left + room / 2, y, w: room, h: tb.area?.h ?? tb.box.h } });
+
+// A composed layout: where the words and each thing go.
+function composeScene(layout: LayoutKind, things: ItemT[], textIn: TextIn, cap: number, seed: number): { tb: TextBlock; spots: Spot[]; order: ItemT[]; arrange: ArrangeKind } {
+  const R = rng(seed + 17);
+  // (a small icon beside the words or around them would be lost: at least medium)
+  const vis = things.map((it) => (it.kind === "icon" && it.size === "s" ? { ...it, size: "m" as const } : it));
+  const flip = R.chance(0.5);
+  const { l, r, t, b } = SAFE;
+  const w = r - l;
+  if (layout === "inline") {
+    const icon = vis.find((it) => it.kind === "icon")!;
+    const glyph = { ...icon, title: null };
+    const others = vis.filter((it) => it !== icon);
+    // the words and their icon on one line, the other things beside them
+    const zone = others.length ? (flip ? rect(r - w * 0.5, t + 40, r, b - 40) : rect(l, t + 40, l + w * 0.5, b - 40)) : rect(l + 60, t + 60, r - 60, b - 60);
+    const side0 = Math.round(Math.min(280, Math.max(170, cap * 1.6)));
+    const room = zone.r - zone.l - side0 - 44;
+    const tb0 = textIn(rect(zone.l + side0 + 44, zone.t, zone.r, zone.b), Math.min(cap, others.length ? 110 : 150), others.length ? 3 : 2, "left", "middle");
+    const side = Math.round(Math.min(300, Math.max(180, tb0.box.h * 0.85, tb0.size * 1.7)));
+    const x0 = others.length ? zone.l : (zone.l + zone.r) / 2 - (side + 44 + tb0.box.w) / 2;
+    const cy = (zone.t + zone.b) / 2;
+    const tb = startAt(tb0, x0 + side + 44, cy, room);
+    const spots: Spot[] = [{ box: { x: x0 + side / 2, y: cy, w: side, h: side }, scale: side / baseSize(glyph as PlacedItem)[0], z: 1 }];
+    if (others.length) spots.push(...arrange(others, others.length > 1 ? "column" : "single", flip ? rect(l, t, r - w * 0.5 - 70, b) : rect(l + w * 0.5 + 70, t, r, b), seed));
+    return { tb, spots, order: [glyph, ...others], arrange: others.length > 1 ? "column" : "single" };
+  }
+  if (layout === "label") {
+    const main = vis.find((it) => FRAMED.has(it.kind))!;
+    const others = vis.filter((it) => it !== main).slice(0, 2);
+    const zone = others.length ? (flip ? rect(l + 460, t, r, b) : rect(l, t, r - 460, b)) : rect(l + w * 0.1, t, r - w * 0.1, b);
+    const tb0 = textIn(rect(zone.l, t, zone.r, t + 300), Math.min(cap, 104), 2, "left", "top");
+    const gap = 30;
+    const f = fit(main, rect(zone.l, t + tb0.box.h + gap, zone.r, b));
+    // the label and its thing as one, in the middle of the frame
+    const total = tb0.box.h + gap + f.box.h;
+    const top = Math.max(t, H / 2 - total / 2);
+    const box = { ...f.box, y: top + tb0.box.h + gap + f.box.h / 2 };
+    const left = Math.max(l, box.x - box.w / 2);
+    const tb = startAt(tb0, left, top + tb0.box.h / 2, Math.min(zone.r, r) - left);
+    const spots: Spot[] = [{ box, scale: f.scale, z: 1 }];
+    if (others.length) spots.push(...arrange(others, others.length > 1 ? "column" : "single", flip ? rect(l, t + 120, l + 400, b - 120) : rect(r - 400, t + 120, r, b - 120), seed).map((sp) => ({ ...sp, z: 2 })));
+    return { tb, spots, order: [main, ...others], arrange: "single" };
+  }
+  if (layout === "caption") {
+    const kind: ArrangeKind = vis.length > 1 ? "row" : "single";
+    const spots = arrange(vis, kind, rect(l, t, r, b), seed).map((sp) => ({ ...sp, z: 0 }));
+    const tb = textIn(flip ? rect(r - 860, b - 280, r - 20, b - 20) : rect(l + 20, b - 280, l + 860, b - 20), Math.min(cap, 68), 2, flip ? "right" : "left", "bottom");
+    return { tb, spots, order: vis, arrange: kind };
+  }
+  if (layout === "around") {
+    const tb = textIn(rect(W / 2 - 440, H / 2 - 190, W / 2 + 440, H / 2 + 190), Math.min(cap, 132), 2, "center", "middle");
+    const n = vis.length;
+    const P: [number, number][] = n === 2 ? [[-640, 0], [640, 0]] : n === 3 ? [[-640, -190], [640, -190], [0, 320]] : [[-640, -215], [640, -215], [-640, 235], [640, 235]];
+    const cw = 360, ch = n === 2 ? 440 : 300;
+    const spots = vis.map((it, i) => {
+      const [dx, dy] = P[i];
+      const cell = n === 3 && i === 2 ? rect(W / 2 - 300, H / 2 + dy - 120, W / 2 + 300, H / 2 + dy + 120) : rect(W / 2 + dx - cw / 2, H / 2 + dy - ch / 2, W / 2 + dx + cw / 2, H / 2 + dy + ch / 2);
+      return { ...fit(it, cell), z: 1 };
+    });
+    return { tb, spots, order: vis, arrange: "scatter" };
+  }
+  // between: the words between two things
+  const tb = textIn(rect(l + w * 0.3 + 40, t, r - w * 0.3 - 40, b), Math.min(cap, 120), 4, "center", "middle");
+  const cells = [rect(l, t + 80, l + w * 0.3, b - 80), rect(r - w * 0.3, t + 80, r, b - 80)];
+  return { tb, spots: vis.slice(0, 2).map((it, i) => ({ ...fit(it, cells[i]), z: 1 })), order: vis.slice(0, 2), arrange: "row" };
+}
+
 // One scene, laid out (and what is wrong with it).
 export function placeScene(p: SceneInput): { placed: PlacedScene; problems: string[] } {
   const { scene: s, art, from, to, words } = p;
@@ -165,53 +266,74 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   const items = s.items.filter((it) => it.kind !== "screenshot" || p.screens > 0);
   const vis = items.filter((it) => !isAccent(it));
   const acc = items.filter(isAccent);
-  // the words: the scene's own, in order
-  let tb: TextBlock | null = null;
-  const tfrom = s.text ? Math.max(p.wordFrom, Math.min(s.text.from, s.text.to)) : 0;
-  const tto = s.text ? Math.min(p.wordTo, Math.max(s.text.from, s.text.to)) : -1;
-  const hasText = !!s.text && tto >= tfrom;
+  // the words: the scene's highlight (highlight.ts), in order
+  let tfrom = s.text ? Math.max(p.wordFrom, Math.min(s.text.from, s.text.to)) : 0;
+  let tto = s.text ? Math.min(p.wordTo, Math.max(s.text.from, s.text.to)) : -1;
+  const keys = new Set((s.text?.key ?? []).map(norm).filter(Boolean));
+  if (s.text && tto >= tfrom) [tfrom, tto] = highlightOf(words, tfrom, tto, keys);
+  // (a stop the voice's timing gives as a word of its own is not shown)
+  const ws = s.text ? words.slice(tfrom, tto + 1).filter((w) => /[\p{L}\p{N}]/u.test(w.text)) : [];
+  const hasText = ws.length > 0;
+  const shown = ws.map((w, i) => shownWord(w.text, i === 0, i === ws.length - 1));
   let layout = s.layout;
   if (layout === "type" && vis.length) layout = "center";
-  const ratio = s.ratio ?? 0.44;
-  const reg = regions(layout, ratio, hasText, vis.length > 0);
-  if (hasText && reg.text) {
-    const ws = words.slice(tfrom, tto + 1);
-    const keys = new Set((s.text!.key ?? []).map(norm).filter(Boolean));
-    const cap = Math.min(TEXT_CAP[s.text!.size], layout === "visual" ? 72 : layout.startsWith("split") || layout === "corner" ? 120 : 999);
-    const fitR = fitText(ws.map((w) => w.text), reg.text, cap, layout === "visual" ? 2 : s.text!.size === "xl" ? 3 : 4, art, !!s.kicker);
+  if (COMPOSED.has(layout) && !layoutFits(layout, items, hasText)) layout = vis.length ? "center" : "type";
+  // the words in a place: sized to fill it, each coming in as it is said —
+  // and a highlight said late in the scene comes in with the scene
+  const textIn: TextIn = (region, cap, maxLines, align, anchor) => {
+    const fitR = fitText(shown, region, cap, maxLines, art, !!s.kicker);
     if (fitR.size < MIN_TEXT) problems.push(`the words are too small (${fitR.size}px)`);
-    const align = s.text!.align ?? reg.align;
-    const bw = Math.min(reg.text.r - reg.text.l, fitR.width + 8), bh = fitR.height;
-    const cy = layout === "top" || layout === "corner" ? reg.text.t + bh / 2 : layout === "bottom" || layout === "visual" ? reg.text.b - bh / 2 : (reg.text.t + reg.text.b) / 2;
-    const cx = align === "left" ? reg.text.l + bw / 2 : align === "right" ? reg.text.r - bw / 2 : (reg.text.l + reg.text.r) / 2;
-    tb = {
-      words: ws.map((w) => ({ t: w.text, at: Math.max(from, Math.round(w.start * FPS) - 2), key: keys.has(norm(w.text)) })),
+    const bw = Math.min(region.r - region.l, fitR.width + 8), bh = fitR.height;
+    const cy = anchor === "top" ? region.t + bh / 2 : anchor === "bottom" ? region.b - bh / 2 : (region.t + region.b) / 2;
+    const cx = align === "left" ? region.l + bw / 2 : align === "right" ? region.r - bw / 2 : (region.l + region.r) / 2;
+    const said = ws.map((w) => Math.max(from, Math.round(w.start * FPS) - 2));
+    const late = Math.max(0, (said[0] ?? from) - (from + 12));
+    return {
+      words: ws.map((w, i) => ({ t: shown[i], at: Math.max(from, said[i] - late), key: keys.has(norm(w.text)) })),
       box: { x: cx, y: cy, w: bw, h: bh },
       size: fitR.size,
       lines: fitR.lines,
       align,
       reveal: s.text!.reveal,
       kicker: s.kicker?.trim() || null,
-      area: { x: (reg.text.l + reg.text.r) / 2, y: (reg.text.t + reg.text.b) / 2, w: reg.text.r - reg.text.l, h: reg.text.b - reg.text.t },
-      anchor: layout === "top" || layout === "corner" ? "top" : layout === "bottom" || layout === "visual" ? "bottom" : "middle",
+      area: { x: (region.l + region.r) / 2, y: (region.t + region.b) / 2, w: region.r - region.l, h: region.b - region.t },
+      anchor,
     };
-    // give the things the room the words did not take
-    if (reg.vis && (layout === "top" || layout === "center")) reg.vis.t = Math.max(reg.vis.t - 120, cy + bh / 2 + 56);
-    if (reg.vis && layout === "bottom") reg.vis.b = Math.min(reg.vis.b + 100, cy - bh / 2 - 56);
-    if (reg.vis && layout === "corner") reg.vis.t = Math.max(reg.vis.t - 60, cy + bh / 2 + 40);
-  } else if (s.kicker && !hasText) {
-    tb = null;
-  }
-  const visRect = reg.vis ?? rect(SAFE.l, SAFE.t, SAFE.r, SAFE.b);
-  const kind: ArrangeKind = s.arrange ?? (vis.length > 1 ? "row" : "single");
-  const spots = vis.length ? arrange(vis, kind, visRect, p.seed) : [];
+  };
   const timeOf = (it: ItemT) => {
     const at = Math.min(to - 16, Math.max(from, frame(it.at) - 4));
     const hit = it.hit != null ? Math.min(to - 6, Math.max(at + 8, frame(it.hit) - 2)) : null;
     return { at, hit };
   };
-  const placed: PlacedItem[] = vis.map((it, i) => ({ ...it, ...timeOf(it), box: spots[i].box, scale: spots[i].scale, z: spots[i].z }));
+  let tb: TextBlock | null = null;
+  let placed: PlacedItem[];
+  let kind: ArrangeKind;
+  if (COMPOSED.has(layout)) {
+    const c = composeScene(layout, vis, textIn, TEXT_CAP[s.text!.size], p.seed);
+    tb = c.tb;
+    kind = c.arrange;
+    placed = c.order.map((it, i) => ({ ...it, ...timeOf(it), box: c.spots[i].box, scale: c.spots[i].scale, z: c.spots[i].z }));
+  } else {
+    const ratio = s.ratio ?? 0.44;
+    const reg = regions(layout, ratio, hasText, vis.length > 0);
+    if (hasText && reg.text) {
+      const cap = Math.min(TEXT_CAP[s.text!.size], layout === "visual" ? 72 : layout.startsWith("split") || layout === "corner" ? 120 : 999);
+      const anchor: Anchor = layout === "top" || layout === "corner" ? "top" : layout === "bottom" || layout === "visual" ? "bottom" : "middle";
+      tb = textIn(reg.text, cap, layout === "visual" ? 2 : s.text!.size === "xl" ? 3 : 4, s.text!.align ?? reg.align, anchor);
+      const { y: cy, h: bh } = tb.box;
+      // give the things the room the words did not take
+      if (reg.vis && (layout === "top" || layout === "center")) reg.vis.t = Math.max(reg.vis.t - 120, cy + bh / 2 + 56);
+      if (reg.vis && layout === "bottom") reg.vis.b = Math.min(reg.vis.b + 100, cy - bh / 2 - 56);
+      if (reg.vis && layout === "corner") reg.vis.t = Math.max(reg.vis.t - 60, cy + bh / 2 + 40);
+    }
+    const visRect = reg.vis ?? rect(SAFE.l, SAFE.t, SAFE.r, SAFE.b);
+    kind = s.arrange ?? (vis.length > 1 ? "row" : "single");
+    const spots = vis.length ? arrange(vis, kind, visRect, p.seed) : [];
+    placed = vis.map((it, i) => ({ ...it, ...timeOf(it), box: spots[i].box, scale: spots[i].scale, z: spots[i].z }));
+  }
   if (layout === "over") placed.forEach((it) => (it.z = 0));
+  // (words on a plate over the picture: they may cover it)
+  const plated = layout === "over" || layout === "caption";
   // accents: a badge sits on a thing's corner, a shape behind, the cursor on its target
   acc.forEach((it, i) => {
     const t = timeOf(it);
@@ -251,7 +373,7 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   for (const it of placed) {
     if (isAccent(it)) continue;
     if (it.scale < 0.42) problems.push(`${it.kind} is too small to read (scale ${it.scale.toFixed(2)})`);
-    if (tb && layout !== "over" && overlap(tb.box, it.box) > 0.04) problems.push(`${it.kind} covers the words`);
+    if (tb && !plated && overlap(tb.box, it.box) > 0.04) problems.push(`${it.kind} covers the words`);
   }
   const solid = placed.filter((q) => !isAccent(q));
   for (let a = 0; a < solid.length; a++) for (let b = a + 1; b < solid.length; b++) if (kind !== "cascade" && kind !== "orbit" && overlap(solid[a].box, solid[b].box) > 0.06) problems.push(`${solid[a].kind} and ${solid[b].kind} overlap`);
@@ -326,7 +448,8 @@ export function placeAll(script: ScriptT, words: Word[], duration: number, brand
     // the things should own the frame: when they fill little of it (a wide
     // row squeezed into a narrow side, small icons in a big field), another
     // layout that fills it far better — with words no smaller — is taken
-    if (!best.problems.length && best.placed.items.some((q) => !isAccent(q))) {
+    // (a composed layout is meant as it is)
+    if (!best.problems.length && !COMPOSED.has(best.placed.layout) && best.placed.items.some((q) => !isAccent(q))) {
       const own = fillOf(best.placed);
       if (own < 0.26) {
         let pick = best, score = own;

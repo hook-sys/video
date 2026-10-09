@@ -24,7 +24,10 @@ export const CASES = ["sentence", "upper", "lower"] as const;
 export const MOTIONS = ["soft", "snappy", "springy", "glide"] as const;
 export const CAMERAS = ["still", "drift", "push", "pull", "tilt", "float", "orbit", "rise"] as const;
 export const ICON_STYLES = ["tile", "round", "bare", "duotone", "outline", "glass"] as const;
-export const LAYOUTS = ["center", "split-left", "split-right", "top", "bottom", "type", "visual", "corner", "over"] as const;
+// (the last five compose the words with the things: an icon beside the words,
+// the words as a thing's label, a caption over a thing that fills the frame,
+// things around the words, the words between two things — see layout.ts)
+export const LAYOUTS = ["center", "split-left", "split-right", "top", "bottom", "type", "visual", "corner", "over", "inline", "label", "caption", "around", "between"] as const;
 export const ARRANGES = ["single", "row", "column", "grid", "cascade", "orbit", "scatter", "diagonal"] as const;
 export const REVEALS = ["word", "rise", "mask", "type", "scale", "blur", "slide", "line"] as const;
 export const TRANSITIONS = ["blur", "fade", "push-left", "push-right", "push-up", "push-down", "zoom-in", "zoom-out", "whip", "iris", "wipe", "flip", "morph", "drop", "clock"] as const;

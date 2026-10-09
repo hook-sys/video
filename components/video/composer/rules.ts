@@ -1,5 +1,7 @@
-import { isAccent } from "./layout";
-import type { ScriptT, TransitionKind } from "./types";
+import { rng } from "./art";
+import { COMPOSED, isAccent, layoutFits } from "./layout";
+import { LAYOUTS } from "./types";
+import type { LayoutKind, ScriptT, TransitionKind } from "./types";
 
 // The house rules (docs/video-never-list.md, video-do-list.md,
 // style-reference.md) as the Composer keeps them, whoever directed the video
@@ -39,4 +41,32 @@ export function houseRules(script: ScriptT, turn?: number | null): ScriptT {
   if (BUSY_FIELDS.has(art.field)) art.field = CALM_FIELDS[Math.abs(Math.round(art.hue)) % CALM_FIELDS.length];
   if (art.overlay === "particles") art.overlay = "grain";
   return { art, scenes: out };
+}
+
+// The scenes' compositions vary: never the same one twice in a row, none
+// more than twice in a video (scenes with things; the closing ask keeps its
+// own), and now and then a scene's words are composed with its things
+// (an icon beside them, a label on a card… — layout.ts COMPOSED) when they fit.
+export function varyLayouts(script: ScriptT, seed: number): ScriptT {
+  const R = rng(seed + 401);
+  const count = new Map<LayoutKind, number>();
+  let prev: LayoutKind | null = null;
+  const last = script.scenes.length - 1;
+  const scenes = script.scenes.map((s, i) => {
+    const things = s.items.filter((it) => !isAccent(it)).length;
+    let layout: LayoutKind = s.layout === "type" && things ? "center" : s.layout;
+    const hasText = !!s.text;
+    const ok = (l: LayoutKind) => l !== prev && (count.get(l) ?? 0) < 2 && layoutFits(l, s.items, hasText);
+    if (things && i !== last) {
+      const fresh = LAYOUTS.filter((l) => COMPOSED.has(l) && !count.has(l) && ok(l));
+      if (!ok(layout) || (!COMPOSED.has(layout) && fresh.length && R.chance(0.35))) {
+        const options = LAYOUTS.filter((l) => l !== "type" && l !== "over" && ok(l));
+        if (options.length) layout = R.pick(options.flatMap((l) => (COMPOSED.has(l) ? [l, l] : [l])));
+      }
+    }
+    count.set(layout, (count.get(layout) ?? 0) + 1);
+    prev = layout;
+    return layout === s.layout ? s : { ...s, layout, arrange: COMPOSED.has(layout) ? null : s.arrange };
+  });
+  return { ...script, scenes };
 }
