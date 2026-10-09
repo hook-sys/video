@@ -27,14 +27,6 @@ body {
   color: var(--foreground);
 }
 
-/* Landing hero: each caption line rises in with the motion it describes. */
-@keyframes hero-caption-in {
-  from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
-  to { opacity: 1; transform: none; filter: none; }
-}
-.hero-caption { animation: hero-caption-in 450ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-@media (prefers-reduced-motion: reduce) { .hero-caption { animation: none; } }
-
 /* MotionBrief logo intro (components/brand/logo.tsx). Hidden until it plays,
    so the intro is never skipped by a slow first paint. */
 .mb-waiting .mb-box, .mb-waiting .mb-line, .mb-waiting .mb-play { opacity: 0; }

@@ -2,8 +2,6 @@
 
 import { useActionState, useState } from "react";
 import { createProject } from "@/app/projects/actions";
-import type { HeroCaption } from "@/components/landing/hero-plan";
-import type { ComposerPlan } from "@/components/video/composer/types";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import {
   BRAND_NAME_MAX,
@@ -37,7 +35,7 @@ const STYLE: StylePreset = "Auto";
 export type Prefill = { script: string; brandName: string; websiteUrl: string; cta: string; voice?: string };
 type VoiceOption = { name: string; gender: "female" | "male"; label: string };
 
-export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = [] }: { maxTotalBytes?: number; waiting: { plan: ComposerPlan; captions: HeroCaption[] }; prefill?: Prefill; voices?: VoiceOption[] }) {
+export function CreateProjectForm({ maxTotalBytes, prefill, voices = [] }: { maxTotalBytes?: number; prefill?: Prefill; voices?: VoiceOption[] }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState(prefill?.script ?? "");
   const [format, setFormat] = useState<string>(FORMATS[0]);
@@ -63,7 +61,7 @@ export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = []
 
   return (
     <>
-      {pending && <WaitingScreen plan={waiting.plan} captions={waiting.captions} />}
+      {pending && <WaitingScreen />}
       <form action={action} className={`grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] ${pending ? "hidden" : ""}`}>
         <input type="hidden" name="direction" value={directionFor(script, STYLE)} />
         <input type="hidden" name="visual_style" value={STYLE_PRESETS[STYLE].visual_style} />

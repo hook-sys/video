@@ -6,7 +6,6 @@ import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { generateBrief, generateVoice, retryPipeline } from "@/app/projects/actions";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { PipelineProgress } from "@/components/pipeline-progress";
-import { heroPlan } from "@/components/landing/hero-plan";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import { getProjectCostSummary } from "@/lib/costs/benchmark";
 import { canUseDevTools } from "@/lib/dev-tools";
@@ -137,7 +136,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         </div>
       </div>
 
-      {project.pipeline_status === "running" && <WaitingScreen step={project.pipeline_step} {...heroPlan()} />}
+      {project.pipeline_status === "running" && <WaitingScreen step={project.pipeline_step} />}
 
       {/* The Composer's video: watch it, change it, download it. */}
       {ready && composer && (

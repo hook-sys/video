@@ -233,3 +233,17 @@
 .gs-bar.admin .gs-brand { margin-right: 0; }
 .gs-admin-stage { position: relative; z-index: 1; margin: 24px 16px 40px; }
 @media (min-width: 1024px) { .gs-admin-stage { margin-left: calc(15rem + 32px); } }
+
+/* ── while a video is made (components/waiting/waiting-screen.tsx) ── */
+.gs-wait { position: fixed; inset: 0; z-index: 60; overflow-y: auto; }
+.gs-wait-win { width: min(600px, calc(100% - 32px)); margin: 8vh auto 40px; }
+.gs-wait-steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.gs-wait-steps li { display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; padding: 14px 16px; border-radius: 14px; background: rgba(255, 255, 255, 0.6); box-shadow: 0 0 0 1px var(--gs-edge); color: var(--gs-ink-3); }
+.gs-wait-steps .dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 600; background: rgba(29, 29, 31, 0.07); color: var(--gs-ink-2); }
+.gs-wait-steps b { font-weight: 500; }
+.gs-wait-steps em { font-style: normal; font-size: 12px; }
+.gs-wait-steps li.done { color: var(--gs-ink-2); }
+.gs-wait-steps li.done .dot { background: #e3f4e8; color: #1e7a3c; }
+.gs-wait-steps li.now { color: var(--gs-ink); background: #fff; box-shadow: 0 0 0 1.5px var(--gs-accent); }
+.gs-wait-steps li.now .dot { background: var(--gs-accent); color: #fff; }
+.gs-wait-steps li.now em { color: var(--gs-accent); font-weight: 600; }

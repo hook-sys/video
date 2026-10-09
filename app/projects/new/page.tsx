@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { VERCEL_SCREENSHOT_TOTAL_BYTES, voiceChoiceOf } from "@/lib/projects";
-import { heroPlan } from "@/components/landing/hero-plan";
 import { AppShell } from "@/components/site/app-shell";
 import { userAccess } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -35,7 +34,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{prefill ? "A new video of the same script" : "Create your video"}</h1>
         <p className="max-w-xl text-foreground/60">{prefill ? "Your script and brand are filled in. Change anything, add your icon, and create." : "Five short steps. MotionBrief records the voice and directs every scene."}</p>
       </div>
-      <CreateProjectForm maxTotalBytes={process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES : undefined} waiting={heroPlan()} prefill={prefill} voices={voices} />
+      <CreateProjectForm maxTotalBytes={process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES : undefined} prefill={prefill} voices={voices} />
     </AppShell>
   );
 }

@@ -1,52 +1,60 @@
 "use client";
 
 import Link from "next/link";
-import { Logo, LogoMark } from "@/components/brand/logo";
-import { HeroPlayer } from "@/components/landing/hero-player";
-import type { HeroCaption } from "@/components/landing/hero-plan";
-import { Sphere } from "@/components/landing/primitives";
-import { SoundProvider, SoundToggle } from "@/components/landing/sound";
-import type { ComposerPlan } from "@/components/video/composer/types";
-import "@/components/landing/landing.css";
+import { PIPELINE_STEPS } from "@/lib/pipeline";
+import { Desk, Mark } from "@/components/site/windows";
+import "@/components/site/site.css";
 
-// Shown while a video is being made: the landing page's stage (glow, floor,
-// spheres), the looping logo as the loading sign, and MotionBrief's own promo
-// right below it to watch meanwhile. It covers the page. `step` is the running
-// pipeline step (not shown; kept for callers).
-export function WaitingScreen({ plan, captions }: { step?: string | null; plan: ComposerPlan; captions: HeroCaption[] }) {
+// Shown while a video is being made: one glass window over the still desk
+// with the steps — done, now, next. Nothing moves; the page refreshes as the
+// steps finish. Without a step the brief is still being sent (the form).
+export function WaitingScreen({ step }: { step?: string | null }) {
+  const sending = step === undefined;
+  const now = sending ? -1 : Math.max(0, PIPELINE_STEPS.findIndex((s) => s.key === step));
   return (
-    <SoundProvider>
-      <div className="lp fixed inset-0 z-50 overflow-y-auto">
-        <section className="lp-hero lp-wait" data-in="true">
-          <div className="lp-hero-glow" aria-hidden="true">
+    <div className="gs gs-wait" role="status" aria-live="polite">
+      <Desk />
+      <header className="gs-bar gs-glass">
+        <span className="gs-brand">
+          <Mark />
+          MotionBrief
+        </span>
+        {!sending && (
+          <Link href="/dashboard" className="gs-plain">
+            Dashboard
+          </Link>
+        )}
+      </header>
+      <section className="gs-win gs-glass gs-wait-win">
+        <div className="gs-titlebar">
+          <div className="gs-dots" aria-hidden="true">
             <i />
             <i />
             <i />
           </div>
-          <div className="lp-floor" aria-hidden="true" />
-          <Sphere size={40} tone="blue" className="lp-float" style={{ left: "10%", top: "24%", "--f": "7s" } as React.CSSProperties} />
-          <Sphere size={90} tone="violet" className="lp-float lp-hide-sm" style={{ right: "8%", top: "58%", "--f": "9s" } as React.CSSProperties} />
-          <Sphere size={24} tone="pink" className="lp-float" style={{ right: "18%", top: "18%", "--f": "6s" } as React.CSSProperties} />
-
-          <header className="lp-nav">
-            <Logo />
-            <nav className="lp-nav-links">
-              <Link href="/dashboard">← Dashboard</Link>
-            </nav>
-          </header>
-
-          <div className="lp-hero-content lp-wait-content">
-            <div role="status" aria-label="Your video is being made">
-              <LogoMark size={76} animated loopMs={4200} className="lp-wait-mark" />
-            </div>
-
-            <div className="lp-hero-player">
-              <HeroPlayer plan={plan} captions={captions} />
-            </div>
-          </div>
-        </section>
-        <SoundToggle />
-      </div>
-    </SoundProvider>
+          <span>{sending ? "Sending" : "Making your video"}</span>
+        </div>
+        <div className="gs-body">
+          <h2>{sending ? "Sending your brief" : "Your video is being made"}</h2>
+          <p className="gs-lead">
+            {sending ? "Keep this page open while your script and icon upload." : "This takes a few minutes. You can close this page; your video will be on your dashboard when it is ready."}
+          </p>
+          <ol className="gs-wait-steps">
+            {PIPELINE_STEPS.map((s, i) => {
+              const state = i < now ? "done" : i === now ? "now" : "next";
+              return (
+                <li key={s.key} className={state}>
+                  <span className="dot" aria-hidden="true">
+                    {state === "done" ? "✓" : i + 1}
+                  </span>
+                  <b>{s.label}</b>
+                  <em>{state === "done" ? "Done" : state === "now" ? "Now" : ""}</em>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </section>
+    </div>
   );
 }
