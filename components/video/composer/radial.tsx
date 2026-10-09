@@ -1,4 +1,5 @@
 import { type CSSProperties, useId } from "react";
+import { H, W } from "./frame";
 
 // A CSS radial-gradient, drawn as SVG: the browser's download (web-renderer)
 // can't paint CSS radial gradients (they came out empty), but it draws SVG as
@@ -20,7 +21,7 @@ export function Radial({ w, h, at = [0.5, 0.5], circle = false, round = false, s
   const fy = Math.max(cy, 1 - cy) * h;
   const [rx, ry] = circle ? [Math.hypot(fx, fy), Math.hypot(fx, fy)] : [fx * Math.SQRT2, fy * Math.SQRT2];
   const [ox, oy] = place ? [place.x, place.y] : [0, 0];
-  const [sw, sh] = place ? [1920, 1080] : [w, h];
+  const [sw, sh] = place ? [W, H] : [w, h];
   return (
     <svg width={sw} height={sh} style={{ display: "block", ...(place ? { position: "absolute", left: 0, top: 0 } : null), ...style }}>
       <defs>
@@ -65,7 +66,7 @@ export function Tiles({ w, h, kind, gap, size, color, dx = 0, dy = 0, fade }: { 
 }
 
 // The CSS reach of a radial gradient centred at (x, y) on the frame.
-export function reachOf(x: number, y: number, circle: boolean, w = 1920, h = 1080): [number, number] {
+export function reachOf(x: number, y: number, circle: boolean, w = W, h = H): [number, number] {
   const fx = Math.max(x, w - x);
   const fy = Math.max(y, h - y);
   return circle ? [Math.hypot(fx, fy), Math.hypot(fx, fy)] : [fx * Math.SQRT2, fy * Math.SQRT2];

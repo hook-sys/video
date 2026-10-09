@@ -1,4 +1,5 @@
 import type { P } from "./journey";
+import { H, W } from "./frame";
 import { isAccent } from "./layout";
 import { clamp01, mix, ramp } from "./motion";
 import type { Box, ComposerPlan, PlacedItem } from "./types";
@@ -28,7 +29,7 @@ export type DepthHop = { kind: DepthKind; c: P; s: number; item: number };
 const area = (b: Box) => b.w * b.h;
 const MAX_ZOOM = 0.018;
 // the inner scene fits inside its window (a little in from its edges)
-const fit = (b: Box) => Math.min((b.w * 0.86) / 1920, (b.h * 0.8) / 1080);
+const fit = (b: Box) => Math.min((b.w * 0.86) / W, (b.h * 0.8) / H);
 
 export function depthHops(plan: ComposerPlan, mv: Move[]): { plan: ComposerPlan; hops: (DepthHop | null)[] } {
   const scenes = plan.scenes.map((s) => ({ ...s, items: [...s.items] }));
@@ -45,7 +46,7 @@ export function depthHops(plan: ComposerPlan, mv: Move[]): { plan: ComposerPlan;
     const big = (it: PlacedItem) => it.box.w >= 220 && it.box.h >= 150 && it.kind !== "button" && calm(it);
     // something of the next scene to see in the window from the start
     const shows = B.items.some((it) => !isAccent(it) && it.at <= B.from + 24);
-    if (want === "flip") return { kind: "flip", c: { x: 960, y: 540 }, s: 1, item: -1 };
+    if (want === "flip") return { kind: "flip", c: { x: W / 2, y: H / 2 }, s: 1, item: -1 };
     if (want === "dive" && shows) {
       const w = A.items.map((it, j) => ({ it, j })).filter(({ it }) => !isAccent(it) && it.at <= lift && big(it)).sort((x, y) => area(y.it.box) - area(x.it.box))[0];
       if (w) {
@@ -62,7 +63,7 @@ export function depthHops(plan: ComposerPlan, mv: Move[]): { plan: ComposerPlan;
         return { kind: "reveal", c: { x: w.it.box.x, y: w.it.box.y }, s: fit(w.it.box), item: w.j };
       }
     }
-    return { kind: "tunnel", c: { x: 960, y: 540 }, s: 1, item: -1 };
+    return { kind: "tunnel", c: { x: W / 2, y: H / 2 }, s: 1, item: -1 };
   });
   return { plan: { ...plan, scenes }, hops };
 }
@@ -75,10 +76,10 @@ export function depthHops(plan: ComposerPlan, mv: Move[]): { plan: ComposerPlan;
 export function zoomAt(u: number, c: P, s: number): { Z: number; C: P } {
   const Z = Math.pow(s, -u);
   const k = s >= 1 ? u : (1 - 1 / Z) / (1 - s);
-  return { Z, C: { x: mix(960, c.x, k), y: mix(540, c.y, k) } };
+  return { Z, C: { x: mix(W / 2, c.x, k), y: mix(H / 2, c.y, k) } };
 }
-export const outerTransform = (Z: number, C: P) => `translate(${(960 - C.x * Z).toFixed(2)}px, ${(540 - C.y * Z).toFixed(2)}px) scale(${Z.toFixed(5)})`;
-export const innerTransform = (Z: number, C: P, c: P, s: number) => `translate(${(960 + (c.x - C.x) * Z - 960 * s * Z).toFixed(2)}px, ${(540 + (c.y - C.y) * Z - 540 * s * Z).toFixed(2)}px) scale(${(s * Z).toFixed(5)})`;
+export const outerTransform = (Z: number, C: P) => `translate(${(W / 2 - C.x * Z).toFixed(2)}px, ${(H / 2 - C.y * Z).toFixed(2)}px) scale(${Z.toFixed(5)})`;
+export const innerTransform = (Z: number, C: P, c: P, s: number) => `translate(${(W / 2 + (c.x - C.x) * Z - (W / 2) * s * Z).toFixed(2)}px, ${(H / 2 + (c.y - C.y) * Z - (H / 2) * s * Z).toFixed(2)}px) scale(${(s * Z).toFixed(5)})`;
 
 // Where the camera is on a hop at frame f: which hop, and how far along (0–1,
 // eased), or null when it is resting in a scene.

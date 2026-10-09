@@ -14,10 +14,11 @@ import { RECAP } from "./staging";
 // to the canvas, so it streams past while the camera moves.
 
 export type P = { x: number; y: number };
-export const W = 1920;
-export const H = 1080;
-const STEP_X = 2350;
-const STEP_Y = 1450;
+export { W, H } from "./frame";
+import { W, H } from "./frame";
+// (a step between scenes: a frame and a gap)
+const stepX = () => W + 430;
+const stepY = () => H + 370;
 export const TILE_GAP = 150;
 
 // How the camera behaves on each kind of canvas: how far back it rests (a
@@ -49,14 +50,14 @@ export function stations(n: number, kind: JourneyKind, seed: number): P[] {
   const j = (i: number, k: string, amp: number) => noise2D(`${k}${seed}`, i * 0.9, 0.3) * amp;
   return Array.from({ length: n }, (_, i) => {
     switch (kind) {
-      case "down": return { x: j(i, "dx", 520), y: i * STEP_Y };
-      case "diagonal": return { x: i * STEP_X * 0.86, y: i * STEP_Y * 0.72 + j(i, "dy", 160) };
-      case "zigzag": return { x: i * STEP_X * 0.92, y: (i % 2) * STEP_Y * 0.95 };
-      case "timeline": return { x: i * STEP_X, y: 0 };
+      case "down": return { x: j(i, "dx", 520), y: i * stepY() };
+      case "diagonal": return { x: i * stepX() * 0.86, y: i * stepY() * 0.72 + j(i, "dy", 160) };
+      case "zigzag": return { x: i * stepX() * 0.92, y: (i % 2) * stepY() * 0.95 };
+      case "timeline": return { x: i * stepX(), y: 0 };
       // the story goes round a ring; the last scene (the ask) is the hub in the middle
       case "map": {
         if (i === n - 1) return { x: 0, y: 0 };
-        const R = Math.max(2700, ((n - 1) * 2350) / (2 * Math.PI));
+        const R = Math.max(W * 1.4, ((n - 1) * stepX()) / (2 * Math.PI));
         const a = -Math.PI * 0.75 + (i / Math.max(1, n - 1)) * Math.PI * 2;
         return { x: Math.cos(a) * R, y: Math.sin(a) * R * 0.78 };
       }
@@ -69,9 +70,9 @@ export function stations(n: number, kind: JourneyKind, seed: number): P[] {
       case "snake": {
         // rows of three: right, down, back left, down…
         const row = Math.floor(i / 3), col = i % 3;
-        return { x: (row % 2 ? 2 - col : col) * STEP_X, y: row * STEP_Y };
+        return { x: (row % 2 ? 2 - col : col) * stepX(), y: row * stepY() };
       }
-      default: return { x: i * STEP_X, y: j(i, "dy", 260) };
+      default: return { x: i * stepX(), y: j(i, "dy", 260) };
     }
   });
 }

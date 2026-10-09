@@ -7,6 +7,7 @@ import { isAccent } from "./layout";
 import { EASE, type Ends, type P, bez, road } from "./journey";
 import { clamp01, mix, ramp } from "./motion";
 import type { Box, ComposerPlan, GuideKind, LinkKind, PlacedItem, TextBlock } from "./types";
+import { H, W } from "./frame";
 
 // How one scene leads to the next on a journey, other than a drawn line:
 //  carry — the scene's main thing lifts off, flies to the next scene and
@@ -28,8 +29,8 @@ type Lead = { kind: "lead"; a: P; b: P; loop: boolean };
 export type Hop = Carry | WordHop | Lead | null;
 export type Links = { dim: (scene: number, f: number) => number; link: LinkKind; plan: ComposerPlan; hops: Hop[]; ends: Ends[]; rests: P[]; guide: GuideKind; hidden: (scene: number, item: number, f: number) => boolean; hiddenWord: (scene: number, wi: number, f: number) => boolean };
 
-// a scene's point (on its 1920×1080 frame) → the canvas
-const onCanvas = (st: P, p: P): P => ({ x: st.x - 960 + p.x, y: st.y - 540 + p.y });
+// a scene's point (on its frame) → the canvas
+const onCanvas = (st: P, p: P): P => ({ x: st.x - W / 2 + p.x, y: st.y - H / 2 + p.y });
 const area = (b: Box) => b.w * b.h;
 const liftOf = (m: Move) => m.start - LEAD;
 const landOf = (m: Move) => m.start - LEAD + m.dur;

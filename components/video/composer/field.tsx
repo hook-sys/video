@@ -5,6 +5,7 @@ import type { Pal } from "./art";
 import { hsl } from "./art";
 import { Radial, reachOf, Tiles } from "./radial";
 import type { FieldKind, Overlay } from "./types";
+import { H, W } from "./frame";
 
 // The background a Composer film plays on: a kind of light (aurora, arcs,
 // grid…) in the film's palette, around an anchor that each scene moves (it
@@ -58,7 +59,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
       body = (
         <>
           <AbsoluteFill>
-            <Tiles w={1920} h={1080} kind="grid" gap={Math.round(70 + a.s * 30)} size={0.75} color={hsl(hue, 30, d ? 60 : 30, d ? 0.09 : 0.07)} dx={f * 0.5 * e} dy={f * 0.25 * e} fade={(([rx, ry]) => ({ x: a.x, y: a.y, rx, ry, inner: 0.1, outer: 0.75 }))(reachOf(a.x, a.y, false))} />
+            <Tiles w={W} h={H} kind="grid" gap={Math.round(70 + a.s * 30)} size={0.75} color={hsl(hue, 30, d ? 60 : 30, d ? 0.09 : 0.07)} dx={f * 0.5 * e} dy={f * 0.25 * e} fade={(([rx, ry]) => ({ x: a.x, y: a.y, rx, ry, inner: 0.1, outer: 0.75 }))(reachOf(a.x, a.y, false))} />
           </AbsoluteFill>
           {glow(a.x + sway(1), a.y + sway(2, 40), 1400 * a.s, 900 * a.s, c1)}
         </>
@@ -69,7 +70,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
         <>
           {glow(a.x + sway(3), a.y, 1600 * a.s, 1000 * a.s, c1)}
           <AbsoluteFill>
-            <Tiles w={1920} h={1080} kind="dots" gap={34} size={2.2} color={hsl(hue, 40, d ? 75 : 40, d ? 0.28 : 0.2)} dx={f * 0.3} fade={(([rx, ry]) => ({ x: a.x, y: a.y, rx, ry, inner: 0, outer: (45 + a.s * 20) / 100 }))(reachOf(a.x, a.y, true))} />
+            <Tiles w={W} h={H} kind="dots" gap={34} size={2.2} color={hsl(hue, 40, d ? 75 : 40, d ? 0.28 : 0.2)} dx={f * 0.3} fade={(([rx, ry]) => ({ x: a.x, y: a.y, rx, ry, inner: 0, outer: (45 + a.s * 20) / 100 }))(reachOf(a.x, a.y, true))} />
           </AbsoluteFill>
         </>
       );
@@ -87,7 +88,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
     case "beams":
       body = (
         <>
-          {glow(a.x, 1080, 2400 * a.s, 1100, c1, "50% 70%")}
+          {glow(a.x, H, 2400 * a.s, 1100, c1, "50% 70%")}
           {Array.from({ length: 13 }, (_, k) => (
             <div key={k} style={{ position: "absolute", left: 60 + k * 148, bottom: 0, width: 42, height: 220 + 200 * Math.abs(Math.sin(f / (20 / e) + k * 0.9 + a.t * 3)), borderRadius: 30, background: `linear-gradient(180deg, transparent, ${hsl(hue, 80, d ? 70 : 55, d ? 0.18 : 0.14)})` }} />
           ))}
@@ -106,7 +107,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
       break;
     case "discs": {
       const disc = (x: number, y: number, size: number, c: string) => <div style={{ position: "absolute", left: x - size / 2, top: y - size / 2, width: size, height: size, borderRadius: 9999, background: c }} />;
-      const op = (k: number) => (a.x < 960 ? 1 : -1) * k;
+      const op = (k: number) => (a.x < W / 2 ? 1 : -1) * k;
       body = (
         <>
           {disc(a.x - 1100 * op(1) + sway(1, 20), a.y + 420, 640 * a.s, d ? hsl(hue, 60, 18) : hsl(hue, 80, 56))}
@@ -137,7 +138,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
         <>
           {glow(a.x + sway(1, 30), a.y + sway(2, 20), 1300 * a.s, 1300 * a.s, hsl(hue, 70, d ? 60 : 80, d ? 0.45 : 0.7), "50% 50%", 0.5)}
           <AbsoluteFill>
-            <Radial w={1920} h={1080} stops={[[0.4, d ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.05)", 0], [1, d ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.05)"]]} />
+            <Radial w={W} h={H} stops={[[0.4, d ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.05)", 0], [1, d ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.05)"]]} />
           </AbsoluteFill>
         </>
       );
@@ -146,7 +147,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
       body = (
         <>
           {glow(a.x, a.y + 200, 1900, 1000, c1)}
-          <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
+          <svg width={W} height={H} style={{ position: "absolute", inset: 0 }}>
             {[0, 1, 2, 3].map((k) => {
               const y0 = a.y + 120 + k * 60;
               const ph = f / (40 - k * 4) + k + a.t * 4;
@@ -168,22 +169,23 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
   );
 }
 
-const SPECKS = Array.from({ length: 26 }, (_, k) => ({ x: (k * 397) % 1920, y: (k * 613) % 1080, s: 0.4 + ((k * 7) % 10) / 14, r: 1.5 + (k % 3) }));
+// (where on the frame, 0–1)
+const SPECKS = Array.from({ length: 26 }, (_, k) => ({ x: ((k * 397) % 1920) / 1920, y: ((k * 613) % 1080) / 1080, s: 0.4 + ((k * 7) % 10) / 14, r: 1.5 + (k % 3) }));
 function OverlayLayer({ f, kind, pal, hue }: { f: number; kind: Overlay; pal: Pal; hue: number }) {
   if (kind === "particles")
     return (
       <AbsoluteFill>
         {SPECKS.map((p, k) => (
-          <div key={k} style={{ position: "absolute", left: p.x + Math.sin(f / 30 + k) * 14, top: ((((p.y - f * p.s) % 1120) + 1120) % 1120) - 20, width: p.r * 2, height: p.r * 2, borderRadius: 9, background: hsl(hue, 80, pal.dark ? 80 : 55), opacity: 0.18 + 0.2 * Math.sin(f / 15 + k) }} />
+          <div key={k} style={{ position: "absolute", left: p.x * W + Math.sin(f / 30 + k) * 14, top: ((((p.y * H - f * p.s) % (H + 40)) + H + 40) % (H + 40)) - 20, width: p.r * 2, height: p.r * 2, borderRadius: 9, background: hsl(hue, 80, pal.dark ? 80 : 55), opacity: 0.18 + 0.2 * Math.sin(f / 15 + k) }} />
         ))}
       </AbsoluteFill>
     );
-  if (kind === "sheen") return <div style={{ position: "absolute", top: -200, height: 1500, width: 460, left: ((f * 2.2) % 2700) - 650, transform: "rotate(21deg)", background: `linear-gradient(90deg, transparent, ${pal.dark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.55)"}, transparent)` }} />;
+  if (kind === "sheen") return <div style={{ position: "absolute", top: -200, height: H + 420, width: 460, left: ((f * 2.2) % (W + 780)) - 650, transform: "rotate(21deg)", background: `linear-gradient(90deg, transparent, ${pal.dark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.55)"}, transparent)` }} />;
   if (kind === "vignette") {
     const edge = pal.dark ? "rgba(0,0,0,0.55)" : hsl(hue, 30, 40, 0.12);
     return (
       <AbsoluteFill>
-        <Radial w={1920} h={1080} stops={[[0.55, edge, 0], [1, edge]]} />
+        <Radial w={W} h={H} stops={[[0.55, edge, 0], [1, edge]]} />
       </AbsoluteFill>
     );
   }
@@ -191,11 +193,11 @@ function OverlayLayer({ f, kind, pal, hue }: { f: number; kind: Overlay; pal: Pa
   if (kind === "grain")
     return (
       <AbsoluteFill style={{ opacity: pal.dark ? 0.09 : 0.06, mixBlendMode: pal.dark ? "screen" : "multiply" }}>
-        <svg width={1920} height={1080}>
+        <svg width={W} height={H}>
           <filter id="cgrain">
             <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves={2} seed={3} />
           </filter>
-          <rect width={1920} height={1080} filter="url(#cgrain)" />
+          <rect width={W} height={H} filter="url(#cgrain)" />
         </svg>
       </AbsoluteFill>
     );

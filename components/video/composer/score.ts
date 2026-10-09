@@ -2,6 +2,7 @@ import { isAccent } from "./layout";
 import type { Staging } from "./staging";
 import { stagingName } from "./staging";
 import type { ComposerPlan, ScriptT } from "./types";
+import { H, W } from "./frame";
 
 // The Judge's rule score (0–10) of a video as it would play: the house rules
 // that can be measured on the plan, the creative plan kept, and how unlike
@@ -39,7 +40,7 @@ export function scorePlan(plan: ComposerPlan, script: ScriptT, ctx: Ctx = {}): S
   // the hero moment: one big thing
   const hero = ctx.heroScene != null ? sc[ctx.heroScene] : null;
   if (hero) {
-    const area = Math.max(0, ...hero.items.filter((it) => !isAccent(it)).map((it) => (it.box.w * it.box.h) / (1920 * 1080)));
+    const area = Math.max(0, ...hero.items.filter((it) => !isAccent(it)).map((it) => (it.box.w * it.box.h) / (W * H)));
     if (area < 0.08) minus(1, "the hero moment has no big thing");
   }
   // the motif comes back

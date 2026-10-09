@@ -27,10 +27,11 @@ export function Structure({ kind, f, cam, st, mv, plan, pals, font }: { kind: st
 
 // The line runs along the bottom of every scene; each scene's station is a
 // numbered dot that lights up as the camera arrives.
-const AXIS_Y = 492;
+// (in from the bottom of the frame: 48 px above its edge)
+const axisY = () => H / 2 - 48;
 function Timeline({ f, cam, st, mv, pal, font }: { f: number; cam: Cam; st: P[]; mv: Move[]; pal: Pal; font: string }) {
   const n = st.length;
-  const y = st[0].y + AXIS_Y;
+  const y = st[0].y + axisY();
   const a = toScreen({ x: st[0].x - 1400, y }, cam), b = toScreen({ x: st[n - 1].x + 1400, y }, cam);
   // filled up to where the camera is
   const here = toScreen({ x: cam.x, y }, cam);

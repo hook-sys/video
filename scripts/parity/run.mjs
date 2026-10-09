@@ -21,9 +21,10 @@ import { build } from "esbuild";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Share of a frame's pixels allowed to differ by more than 40/255 in a channel
 // (anti-aliasing of big type and the soft edges of large shadows and glows
-// differ a little between the two renderers — up to ~1%; a thing missing or
-// drawn differently is several %).
-const LIMIT = Number(process.env.PARITY_LIMIT ?? 1.2);
+// differ a little between the two renderers — up to ~1%, ~2% on a smaller
+// square frame with a slanted thing whose edges land a pixel apart; a thing
+// missing or drawn differently is 3% or more).
+const LIMIT = Number(process.env.PARITY_LIMIT ?? 2);
 const FRAMES = 12;
 // The download renders at scale 1 (4K at 2). At 0.5, anti-aliasing alone
 // differs on ~1% of pixels, which would hide real differences.

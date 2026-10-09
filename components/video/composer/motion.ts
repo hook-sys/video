@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { Easing, interpolate, spring } from "remotion";
 import type { ArtT, EnterKind, TransitionKind } from "./types";
+import { H, W } from "./frame";
 import { noise2D } from "@remotion/noise";
 
 // How things move in a Composer film: the art direction's motion character
@@ -63,15 +64,15 @@ export { TRANSITION_FRAMES } from "./sizes";
 export function sceneIn(kind: TransitionKind, k: number, origin: { x: number; y: number }): CSSProperties {
   const r = 1 - k;
   switch (kind) {
-    case "push-left": return { transform: `translateX(${1920 * 0.42 * r}px)`, filter: blurOf(r * 14), opacity: clamp01(k * 1.4) };
-    case "push-right": return { transform: `translateX(${-1920 * 0.42 * r}px)`, filter: blurOf(r * 14), opacity: clamp01(k * 1.4) };
-    case "push-up": return { transform: `translateY(${1080 * 0.45 * r}px)`, filter: blurOf(r * 14), opacity: clamp01(k * 1.4) };
-    case "push-down": return { transform: `translateY(${-1080 * 0.45 * r}px)`, filter: blurOf(r * 14), opacity: clamp01(k * 1.4) };
+    case "push-left": return { transform: `translateX(${W * 0.42 * r}px)`, filter: blurOf(r * 14), opacity: clamp01(k * 1.4) };
+    case "push-right": return { transform: `translateX(${-W * 0.42 * r}px)`, filter: blurOf(r * 14), opacity: clamp01(k * 1.4) };
+    case "push-up": return { transform: `translateY(${H * 0.45 * r}px)`, filter: blurOf(r * 14), opacity: clamp01(k * 1.4) };
+    case "push-down": return { transform: `translateY(${-H * 0.45 * r}px)`, filter: blurOf(r * 14), opacity: clamp01(k * 1.4) };
     case "zoom-in": return { transform: `scale(${mix(0.72, 1, k)})`, filter: blurOf(r * 16), opacity: k };
     case "zoom-out": return { transform: `scale(${mix(1.35, 1, k)})`, filter: blurOf(r * 16), opacity: k };
     case "whip": return { transform: `translateX(${1100 * r}px) skewX(${-8 * r}deg)`, filter: blurOf(r * 30), opacity: clamp01(k * 3) };
     case "iris": {
-      const reach = Math.hypot(Math.max(origin.x, 1920 - origin.x), Math.max(origin.y, 1080 - origin.y));
+      const reach = Math.hypot(Math.max(origin.x, W - origin.x), Math.max(origin.y, H - origin.y));
       const c = `circle(${Math.round(Math.sqrt(k) * reach)}px at ${Math.round(origin.x)}px ${Math.round(origin.y)}px)`;
       return { clipPath: c, WebkitClipPath: c };
     }
@@ -90,10 +91,10 @@ export function sceneIn(kind: TransitionKind, k: number, origin: { x: number; y:
 export function sceneOut(kind: TransitionKind, k: number): CSSProperties {
   // k: 0 (still here) → 1 (gone)
   switch (kind) {
-    case "push-left": return { transform: `translateX(${-1920 * 0.35 * k}px)`, filter: blurOf(k * 14), opacity: 1 - k * 0.9 };
-    case "push-right": return { transform: `translateX(${1920 * 0.35 * k}px)`, filter: blurOf(k * 14), opacity: 1 - k * 0.9 };
-    case "push-up": return { transform: `translateY(${-1080 * 0.4 * k}px)`, filter: blurOf(k * 14), opacity: 1 - k * 0.9 };
-    case "push-down": return { transform: `translateY(${1080 * 0.4 * k}px)`, filter: blurOf(k * 14), opacity: 1 - k * 0.9 };
+    case "push-left": return { transform: `translateX(${-W * 0.35 * k}px)`, filter: blurOf(k * 14), opacity: 1 - k * 0.9 };
+    case "push-right": return { transform: `translateX(${W * 0.35 * k}px)`, filter: blurOf(k * 14), opacity: 1 - k * 0.9 };
+    case "push-up": return { transform: `translateY(${-H * 0.4 * k}px)`, filter: blurOf(k * 14), opacity: 1 - k * 0.9 };
+    case "push-down": return { transform: `translateY(${H * 0.4 * k}px)`, filter: blurOf(k * 14), opacity: 1 - k * 0.9 };
     case "zoom-in": return { transform: `scale(${mix(1, 1.3, k)})`, filter: blurOf(k * 16), opacity: 1 - k };
     case "zoom-out": return { transform: `scale(${mix(1, 0.8, k)})`, filter: blurOf(k * 16), opacity: 1 - k };
     case "whip": return { transform: `translateX(${-1100 * k}px) skewX(${8 * k}deg)`, filter: blurOf(k * 30), opacity: 1 - k };

@@ -18,6 +18,7 @@ import { type Links, Travellers, linksOf } from "./links";
 import { depthHops, hopAt, innerTransform, isDepth, outerTransform, tunnelAt, zoomAt } from "./depth";
 import { measureText } from "@remotion/layout-utils";
 import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene, TextBlock } from "./types";
+import { H, W, setFrame } from "./frame";
 
 // A Composer film: the Director's scenes on the voice's words. Every scene
 // is its own composition; one field of light runs under all of them and
@@ -111,6 +112,8 @@ function fitWords(tb: TextBlock, family: string, weight: number, upper: boolean,
 }
 
 export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: ComposerProps & { screens?: string[] }) {
+  // (the frame every part reads — frame.ts)
+  setFrame(plan.w ?? 1920, plan.h ?? 1080);
   const f = useCurrentFrame();
   const { art } = plan;
   const display = faceOf(art.display);
@@ -140,10 +143,10 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   const a = anchors[cur];
   const anchor: Anchor = { x: mix(prevA.x, a.x, tk), y: mix(prevA.y, a.y, tk), s: mix(prevA.s, a.s, tk), t: mix(prevA.t, a.t, tk) };
   const flip = flipping && tk < 1;
-  const origin = s.items.find((q) => !isAccent(q))?.box ?? s.text?.box ?? { x: 960, y: 540, w: 0, h: 0 };
+  const origin = s.items.find((q) => !isAccent(q))?.box ?? s.text?.box ?? { x: W / 2, y: H / 2, w: 0, h: 0 };
   const fieldOf = (dark: boolean, style?: CSSProperties) => <Field f={f} kind={art.field} pal={dark ? pals.dark : pals.light} hue={art.hue} anchor={anchor} energy={art.energy} overlay={art.overlay} style={style} />;
   // (the circle's area grows evenly until it reaches the farthest corner)
-  const reach = Math.hypot(Math.max(origin.x, 1920 - origin.x), Math.max(origin.y, 1080 - origin.y));
+  const reach = Math.hypot(Math.max(origin.x, W - origin.x), Math.max(origin.y, H - origin.y));
   const clip = flip ? `circle(${Math.round(Math.sqrt(tk) * reach)}px at ${Math.round(origin.x)}px ${Math.round(origin.y)}px)` : undefined;
   // a scene's own background (each scene on its own: a tile, a window, a page section)
   const sceneField = (i: number) => <Field f={f} kind={art.field} pal={scenes[i].dark ? pals.dark : pals.light} hue={art.hue} anchor={anchors[i]} energy={art.energy} overlay={art.overlay} />;
@@ -235,8 +238,8 @@ function RecapCard(props: JourneyProps) {
   const last = plan.scenes[plan.scenes.length - 1];
   const pal = last.dark ? props.pals.dark : props.pals.light;
   const c: Ctx = { f, pal, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens };
-  const logo: PlacedItem = { kind: "logo", at, hit: null, sub: plan.brand.url || null, box: { x: 960, y: 470, w: 760, h: 0 }, scale: 1, z: 1 };
-  const button: PlacedItem = { kind: "button", at: at + 14, hit: at + 44, title: plan.brand.cta, box: { x: 960, y: 700, w: 560, h: 0 }, scale: 1, z: 1 };
+  const logo: PlacedItem = { kind: "logo", at, hit: null, sub: plan.brand.url || null, box: { x: W / 2, y: H / 2 - 70, w: Math.min(760, W * 0.7), h: 0 }, scale: 1, z: 1 };
+  const button: PlacedItem = { kind: "button", at: at + 14, hit: at + 44, title: plan.brand.cta, box: { x: W / 2, y: H / 2 + 160, w: Math.min(560, W * 0.52), h: 0 }, scale: 1, z: 1 };
   const draw = (it: PlacedItem) => {
     const [bw, bh] = baseSize(it);
     const k = enterK(props.m, f, it.at);
@@ -250,7 +253,7 @@ function RecapCard(props: JourneyProps) {
     <AbsoluteFill>
       {/* the canvas stays in view around a plate the brand sits on */}
       <AbsoluteFill style={{ background: pal.bg, opacity: 0.45 * veil }} />
-      <div style={{ position: "absolute", left: 960 - 560, top: 560 - 300, width: 1120, height: 600, borderRadius: 56, background: pal.bg, opacity: veil, transform: `scale(${mix(0.94, 1, veil).toFixed(4)})`, boxShadow: `0 40px 120px ${pal.shadow}, 0 0 0 2px ${pal.dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
+      <div style={{ position: "absolute", left: W / 2 - Math.min(1120, W - 80) / 2, top: H / 2 + 20 - 300, width: Math.min(1120, W - 80), height: 600, borderRadius: 56, background: pal.bg, opacity: veil, transform: `scale(${mix(0.94, 1, veil).toFixed(4)})`, boxShadow: `0 40px 120px ${pal.shadow}, 0 0 0 2px ${pal.dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
       <CtxC.Provider value={c}>
         {draw(logo)}
         {draw(button)}
@@ -269,10 +272,10 @@ function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv
   // towards it; it is drawn while it is in view
   const inView = (i: number) => {
     const c = toScreen(st[i], cam);
-    if (rots) return Math.hypot(c.x - 960, c.y - 540) < 1102 + 1160 * cam.z;
-    return Math.abs(c.x - 960) < 960 + (960 + 120) * cam.z && Math.abs(c.y - 540) < 540 + (540 + 120) * cam.z;
+    if (rots) return Math.hypot(c.x - W / 2, c.y - H / 2) < Math.hypot(W / 2, H / 2) + (Math.hypot(W / 2, H / 2) + 58) * cam.z;
+    return Math.abs(c.x - W / 2) < W / 2 + (W / 2 + 120) * cam.z && Math.abs(c.y - H / 2) < H / 2 + (H / 2 + 120) * cam.z;
   };
-  const place = (i: number) => ({ position: "absolute" as const, left: st[i].x - 960, top: st[i].y - 540, width: 1920, height: 1080, ...(rots?.[i] ? { transform: `rotate(${rots[i]}deg)` } : {}) });
+  const place = (i: number) => ({ position: "absolute" as const, left: st[i].x - W / 2, top: st[i].y - H / 2, width: W, height: H, ...(rots?.[i] ? { transform: `rotate(${rots[i]}deg)` } : {}) });
   return (
     <AbsoluteFill style={{ transform: worldTransform(cam), transformOrigin: "0 0" }}>
       {plan.scenes.map((_, i) => {
@@ -396,13 +399,13 @@ function ScrollPage(props: DepthProps) {
   const { y, seg } = scrollAt(f, mv);
   const n = plan.scenes.length;
   const { k, bar } = PAGE;
-  const w = 1920 * k, h = 1080 * k;
-  const left = (1920 - w) / 2, top = (1080 - h - bar) / 2;
-  const cur = Math.min(n - 1, Math.round(y / 1080));
+  const w = W * k, h = H * k;
+  const left = (W - w) / 2, top = (H - h - bar) / 2;
+  const cur = Math.min(n - 1, Math.round(y / H));
   const pal = plan.scenes[cur].dark ? props.pals.dark : props.pals.light;
   const all = { start: -1, end: plan.duration + 1 };
   const thumbH = Math.max(60, h / n);
-  const thumbY = (y / Math.max(1, (n - 1) * 1080)) * (h - thumbH - 16) + 8;
+  const thumbY = (y / Math.max(1, (n - 1) * H)) * (h - thumbH - 16) + 8;
   return (
     <>
       {props.field(plan.scenes[seg].dark)}
@@ -418,13 +421,13 @@ function ScrollPage(props: DepthProps) {
           <div style={{ width: 72 }} />
         </div>
         <div style={{ position: "absolute", left: 0, top: bar, width: w, height: h, overflow: "hidden" }}>
-          <div style={{ position: "absolute", left: 0, top: 0, width: 1920, height: 1080 * n, transformOrigin: "0 0", transform: `scale(${k}) translateY(${(-y).toFixed(1)}px)` }}>
+          <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H * n, transformOrigin: "0 0", transform: `scale(${k}) translateY(${(-y).toFixed(1)}px)` }}>
             {plan.scenes.map((_, i) => {
               // a section is there once the page starts scrolling to it, while it is in view
               const from = i ? mv[i].start - 2 : 0;
-              if (f < from || Math.abs(i * 1080 - y) >= 1080) return null;
+              if (f < from || Math.abs(i * H - y) >= H) return null;
               return (
-                <div key={i} style={{ position: "absolute", left: 0, top: i * 1080, width: 1920, height: 1080, overflow: "hidden" }}>
+                <div key={i} style={{ position: "absolute", left: 0, top: i * H, width: W, height: H, overflow: "hidden" }}>
                   {props.sceneField(i)}
                   {!props.bare && <SceneBody {...props} plan={plan} i={i} journey={all} />}
                 </div>
@@ -448,12 +451,12 @@ function Warp({ f, k, travel, color }: { f: number; k: number; travel: number; c
   for (let j = 0; j < 90; j++) {
     const a = R.next() * Math.PI * 2, rad = R.range(120, 900), z0 = R.next(), w = R.range(1.5, 4);
     const z = 1 - ((z0 + travel * 0.9 + f * 0.0006) % 1);
-    const at = (zz: number) => ({ x: 960 + Math.cos(a) * rad * (0.16 / Math.max(0.04, zz)), y: 540 + Math.sin(a) * rad * (0.16 / Math.max(0.04, zz)) });
+    const at = (zz: number) => ({ x: W / 2 + Math.cos(a) * rad * (0.16 / Math.max(0.04, zz)), y: H / 2 + Math.sin(a) * rad * (0.16 / Math.max(0.04, zz)) });
     const p = at(z), q = at(z + 0.05);
     lines.push(<line key={j} x1={q.x} y1={q.y} x2={p.x} y2={p.y} stroke={j % 3 ? "#ffffff" : color} strokeWidth={w * (1.2 - z)} strokeLinecap="round" opacity={k * Math.min(1, (1 - z) * 1.6) * 0.8} />);
   }
   return (
-    <svg width={1920} height={1080} style={{ position: "absolute", left: 0, top: 0 }}>
+    <svg width={W} height={H} style={{ position: "absolute", left: 0, top: 0 }}>
       {lines}
     </svg>
   );
@@ -504,7 +507,7 @@ function SceneBody(props: SceneProps) {
   const kout = J ? 0 : last ? 0 : IN_OUT(ramp(f, outAt, dOut));
   const pal = sc.dark ? pals.dark : pals.light;
   const c: Ctx = { f, pal, art, m, display, text: textFamily, brand, screens };
-  const o = sc.items.find((q) => !isAccent(q))?.box ?? sc.text?.box ?? { x: 960, y: 540 };
+  const o = sc.items.find((q) => !isAccent(q))?.box ?? sc.text?.box ?? { x: W / 2, y: H / 2 };
   const pin = J ? null : presentationOf(sc.enter, sc.seed);
   const pout = J || !next ? null : presentationOf(next.enter, next.seed);
   const outStyle = kout > 0 && !pout ? sceneOut(next.enter, kout) : undefined;

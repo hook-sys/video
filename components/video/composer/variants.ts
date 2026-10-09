@@ -127,7 +127,7 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
   return { art, scenes };
 }
 
-export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null };
+export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null; size?: [number, number] };
 
 // What the Creative Director decided that the build keeps (lib/studio.ts
 // CreativePlan): the camera language, the scheme, where the story turns and
@@ -158,7 +158,7 @@ function shaped(script: ScriptT, creative: Creative | null | undefined, look: Co
 // when shown) and how it is staged (staging.ts; older videos: cuts).
 export type StoredComposition = { script: ScriptT; seed: number; source: ComposerPlan["source"]; staging?: Staging | null };
 
-export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
+export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look, size }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
   const problems: string[] = [];
   const plans: ComposerPlan[] = [];
   const videos: StoredComposition[] = [];
@@ -169,11 +169,11 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
     const avoidNow: Partial<Record<keyof ArtT, unknown[]>> = { display: [...(used.display ?? [])], field: [...(used.field ?? [])], key: [...(used.key ?? [])], surface: [...(used.surface ?? [])], hue: [...(used.hue ?? [])] };
     let script: ScriptT = ideas?.scenes.length ? scriptFromIdeas(ideas, v, s, words, brand, avoidNow) : autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens });
     script = fitScript(shaped(script, creative, look, !ideas?.scenes.length, s));
-    let placed = placeAll(script, words, duration, brand, s, screens, ideas ? "director" : "auto");
+    let placed = placeAll(script, words, duration, brand, s, screens, ideas ? "director" : "auto", size);
     if (ideas && tooBroken(placed.problems, placed.plan)) {
       problems.push(`video ${v + 1}: the Director's scenes did not lay out (${placed.problems.slice(0, 3).map((p) => p.what).join("; ")}) — composed by the Composer instead`);
       script = fitScript(shaped(autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens }), creative, look, true, s));
-      placed = placeAll(script, words, duration, brand, s, screens, "auto");
+      placed = placeAll(script, words, duration, brand, s, screens, "auto", size);
     }
     placed.problems.forEach((p) => problems.push(`video ${v + 1}, scene ${p.scene + 1}: ${p.what}`));
     for (const k of ["display", "field", "key", "surface", "hue"] as const) (used[k] ??= []).push(placed.plan.art[k]);

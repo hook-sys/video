@@ -9,8 +9,8 @@ import { CHANGE_WORDS, COMPOSER_CHANGES, type ComposerPlan, type ComposerProps }
 // The Composer's video of a project (each scene composed by its Director):
 // watch it, download it (rendered in this browser), or "Change it" with your
 // own direction — each change is a new version, the earlier ones are kept.
-const W = 1920;
-const H = 1080;
+// the film's frame (16:9 unless its plan says 9:16 or 1:1)
+const sizeOf = (plan: ComposerPlan) => [plan.w ?? 1920, plan.h ?? 1080] as const;
 type Props = ComposerProps & { screens?: string[] };
 
 async function renderToFile({ props, file, signal, onProgress }: { props: Props; file: string; signal: AbortSignal; onProgress: (p: number) => void }) {
@@ -18,6 +18,7 @@ async function renderToFile({ props, file, signal, onProgress }: { props: Props;
   const codecs = await getEncodableVideoCodecs("mp4");
   const videoCodec = (["h264", "vp9", "av1"] as const).find((c) => codecs.includes(c));
   if (!videoCodec) throw new Error("This browser can't encode MP4 video. Try Chrome on a computer.");
+  const [W, H] = sizeOf(props.plan);
   const check = await canRenderMediaOnWeb({ width: W, height: H, container: "mp4", videoCodec });
   if (!check.canRender) throw new Error(check.issues.map((i) => i.message).join(" ") || "This browser can't render video.");
   const inputProps: Props = { ...props, webAudio: true };
@@ -107,15 +108,15 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
         <section className="flex min-w-0 flex-col gap-3">
           <div className="overflow-hidden rounded-3xl border border-foreground/10 bg-black shadow-2xl shadow-violet-900/20">
             <Player
-              key={`${selected}:${plan.seed}`}
+              key={`${selected}:${plan.seed}:${plan.w ?? 1920}`}
               component={ComposerFilm}
               inputProps={{ plan, audioUrl, screens } satisfies Props}
               durationInFrames={Math.max(1, plan.duration)}
               fps={30}
-              compositionWidth={W}
-              compositionHeight={H}
+              compositionWidth={sizeOf(plan)[0]}
+              compositionHeight={sizeOf(plan)[1]}
               controls
-              style={{ width: "100%", maxHeight: "75vh", aspectRatio: `${W} / ${H}` }}
+              style={{ width: "100%", maxHeight: "75vh", aspectRatio: `${sizeOf(plan)[0]} / ${sizeOf(plan)[1]}` }}
             />
           </div>
           {/* what the studio's Directors decided */}

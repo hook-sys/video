@@ -612,6 +612,28 @@ export async function runChecks(): Promise<Check[]> {
     add("the same layout everywhere is varied", varied.slice(0, -1).every((x, i) => i === 0 || x.layout !== varied[i - 1].layout), varied.map((x) => x.layout).join(" "));
   }
 
+  section = "composer frames (16:9, 9:16, 1:1)";
+  {
+    const bw = bookwellPlan();
+    const dur = Math.round((bw.words[bw.words.length - 1].end + 1.2) * FPS);
+    for (const [name, size] of [["9:16", [1080, 1920]], ["1:1", [1080, 1080]]] as const) {
+      let problems = 0, outside = 0, scenes = 0;
+      for (const seed of [3, 17, 29]) {
+        const set = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed, count: 2, size: [size[0], size[1]] });
+        problems += set.problems.length;
+        for (const plan of set.plans) {
+          if (plan.w !== size[0] || plan.h !== size[1]) outside += 100;
+          for (const sc of plan.scenes) {
+            scenes++;
+            const boxes = [...sc.items.filter((it) => !["shape", "cursor"].includes(it.kind)).map((it) => it.box), ...(sc.text ? [sc.text.box] : [])];
+            if (boxes.some((b) => b.x - b.w / 2 < -2 || b.x + b.w / 2 > size[0] + 2 || b.y - b.h / 2 < -2 || b.y + b.h / 2 > size[1] + 2)) outside++;
+          }
+        }
+      }
+      add(`${name}: every scene inside its frame, laid out cleanly`, outside === 0 && problems <= 2, `${scenes} scenes · ${outside} outside · ${problems} layout problems`);
+    }
+  }
+
   section = "composer words";
   {
     // a voice that times pieces of words and the stops on their own

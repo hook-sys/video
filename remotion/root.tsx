@@ -74,7 +74,10 @@ export function RemotionRoot() {
       height={1080}
       durationInFrames={300}
       defaultProps={{} as Record<string, unknown>}
-      calculateMetadata={({ props }) => ({ durationInFrames: Math.max(1, (props as unknown as ComposerProps).plan?.duration ?? 300) })}
+      calculateMetadata={({ props }) => {
+        const plan = (props as unknown as ComposerProps).plan;
+        return { durationInFrames: Math.max(1, plan?.duration ?? 300), width: plan?.w ?? 1920, height: plan?.h ?? 1080 };
+      }}
     />
     {/* The clean explainer (flat UI, kinetic type, story-coloured background). */}
     <Composition
