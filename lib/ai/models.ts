@@ -15,6 +15,9 @@ import type { BriefUsage } from "@/lib/ai/product-brief";
 export const TEXT_TASKS = [
   { id: "brief", label: "Script & brief", help: "Reads the website, screenshots' text and the customer's script, and writes the brief. Every video needs it, so it can't be turned off.", canOff: false },
   { id: "screenshots", label: "Screenshot reading", help: "Reads uploaded screenshots (needs a model that accepts images). Off: screenshots are still shown in the video, just not read.", canOff: true },
+  { id: "analyst", label: "Brand Analyst", help: "Reads the website, brand and script and writes the brand's profile (kind of business, character, mood, look) that every other Director works from. Off: the profile by rule.", canOff: true },
+  { id: "creative", label: "Creative Director", help: "Writes the video's one idea, its hero moment and its one camera language from the brand profile, unlike the brand's earlier videos. Off: by rule from the brand's mood.", canOff: true },
+  { id: "judge", label: "Judge", help: "Scores the candidate videos against the house rules and keeps the best. Off: the best by the rule score.", canOff: true },
   { id: "composer", label: "Composer Director", help: "Composes the Composer engine's videos scene by scene (only when the Composer engine is on). Off: the Composer's own rule-based director composes them.", canOff: true },
   { id: "clean", label: "Studio Director", help: "Splits the narration into the studio's parts (new engine, 16:9). Off: a rule-based split is used instead.", canOff: true },
   { id: "shot", label: "Shot Director (old engine)", help: "Plans the old engine's shots. Off: skipped; the Scene Director is tried next.", canOff: true },

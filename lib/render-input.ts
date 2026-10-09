@@ -182,7 +182,8 @@ export async function buildRenderInput(
 
   // The Composer's videos: each stored script laid out on the voice's words
   // with the customer's brand inputs (a script that no longer parses is left out).
-  let composer: { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[] } | null = null;
+  // (about: what the studio's Directors decided — the idea, the camera language, the Judge's score — shown beside the video)
+  let composer: { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[]; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null; judge: string | null } } | null = null;
   const storedComposer = (project.brief as { composer?: { videos?: { script: unknown; seed: number; source: ComposerPlan["source"]; staging?: Staging | null }[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] } } | null)?.composer;
   if (storedComposer?.videos?.length && project.format === "16:9" && wordTimings?.length) {
     // the script's own words on the voice's times; videos written on the
@@ -202,7 +203,11 @@ export async function buildRenderInput(
       }
     });
     // the versions in order (the first is the Director's; each change adds one)
-    if (plans.length) composer = { plans, screens: screenshotUrls, changes: (storedComposer.changes ?? []).filter((c) => c.ok).map((c) => ({ direction: c.direction, at: c.at })) };
+    const sc = storedComposer as { creative?: { idea?: string; language?: string }; profile?: { mood?: string; category?: string }; judge?: { source?: string; best?: number; scores?: { candidate: number; total: number }[]; rule?: { total: number }[] } };
+    const best = sc.judge?.best ?? 0;
+    const score = sc.judge?.scores?.find((x) => x.candidate === best)?.total ?? sc.judge?.rule?.[best]?.total ?? null;
+    const about = sc.creative ? { idea: sc.creative.idea ?? null, mood: [sc.profile?.category, sc.profile?.mood].filter(Boolean).join(" · ") || null, language: storedComposer.videos.at(-1)?.staging?.language ?? sc.creative.language ?? null, score, judge: sc.judge?.source ?? null } : undefined;
+    if (plans.length) composer = { plans, screens: screenshotUrls, changes: (storedComposer.changes ?? []).filter((c) => c.ok).map((c) => ({ direction: c.direction, at: c.at })), about };
   }
 
   return {

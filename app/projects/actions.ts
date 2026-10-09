@@ -77,6 +77,11 @@ import { generateFlowScript } from "@/lib/ai/flow-director";
 import { generateStories } from "@/lib/ai/story-director";
 import { generateComposerIdeas, ideasOf, reviseComposerPlan } from "@/lib/ai/composer-director";
 import { ruleBrief } from "@/lib/rule-brief";
+import { analyzeBrand } from "@/lib/ai/brand-analyst";
+import { directCreative } from "@/lib/ai/creative-director";
+import { judge } from "@/lib/ai/judge";
+import { scorePlan } from "@/components/video/composer/score";
+import { pickLanguage, type BrandProfile, type CreativePlan } from "@/lib/studio";
 import { CHANGE_WORDS, COMPOSER_CHANGES } from "@/components/video/composer/types";
 import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { scriptWords } from "@/components/video/composer/words";
@@ -543,6 +548,42 @@ async function composerOn(admin: ReturnType<typeof createAdminClient>, userId: s
   return mode === "all" || (mode === "admins" && (await userAccess(admin, userId)).admin);
 }
 
+// The studio's first two Directors (before the voice is even ready): the
+// Brand Analyst writes the brand's profile — reused for the brand's later
+// videos — and the Creative Director the video's idea, motif, hero moment and
+// one camera language, unlike the brand's earlier videos. By rule when their
+// AI is off. Usage is handed on (the Composer's meter counts it).
+type StudioDirection = { profile: BrandProfile; creative: CreativePlan; problems: string[]; ms: number; usage: BriefUsage[] };
+async function studioDirection(
+  admin: ReturnType<typeof createAdminClient>,
+  projectId: string,
+  userId: string,
+  project: { brand_name?: string | null; brand_color?: string | null; website_url?: string | null },
+  narration: string,
+): Promise<StudioDirection> {
+  const t0 = Date.now();
+  const usage: BriefUsage[] = [];
+  const name = project.brand_name?.trim() || "Your product";
+  const { data: past } = await admin.from("projects").select("brand_name, composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(20);
+  const same = (past ?? []).filter((p) => (p.brand_name ?? "").trim().toLowerCase() === name.toLowerCase());
+  const known = same.map((p) => (p.composer as { profile?: BrandProfile } | null)?.profile).find((x): x is BrandProfile => !!x?.category);
+  const earlier = same
+    .flatMap((p) => {
+      const c = p.composer as { creative?: CreativePlan; videos?: StoredComposition[] } | null;
+      return c?.creative ? [{ idea: c.creative.idea, language: c.videos?.at(-1)?.staging?.language ?? c.creative.language }] : [];
+    })
+    .slice(0, 6);
+  const { data: capture } = await admin.from("website_captures").select("url, title, meta_description, visible_text").eq("project_id", projectId).eq("status", "completed").order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const analyst = known
+    ? { profile: known, problems: ["profile: this brand's earlier one"] }
+    : await analyzeBrand({ name, color: project.brand_color || "#6a5bff", script: narration, website: capture ? { url: capture.url, title: capture.title, description: capture.meta_description, text: capture.visible_text } : null }, (u) => usage.push(u));
+  // the script's own words (the same split the voice's words are put on)
+  const words = narration.split(/\s+/).filter(Boolean).map((text, i) => ({ text, start: i * 0.4, end: i * 0.4 + 0.35 }));
+  const creative = await directCreative({ profile: analyst.profile, words, brandName: name, seed: seedFrom(projectId), earlier }, (u) => usage.push(u));
+  console.info("studio direction:", { projectId, profile: analyst.profile.source, category: analyst.profile.category, mood: analyst.profile.mood, creative: creative.plan.source, idea: creative.plan.idea, language: creative.plan.language, problems: [...analyst.problems, ...creative.problems] });
+  return { profile: analyst.profile, creative: creative.plan, problems: [...analyst.problems, ...creative.problems], ms: Date.now() - t0, usage };
+}
+
 async function composerSet(
   admin: ReturnType<typeof createAdminClient>,
   projectId: string,
@@ -552,6 +593,7 @@ async function composerSet(
   narration: string,
   brief: { product_name?: string; product_summary?: string; cta?: string } | null,
   addUsage: (u: BriefUsage) => void,
+  direction?: Promise<StudioDirection | null> | null,
 ) {
   if (!(await composerOn(admin, userId))) return null;
   // the script's own words on the voice's times (never pieces of words)
@@ -559,19 +601,45 @@ async function composerSet(
   const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
   const brand = { name: project.brand_name?.trim() || brief?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief?.cta || "Get started", url: host, icon: null };
   const { data: past } = await admin.from("projects").select("composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(12);
-  const seenArts = (past ?? []).flatMap((p) => ((p.composer as { videos?: { script?: { art?: { display?: string; field?: string } } }[] } | null)?.videos ?? []).map((v) => v.script?.art ?? {}));
+  const pastVideos = (past ?? []).flatMap((p) => (p.composer as { videos?: StoredComposition[] } | null)?.videos ?? []);
+  const seenArts = pastVideos.map((v) => (v.script as { art?: { display?: string; field?: string } } | undefined)?.art ?? {});
   // how this customer's last videos were staged (the next is staged otherwise)
-  const seenStaging = (past ?? []).flatMap((p) => ((p.composer as { videos?: StoredComposition[] } | null)?.videos ?? []).map((v) => v.staging ?? null)).slice(0, 8).reverse();
+  const seenStaging = pastVideos.map((v) => v.staging ?? null).slice(0, 8).reverse();
   const seen = { display: [...new Set(seenArts.map((a) => a.display).filter((x): x is string => !!x))].slice(0, 12), field: [...new Set(seenArts.map((a) => a.field).filter((x): x is string => !!x))].slice(0, 6) };
-  const result = await generateComposerIdeas({ words, brand, product: brief?.product_summary ?? null, seen }, addUsage);
+  // 1–2. the brand's profile and the creative plan (started alongside the voice)
+  const dir = (await direction?.catch(() => null)) ?? (await studioDirection(admin, projectId, userId, project, narration));
+  dir.usage.forEach(addUsage);
+  // 3. the Composer Director pictures every scene inside that plan, with the house rules
+  const result = await generateComposerIdeas({ words, brand, product: brief?.product_summary ?? null, seen, profile: dir.profile, creative: dir.creative, never: await loadNeverList(admin) }, addUsage, undefined, 95_000);
   const { count: screens } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
-  // one video, the Director's best (its versions follow from "Change it")
-  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: result.ideas, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, count: 1, avoidStaging: seenStaging });
-  console.info("composer director:", { projectId, source: result.source, ms: result.ms, scenes: result.ideas?.scenes.length ?? 0, problems: [...result.problems, ...set.problems].slice(0, 8) });
-  return { videos: set.videos, ideas: result.ideas, indexing: "script" as const, source: result.source, changes: [] as { direction: string; at: string; ok: boolean }[], problems: [...result.problems, ...set.problems].slice(0, 20), at: new Date().toISOString() };
+  // 4. candidates: the Director's video and two composed by rule, all in the plan's camera language
+  const seed = seedFrom(projectId);
+  const base = { words, brand, duration: Math.round(project.duration_seconds * 30), avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, creative: dir.creative, look: { scheme: dir.profile.look.scheme, energy: dir.profile.look.energy } };
+  const sets = [result.ideas ? composeVariants({ ...base, seed, ideas: result.ideas, count: 1 }) : null, composeVariants({ ...base, seed: (seed + 7919) >>> 0, ideas: null, count: result.ideas ? 2 : 3 })].filter((x): x is NonNullable<typeof x> => !!x);
+  const candidates = sets.flatMap((set) => set.videos.map((video, v) => ({ video, plan: set.plans[v], problems: set.problems.filter((p) => p.startsWith(`video ${v + 1},`)).length })));
+  // 5. the Judge scores them and keeps the best
+  const heroSceneOf = (st: StoredComposition["staging"]) => st?.hero ?? null;
+  const recent = pastVideos.slice(0, 8).map((v) => ({ staging: v.staging ?? null, display: (v.script as { art?: { display?: string } } | undefined)?.art?.display ?? null }));
+  const scores = candidates.map((c) => scorePlan(c.plan, c.video.script, { staging: c.video.staging, motif: dir.creative.motif, heroScene: heroSceneOf(c.video.staging), recent, problems: c.problems }));
+  const verdict = await judge({ candidates: candidates.map((c, i) => ({ plan: c.plan, staging: c.video.staging, score: scores[i] })), profile: dir.profile, creative: dir.creative, earlier: recent.slice(0, 4).map((r) => `${r.staging?.language ?? "cuts"}, ${r.display ?? "?"} type`) }, addUsage);
+  const chosen = candidates[verdict.best] ?? candidates[0];
+  const problems = [...dir.problems, ...result.problems, ...verdict.problems, ...sets.flatMap((x) => x.problems)].slice(0, 20);
+  console.info("composer:", { projectId, director: result.source, ms: result.ms, scenes: result.ideas?.scenes.length ?? 0, judge: verdict.source, best: verdict.best, of: candidates.length, scores: scores.map((x) => x.total), problems: problems.slice(0, 8) });
+  return {
+    videos: [chosen.video],
+    ideas: result.ideas,
+    indexing: "script" as const,
+    source: result.source,
+    profile: dir.profile,
+    creative: dir.creative,
+    judge: { source: verdict.source, best: verdict.best, scores: verdict.scores, rule: scores.map((x) => ({ total: x.total, notes: x.notes.slice(0, 6) })), kept: chosen.video.source },
+    changes: [] as { direction: string; at: string; ok: boolean }[],
+    problems,
+    at: new Date().toISOString(),
+  };
 }
 
-async function generateFlow(projectId: string, userId: string, budgetMs: number) {
+async function generateFlow(projectId: string, userId: string, budgetMs: number, direction?: Promise<StudioDirection | null> | null) {
   const admin = createAdminClient();
   const { data: project } = await admin
     .from("projects")
@@ -613,7 +681,7 @@ async function generateFlow(projectId: string, userId: string, budgetMs: number)
   // Director only when it is off (or the Composer failed).
   const sixteen = project.format === "16:9" && !!words?.length;
   const composer = sixteen
-    ? await composerSet(admin, projectId, userId, project, words!, narration, brief.success ? brief.data : null, meterOf("composer")).catch((e) => {
+    ? await composerSet(admin, projectId, userId, project, words!, narration, brief.success ? brief.data : null, meterOf("composer"), direction).catch((e) => {
         console.warn("composer failed:", e instanceof Error ? e.message : e);
         return null;
       })
@@ -1388,6 +1456,16 @@ async function runPipeline(projectId: string, userId: string) {
     };
     if (!alongside && !(await briefDone())) return void (await fail(p.brief_error ?? "Brief failed."));
 
+    // The studio's Brand Analyst and Creative Director need only the script:
+    // they work while the voice is made (the Composer's videos only).
+    let direction: Promise<StudioDirection | null> | null = null;
+    if (flowEngineEnabled()) {
+      const { data: row } = await admin.from("projects").select("brief, format, direction, advanced_direction, brand_name, brand_color, website_url").eq("id", projectId).single();
+      const b = ProductBrief.safeParse(row?.brief);
+      const script = b.success ? b.data.script : row ? lockedScriptOf(row) : "";
+      if (row?.format === "16:9" && script && (await composerOn(admin, userId))) direction = studioDirection(admin, projectId, userId, row, script).catch((e) => (console.warn("studio direction failed:", e instanceof Error ? e.message : e), null));
+    }
+
     // 3. Voice: one track for the locked script, with word timestamps.
     await enter("voice");
     if (p.voice_status !== "completed") {
@@ -1406,7 +1484,7 @@ async function runPipeline(projectId: string, userId: string) {
       storyEngineEnabled() && budget > 45_000
         ? attempt(() => generateStory(projectId, userId, Math.min(110_000, budget - 30_000)))
         : flowEngineEnabled() && budget > 45_000
-          ? attempt(() => generateFlow(projectId, userId, flowBudgetMs(Date.now() - pipelineStarted)))
+          ? attempt(() => generateFlow(projectId, userId, flowBudgetMs(Date.now() - pipelineStarted), direction))
           : null;
     // The brief (written alongside) must be done before the visuals step.
     if (alongside && !(await briefDone())) {
@@ -1541,7 +1619,7 @@ export async function changeComposerVideo(projectId: string, direction: string):
   if (!(await composerOn(admin, user.id))) return { ok: false, message: "Changes are not available yet." };
   // RLS: only returns the project if this user owns it.
   const { data: project } = await supabase.from("projects").select("brief, brand_name, brand_color, call_to_action, website_url, duration_seconds, voice_result").eq("id", projectId).maybeSingle();
-  const raw = (project?.brief ?? null) as { composer?: { videos: StoredComposition[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] }; product_name?: string; product_summary?: string; cta?: string; script?: string } | null;
+  const raw = (project?.brief ?? null) as { composer?: { videos: StoredComposition[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[]; profile?: BrandProfile; creative?: CreativePlan }; product_name?: string; product_summary?: string; cta?: string; script?: string } | null;
   const composer = raw?.composer;
   const voice = parseWordTimings((project?.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
   // the words its versions are written on (older videos: the voice's own pieces)
@@ -1555,7 +1633,11 @@ export async function changeComposerVideo(projectId: string, direction: string):
   let usage: BriefUsage | null = null;
   const result = byRule ? { ideas: null, ms: 0, problems: [] as string[] } : await reviseComposerPlan({ words, brand, product: raw?.product_summary ?? null, plan: ideasOf(current.script), direction: text }, (u) => (usage = u));
   const seed = (current.seed + 7919) >>> 0;
-  const set = result.ideas || byRule ? composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed, ideas: result.ideas ?? undefined, count: 1, avoidStaging: composer.videos.map((v) => v.staging ?? null) }) : null;
+  // the plan stays (a new version by rule takes another camera language than the ones before)
+  const stored = composer.creative ?? null;
+  const creative = stored && byRule && composer.profile ? { ...stored, language: pickLanguage(composer.profile.mood, seed, composer.videos.map((v) => v.staging?.language)) } : stored;
+  const look = composer.profile ? { scheme: composer.profile.look.scheme, energy: composer.profile.look.energy } : null;
+  const set = result.ideas || byRule ? composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed, ideas: result.ideas ?? undefined, count: 1, avoidStaging: composer.videos.map((v) => v.staging ?? null), creative, look }) : null;
   const video = set?.videos[0] && (byRule || set.videos[0].source === "director") ? set.videos[0] : null;
   const changes = [...(composer.changes ?? []), { direction: text.slice(0, 9000), at: new Date().toISOString(), ok: !!video }];
   await admin

@@ -148,7 +148,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   let preview: RenderProps | null = null;
   let variants: StudioVariant[] = [];
   let clean: { plans: CleanPlan[]; variants: StudioRecipe[] } | null = null;
-  let composer: { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[] } | null = null;
+  let composer: { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[]; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null; judge: string | null } } | null = null;
   if (ready && !video?.signedUrl) {
     try {
       const input = await buildRenderInput(supabase, project);
@@ -216,7 +216,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {/* The Composer (new engine): four videos composed scene by scene. */}
       {ready && composer && (
-        <ComposerStudio projectId={id} plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={preview?.audioUrl ?? null} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} byRule={byRule} />
+        <ComposerStudio projectId={id} plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={preview?.audioUrl ?? null} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} byRule={byRule} about={composer.about} />
       )}
 
       {/* The clean film templates: four different videos of the same script. */}

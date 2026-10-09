@@ -2,9 +2,10 @@ import { resolveIcon } from "../icons";
 import { DISPLAY_FACES, TEXT_FACES, rng } from "./art";
 import { LENSES, autoScript, drawArt } from "./auto";
 import { placeAll, type Problem } from "./layout";
-import { type Staging, stageOf, staged } from "./staging";
+import { type Language, type Staging, sceneAt, stageOf, staged } from "./staging";
+import { houseRules } from "./rules";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
-import type { ArtT, Brand, ComposerPlan, ItemT, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
+import type { ArtT, Brand, ComposerPlan, GuideKind, ItemT, JourneyKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
 
 // Four Composer videos of one narration. With the Director's ideas (its
 // scenes, two or three ways to picture each, and its art directions) each
@@ -126,13 +127,37 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
   return { art, scenes };
 }
 
-export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[] };
+export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null };
+
+// What the Creative Director decided that the build keeps (lib/studio.ts
+// CreativePlan): the camera language, the scheme, where the story turns and
+// the hero moment (word indexes), the motif.
+export type Creative = { language: Language; journey?: JourneyKind | null; guide?: GuideKind | null; recap?: boolean; scheme?: "dark" | "light" | "mixed"; hero?: number | null; turn?: number | null; motif?: { icon: string; label: string } | null };
+
+// A script shaped by the plan and the house rules (rules.ts): the plan's
+// scheme, the brand's energy; a motif badge where the story turns and at the
+// hero moment (the AI Director places its own); one dark → light turn.
+function shaped(script: ScriptT, creative: Creative | null | undefined, look: ComposeInput["look"], byRule: boolean): ScriptT {
+  let out: ScriptT = { ...script, art: { ...script.art } };
+  const scheme = creative?.scheme ?? look?.scheme;
+  if (scheme) out.art.scheme = scheme;
+  if (byRule && look?.energy != null) out.art.energy = Math.max(0, Math.min(1, look.energy));
+  const sceneOf = (word: number | null | undefined) => (word == null ? null : Math.max(0, out.scenes.findLastIndex((x) => x.at <= word)));
+  const turn = sceneOf(creative?.turn);
+  if (byRule && creative?.motif) {
+    // where the story turns, at the hero moment, and once more between them or after (2–3 scenes)
+    const hero = sceneOf(creative.hero);
+    const marks = [...new Set([turn, hero, turn != null ? turn + 1 : null].filter((x): x is number => x != null && x > 0 && x < out.scenes.length - 1))];
+    out = { ...out, scenes: out.scenes.map((sc, i) => (marks.includes(i) && !sc.items.some((it) => it.kind === "badge") && sc.items.length ? { ...sc, items: [...sc.items, { kind: "badge", at: sc.at, icon: resolveIcon(creative.motif!.icon) ?? "sparkles", title: creative.motif!.label, size: "s" }] } : sc)) };
+  }
+  return houseRules(out, turn);
+}
 
 // A video as stored: its script and seed (laid out again on the voice's words
 // when shown) and how it is staged (staging.ts; older videos: cuts).
 export type StoredComposition = { script: ScriptT; seed: number; source: ComposerPlan["source"]; staging?: Staging | null };
 
-export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [] }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
+export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
   const problems: string[] = [];
   const plans: ComposerPlan[] = [];
   const videos: StoredComposition[] = [];
@@ -142,17 +167,20 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
     // each video avoids the faces, fields and schemes of the ones before it
     const avoidNow: Partial<Record<keyof ArtT, unknown[]>> = { display: [...(used.display ?? [])], field: [...(used.field ?? [])], key: [...(used.key ?? [])], surface: [...(used.surface ?? [])], hue: [...(used.hue ?? [])] };
     let script: ScriptT = ideas?.scenes.length ? scriptFromIdeas(ideas, v, s, words, brand, avoidNow) : autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens });
-    script = fitScript(script);
+    script = fitScript(shaped(script, creative, look, !ideas?.scenes.length));
     let placed = placeAll(script, words, duration, brand, s, screens, ideas ? "director" : "auto");
     if (ideas && tooBroken(placed.problems, placed.plan)) {
       problems.push(`video ${v + 1}: the Director's scenes did not lay out (${placed.problems.slice(0, 3).map((p) => p.what).join("; ")}) — composed by the Composer instead`);
-      script = fitScript(autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens }));
+      script = fitScript(shaped(autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens }), creative, look, true));
       placed = placeAll(script, words, duration, brand, s, screens, "auto");
     }
     placed.problems.forEach((p) => problems.push(`video ${v + 1}, scene ${p.scene + 1}: ${p.what}`));
     for (const k of ["display", "field", "key", "surface", "hue"] as const) (used[k] ??= []).push(placed.plan.art[k]);
-    // how it is staged: chosen by rule for what its scenes hold, unlike the ones before it
-    const staging = stageOf(placed.plan, s, [...avoidStaging, ...videos.map((x) => x.staging ?? null)]);
+    // how it is staged: the Creative Director's camera language (else one drawn,
+    // unlike the ones before it), its signature move at the hero moment
+    const heroWord = creative?.hero != null ? words[Math.max(0, Math.min(words.length - 1, creative.hero))] : null;
+    const direction = creative ? { language: creative.language, journey: creative.journey, guide: creative.guide, recap: creative.recap, hero: heroWord ? sceneAt(placed.plan, Math.round(heroWord.start * 30)) : null } : null;
+    const staging = stageOf(placed.plan, s, [...avoidStaging, ...videos.map((x) => x.staging ?? null)], direction);
     plans.push(staged(placed.plan, staging));
     videos.push({ script, seed: s, source: placed.plan.source, staging });
   }

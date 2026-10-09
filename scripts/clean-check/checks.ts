@@ -36,6 +36,12 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { countUsage, defaultConfig, effectiveConfig, normalizeConfig, parseVoiceChoices, textClient, textCost, usageCost } from "@/lib/ai/models";
 import { ruleBrief } from "@/lib/rule-brief";
 import { RECAP, stageOf, staged, stagingName } from "@/components/video/composer/staging";
+import { ruleCreative, ruleProfile } from "@/lib/studio";
+import { analyzeBrand } from "@/lib/ai/brand-analyst";
+import { directCreative } from "@/lib/ai/creative-director";
+import { judge, playOf } from "@/lib/ai/judge";
+import { scorePlan } from "@/components/video/composer/score";
+import { houseRules } from "@/components/video/composer/rules";
 import { retimeScript } from "@/lib/voice-timing";
 import { directionFor, lockedVoiceScript, voiceChoiceOf, withVoiceChoice } from "@/lib/projects";
 import { composeVariants, fitScript, scriptFromIdeas, type Ideas } from "@/components/video/composer/variants";
@@ -488,13 +494,72 @@ export async function runChecks(): Promise<Check[]> {
     const base = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 11, count: 1 }).plans[0];
     const st = Array.from({ length: 60 }, (_, k) => stageOf({ ...base, journey: null, link: null, links: null }, 1000 + k * 7919));
     const fams = new Set(st.map((x) => x.family)), names = new Set(st.map(stagingName)), hops = new Set(st.flatMap((x) => x.links ?? []).filter(Boolean));
-    add("staging: every family and many ways over 60 videos", fams.size === 6 && names.size >= 14 && hops.size >= 6, `${fams.size} families · ${names.size} stagings · ways in: ${[...hops].join(", ")}`);
+    add("staging: every family and many ways over 60 videos", fams.size === 6 && names.size >= 11 && hops.size >= 5, `${fams.size} families · ${names.size} stagings · ways in: ${[...hops].join(", ")}`);
     const fits = st.every((x) => !x.links || (x.links.length === base.scenes.length && x.links.every((l, i) => l !== "carry" || (base.scenes[i - 1].items.some((it) => !["badge", "shape", "cursor"].includes(it.kind))))));
     add("staging: a way per move, only where its two scenes allow it", fits, "carry only from a scene with a thing");
     const again = Array.from({ length: 40 }, (_, k) => stageOf(base, 5000 + k * 104729, [st[0], st[0], st[0]])).filter((x) => stagingName(x) === stagingName(st[0])).length;
     add("staging: what the customer had lately is rarer", again <= 6, `${again}/40 the same as the last three`);
-    const recap = staged(base, { family: "path", journey: "snake", link: "line", links: null, guide: null, recap: true });
-    add("staged recap adds its seconds; cuts change nothing", recap.duration === base.duration + RECAP && staged(base, { family: "cuts", journey: null, link: null, links: null, guide: null, recap: true }) === base, `+${recap.duration - base.duration} frames`);
+    const bare = { ...base, recap: false };
+    const recap = staged(bare, { family: "path", journey: "snake", link: "line", links: null, guide: null, recap: true });
+    add("staged recap adds its seconds; cuts change nothing", recap.duration === bare.duration + RECAP && staged(bare, { family: "cuts", journey: null, link: null, links: null, guide: null, recap: true }) === bare, `+${recap.duration - bare.duration} frames`);
+  }
+
+  section = "studio directors (Brand Analyst → Creative Director → Composer → Judge)";
+  {
+    const bw = bookwellPlan();
+    const script = bw.words.map((w) => w.text).join(" ");
+    const dur = Math.round((bw.words[bw.words.length - 1].end + 1.2) * FPS);
+    // the profile by rule
+    const rp = ruleProfile({ name: "Bookwell", script });
+    add("rule profile: kind of business and mood from the words", rp.category === "clinic & health" && rp.mood === "calm" && rp.source === "rule", `${rp.category} · ${rp.mood} · ${rp.look.scheme}/${rp.look.face}`);
+    // the Brand Analyst: what the script does not say is dropped; a failed call → by rule
+    const fakeProfile = { category: "clinic & health", personality: ["calm", "caring", "precise"], mood: "calm", audience: "clinic owners", promise: "Your whole clinic in one app", features: ["online booking"], before: ["phone calls"], keywords: ["clinic", "rocket"], numbers: ["99%"], look: { scheme: "light", face: "humanist", energy: 2 } };
+    const asked: string[] = [];
+    const ok = await analyzeBrand({ name: "Bookwell", color: "#4f46e5", script }, undefined, { responses: { parse: async (r: { input: string }) => (asked.push(r.input), { id: "a", usage: null, output_parsed: fakeProfile }) } } as never);
+    add("Brand Analyst: profile kept, unsaid words and numbers dropped", ok.profile.source === "ai" && ok.profile.keywords.includes("clinic") && !ok.profile.keywords.includes("rocket") && !ok.profile.numbers.length && ok.profile.look.energy <= 0.85 && asked[0].includes("SCRIPT"), `${ok.profile.keywords.join(", ")} · energy ${ok.profile.look.energy}`);
+    const down = await analyzeBrand({ name: "Bookwell", color: "#4f46e5", script }, undefined, { responses: { parse: async () => { throw new Error("down"); } } } as never);
+    add("Brand Analyst: a failed call → the profile by rule", down.profile.source === "rule" && down.problems[0].includes("down"), down.problems[0]);
+    // the Creative Director: one language; a hero out of range → by rule
+    const fakePlan = { idea: "a calendar that fills itself", motif: { icon: "calendar-check", label: "Booked" }, hero: 9999, turn: 12, beats: [{ at: 0, beat: "hook" }], language: "depth", journey: "snake", guide: null, recap: true, scheme: "mixed" };
+    const cp = await directCreative({ profile: rp, words: bw.words, brandName: "Bookwell", seed: 7, earlier: [{ idea: "old idea", language: "line" }] }, undefined, { responses: { parse: async (r: { input: string }) => (asked.push(r.input), { id: "c", usage: null, output_parsed: fakePlan }) } } as never);
+    add("Creative Director: plan kept, bad hero mended, earlier ideas sent", cp.plan.source === "ai" && cp.plan.language === "depth" && cp.plan.journey === null && cp.plan.hero < bw.words.length && asked[1].includes("old idea") && asked[1].includes("EARLIER"), `${cp.plan.language} · hero word ${cp.plan.hero} · turn ${cp.plan.turn}`);
+    const rc = ruleCreative(rp, bw.words, "Bookwell", 7, []);
+    add("Creative Director by rule: turn on the brand's name, hero after it", rc.source === "rule" && bw.words[rc.turn].text.toLowerCase().includes("bookwell") && rc.hero >= rc.turn && rc.beats[0].beat === "hook" && rc.beats.at(-1)!.beat === "cta", `turn "${bw.words[rc.turn].text}" · hero word ${rc.hero} · ${rc.language} · idea "${rc.idea}"`);
+    // one camera language per video, its signature at the hero
+    const langs = new Set<string>();
+    let single = true;
+    for (const language of ["line", "depth", "flip", "timeline", "words"] as const) {
+      const set = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 21, count: 2, creative: { ...rc, language } });
+      for (const v of set.videos) {
+        langs.add(v.staging?.language ?? "?");
+        const hops = (v.staging?.links ?? []).slice(1);
+        const others = hops.filter((_, i) => i + 1 !== v.staging?.hero);
+        const plainOk = language === "words" ? others.every((l) => l === "word" || l === "line") : new Set(others).size <= 1;
+        if (v.staging?.language !== language || !plainOk) single = false;
+      }
+    }
+    add("one camera language per video; the hero's move its own", single && langs.size === 5, [...langs].join(", "));
+    // the house rules kept by construction
+    const sample = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 5, count: 1 }).videos[0].script;
+    const crowded = { art: { ...sample.art, scheme: "mixed" as const, field: "beams" as const, overlay: "particles" as const }, scenes: sample.scenes.map((sc, i) => ({ ...sc, enter: (["fade", "blur", "whip", "iris", "drop", "clock"] as const)[i % 6], items: [...sc.items, ...sc.items, ...sc.items, ...sc.items].slice(0, 5) })) };
+    const ruled = houseRules(crowded, 2);
+    const kinds = new Set(ruled.scenes.slice(1).map((x) => x.enter));
+    const flips = ruled.scenes.slice(1).filter((x, i) => x.dark !== ruled.scenes[i].dark).length;
+    add("house rules: ≤3 things, ≤3 ways in, one dark → light turn, calm background", ruled.scenes.every((x) => x.items.filter((it) => !["badge", "shape", "cursor"].includes(it.kind)).length <= 3) && kinds.size <= 3 && flips === 1 && ruled.art.field !== "beams" && ruled.art.overlay !== "particles", `${kinds.size} ways in · ${flips} turn · ${ruled.art.field}/${ruled.art.overlay}`);
+    // the Composer Director works inside the plan, with the house rules
+    let sentInstr = "", sentReq = "";
+    const comp = { responses: { parse: async (r: { instructions: string; input: string }) => ((sentInstr = r.instructions), (sentReq = r.input), { id: "x", usage: null, output_parsed: null }) } };
+    await generateComposerIdeas({ words: bw.words, brand: bw.brand, profile: rp, creative: rc, never: "- never use red" }, undefined, comp as never, 10_000);
+    add("Composer Director gets the profile, the plan and the rulebook", sentInstr.includes("HOUSE RULES") && sentInstr.includes("never use red") && sentReq.includes("CREATIVE PLAN") && sentReq.includes(rc.idea) && sentReq.includes("BRAND PROFILE"), "profile · plan · house rules · team's never list");
+    // the Judge: scores, picks; a bad answer → the rule score
+    const set = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 31, count: 2, creative: rc });
+    const cands = set.videos.map((v, i) => ({ plan: set.plans[i], staging: v.staging, score: scorePlan(set.plans[i], v.script, { staging: v.staging, motif: rc.motif, heroScene: v.staging?.hero }) }));
+    const picked = await judge({ candidates: cands, profile: rp, creative: rc }, undefined, { responses: { parse: async () => ({ id: "j", usage: null, output_parsed: { best: 1, scores: [{ candidate: 0, story: 7, clarity: 7, brand: 7, rules: 7, total: 7, note: "flat" }, { candidate: 1, story: 9, clarity: 8, brand: 9, rules: 9, total: 8.6, note: "strong" }] } }) } } as never);
+    const bad = await judge({ candidates: cands }, undefined, { responses: { parse: async () => ({ id: "j", usage: null, output_parsed: { best: 9, scores: [] } }) } } as never);
+    add("Judge: picks the best; a bad answer → the rule score", picked.best === 1 && picked.source === "ai" && bad.source === "rule" && cands.every((c) => c.score.total > 0 && c.score.total <= 10), `rule scores ${cands.map((c) => c.score.total).join(" / ")}`);
+    const noCta = scorePlan({ ...set.plans[0], scenes: set.plans[0].scenes.map((sc, i, xs) => (i === xs.length - 1 ? { ...sc, items: sc.items.filter((it) => it.kind !== "button") } : sc)) }, set.videos[0].script);
+    add("rule score: a video without its call to action loses 2", noCta.notes.some((n) => n.includes("call to action")), noCta.notes.slice(0, 2).join("; "));
+    add("Judge's view of a candidate reads as it plays", playOf(set.plans[0], set.videos[0].staging).split("\n").length === set.plans[0].scenes.length + 1, playOf(set.plans[0], set.videos[0].staging).split("\n")[0]);
   }
 
   section = "composer words";

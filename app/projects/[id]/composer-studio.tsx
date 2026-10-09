@@ -54,7 +54,7 @@ const wordsIn = (t: string) => t.split(/\s+/).filter(Boolean).length;
 
 // byRule ("AI only for the voice"): nothing reads a written direction, so a
 // change is a new version, staged and composed anew by rule.
-export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, name, className, secondaryClassName, byRule = false }: { projectId: string; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string; byRule?: boolean }) {
+export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, name, className, secondaryClassName, byRule = false, about }: { projectId: string; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string; byRule?: boolean; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null; judge: string | null } }) {
   // the newest version unless the customer picks an earlier one
   const [picked, setPicked] = useState<number | null>(null);
   const selected = Math.min(picked ?? plans.length - 1, plans.length - 1);
@@ -118,6 +118,15 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
               style={{ width: "100%", maxHeight: "75vh", aspectRatio: `${W} / ${H}` }}
             />
           </div>
+          {/* what the studio's Directors decided */}
+          {about?.idea && (
+            <p className="text-xs text-foreground/60">
+              <span className="font-semibold text-foreground/80">Idea:</span> {about.idea}
+              {about.mood && <> · {about.mood}</>}
+              {about.language && <> · camera: {about.language}</>}
+              {about.score != null && <> · Judge {about.score.toFixed(1)}/10{about.judge === "rule" ? " (rule)" : ""}</>}
+            </p>
+          )}
           {plans.length > 1 && (
             <div className="flex flex-wrap gap-2">
               {plans.map((p, i) => (
