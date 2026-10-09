@@ -18,7 +18,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
     .from("projects")
     .select("id", { count: "exact", head: true })
     .gte("updated_at", since)
-    .or("pipeline_status.eq.failed,render_status.eq.failed,render_4k_status.eq.failed");
+    .eq("pipeline_status", "failed");
 
   return (
     <div className="gs gs-dark">

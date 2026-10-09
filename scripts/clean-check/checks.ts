@@ -7,7 +7,7 @@ import { FPS } from "@/components/video/composer/types";
 import http from "node:http";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import { countUsage, defaultConfig, effectiveConfig, normalizeConfig, parseVoiceChoices, textClient, textCost, usageCost } from "@/lib/ai/models";
+import { countUsage, defaultConfig, normalizeConfig, parseVoiceChoices, textClient, textCost, usageCost } from "@/lib/ai/models";
 import { ruleBrief } from "@/lib/rule-brief";
 import { RECAP, stageOf, staged, stagingName } from "@/components/video/composer/staging";
 import { ruleCreative, ruleProfile } from "@/lib/studio";
@@ -176,13 +176,9 @@ export async function runChecks(): Promise<Check[]> {
     add("download-safe drawing (no CSS radial gradients / backdrop blur)", css.length === 0, css.slice(0, 3).join(" · ") || "SVG gradients");
   }
 
-  section = "AI only for the voice";
+  section = "rule brief and staging";
   {
-    const on = effectiveConfig(normalizeConfig({ engine: { voiceOnly: true }, tasks: { composer: { on: true } }, voice: { on: false } }));
-    const offJobs = Object.entries(on.tasks).filter(([, t]) => t.on).map(([k]) => k);
-    add("every AI job but the voice is off (the brief too)", !offJobs.length && on.voice.on, offJobs.join(", ") || `${Object.keys(on.tasks).length} text jobs off · voice on`);
-    add("the Composer composes every video, by rule", !on.tasks.composer.on, "Composer Director off");
-    add("off by default; the saved settings are kept", !normalizeConfig(null).engine.voiceOnly && effectiveConfig(normalizeConfig({ tasks: { composer: { on: true } } })).tasks.composer.on, "voiceOnly false → as saved");
+    add("the jobs are the two directors' (the script & brief, the Motion Director)", Object.keys(normalizeConfig(null).tasks).join(",") === "brief,composer" && normalizeConfig({ tasks: { composer: { on: false } } }).tasks.composer.on === false, Object.keys(normalizeConfig(null).tasks).join(", "));
     const script = "Most clinics still run their day on phone calls. Bookwell puts your whole clinic in one simple app! Try it free?";
     const b = ruleBrief({ script, productName: "Bookwell", cta: "Book a demo" });
     add("rule brief: the script word for word, nothing claimed", b.script === script && b.product_name === "Bookwell" && b.cta === "Book a demo" && !b.supported_claims.length && !b.supported_features.length, b.product_name);

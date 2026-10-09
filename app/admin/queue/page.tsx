@@ -6,7 +6,7 @@ import { ConfirmSubmit } from "../_components/confirm-submit";
 import { Badge, Card, PageHeader, Stat, Table, btn, td } from "../_components/ui";
 import { PROJECT_COLUMNS, ago, daysAgo, minutesSince, projectTitle, type ProjectRow } from "../_components/format";
 
-export const metadata = { title: "Render queue" };
+export const metadata = { title: "Video queue" };
 
 // A job with no update for this long is probably stuck.
 const STUCK_MIN = 30;
@@ -15,22 +15,20 @@ export default async function QueuePage() {
   const { db } = await requireAdmin();
   const since = daysAgo(1);
   const [{ data: running }, { data: failed }, { data: users }] = await Promise.all([
-    db.from("projects").select(PROJECT_COLUMNS).or("pipeline_status.eq.running,render_status.eq.processing,render_4k_status.eq.processing").order("updated_at"),
-    db.from("projects").select(`${PROJECT_COLUMNS}, render_4k_error`).gte("updated_at", since).or("pipeline_status.eq.failed,render_status.eq.failed,render_4k_status.eq.failed").order("updated_at", { ascending: false }),
+    db.from("projects").select(PROJECT_COLUMNS).eq("pipeline_status", "running").order("updated_at"),
+    db.from("projects").select(PROJECT_COLUMNS).gte("updated_at", since).eq("pipeline_status", "failed").order("updated_at", { ascending: false }),
     db.from("profiles").select("id, email"),
   ]);
   const email = new Map((users ?? []).map((u) => [u.id, u.email]));
   const jobs = ((running ?? []) as ProjectRow[]).flatMap((p) => [
     p.pipeline_status === "running" && { p, what: "pipeline" as const, label: `Generating · ${p.pipeline_step ?? "…"}` },
-    p.render_status === "processing" && { p, what: "render" as const, label: "Rendering 1080p" },
-    p.render_4k_status === "processing" && { p, what: "render4k" as const, label: "Rendering 4K" },
   ]).filter((j) => !!j);
   const stuck = jobs.filter((j) => minutesSince(j.p.updated_at) > STUCK_MIN).length;
 
   return (
     <>
       <AutoRefresh active={jobs.length > 0} intervalMs={10000} />
-      <PageHeader title="Render queue" sub="Jobs running now, and everything that failed in the last 24 hours. Refreshes on its own while jobs run." />
+      <PageHeader title="Video queue" sub="Videos being made now, and everything that failed in the last 24 hours. Refreshes on its own while jobs run." />
       <div className="grid grid-cols-3 gap-4">
         <Stat label="Running" value={jobs.length} />
         <Stat label={`Stuck (> ${STUCK_MIN} min)`} value={stuck} tone={stuck ? "warn" : "default"} />
@@ -58,11 +56,11 @@ export default async function QueuePage() {
       </Card>
       <Card title="Failed · last 24 hours">
         <Table head={["Video", "Owner", "Error", "When"]} empty="No failures in the last 24 hours.">
-          {((failed ?? []) as (ProjectRow & { render_4k_error: string | null })[]).map((p) => (
+          {((failed ?? []) as ProjectRow[]).map((p) => (
             <tr key={p.id}>
               <td className={td}><Link href={`/admin/videos/${p.id}`} className="font-medium text-white hover:underline">{projectTitle(p)}</Link></td>
               <td className={`${td} text-zinc-400`}>{email.get(p.user_id) ?? "—"}</td>
-              <td className={`${td} max-w-md text-xs text-rose-300`}>{p.pipeline_error ?? p.render_error ?? p.render_4k_error ?? "—"}</td>
+              <td className={`${td} max-w-md text-xs text-rose-300`}>{p.pipeline_error ?? "—"}</td>
               <td className={`${td} text-zinc-500`}>{ago(p.updated_at)}</td>
             </tr>
           ))}

@@ -62,21 +62,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
 
       <form action={saveAiModels} className="flex flex-col gap-4">
         <fieldset disabled={!editable} className="flex flex-col gap-4">
-          <Card title="Video engine">
-            <div className="flex flex-col gap-3 text-sm">
-              <p className="text-zinc-500">
-                Every video is the <b className="text-zinc-300">Composer</b>&apos;s: every scene composed by its Directors from parts — layout, things, motion, background and transition chosen for its words; no fixed scenes. 16:9, 9:16 and 1:1.
-              </p>
-              <label className="mt-2 flex items-start gap-2">
-                <input type="checkbox" name="engine_voice_only" defaultChecked={c.engine.voiceOnly} className="mt-1" />
-                <span>
-                  <b className="text-zinc-300">AI only for the voice.</b> <span className="text-zinc-500">The voice is spoken (and its words timed) by AI; nothing else is. The customer&apos;s own script is the narration (a project without one asks for it), screenshots are shown but not read, and every video is composed by the Composer&apos;s own rules (the settings below are kept but not used). &quot;Change it&quot; gives a new version instead of following a written direction.</span>
-                </span>
-              </label>
-            </div>
-          </Card>
-
-          <Card title="Script & director — main model">
+          <Card title="Main model">
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">
                 On <b className="text-zinc-300">fal</b>, models are named like <code>google/gemini-2.5-flash</code> or <code>openai/gpt-5-mini</code> (fal&apos;s OpenRouter list). On <b className="text-zinc-300">OpenAI</b>, like <code>gpt-5-mini</code>. Environment default: <code>{env.text}</code> on OpenAI.
@@ -99,7 +85,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
             </div>
           </Card>
 
-          <Card title="Text jobs">
+          <Card title="Directors">
             <div className="divide-y divide-white/[0.05]">
               {TEXT_TASKS.map((t) => {
                 const v = c.tasks[t.id];

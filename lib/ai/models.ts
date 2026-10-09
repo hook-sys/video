@@ -13,8 +13,7 @@ import type { BriefUsage } from "@/lib/ai/product-brief";
 // "backup" on (and OpenAI direct on), a failed fal call is retried once on OpenAI.
 
 export const TEXT_TASKS = [
-  { id: "brief", label: "Script & brief", help: "Reads the website, screenshots' text and the customer's script, and writes the brief. Every video needs it, so it can't be turned off.", canOff: false },
-  { id: "screenshots", label: "Screenshot reading", help: "Reads uploaded screenshots (needs a model that accepts images). Off: screenshots are still shown in the video, just not read.", canOff: true },
+  { id: "brief", label: "Script & brief", help: "Reads the website and the customer\'s script and writes the brief (the product facts the video may say). Every video needs it, so it can\'t be turned off.", canOff: false },
   { id: "composer", label: "Motion Director", help: "Directs the whole video in one plan: the brand, the idea, the camera and dark/light, the art and every scene; reviews its plan once the voice is timed. Off: the video is composed by rule.", canOff: true },
 ] as const;
 export type TextTask = (typeof TEXT_TASKS)[number]["id"];
@@ -30,10 +29,6 @@ export type AiConfig = {
   voice: { on: boolean; model: string; template: string; female: string; male: string; choices: VoiceChoice[]; fallback: boolean };
   // USD: per 1M input / output tokens (text), per character (voice)
   prices: Record<string, ModelPrice>;
-  // voiceOnly: AI speaks the voice (and times its words) and does nothing
-  // else — the customer's own script, no screenshot reading, the Composer's
-  // rule-based director (see effectiveConfig)
-  engine: { voiceOnly: boolean };
 };
 
 // A voice customers can pick on the form (a name of the voice model's).
@@ -61,20 +56,6 @@ export function defaultConfig(): AiConfig {
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: true, provider: "", model: "" }])) as AiConfig["tasks"],
     voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     prices: {},
-    engine: { voiceOnly: false },
-  };
-}
-
-// What the pipeline runs with: with "AI only for the voice" every other AI
-// job is off (the brief too: it is written by rule from the customer's own
-// script) and the Composer composes every video by its own rules.
-export function effectiveConfig(c: AiConfig): AiConfig {
-  if (!c.engine.voiceOnly) return c;
-  return {
-    ...c,
-    tasks: Object.fromEntries(Object.entries(c.tasks).map(([k, t]) => [k, { ...t, on: false }])) as AiConfig["tasks"],
-    voice: { ...c.voice, on: true },
-    engine: { voiceOnly: true },
   };
 }
 
@@ -100,7 +81,6 @@ export function normalizeConfig(raw: unknown): AiConfig {
         .filter(([k]) => k.trim())
         .map(([k, p]) => [k.trim().slice(0, 200), { in: price(p?.in), out: price(p?.out), unit: price(p?.unit) }]),
     ),
-    engine: { voiceOnly: bool(r.engine?.voiceOnly, false) },
   };
 }
 
@@ -108,7 +88,7 @@ export function normalizeConfig(raw: unknown): AiConfig {
 // the offline checks) means the defaults.
 let cached: { at: number; config: AiConfig } | null = null;
 export async function getAiConfig(): Promise<AiConfig> {
-  return effectiveConfig(await getStoredAiConfig());
+  return getStoredAiConfig();
 }
 // (as saved on /admin/models, before "AI only for the voice" turns jobs off)
 export async function getStoredAiConfig(): Promise<AiConfig> {

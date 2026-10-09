@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/admin";
 import { SETTINGS, getSettings } from "@/lib/app-settings";
 import { saveSettings } from "../actions";
-import { Badge, Card, Notice, PageHeader, btnPrimary, input } from "../_components/ui";
+import { Card, Notice, PageHeader, btnPrimary, input } from "../_components/ui";
 
 export const metadata = { title: "Settings" };
 
@@ -20,10 +20,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
             {SETTINGS.map((s) => (
               <div key={s.key} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 md:flex-row md:items-center md:justify-between">
                 <div className="max-w-xl">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-white">{s.label}</p>
-                    <Badge tone={s.wired ? "green" : "gray"}>{s.wired ? "live" : "saved only"}</Badge>
-                  </div>
+                  <p className="font-medium text-white">{s.label}</p>
                   <p className="mt-0.5 text-sm text-zinc-500">{s.help}</p>
                 </div>
                 <div className="md:w-80">

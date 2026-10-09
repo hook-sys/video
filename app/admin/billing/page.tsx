@@ -37,7 +37,6 @@ export default async function BillingPage({ searchParams }: PageProps<"/admin/bi
                 <label className="flex flex-col gap-1"><span className="text-xs text-zinc-500">Price / month (USD)</span><input name="price" type="number" min={0} step="0.01" defaultValue={p.price_usd_month} className={input} /></label>
                 <label className="flex flex-col gap-1"><span className="text-xs text-zinc-500">Videos / month</span><input name="videos" type="number" min={0} defaultValue={p.videos_per_month} className={input} /></label>
               </div>
-              <label className="flex items-center gap-2 text-zinc-300"><input type="checkbox" name="allow_4k" defaultChecked={p.allow_4k} className="accent-[#4f8ff0]" /> 4K downloads</label>
               <label className="flex items-center gap-2 text-zinc-300"><input type="checkbox" name="active" defaultChecked={p.active} className="accent-[#4f8ff0]" /> Available to customers</label>
               <button className={btn}>Save {p.name}</button>
             </form>

@@ -48,8 +48,6 @@ export async function setUserPlan(userId: string, formData: FormData) {
 
 const FAIL_FIELDS = {
   pipeline: { pipeline_status: "failed", pipeline_error: "Stopped by an admin." },
-  render: { render_status: "failed", render_error: "Stopped by an admin." },
-  render4k: { render_4k_status: "failed", render_4k_error: "Stopped by an admin." },
 } as const;
 
 // For jobs stuck in running/processing: frees the project so it can be retried.
@@ -99,7 +97,6 @@ export async function savePlan(planId: string, formData: FormData) {
     name: String(formData.get("name") ?? "").trim().slice(0, 40) || planId,
     price_usd_month: Math.max(0, Number(formData.get("price")) || 0),
     videos_per_month: Math.max(0, Math.round(Number(formData.get("videos")) || 0)),
-    allow_4k: formData.get("allow_4k") === "on",
     active: formData.get("active") === "on",
   };
   const { error } = await s.db.from("plans").update(fields).eq("id", planId);

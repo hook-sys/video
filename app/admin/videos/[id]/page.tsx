@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { VIDEOS_BUCKET } from "@/lib/projects";
-import { RULE_BY_ID } from "@/lib/video-rules";
 import { deleteProject, markFailed } from "../../actions";
 import { ConfirmSubmit } from "../../_components/confirm-submit";
 import { Badge, Card, PageHeader, Table, btn, btnDanger, td } from "../../_components/ui";
@@ -13,12 +12,10 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
   const { db } = await requireAdmin();
   const { data: p } = await db.from("projects").select("*").eq("id", id).maybeSingle();
   if (!p) notFound();
-  const [{ data: owner }, { data: costs }, { data: mistakes }, video, video4k] = await Promise.all([
+  const [{ data: owner }, { data: costs }, video] = await Promise.all([
     db.from("profiles").select("id, email").eq("id", p.user_id).maybeSingle(),
     db.from("cost_events").select("operation, model, estimated_cost_usd, created_at").eq("project_id", id).order("created_at"),
-    db.from("video_mistakes").select("rule_id, detail, source, created_at").eq("project_id", id).order("created_at", { ascending: false }),
     p.video_path ? db.storage.from(VIDEOS_BUCKET).createSignedUrl(p.video_path, 3600) : null,
-    p.video_4k_path ? db.storage.from(VIDEOS_BUCKET).createSignedUrl(p.video_4k_path, 3600, { download: "video-4k.mp4" }) : null,
   ]);
   const [label, tone] = STATE_LABEL[videoState(p)];
   const total = (costs ?? []).reduce((a, c) => a + Number(c.estimated_cost_usd), 0);
@@ -28,7 +25,6 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
     ["Voice", p.voice_error],
     ["Assets", p.assets_error],
     ["Render", p.render_error],
-    ["4K render", p.render_4k_error],
   ].filter(([, e]) => e);
   const stages: [string, string | null][] = [
     ["Pipeline", p.pipeline_status],
@@ -36,12 +32,9 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
     ["Voice", p.voice_status],
     ["Assets", p.assets_status],
     ["Render", p.render_status],
-    ["4K render", p.render_4k_status],
   ];
   const stuck = [
     p.pipeline_status === "running" && (["pipeline", "Stop pipeline"] as const),
-    p.render_status === "processing" && (["render", "Stop render"] as const),
-    p.render_4k_status === "processing" && (["render4k", "Stop 4K render"] as const),
   ].filter((x) => !!x);
 
   return (
@@ -70,7 +63,6 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
           )}
           <div className="mt-3 flex gap-2">
             {video?.data?.signedUrl && <a href={video.data.signedUrl} className={btn}>↓ 1080p</a>}
-            {video4k?.data?.signedUrl && <a href={video4k.data.signedUrl} className={btn}>↓ 4K</a>}
           </div>
         </Card>
         <Card title="Details">
@@ -107,22 +99,10 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
           </div>
         </Card>
       )}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Script & direction">
-          <p className="whitespace-pre-wrap text-sm text-zinc-300">{p.direction}</p>
-          {p.advanced_direction && <p className="mt-3 whitespace-pre-wrap border-t border-white/5 pt-3 text-sm text-zinc-400">{p.advanced_direction}</p>}
-        </Card>
-        <Card title={`Rules broken (${mistakes?.length ?? 0})`}>
-          <Table head={["Rule", "Detail"]} empty="No rule violations logged.">
-            {(mistakes ?? []).map((m, i) => (
-              <tr key={i}>
-                <td className={td}><span title={RULE_BY_ID.get(m.rule_id)?.never}><Badge tone="amber">{m.rule_id}</Badge></span></td>
-                <td className={`${td} text-xs text-zinc-400`}>{m.detail}</td>
-              </tr>
-            ))}
-          </Table>
-        </Card>
-      </div>
+      <Card title="Script & direction">
+        <p className="whitespace-pre-wrap text-sm text-zinc-300">{p.direction}</p>
+        {p.advanced_direction && <p className="mt-3 whitespace-pre-wrap border-t border-white/5 pt-3 text-sm text-zinc-400">{p.advanced_direction}</p>}
+      </Card>
       <Card title="Cost events">
         <Table head={["Operation", "Model", "Cost", "When"]} empty="No cost events recorded for this video.">
           {(costs ?? []).map((c, i) => (

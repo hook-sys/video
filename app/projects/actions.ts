@@ -37,7 +37,6 @@ import {
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
 import { type BriefUsage, ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
-import { type ScreenshotEvidence, analyzeScreenshots } from "@/lib/ai/screenshot-evidence";
 import { falCost, openaiCost, storageCost } from "@/lib/costs/pricing";
 import { recordCost } from "@/lib/costs/record";
 import { getAiConfig, unitCost, usageCost } from "@/lib/ai/models";
@@ -280,21 +279,9 @@ export async function generateBrief(projectId: string) {
 
   // Captured even if the call fails after tokens were used.
   let usage: BriefUsage | undefined;
-  let visionUsage: BriefUsage | undefined;
   try {
-    // Screenshot evidence (vision) is extracted once and reused; it lets
-    // screenshot-only projects support claims without website text.
-    let evidence = project.screenshot_evidence as ScreenshotEvidence | null;
-    // (turned off on /admin/models: the screenshots are shown, not read)
-    if (!evidence && screenshots?.length && (await getAiConfig()).tasks.screenshots.on) {
-      const { data: signed } = await supabase.storage
-        .from(SCREENSHOTS_BUCKET)
-        .createSignedUrls(screenshots.map((s) => s.storage_path), 600);
-      const urls = (signed ?? []).flatMap((s) => (s.signedUrl ? [s.signedUrl] : []));
-      if (!urls.length) throw new Error("Screenshots could not be loaded for analysis.");
-      evidence = await analyzeScreenshots(urls, (u) => (visionUsage = u));
-      await briefUpdate({ screenshot_evidence: evidence });
-    }
+    // (projects from before screenshots were dropped keep what was read from them)
+    const evidence = project.screenshot_evidence as Parameters<typeof generateProductBrief>[0]["screenshot_evidence"] | null;
 
     const brief = await generateProductBrief(
       {
@@ -329,10 +316,7 @@ export async function generateBrief(projectId: string) {
     await fail((e instanceof Error ? e.message : "Brief generation failed.").slice(0, 500));
   } finally {
     const ai = await getAiConfig();
-    for (const [u, kind] of [
-      [visionUsage, "screenshot_analysis"],
-      [usage, "brief"],
-    ] as const) {
+    for (const [u, kind] of [[usage, "brief"]] as const) {
       if (!u) continue;
       await recordCost(admin, {
         project_id: projectId,
@@ -348,18 +332,12 @@ export async function generateBrief(projectId: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
-// The Director's NEVER list: built-in rules, active `video_rules` rows, and
-// how many videos broke each rule in the last 30 days. Never blocks a video.
+// The Director's NEVER list: built-in rules plus the active `video_rules`
+// rows (admin → Video rules). Never blocks a video.
 async function loadNeverList(admin: ReturnType<typeof createAdminClient>) {
   try {
-    const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-    const [rules, mistakes] = await Promise.all([
-      admin.from("video_rules").select("id, never").eq("active", true).limit(50),
-      admin.from("video_mistakes").select("rule_id, project_id").gte("created_at", since).limit(5000),
-    ]);
-    const videos: Record<string, Set<string>> = {};
-    for (const m of mistakes.data ?? []) (videos[m.rule_id] ??= new Set()).add(m.project_id ?? "");
-    return neverList(rules.data ?? [], Object.fromEntries(Object.entries(videos).map(([k, v]) => [k, v.size])));
+    const { data } = await admin.from("video_rules").select("id, never").eq("active", true).limit(50);
+    return neverList(data ?? []);
   } catch {
     return neverList();
   }

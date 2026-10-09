@@ -22,9 +22,9 @@ const I = {
 const GROUPS: { title: string; items: { href: string; label: string; icon: keyof typeof I }[] }[] = [
   { title: "Monitor", items: [
     { href: "/admin", label: "Overview", icon: "overview" },
-    { href: "/admin/queue", label: "Render queue", icon: "queue" },
+    { href: "/admin/queue", label: "Video queue", icon: "queue" },
     { href: "/admin/costs", label: "Costs", icon: "costs" },
-    { href: "/admin/quality", label: "Video quality", icon: "quality" },
+    { href: "/admin/quality", label: "Video rules", icon: "quality" },
   ] },
   { title: "Manage", items: [
     { href: "/admin/users", label: "Users", icon: "users" },

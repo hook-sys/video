@@ -40,7 +40,7 @@ export default async function VideosPage({ searchParams }: PageProps<"/admin/vid
         items={[{ value: "", label: "All" }, ...Object.keys(FILTER).map((k) => ({ value: k, label: STATE_LABEL[k as VideoState][0] }))]}
       />
       <Card>
-        <Table head={["Video", "Owner", "Status", "Step", "Length", "4K", "Created"]} empty="No videos match.">
+        <Table head={["Video", "Owner", "Status", "Step", "Length", "Created"]} empty="No videos match.">
           {rows.map((p) => {
             const [label, tone] = STATE_LABEL[videoState(p)];
             return (
@@ -50,7 +50,6 @@ export default async function VideosPage({ searchParams }: PageProps<"/admin/vid
                 <td className={td}><Badge tone={tone}>{label}</Badge></td>
                 <td className={`${td} text-xs text-zinc-500`}>{p.pipeline_step ?? "—"}</td>
                 <td className={`${td} tabular-nums text-zinc-400`}>{p.duration_seconds ? `${p.duration_seconds}s` : "—"}</td>
-                <td className={td}>{p.render_4k_status && p.render_4k_status !== "idle" ? <Badge tone={p.render_4k_status === "completed" ? "green" : p.render_4k_status === "failed" ? "red" : "blue"}>{p.render_4k_status}</Badge> : <span className="text-zinc-600">—</span>}</td>
                 <td className={`${td} text-zinc-500`}>{ago(p.created_at)}</td>
               </tr>
             );
