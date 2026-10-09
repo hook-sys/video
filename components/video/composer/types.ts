@@ -132,7 +132,9 @@ export type PlacedScene = {
   items: PlacedItem[];
   seed: number;
 };
-export const JOURNEYS = ["right", "zigzag", "down", "diagonal", "snake"] as const;
+// (the last four are structures: a timeline, a mind map, a wall of tiles, a
+// web page that scrolls — see structure.tsx)
+export const JOURNEYS = ["right", "zigzag", "down", "diagonal", "snake", "timeline", "map", "tiles", "scroll"] as const;
 export type JourneyKind = (typeof JOURNEYS)[number];
 // How one scene leads to the next on a journey: a line drawn between them,
 // the scene's main thing carried on into the next, a guide (a paper plane, a

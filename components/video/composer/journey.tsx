@@ -17,6 +17,27 @@ export const W = 1920;
 export const H = 1080;
 const STEP_X = 2350;
 const STEP_Y = 1450;
+export const TILE_GAP = 150;
+
+// How the camera behaves on each kind of canvas: how far back it rests (a
+// wall of tiles shows the gutters), how much it pulls out on the way, whether
+// it leans, and whether the last move shows the whole canvas first.
+export type Style = { rest: number; pull: number; lean: boolean; overview: boolean };
+export function styleOf(kind: JourneyKind | null | undefined): Style {
+  switch (kind) {
+    case "timeline": return { rest: 1, pull: 0.55, lean: false, overview: false };
+    case "map": return { rest: 1, pull: 1, lean: true, overview: true };
+    case "tiles": return { rest: 0.9, pull: 0.8, lean: false, overview: true };
+    case "scroll": return { rest: 1, pull: 0, lean: false, overview: false };
+    default: return { rest: 1, pull: 1, lean: true, overview: false };
+  }
+}
+// the whole canvas in view (its middle, and the zoom that fits it)
+export function overviewOf(st: P[]): { c: P; z: number } {
+  const xs = st.map((p) => p.x), ys = st.map((p) => p.y);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  return { c: { x: (x0 + x1) / 2, y: (y0 + y1) / 2 }, z: Math.min(W / (x1 - x0 + W + 500), H / (y1 - y0 + H + 360)) };
+}
 
 // The scenes' places on the canvas.
 export function stations(n: number, kind: JourneyKind, seed: number): P[] {
@@ -26,6 +47,20 @@ export function stations(n: number, kind: JourneyKind, seed: number): P[] {
       case "down": return { x: j(i, "dx", 520), y: i * STEP_Y };
       case "diagonal": return { x: i * STEP_X * 0.86, y: i * STEP_Y * 0.72 + j(i, "dy", 160) };
       case "zigzag": return { x: i * STEP_X * 0.92, y: (i % 2) * STEP_Y * 0.95 };
+      case "timeline": return { x: i * STEP_X, y: 0 };
+      // the story goes round a ring; the last scene (the ask) is the hub in the middle
+      case "map": {
+        if (i === n - 1) return { x: 0, y: 0 };
+        const R = Math.max(2700, ((n - 1) * 2350) / (2 * Math.PI));
+        const a = -Math.PI * 0.75 + (i / Math.max(1, n - 1)) * Math.PI * 2;
+        return { x: Math.cos(a) * R, y: Math.sin(a) * R * 0.78 };
+      }
+      // a wall of screens, three across, read like a snake
+      case "tiles": {
+        const row = Math.floor(i / 3), col = i % 3;
+        return { x: (row % 2 ? 2 - col : col) * (W + TILE_GAP), y: row * (H + TILE_GAP) };
+      }
+      case "scroll": return { x: 0, y: i * H };
       case "snake": {
         // rows of three: right, down, back left, down…
         const row = Math.floor(i / 3), col = i % 3;
@@ -41,10 +76,12 @@ export function stations(n: number, kind: JourneyKind, seed: number): P[] {
 export const MOVE = 60;
 export function moves(plan: ComposerPlan): { start: number; dur: number }[] {
   const sc = plan.scenes;
+  // a last move that shows the whole canvas on the way takes longer
+  const long = styleOf(plan.journey).overview;
   return sc.map((s, i) => {
     if (!i) return { start: -1, dur: 1 };
     const room = s.from - sc[i - 1].from - 16;
-    const dur = Math.max(24, Math.min(MOVE, room));
+    const dur = Math.max(24, Math.min(long && i === sc.length - 1 ? 110 : MOVE, room));
     return { start: Math.round(s.from - dur * 0.72), dur };
   });
 }
@@ -87,29 +124,37 @@ export type Cam = { x: number; y: number; z: number; rot: number; seg: number; k
 // keeping the thing where it was on screen at the start and where it will be
 // at the end.
 export type Ends = { a: P; b: P } | null;
-export function cameraAt(f: number, st: P[], mv: { start: number; dur: number }[], ends?: Ends[]): Cam {
+export function cameraAt(f: number, st: P[], mv: { start: number; dur: number }[], ends?: Ends[], style: Style = styleOf(null)): Cam {
   let seg = 0;
   for (let i = 1; i < st.length; i++) if (f >= mv[i].start) seg = i;
   const raw = seg ? ramp(f, mv[seg].start, mv[seg].dur) : 1;
   const k = EASE(raw);
   if (!seg || raw >= 1) {
     const p = st[seg];
-    return { x: p.x, y: p.y, z: 1, rot: 0, seg, k: 1, speed: 0 };
+    return { x: p.x, y: p.y, z: style.rest, rot: 0, seg, k: 1, speed: 0 };
   }
   const sa = st[seg - 1], sb = st[seg];
   const e = ends?.[seg];
   const a = e?.a ?? sa, b = e?.b ?? sb;
   const r = road(a, b);
-  const at = (t: number): P => {
+  const over = style.overview && seg === st.length - 1 ? overviewOf(st) : null;
+  const at = (t: number, w: number): P => {
     const q = bez(r, t);
-    return { x: q.x - mix(a.x - sa.x, b.x - sb.x, t), y: q.y - mix(a.y - sa.y, b.y - sb.y, t) };
+    const p = { x: q.x - mix(a.x - sa.x, b.x - sb.x, t), y: q.y - mix(a.y - sa.y, b.y - sb.y, t) };
+    return over ? { x: mix(p.x, over.c.x, w), y: mix(p.y, over.c.y, w) } : p;
   };
-  const p = at(k);
-  const p2 = at(EASE(ramp(f + 1, mv[seg].start, mv[seg].dur)));
+  // (on the way to the last scene the camera first pulls back to show the whole canvas)
+  // (it eases out to the whole view, holds it a moment, and eases back in)
+  const smooth = (x: number) => x * x * (3 - 2 * x);
+  const wOf = (rr: number) => (over ? smooth(clamp01(Math.min(rr, 1 - rr) / 0.38)) : 0);
+  const raw2 = ramp(f + 1, mv[seg].start, mv[seg].dur);
+  const p = at(k, wOf(raw));
+  const p2 = at(EASE(raw2), wOf(raw2));
   // it pulls out on the way (the further, the more) and leans into the turn
   const dist = Math.hypot(sb.x - sa.x, sb.y - sa.y);
-  const z = 1 - Math.sin(raw * Math.PI) * Math.min(0.46, 0.2 + dist / 7000);
-  const rot = Math.sin(raw * Math.PI) * Math.sign(sb.x - sa.x || 1) * (sb.y >= sa.y ? 1.4 : -1.4);
+  let z = style.rest * (1 - Math.sin(raw * Math.PI) * Math.min(0.46, 0.2 + dist / 7000) * style.pull);
+  if (over) z = Math.exp(mix(Math.log(z), Math.log(over.z), wOf(raw)));
+  const rot = style.lean ? Math.sin(raw * Math.PI) * Math.sign(sb.x - sa.x || 1) * (sb.y >= sa.y ? 1.4 : -1.4) * (1 - wOf(raw)) : 0;
   return { x: p.x, y: p.y, z, rot, seg, k, speed: Math.hypot(p2.x - p.x, p2.y - p.y) };
 }
 

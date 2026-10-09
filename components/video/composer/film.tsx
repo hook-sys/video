@@ -11,7 +11,8 @@ import { Headline } from "./text";
 import { Trail } from "@remotion/motion-blur";
 import { noise2D } from "@remotion/noise";
 import { Present, presentationOf } from "./present";
-import { JourneyField, Roads, arriving, cameraAt, moves, stations, worldTransform } from "./journey";
+import { JourneyField, Roads, arriving, cameraAt, moves, stations, styleOf, toScreen, worldTransform } from "./journey";
+import { PAGE, Structure, scrollAt } from "./structure";
 import { type Links, Travellers, linksOf } from "./links";
 import { depthHops, hopAt, innerTransform, isDepth, outerTransform, tunnelAt, zoomAt } from "./depth";
 import { measureText } from "@remotion/layout-utils";
@@ -143,9 +144,19 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   // (the circle's area grows evenly until it reaches the farthest corner)
   const reach = Math.hypot(Math.max(origin.x, 1920 - origin.x), Math.max(origin.y, 1080 - origin.y));
   const clip = flip ? `circle(${Math.round(Math.sqrt(tk) * reach)}px at ${Math.round(origin.x)}px ${Math.round(origin.y)}px)` : undefined;
+  // a scene's own background (each scene on its own: a tile, a window, a page section)
+  const sceneField = (i: number) => <Field f={f} kind={art.field} pal={scenes[i].dark ? pals.dark : pals.light} hue={art.hue} anchor={anchors[i]} energy={art.energy} overlay={art.overlay} />;
+  if (plan.journey === "scroll") {
+    const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf };
+    return (
+      <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
+        <ScrollPage {...props} bare={bare} sceneField={sceneField} />
+        {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+      </AbsoluteFill>
+    );
+  }
   if (isDepth(plan.link)) {
     const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf };
-    const sceneField = (i: number) => <Field f={f} kind={art.field} pal={scenes[i].dark ? pals.dark : pals.light} hue={art.hue} anchor={anchors[i]} energy={art.energy} overlay={art.overlay} />;
     return (
       <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
         <Depth {...props} bare={bare} sceneField={sceneField} />
@@ -154,7 +165,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
     );
   }
   if (plan.journey) {
-    const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf, weight, upper, tracking };
+    const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf, weight, upper, tracking, sceneField };
     return (
       <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
         <Journey {...props} bare={bare} />
@@ -175,7 +186,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
 // A journey: one canvas, each scene in its own place on it, the camera
 // travelling between them along the line it draws (see journey.tsx). While it
 // travels the whole view leaves a short trail.
-type JourneyProps = Omit<SceneProps, "i" | "journey"> & { bare?: boolean; weight: number; upper: boolean; tracking: number };
+type JourneyProps = Omit<SceneProps, "i" | "journey"> & { bare?: boolean; weight: number; upper: boolean; tracking: number; sceneField: (i: number) => ReactNode };
 function Journey(props: JourneyProps) {
   const f = useCurrentFrame();
   const st = useMemo(() => stations(props.plan.scenes.length, props.plan.journey ?? "right", props.plan.seed), [props.plan]);
@@ -185,14 +196,19 @@ function Journey(props: JourneyProps) {
   // how the scenes are joined (see links.tsx); the words measured in the face
   const L = linksOf(arrived, st, mv, props.texts, (t, size) => (typeof document === "undefined" ? t.length * size * 0.55 : measureText({ text: t, fontFamily: display, fontSize: size, fontWeight: weight, letterSpacing: `${tracking}em`, textTransform: upper ? "uppercase" : "none", validateFontIsLoaded: false }).width), upper);
   const plan = L.plan;
-  const cam = cameraAt(f, st, mv, L.ends);
+  const kind = plan.journey ?? "right";
+  const style = styleOf(kind);
+  const cam = cameraAt(f, st, mv, L.ends, style);
   const darks = plan.scenes.map((s) => s.dark);
   const travelling = cam.speed > 10;
   const world = <JourneyWorld {...props} plan={plan} st={st} mv={mv} L={L} />;
+  // a structure draws its own joins (a map keeps the line round its ring, up to the hub)
+  const roads = kind === "timeline" || kind === "tiles" ? [] : L.hops.map((h, i) => i > 0 && !h && !(kind === "map" && i === st.length - 1));
   return (
     <>
       <JourneyField f={f} cam={cam} st={st} darks={darks} pals={props.pals} hue={plan.art.hue} grid={["beams", "streaks", "horizon", "arcs"].includes(plan.art.field)} />
-      <Roads cam={cam} st={st} mv={mv} f={f} pals={props.pals} darks={darks} only={L.hops.map((h, i) => i > 0 && !h)} />
+      <Roads cam={cam} st={st} mv={mv} f={f} pals={props.pals} darks={darks} only={roads} />
+      <Structure kind={kind} f={f} cam={cam} st={st} mv={mv} plan={plan} pals={props.pals} font={props.textFamily} />
       {!props.bare && (travelling ? <Trail layers={4} lagInFrames={0.3} trailOpacity={0.4}>{world}</Trail> : world)}
     </>
   );
@@ -200,21 +216,36 @@ function Journey(props: JourneyProps) {
 function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv: { start: number; dur: number }[]; L: Links }) {
   const f = useCurrentFrame();
   const { plan, st, mv, L } = props;
-  const cam = cameraAt(f, st, mv, L.ends);
+  const cam = cameraAt(f, st, mv, L.ends, styleOf(plan.journey));
   const n = plan.scenes.length;
+  const tiles = plan.journey === "tiles";
   const ctxOf = (i: number): Ctx => ({ f, pal: plan.scenes[i].dark ? props.pals.dark : props.pals.light, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens });
+  // a scene stays where it is on the canvas once the camera has set off
+  // towards it; it is drawn while it is in view
+  const inView = (i: number) => {
+    const c = toScreen(st[i], cam);
+    return Math.abs(c.x - 960) < 960 + (960 + 120) * cam.z && Math.abs(c.y - 540) < 540 + (540 + 120) * cam.z;
+  };
+  const place = (i: number) => ({ position: "absolute" as const, left: st[i].x - 960, top: st[i].y - 540, width: 1920, height: 1080 });
   return (
     <AbsoluteFill style={{ transform: worldTransform(cam), transformOrigin: "0 0" }}>
       {plan.scenes.map((_, i) => {
-        // a scene is there from when the camera sets off towards it until it has arrived at the next
         const start = i ? mv[i].start - 2 : 0;
         const end = i < n - 1 ? mv[i + 1].start + mv[i + 1].dur + 2 : plan.duration;
-        if (f < start || f > end) return null;
-        return (
-          <div key={i} style={{ position: "absolute", left: st[i].x - 960, top: st[i].y - 540, width: 1920, height: 1080 }}>
-            <SceneBody {...props} i={i} journey={{ start, end, hidden: (j) => L.hidden(i, j, f), hiddenWord: (wi) => L.hiddenWord(i, wi, f), dim: L.dim(i, f) }} />
+        const seen = f >= start && (f <= end || inView(i));
+        // on a wall of tiles every scene has its tile (an empty one until the camera sets off for it)
+        const tile = tiles && inView(i) && (
+          <div key={`t${i}`} style={{ ...place(i), borderRadius: 44, overflow: "hidden", boxShadow: "0 40px 120px rgba(0,0,0,0.35)", ...(seen ? {} : { background: "rgba(255,255,255,0.06)", border: "3px dashed rgba(255,255,255,0.28)" }) }}>
+            {seen && props.sceneField(i)}
           </div>
         );
+        if (!seen) return tile || null;
+        return [
+          tile,
+          <div key={i} style={{ ...place(i), ...(tiles ? { borderRadius: 44, overflow: "hidden" } : {}) }}>
+            <SceneBody {...props} i={i} journey={{ start, end: plan.duration + 1, hidden: (j) => L.hidden(i, j, f), hiddenWord: (wi) => L.hiddenWord(i, wi, f), dim: L.dim(i, f) }} />
+          </div>,
+        ];
       })}
       <Travellers f={f} L={L} st={st} mv={mv} ctxOf={ctxOf} display={props.display} weight={props.weight} tracking={props.tracking} upper={props.upper} lower={plan.art.case === "lower"} />
     </AbsoluteFill>
@@ -277,6 +308,60 @@ function Depth(props: DepthProps) {
       {layer(outer, { transform: outerTransform(z.Z, z.C) })}
       {o > 0 && layer(inner, { transform: innerTransform(z.Z, z.C, h.c, h.s), opacity: o }, true, { borderRadius: r, boxShadow: `0 0 0 ${(3 / onScreen).toFixed(1)}px ${ring.accent}, 0 ${(30 / onScreen).toFixed(0)}px ${(80 / onScreen).toFixed(0)}px ${ring.shadow}` })}
     </>,
+  );
+}
+
+// A web page that scrolls (see structure.tsx): the scenes are its sections,
+// one under the next, each on its own background, in a browser window; the
+// page scrolls from one to the next.
+function ScrollPage(props: DepthProps) {
+  const f = useCurrentFrame();
+  const mv = useMemo(() => moves(props.plan), [props.plan]);
+  // a section's first things are there as it scrolls into view (a page is already written)
+  const plan = useMemo(() => ({ ...props.plan, scenes: props.plan.scenes.map((sc, i) => (i ? { ...sc, items: sc.items.map((it) => (it.at <= sc.from + 24 ? { ...it, at: Math.min(it.at, mv[i].start - 12) } : it)) } : sc)) }), [props.plan, mv]);
+  const { y, seg } = scrollAt(f, mv);
+  const n = plan.scenes.length;
+  const { k, bar } = PAGE;
+  const w = 1920 * k, h = 1080 * k;
+  const left = (1920 - w) / 2, top = (1080 - h - bar) / 2;
+  const cur = Math.min(n - 1, Math.round(y / 1080));
+  const pal = plan.scenes[cur].dark ? props.pals.dark : props.pals.light;
+  const all = { start: -1, end: plan.duration + 1 };
+  const thumbH = Math.max(60, h / n);
+  const thumbY = (y / Math.max(1, (n - 1) * 1080)) * (h - thumbH - 16) + 8;
+  return (
+    <>
+      {props.field(plan.scenes[seg].dark)}
+      <AbsoluteFill style={{ background: "rgba(0,0,0,0.38)" }} />
+      <div style={{ position: "absolute", left, top, width: w, height: h + bar, borderRadius: 26, overflow: "hidden", boxShadow: `0 50px 140px ${pal.shadow}, 0 0 0 2px ${pal.dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.08)"}` }}>
+        {/* the browser's bar: three dots and the brand's address */}
+        <div style={{ position: "absolute", left: 0, top: 0, width: w, height: bar, background: pal.dark ? "#16171f" : "#f3f4f8", display: "flex", alignItems: "center", gap: 12, padding: "0 26px", boxSizing: "border-box", borderBottom: `1px solid ${pal.dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}` }}>
+          {["#ff5f57", "#febc2e", "#28c840"].map((c) => <div key={c} style={{ width: 16, height: 16, borderRadius: 99, background: c }} />)}
+          <div style={{ margin: "0 auto", width: w * 0.42, height: 36, borderRadius: 12, background: pal.dark ? "#262833" : "#ffffff", color: pal.dark ? "#c9cbd6" : "#5a5e6e", fontFamily: props.textFamily, fontSize: 19, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            <svg width={14} height={16} viewBox="0 0 14 16"><rect x={1.5} y={7} width={11} height={8} rx={2} fill="none" stroke="currentColor" strokeWidth={1.8} /><path d="M4,7 V5 a3,3 0 0 1 6,0 V7" fill="none" stroke="currentColor" strokeWidth={1.8} /></svg>
+            {plan.brand.url || `${plan.brand.name.toLowerCase()}.com`}
+          </div>
+          <div style={{ width: 72 }} />
+        </div>
+        <div style={{ position: "absolute", left: 0, top: bar, width: w, height: h, overflow: "hidden" }}>
+          <div style={{ position: "absolute", left: 0, top: 0, width: 1920, height: 1080 * n, transformOrigin: "0 0", transform: `scale(${k}) translateY(${(-y).toFixed(1)}px)` }}>
+            {plan.scenes.map((_, i) => {
+              // a section is there once the page starts scrolling to it, while it is in view
+              const from = i ? mv[i].start - 2 : 0;
+              if (f < from || Math.abs(i * 1080 - y) >= 1080) return null;
+              return (
+                <div key={i} style={{ position: "absolute", left: 0, top: i * 1080, width: 1920, height: 1080, overflow: "hidden" }}>
+                  {props.sceneField(i)}
+                  {!props.bare && <SceneBody {...props} plan={plan} i={i} journey={all} />}
+                </div>
+              );
+            })}
+          </div>
+          {/* the scroll bar */}
+          <div style={{ position: "absolute", right: 8, top: thumbY, width: 9, height: thumbH, borderRadius: 9, background: pal.dark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.28)" }} />
+        </div>
+      </div>
+    </>
   );
 }
 
