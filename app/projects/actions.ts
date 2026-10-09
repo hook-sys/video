@@ -616,7 +616,7 @@ async function composerSet(
   const seed = seedFrom(projectId);
   const base = { words, brand, duration: Math.round(project.duration_seconds * 30), avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, creative: dir.creative, look: { scheme: dir.profile.look.scheme, energy: dir.profile.look.energy } };
   const sets = [result.ideas ? composeVariants({ ...base, seed, ideas: result.ideas, count: 1 }) : null, composeVariants({ ...base, seed: (seed + 7919) >>> 0, ideas: null, count: result.ideas ? 2 : 3 })].filter((x): x is NonNullable<typeof x> => !!x);
-  const candidates = sets.flatMap((set) => set.videos.map((video, v) => ({ video, plan: set.plans[v], problems: set.problems.filter((p) => p.startsWith(`video ${v + 1},`)).length })));
+  const candidates = sets.flatMap((set) => set.videos.map((video, v) => ({ video, plan: set.plans[v], problems: set.problems.filter((p) => p.startsWith(`video ${v + 1},`) || p.startsWith(`video ${v + 1}:`)).length })));
   // 5. the Judge scores them and keeps the best
   const heroSceneOf = (st: StoredComposition["staging"]) => st?.hero ?? null;
   const recent = pastVideos.slice(0, 8).map((v) => ({ staging: v.staging ?? null, display: (v.script as { art?: { display?: string } } | undefined)?.art?.display ?? null }));

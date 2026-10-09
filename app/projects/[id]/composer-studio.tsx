@@ -43,7 +43,7 @@ async function renderToFile({ props, file, signal, onProgress }: { props: Props;
 
 // Quick directions (added to the box; the customer can edit them).
 const QUICK = [
-  ["Darker", "Make it darker and more premium: a deep, dark background with glowing accents."],
+  ["Darker", "Make it darker and more premium: a deep, calm, dark background with the brand colour as the accent."],
   ["Brighter", "Make it brighter and lighter: a clean, light background with soft colours."],
   ["Calmer", "Make it calmer: slower, smoother motion and gentler cuts."],
   ["Bolder", "Make it bolder: bigger type, stronger colours and punchier cuts."],

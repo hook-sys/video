@@ -15,7 +15,7 @@ export type Anchor = { x: number; y: number; s: number; t: number }; // centre (
 
 // (drawn as SVG — see radial.tsx; the gradient's own fall-off is the softness)
 const pct = (v: string) => Number(v.replace("%", "")) / 100;
-const glow = (x: number, y: number, w: number, h: number, color: string, _blur = 40, at = "50% 50%", stop = 0.62): ReactNode => {
+const glow = (x: number, y: number, w: number, h: number, color: string, at = "50% 50%", stop = 0.62): ReactNode => {
   const [ax, ay] = at.split(" ").map(pct);
   return <Radial w={w} h={h} at={[ax, ay]} stops={[[0, color], [stop, color, 0]]} place={{ x: x - w / 2, y: y - h / 2 }} />;
 };
@@ -34,9 +34,9 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
     case "aurora":
       body = (
         <>
-          {glow(a.x - 520 * a.s + sway(1, 90), a.y - 160 + sway(2, 50), 1500 * a.s, 1000 * a.s, c1, 60)}
-          {glow(a.x + 560 * a.s + sway(3, 90), a.y + 220 + sway(4, 60), 1400 * a.s, 1000 * a.s, c2, 60)}
-          {glow(a.x + sway(5, 120), a.y - 520, 1200, 700, c3, 50)}
+          {glow(a.x - 520 * a.s + sway(1, 90), a.y - 160 + sway(2, 50), 1500 * a.s, 1000 * a.s, c1)}
+          {glow(a.x + 560 * a.s + sway(3, 90), a.y + 220 + sway(4, 60), 1400 * a.s, 1000 * a.s, c2)}
+          {glow(a.x + sway(5, 120), a.y - 520, 1200, 700, c3)}
         </>
       );
       break;
@@ -46,7 +46,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
       );
       body = (
         <>
-          {glow(a.x, a.y, 2000, 1300, c1, 50)}
+          {glow(a.x, a.y, 2000, 1300, c1)}
           {arc(a.y - 380 - 900 * a.s * 0.2 + sway(1, 16), false, 0.7)}
           {arc(a.y + 300 - 2200 + sway(2, 16), true, 0.5)}
         </>
@@ -59,14 +59,14 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
           <AbsoluteFill>
             <Tiles w={1920} h={1080} kind="grid" gap={Math.round(70 + a.s * 30)} size={0.75} color={hsl(hue, 30, d ? 60 : 30, d ? 0.09 : 0.07)} dx={f * 0.5 * e} dy={f * 0.25 * e} fade={(([rx, ry]) => ({ x: a.x, y: a.y, rx, ry, inner: 0.1, outer: 0.75 }))(reachOf(a.x, a.y, false))} />
           </AbsoluteFill>
-          {glow(a.x + sway(1), a.y + sway(2, 40), 1400 * a.s, 900 * a.s, c1, 60)}
+          {glow(a.x + sway(1), a.y + sway(2, 40), 1400 * a.s, 900 * a.s, c1)}
         </>
       );
       break;
     case "dots":
       body = (
         <>
-          {glow(a.x + sway(3), a.y, 1600 * a.s, 1000 * a.s, c1, 60)}
+          {glow(a.x + sway(3), a.y, 1600 * a.s, 1000 * a.s, c1)}
           <AbsoluteFill>
             <Tiles w={1920} h={1080} kind="dots" gap={34} size={2.2} color={hsl(hue, 40, d ? 75 : 40, d ? 0.28 : 0.2)} dx={f * 0.3} fade={(([rx, ry]) => ({ x: a.x, y: a.y, rx, ry, inner: 0, outer: (45 + a.s * 20) / 100 }))(reachOf(a.x, a.y, true))} />
           </AbsoluteFill>
@@ -76,7 +76,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
     case "rings":
       body = (
         <>
-          {glow(a.x, a.y, 1800 * a.s, 1200 * a.s, c1, 50)}
+          {glow(a.x, a.y, 1800 * a.s, 1200 * a.s, c1)}
           {[500, 820, 1160, 1520, 1900].map((r, k) => (
             <div key={r} style={{ position: "absolute", left: a.x - (r * a.s) / 2, top: a.y - (r * a.s) / 2 + Math.sin(f / 50 + k) * 8, width: r * a.s, height: r * a.s, borderRadius: 9999, border: `2px solid ${hsl(hue, 70, d ? 70 : 50, (d ? 0.2 : 0.16) - k * 0.03)}` }} />
           ))}
@@ -86,7 +86,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
     case "beams":
       body = (
         <>
-          {glow(a.x, 1080, 2400 * a.s, 1100, c1, 40, "50% 70%")}
+          {glow(a.x, 1080, 2400 * a.s, 1100, c1, "50% 70%")}
           {Array.from({ length: 13 }, (_, k) => (
             <div key={k} style={{ position: "absolute", left: 60 + k * 148, bottom: 0, width: 42, height: 220 + 200 * Math.abs(Math.sin(f / (20 / e) + k * 0.9 + a.t * 3)), borderRadius: 30, background: `linear-gradient(180deg, transparent, ${hsl(hue, 80, d ? 70 : 55, d ? 0.18 : 0.14)})` }} />
           ))}
@@ -96,7 +96,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
     case "horizon":
       body = (
         <>
-          {glow(a.x + sway(1, 40), 760, 1900 * a.s, 900, hsl(hue, 90, 60, d ? 0.7 : 0.45), 30, "50% 30%")}
+          {glow(a.x + sway(1, 40), 760, 1900 * a.s, 900, hsl(hue, 90, 60, d ? 0.7 : 0.45), "50% 30%")}
           {Array.from({ length: 9 }, (_, k) => (
             <div key={k} style={{ position: "absolute", left: 0, right: 0, top: 690 + k * 46 - ((f * 0.6 * e) % 46), height: 1.5, background: hsl(hue, 80, d ? 72 : 45, 0.05 + k * 0.013) }} />
           ))}
@@ -117,7 +117,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
     case "streaks":
       body = (
         <>
-          {glow(a.x + sway(1, 120), a.y, 1700 * a.s, 1000, c1, 60)}
+          {glow(a.x + sway(1, 120), a.y, 1700 * a.s, 1000, c1)}
           <AbsoluteFill style={{ backgroundImage: `repeating-linear-gradient(${110 + a.t * 30}deg, transparent 0 120px, ${d ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.6)"} 160px, transparent 220px)`, backgroundPosition: `${(f * 1.2 * e).toFixed(1)}px 0`, opacity: 0.8 }} />
         </>
       );
@@ -125,16 +125,16 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
     case "mesh":
       body = (
         <>
-          {glow(a.x - 600 + sway(1, 100), a.y - 300, 1600, 1100, c1, 70)}
-          {glow(a.x + 600 + sway(2, 100), a.y - 200, 1500, 1100, c2, 70)}
-          {glow(a.x + sway(3, 140), a.y + 420, 1800, 1000, c3, 70)}
+          {glow(a.x - 600 + sway(1, 100), a.y - 300, 1600, 1100, c1)}
+          {glow(a.x + 600 + sway(2, 100), a.y - 200, 1500, 1100, c2)}
+          {glow(a.x + sway(3, 140), a.y + 420, 1800, 1000, c3)}
         </>
       );
       break;
     case "spot":
       body = (
         <>
-          {glow(a.x + sway(1, 30), a.y + sway(2, 20), 1300 * a.s, 1300 * a.s, hsl(hue, 70, d ? 60 : 80, d ? 0.45 : 0.7), 30, "50% 50%", 0.5)}
+          {glow(a.x + sway(1, 30), a.y + sway(2, 20), 1300 * a.s, 1300 * a.s, hsl(hue, 70, d ? 60 : 80, d ? 0.45 : 0.7), "50% 50%", 0.5)}
           <AbsoluteFill>
             <Radial w={1920} h={1080} stops={[[0.4, d ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.05)", 0], [1, d ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.05)"]]} />
           </AbsoluteFill>
@@ -144,7 +144,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
     case "waves":
       body = (
         <>
-          {glow(a.x, a.y + 200, 1900, 1000, c1, 60)}
+          {glow(a.x, a.y + 200, 1900, 1000, c1)}
           <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
             {[0, 1, 2, 3].map((k) => {
               const y0 = a.y + 120 + k * 60;
@@ -157,7 +157,7 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
       );
       break;
     default:
-      body = glow(a.x, a.y, 1800, 1100, hsl(hue, 70, d ? 50 : 85, d ? 0.25 : 0.4), 60);
+      body = glow(a.x, a.y, 1800, 1100, hsl(hue, 70, d ? 50 : 85, d ? 0.25 : 0.4));
   }
   return (
     <AbsoluteFill style={base}>

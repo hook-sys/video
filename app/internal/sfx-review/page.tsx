@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/admin";
 
-// Listening page for the SFX library jobs (see /internal/sfx-jobs). Preview only.
+// Listening page for the SFX library jobs (see /internal/sfx-jobs). Preview only, admins only.
 export const dynamic = "force-dynamic";
 
 export default async function SfxReview() {
   if (process.env.VERCEL_ENV !== "preview") notFound();
-  const { data } = await createAdminClient()
+  const { db } = await requireAdmin();
+  const { data } = await db
     .from("sfx_jobs")
     .select("id, name, variant, take, prompt, duration_seconds, status, audio_b64, error")
     .order("name")
