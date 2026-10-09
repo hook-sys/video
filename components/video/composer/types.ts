@@ -137,8 +137,10 @@ export type JourneyKind = (typeof JOURNEYS)[number];
 // How one scene leads to the next on a journey: a line drawn between them,
 // the scene's main thing carried on into the next, a guide (a paper plane, a
 // cursor, a point of light) the camera follows, or a word that stays and
-// becomes the next scene's first word.
-export const LINKS = ["line", "carry", "lead", "word"] as const;
+// becomes the next scene's first word. Or deeper instead of sideways (see
+// depth.ts): into the scene's main thing, back out of the next one's, or
+// forward through the scenes.
+export const LINKS = ["line", "carry", "lead", "word", "dive", "reveal", "tunnel"] as const;
 export type LinkKind = (typeof LINKS)[number];
 export const GUIDES = ["plane", "cursor", "orb"] as const;
 export type GuideKind = (typeof GUIDES)[number];

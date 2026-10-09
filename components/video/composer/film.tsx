@@ -13,6 +13,7 @@ import { noise2D } from "@remotion/noise";
 import { Present, presentationOf } from "./present";
 import { JourneyField, Roads, arriving, cameraAt, moves, stations, worldTransform } from "./journey";
 import { type Links, Travellers, linksOf } from "./links";
+import { depthHops, hopAt, innerTransform, isDepth, outerTransform, tunnelAt, zoomAt } from "./depth";
 import { measureText } from "@remotion/layout-utils";
 import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene, TextBlock } from "./types";
 
@@ -142,6 +143,16 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   // (the circle's area grows evenly until it reaches the farthest corner)
   const reach = Math.hypot(Math.max(origin.x, 1920 - origin.x), Math.max(origin.y, 1080 - origin.y));
   const clip = flip ? `circle(${Math.round(Math.sqrt(tk) * reach)}px at ${Math.round(origin.x)}px ${Math.round(origin.y)}px)` : undefined;
+  if (isDepth(plan.link)) {
+    const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf };
+    const sceneField = (i: number) => <Field f={f} kind={art.field} pal={scenes[i].dark ? pals.dark : pals.light} hue={art.hue} anchor={anchors[i]} energy={art.energy} overlay={art.overlay} />;
+    return (
+      <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
+        <Depth {...props} bare={bare} sceneField={sceneField} />
+        {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+      </AbsoluteFill>
+    );
+  }
   if (plan.journey) {
     const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf, weight, upper, tracking };
     return (
@@ -207,6 +218,85 @@ function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv
       })}
       <Travellers f={f} L={L} st={st} mv={mv} ctxOf={ctxOf} display={props.display} weight={props.weight} tracking={props.tracking} upper={props.upper} lower={plan.art.case === "lower"} />
     </AbsoluteFill>
+  );
+}
+
+// Depth (see depth.ts): the camera goes into a thing of the scene (the next
+// scene is inside it), pulls back out of the next scene's thing, or flies
+// forward through the scenes. Every scene has its own background; between
+// scenes the two are on screen, one inside (or behind) the other.
+type DepthProps = Omit<SceneProps, "i" | "journey"> & { bare?: boolean; sceneField: (i: number) => ReactNode };
+function Depth(props: DepthProps) {
+  const f = useCurrentFrame();
+  const mv = useMemo(() => moves(props.plan), [props.plan]);
+  const { plan, hops } = useMemo(() => depthHops(arriving(props.plan, mv), mv), [props.plan, mv]);
+  const { seg, raw, u } = hopAt(f, mv);
+  const all = { start: -1, end: plan.duration + 1 };
+  const layer = (i: number, style: CSSProperties, field = true, frame?: CSSProperties) => (
+    <AbsoluteFill key={i} style={{ transformOrigin: "0 0", ...style }}>
+      <AbsoluteFill style={{ overflow: "hidden", ...frame }}>
+        {field && props.sceneField(i)}
+        {!props.bare && <SceneBody {...props} plan={plan} i={i} journey={all} />}
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+  const h = hops[seg];
+  if (!seg || raw >= 1 || !h) return layer(seg, {});
+  const fast = raw > 0.08 && raw < 0.92;
+  const blur = (node: ReactNode) => (fast ? <Trail layers={3} lagInFrames={0.35} trailOpacity={0.45}>{node}</Trail> : node);
+  if (h.kind === "tunnel") {
+    const t = tunnelAt(u);
+    const around = (S: number) => ({ transform: `translate(960px, 540px) scale(${S.toFixed(5)}) translate(-960px, -540px)` });
+    const fade = clamp01((u - 0.2) / 0.5);
+    return (
+      <>
+        {props.sceneField(seg)}
+        <AbsoluteFill style={{ opacity: 1 - fade * fade * (3 - 2 * fade) }}>{props.sceneField(seg - 1)}</AbsoluteFill>
+        <Warp f={f} k={Math.sin(raw * Math.PI)} travel={seg + u} color={(plan.scenes[seg].dark ? props.pals.dark : props.pals.light).accent} />
+        {blur(
+          <>
+            {t.inO > 0 && layer(seg, { ...around(t.inS), opacity: t.inO }, false)}
+            {t.outO > 0 && layer(seg - 1, { ...around(t.outS), opacity: t.outO }, false)}
+          </>,
+        )}
+      </>
+    );
+  }
+  // into a window (dive: the last scene is outside, the next inside) or out
+  // of one (reveal: the next scene is outside, the last one inside)
+  const dive = h.kind === "dive";
+  const outer = dive ? seg - 1 : seg, inner = dive ? seg : seg - 1;
+  const z = zoomAt(dive ? u : 1 - u, h.c, h.s);
+  const onScreen = h.s * z.Z;
+  // the window: rounded on screen while it is small, square when it fills the frame
+  const r = (24 * (1 - clamp01((onScreen - 0.4) / 0.6))) / onScreen;
+  const o = dive ? clamp01(raw / 0.22) : 1 - clamp01((u - 0.55) / 0.3);
+  const ring = props.pals[plan.scenes[outer].dark ? "dark" : "light"];
+  return blur(
+    <>
+      {layer(outer, { transform: outerTransform(z.Z, z.C) })}
+      {o > 0 && layer(inner, { transform: innerTransform(z.Z, z.C, h.c, h.s), opacity: o }, true, { borderRadius: r, boxShadow: `0 0 0 ${(3 / onScreen).toFixed(1)}px ${ring.accent}, 0 ${(30 / onScreen).toFixed(0)}px ${(80 / onScreen).toFixed(0)}px ${ring.shadow}` })}
+    </>,
+  );
+}
+
+// The light streaming past in a tunnel: points far ahead that rush out past
+// the edges (a short streak each) as the camera flies forward.
+function Warp({ f, k, travel, color }: { f: number; k: number; travel: number; color: string }) {
+  if (k <= 0.01) return null;
+  const R = rng(911);
+  const lines: ReactNode[] = [];
+  for (let j = 0; j < 90; j++) {
+    const a = R.next() * Math.PI * 2, rad = R.range(120, 900), z0 = R.next(), w = R.range(1.5, 4);
+    const z = 1 - ((z0 + travel * 0.9 + f * 0.0006) % 1);
+    const at = (zz: number) => ({ x: 960 + Math.cos(a) * rad * (0.16 / Math.max(0.04, zz)), y: 540 + Math.sin(a) * rad * (0.16 / Math.max(0.04, zz)) });
+    const p = at(z), q = at(z + 0.05);
+    lines.push(<line key={j} x1={q.x} y1={q.y} x2={p.x} y2={p.y} stroke={j % 3 ? "#ffffff" : color} strokeWidth={w * (1.2 - z)} strokeLinecap="round" opacity={k * Math.min(1, (1 - z) * 1.6) * 0.8} />);
+  }
+  return (
+    <svg width={1920} height={1080} style={{ position: "absolute", left: 0, top: 0 }}>
+      {lines}
+    </svg>
   );
 }
 
