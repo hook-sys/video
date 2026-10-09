@@ -1,14 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import { Player } from "@remotion/player";
-import { changeComposerVideo } from "@/app/projects/actions";
 import { ComposerFilm } from "@/components/video/composer/film";
-import { CHANGE_WORDS, COMPOSER_CHANGES, type ComposerPlan, type ComposerProps } from "@/components/video/composer/types";
+import type { ComposerPlan, ComposerProps } from "@/components/video/composer/types";
 
 // The Composer's video of a project (each scene composed by its Director):
-// watch it, download it (rendered in this browser), or "Change it" with your
-// own direction — each change is a new version, the earlier ones are kept.
+// watch it and download it (rendered in this browser). A video changed
+// before "Change it" was removed keeps its versions to pick from.
 // the film's frame (16:9 unless its plan says 9:16 or 1:1)
 const sizeOf = (plan: ComposerPlan) => [plan.w ?? 1920, plan.h ?? 1080] as const;
 type Props = ComposerProps & { screens?: string[] };
@@ -42,33 +41,16 @@ async function renderToFile({ props, file, signal, onProgress }: { props: Props;
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-// Quick directions (added to the box; the customer can edit them).
-const QUICK = [
-  ["Darker", "Make it darker and more premium: a deep, calm, dark background with the brand colour as the accent."],
-  ["Brighter", "Make it brighter and lighter: a clean, light background with soft colours."],
-  ["Calmer", "Make it calmer: slower, smoother motion and gentler cuts."],
-  ["Bolder", "Make it bolder: bigger type, stronger colours and punchier cuts."],
-  ["More product", "Show the product's screens (phone, browser, dashboard) in more scenes."],
-  ["Less text", "Put fewer words on screen; let the pictures carry the scenes."],
-] as const;
-const wordsIn = (t: string) => t.split(/\s+/).filter(Boolean).length;
 
-// byRule ("AI only for the voice"): nothing reads a written direction, so a
-// change is a new version, staged and composed anew by rule.
-export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, name, className, secondaryClassName, byRule = false, about }: { projectId: string; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string; byRule?: boolean; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null } }) {
+export function ComposerStudio({ plans, changes, screens, audioUrl, name, className, about }: { plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null } }) {
   // the newest version unless the customer picks an earlier one
   const [picked, setPicked] = useState<number | null>(null);
   const selected = Math.min(picked ?? plans.length - 1, plans.length - 1);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string>();
-  const [direction, setDirection] = useState("");
-  const [note, setNote] = useState<{ ok: boolean; message: string } | null>(null);
-  const [pending, start] = useTransition();
   const abort = useRef<AbortController | null>(null);
   const plan = plans[selected];
-  const left = Math.max(0, COMPOSER_CHANGES - changes.length);
-  const count = wordsIn(direction);
 
   const download = async () => {
     setError(undefined);
@@ -86,17 +68,6 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
       abort.current = null;
     }
   };
-
-  const change = () =>
-    start(async () => {
-      setNote(null);
-      const r = await changeComposerVideo(projectId, direction);
-      setNote(r);
-      if (r.ok) {
-        setDirection("");
-        setPicked(null);
-      }
-    });
 
   return (
     <div className="flex flex-col gap-3">
@@ -127,7 +98,7 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
           {plans.length > 1 && (
             <div className="flex flex-wrap gap-2">
               {plans.map((p, i) => (
-                <button key={`${i}:${p.seed}`} type="button" onClick={() => setPicked(i)} title={i ? changes[i - 1]?.direction.slice(0, 300) : "The Director's video"} className={`flex flex-col items-start rounded-2xl border bg-white/70 px-3 py-2 text-left ${i === selected ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/10 hover:bg-white"}`}>
+                <button key={`${i}:${p.seed}`} type="button" onClick={() => setPicked(i)} title={i ? changes[i - 1]?.direction.slice(0, 300) : "The first video"} className={`flex flex-col items-start rounded-2xl border bg-white/70 px-3 py-2 text-left ${i === selected ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/10 hover:bg-white"}`}>
                   <span className="text-sm font-semibold">Version {i + 1}</span>
                   <span className="max-w-[180px] truncate text-xs text-foreground/55">{i ? changes[i - 1]?.direction ?? "" : "Original"}</span>
                 </button>
@@ -153,41 +124,6 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
             )}
             {error && <p className="text-xs text-[#a1281b]">{error}</p>}
             <p className="text-xs text-foreground/50">Rendered in this browser (1080p). Keep this tab open until it finishes.</p>
-          </div>
-          <div className="flex flex-col gap-3 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold">{byRule ? "Another version" : "Change it"}</h2>
-              <span className="text-xs text-foreground/50">{left} of {COMPOSER_CHANGES} left</span>
-            </div>
-            {byRule ? (
-              <>
-                <p className="text-xs text-foreground/55">A new version of this video: another look and another way of telling it. Your script and voice stay the same.</p>
-                <button type="button" disabled={!left || pending || busy} onClick={change} className={secondaryClassName}>
-                  {pending ? "Making a new version…" : left ? "New version" : "No versions left"}
-                </button>
-              </>
-            ) : (
-              <>
-            <p className="text-xs text-foreground/55">Tell the Director what to change — colours, mood, pace, any scene, what to show. Your script and voice stay the same.</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {QUICK.map(([label, line]) => (
-                    <button key={label} type="button" disabled={!left || pending} onClick={() => setDirection((d) => (d.trim() ? `${d.trim()}\n${line}` : line))} className="rounded-full bg-white/70 px-2.5 py-1 text-xs ring-1 ring-black/[0.08] hover:bg-white disabled:opacity-40">
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <textarea value={direction} onChange={(e) => setDirection(e.target.value)} disabled={!left || pending} rows={6} placeholder={'e.g. "Make the opening darker and more dramatic. In the scene about reminders show a phone with the notification. Use blue instead of purple."'} className="w-full resize-y rounded-xl border border-foreground/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[#0a66d6] disabled:opacity-50" />
-                <div className="flex items-center justify-between text-xs">
-                  <span className={count > CHANGE_WORDS ? "text-[#a1281b]" : "text-foreground/50"}>
-                    {count} / {CHANGE_WORDS} words
-                  </span>
-                </div>
-                <button type="button" disabled={!left || pending || !count || count > CHANGE_WORDS || busy} onClick={change} className={secondaryClassName}>
-                  {pending ? "Changing your video…" : left ? "Change it" : "No changes left"}
-                </button>
-              </>
-            )}
-            {note && <p className={`text-xs ${note.ok ? "text-[#1e7a3c]" : "text-[#a1281b]"}`}>{note.message}</p>}
           </div>
         </aside>
       </div>

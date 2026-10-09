@@ -9,7 +9,6 @@ import { PipelineProgress } from "@/components/pipeline-progress";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import { getProjectCostSummary } from "@/lib/costs/benchmark";
 import { canUseDevTools } from "@/lib/dev-tools";
-import { getStoredAiConfig } from "@/lib/ai/models";
 import { SubmitButton } from "@/components/submit-button";
 import { AppShell } from "@/components/site/app-shell";
 import { userAccess } from "@/lib/admin";
@@ -34,8 +33,6 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   } = await supabase.auth.getUser();
   const dev = !!user && (await canUseDevTools(supabase, user.id));
   const admin = user ? (await userAccess(supabase, user.id)).admin : false;
-  // ("AI only for the voice": a change is a new version, composed by rule)
-  const byRule = (await getStoredAiConfig()).engine.voiceOnly;
 
   const { data: screenshots } = await supabase
     .from("project_screenshots")
@@ -107,7 +104,6 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
     : project.pipeline_status === "needs_input" ? { label: "Needs your input", cls: "bg-[#fff3df] text-[#8a5300]" }
     : { label: "Draft", cls: "bg-foreground/10 text-foreground/60" };
   const primaryBtn = "inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#0a66d6] px-5 py-3.5 font-semibold text-white hover:bg-[#0859bd] disabled:opacity-60";
-  const secondaryBtn = "inline-flex w-full items-center justify-center gap-2 rounded-full bg-white/80 px-5 py-3 font-semibold ring-1 ring-black/[0.08] hover:bg-white disabled:opacity-60";
 
   return (
     <AppShell title={title} admin={admin} active={null} initial={(user?.email ?? "?")[0]} wide>
@@ -140,7 +136,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {/* The Composer's video: watch it, change it, download it. */}
       {ready && composer && (
-        <ComposerStudio projectId={id} plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={audioUrl} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} byRule={byRule} about={composer.about} />
+        <ComposerStudio plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={audioUrl} name={title} className={primaryBtn} about={composer.about} />
       )}
       {ready && !composer && (
         <section className="rounded-2xl bg-white/70 p-6 text-sm text-foreground/65 ring-1 ring-black/[0.06]">This video can&apos;t be shown: its voice is missing. Try again from a new video.</section>

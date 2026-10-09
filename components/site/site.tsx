@@ -113,8 +113,8 @@ export function Site({ initial, signedIn, error, message }: Props) {
                 <span>A natural voice, timed word by word.</span>
               </div>
               <div>
-                <b>Three changes included</b>
-                <span>Say what to change. A new version, the old one kept.</span>
+                <b>Made for your brand</b>
+                <span>Your icon, name and colour in every scene.</span>
               </div>
               <div>
                 <b>Download as MP4</b>
@@ -131,9 +131,9 @@ export function Site({ initial, signedIn, error, message }: Props) {
             <p className="gs-lead">You bring what the product does. MotionBrief does the rest.</p>
             <div className="gs-steps">
               {[
-                ["Tell us about the product", "Paste your website, or write the script yourself, word for word.", "website or script"],
+                ["Tell us about the product", "Write the script word for word, add your icon, and answer six short questions.", "6 questions"],
                 ["Hear the voice", "The script is read by a natural voice. Every word gets its own moment.", "automatic"],
-                ["Watch, change, download", "Each scene follows the words. Ask for a change up to three times, then download.", "MP4"],
+                ["Watch and download", "Each scene follows the words. Download it ready to post.", "MP4"],
               ].map(([title, text, tag], i) => (
                 <div key={title} className="gs-step">
                   <span className="n">{i + 1}</span>

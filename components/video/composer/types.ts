@@ -9,9 +9,6 @@ export const COMPOSER_ID = "ComposerFilm";
 export const FPS = 30;
 // (the frame: frame.ts — 16:9, 9:16 or 1:1)
 export { W, H } from "./frame";
-// "Change it": how many times a video can be changed, and how long a direction may be (words).
-export const COMPOSER_CHANGES = 3;
-export const CHANGE_WORDS = 1000;
 
 // ── the vocabulary ─────────────────────────────────────────────────────────
 export const FIELDS = ["aurora", "arcs", "grid", "dots", "rings", "beams", "horizon", "discs", "streaks", "mesh", "spot", "waves", "plain"] as const;

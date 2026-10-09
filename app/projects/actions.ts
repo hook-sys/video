@@ -34,8 +34,6 @@ import {
   logoPath,
   parseHttpUrl,
   validateLogo,
-  validateScreenshots,
-  VERCEL_SCREENSHOT_TOTAL_BYTES,
 } from "@/lib/projects";
 import { runWebsiteCapture } from "@/lib/website-capture";
 import { type BriefUsage, ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
@@ -46,12 +44,12 @@ import { getAiConfig, unitCost, usageCost } from "@/lib/ai/models";
 import { COMPOSE_MESSAGE, NEEDS_SCREENSHOTS_MESSAGE, OWN_SCRIPT_MESSAGE, type PipelineStep } from "@/lib/pipeline";
 import { generateVoice as generateFalVoice, timeWords } from "@/lib/ai/fal";
 import { estimateWords, parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { type MotionInput, type MotionPlan, type MotionResult, directMotion, reviewMotion, reviseMotion, rulePlan, scenesOf } from "@/lib/ai/motion-director";
+import { type MotionInput, type MotionResult, directMotion, reviewMotion } from "@/lib/ai/motion-director";
 import { ruleBrief } from "@/lib/rule-brief";
+import { detailsFrom, parseDetails } from "@/lib/project-details";
 import { scorePlan } from "@/components/video/composer/score";
-import { pickLanguage, type BrandProfile, type CreativePlan } from "@/lib/studio";
+import { type BrandProfile, type CreativePlan } from "@/lib/studio";
 import { frameOf } from "@/components/video/composer/frame";
-import { CHANGE_WORDS, COMPOSER_CHANGES } from "@/components/video/composer/types";
 import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { scriptWords } from "@/components/video/composer/words";
 import { neverList } from "@/lib/video-rules";
@@ -99,27 +97,23 @@ export async function createProject(
   if (brandColorRaw && !brandColor) return { error: "Brand colour must be a hex colour like #0E9CA6." };
   if (brandName.length > BRAND_NAME_MAX || callToAction.length > CTA_MAX || targetAudience.length > AUDIENCE_MAX)
     return { error: "Brand name and call to action must be 60 characters or less, audience 200." };
+  // every answer is required (the Director builds on them)
+  if (!brandName) return { error: "Your company name is required." };
+  if (!targetAudience) return { error: "Say who the video is for." };
+  if (!callToAction) return { error: "The call to action is required." };
+  if (!websiteUrl) return { error: "Your website is required." };
+  const { details, error: detailsError } = detailsFrom(formData);
+  if (!details) return { error: detailsError ?? "Please answer every question." };
   if (!duration || !format || !voiceLanguage || !voiceStyle)
     return { error: "Please choose a valid option for every field." };
   if (websiteUrl && !parseHttpUrl(websiteUrl))
     return { error: "Website URL must be a valid http:// or https:// address." };
 
-  // The logo is required; screenshots are optional.
+  // The logo (the icon) is required.
   const logoEntry = formData.get("logo");
   const logo = logoEntry instanceof File ? logoEntry : null;
   const logoError = validateLogo(logo);
   if (logoError) return { error: logoError };
-  // With no file chosen, browsers send an empty File — unnamed on desktop,
-  // named "blob" on mobile Chrome. Empty entries are "none chosen".
-  const screenshots = formData
-    .getAll("screenshots")
-    .filter((f): f is File => f instanceof File && f.size > 0);
-  // On Vercel the logo shares the request-size budget with the screenshots.
-  const screenshotError = validateScreenshots(
-    screenshots,
-    process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES - logo!.size : undefined,
-  );
-  if (screenshotError) return { error: screenshotError };
 
   const supabase = await createClient();
   const {
@@ -165,46 +159,18 @@ export async function createProject(
       brand_color: brandColor,
       call_to_action: callToAction,
       target_audience: targetAudience,
+      details,
     })
     .select("id")
     .single();
 
   if (error) return { error: error.message };
 
-  const uploaded: string[] = [];
   const logoAt = logoPath(user.id, data.id, SCREENSHOT_TYPES[logo!.type]);
   const logoUpload = await supabase.storage.from(SCREENSHOTS_BUCKET).upload(logoAt, logo!, { contentType: logo!.type });
   if (logoUpload.error) {
     await supabase.from("projects").delete().eq("id", data.id);
     return { error: "Icon upload failed. Please try again." };
-  }
-  for (const file of screenshots) {
-    const path = `${user.id}/${data.id}/${crypto.randomUUID()}.${SCREENSHOT_TYPES[file.type]}`;
-    const upload = await supabase.storage
-      .from(SCREENSHOTS_BUCKET)
-      .upload(path, file, { contentType: file.type });
-    if (upload.error) break;
-    uploaded.push(path);
-  }
-
-  let saved = uploaded.length === screenshots.length;
-  if (saved && uploaded.length > 0) {
-    const { error: rowsError } = await supabase.from("project_screenshots").insert(
-      uploaded.map((storage_path, i) => ({
-        project_id: data.id,
-        user_id: user.id,
-        storage_path,
-        original_filename: screenshots[i].name,
-      })),
-    );
-    saved = !rowsError;
-  }
-
-  if (!saved) {
-    // Roll back so the user can retry cleanly.
-    await supabase.storage.from(SCREENSHOTS_BUCKET).remove([logoAt, ...uploaded]);
-    await supabase.from("projects").delete().eq("id", data.id);
-    return { error: "Screenshot upload failed. Please try again." };
   }
 
   // Direction library: what the customer asked for, kept as data the product
@@ -228,7 +194,7 @@ export async function createProject(
       call_to_action: callToAction || null,
       target_audience: targetAudience || null,
       has_logo: true,
-      screenshot_count: uploaded.length,
+      screenshot_count: 0,
     });
   if (libraryError) console.error("direction library insert failed:", data.id, libraryError.message);
 
@@ -431,11 +397,12 @@ async function motionDirection(
   admin: ReturnType<typeof createAdminClient>,
   projectId: string,
   userId: string,
-  project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null },
+  project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null; details?: unknown; target_audience?: string | null },
   narration: string,
   brief: { product_name?: string; product_summary?: string; cta?: string } | null,
 ): Promise<MotionDirection> {
   const usage: BriefUsage[] = [];
+  const details = parseDetails(project.details);
   const brand = brandOf(project, brief);
   const [{ known, earlier, past }, { data: capture }, never] = await Promise.all([
     pastOf(admin, projectId, userId, brand.name),
@@ -456,6 +423,9 @@ async function motionDirection(
     earlier,
     known,
     never,
+    // the customer's own answers (the form), taken as facts
+    category: details?.category ?? null,
+    customer: details ? { audience: project.target_audience?.trim() ?? "", features: details.features, before: details.before, mood: details.mood, use: details.use } : null,
     seed: seedFrom(projectId),
   };
   const result = await directMotion(input, (u) => usage.push(u));
@@ -471,7 +441,7 @@ async function composerSet(
   admin: ReturnType<typeof createAdminClient>,
   projectId: string,
   userId: string,
-  project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null; duration_seconds: number; format: string },
+  project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null; details?: unknown; target_audience?: string | null; duration_seconds: number; format: string },
   voice: WordTiming[],
   narration: string,
   brief: { product_name?: string; product_summary?: string; cta?: string } | null,
@@ -514,7 +484,7 @@ async function generateComposer(projectId: string, userId: string, direction?: P
   const admin = createAdminClient();
   const { data: project } = await admin
     .from("projects")
-    .select("brief, format, duration_seconds, direction, advanced_direction, brand_name, brand_color, call_to_action, website_url, voice_status, voice_result")
+    .select("brief, format, duration_seconds, direction, advanced_direction, brand_name, brand_color, call_to_action, website_url, details, target_audience, voice_status, voice_result")
     .eq("id", projectId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -761,7 +731,7 @@ async function runPipeline(projectId: string, userId: string) {
     // for the voice or the Directors, so it is written alongside them.
     await enter("writing");
     let p = await state();
-    const { data: row } = await admin.from("projects").select("brief, format, direction, advanced_direction, brand_name, brand_color, call_to_action, website_url").eq("id", projectId).single();
+    const { data: row } = await admin.from("projects").select("brief, format, direction, advanced_direction, brand_name, brand_color, call_to_action, website_url, details, target_audience").eq("id", projectId).single();
     const alongside = !!row && !!lockedScriptOf(row);
     const briefRun = p.brief_status !== "completed" ? attempt(() => generateBrief(projectId)) : null;
     const briefDone = async () => {
@@ -816,88 +786,5 @@ export async function retryPipeline(projectId: string) {
   if (!project || !["failed", "idle"].includes(project.pipeline_status)) return;
   if (await claimPipeline(projectId, user.id)) after(() => runPipeline(projectId, user.id));
   revalidatePath(`/projects/${projectId}`);
-}
-
-// "Change it": the customer's direction (up to 1000 words) revises the
-// Composer video; the voice and script stay. Each change is a new version
-// (the earlier ones are kept); three changes per video. Returns a message
-// for the form.
-export async function changeComposerVideo(projectId: string, direction: string): Promise<{ ok: boolean; message: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const text = String(direction ?? "").trim();
-  const count = text.split(/\s+/).filter(Boolean).length;
-  const ai = await getAiConfig();
-  // ("AI only for the voice": nothing reads a written direction — a change is a new version, composed by rule)
-  const byRule = ai.engine.voiceOnly;
-  if (!text && !byRule) return { ok: false, message: "Write what you want changed." };
-  if (count > CHANGE_WORDS) return { ok: false, message: `Keep it to ${CHANGE_WORDS} words (now ${count}).` };
-  const admin = createAdminClient();
-  // RLS: only returns the project if this user owns it.
-  const { data: project } = await supabase.from("projects").select("brief, format, brand_name, brand_color, call_to_action, website_url, duration_seconds, voice_result").eq("id", projectId).maybeSingle();
-  const raw = (project?.brief ?? null) as { composer?: { videos: StoredComposition[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[]; profile?: BrandProfile; creative?: CreativePlan }; product_name?: string; product_summary?: string; cta?: string; script?: string } | null;
-  const composer = raw?.composer;
-  const voice = parseWordTimings((project?.voice_result as { timing?: { words?: unknown } } | null)?.timing?.words);
-  // the words its versions are written on (older videos: the voice's own pieces)
-  const words = voice && composer?.indexing === "script" ? scriptWords(raw?.script, voice) : voice;
-  if (!project || !composer?.videos?.length || !words?.length) return { ok: false, message: "This video can't be changed." };
-  const done = (composer.changes ?? []).filter((c) => c.ok).length;
-  if (done >= COMPOSER_CHANGES) return { ok: false, message: `All ${COMPOSER_CHANGES} changes for this video are used.` };
-  const current = composer.videos[composer.videos.length - 1];
-  const brand = brandOf(project, raw ?? null);
-  let usage: BriefUsage | null = null;
-  const seed = (current.seed + 7919) >>> 0;
-  const duration = Math.round(project.duration_seconds * 30);
-  // the plan the current version was built from: the brand, its concept and
-  // how it moves now, its scenes (a video made before the Motion Director: by rule)
-  const ruled = rulePlan({ name: brand.name, words, seed: current.seed });
-  const now = current.staging ?? null;
-  const before = composer.creative ?? ruled.creative;
-  const plan: MotionPlan = {
-    profile: composer.profile ?? ruled.profile,
-    creative: { ...before, language: now?.language ?? before.language, journey: now?.journey && now.journey !== "scroll" && !["timeline", "map", "tiles"].includes(now.journey) ? now.journey : before.journey, guide: now?.guide ?? before.guide, recap: now?.recap ?? before.recap, scheme: current.script.art.scheme },
-    ideas: scenesOf(current.script),
-    source: "ai",
-  };
-  let video: StoredComposition | null = null;
-  let creative = plan.creative;
-  const problems: string[] = [];
-  let ms = 0;
-  if (byRule) {
-    // by rule: the plan stays, the new version takes another camera language than the ones before
-    creative = { ...plan.creative, language: pickLanguage(plan.profile.mood, seed, composer.videos.map((v) => v.staging?.language)) };
-    video = composeVariants({ words, brand, duration, seed, count: 1, avoidStaging: composer.videos.map((v) => v.staging ?? null), creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) }).videos[0] ?? null;
-  } else {
-    // the Motion Director revises its own plan (anything the direction asks: the
-    // concept, the staging, the art, the scenes) and the new version is built from it
-    const rev = await reviseMotion(plan, text, { name: brand.name, color: brand.color, cta: brand.cta, url: brand.url, product: raw?.product_summary ?? null, words, never: await loadNeverList(admin), seed }, (u) => (usage = u));
-    problems.push(...rev.problems);
-    ms = rev.ms;
-    if (rev.ok) {
-      creative = rev.plan.creative;
-      const set = composeVariants({ words, brand, duration, seed, ideas: rev.plan.ideas, count: 1, creative, size: frameOf(project.format) });
-      problems.push(...set.problems);
-      // (a plan that does not lay out is not a change: the video stays as it was)
-      video = set.videos[0]?.source === "director" ? set.videos[0] : null;
-    }
-  }
-  const changes = [...(composer.changes ?? []), { direction: text.slice(0, 9000), at: new Date().toISOString(), ok: !!video }];
-  await admin
-    .from("projects")
-    // (the plan changes with it: the next change starts from this version)
-    .update({ brief: { ...(project.brief as object), composer: { ...composer, videos: video ? [...composer.videos, video] : composer.videos, changes, ...(video && !byRule ? { creative } : {}) } } })
-    .eq("id", projectId)
-    .eq("user_id", user.id);
-  const u = usage as BriefUsage | null;
-  if (u && (u.inputTokens || u.outputTokens)) {
-    await recordCost(admin, { project_id: projectId, user_id: user.id, operation: "openai_brief", model: u.model, quantity: u.inputTokens + u.outputTokens, estimated_cost_usd: usageCost(ai, u, (i, o) => openaiCost(u.model, i, o)), metadata: { kind: "composer_change", input_tokens: u.inputTokens, output_tokens: u.outputTokens, words: count, ok: !!video } });
-  }
-  console.info("composer change:", { projectId, ok: !!video, ms, words: count, language: creative.language, scheme: creative.scheme, problems: problems.slice(0, 8) });
-  revalidatePath(`/projects/${projectId}`);
-  if (!video) return { ok: false, message: "The change didn't work this time — your video is as it was, and no change was used. Try again or say it differently." };
-  return { ok: true, message: `Done — version ${composer.videos.length + 1}. ${COMPOSER_CHANGES - done - 1} change${COMPOSER_CHANGES - done - 1 === 1 ? "" : "s"} left.` };
 }
 

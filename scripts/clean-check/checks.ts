@@ -21,7 +21,8 @@ import { composeVariants, fitScript, scriptFromIdeas, type Ideas } from "@/compo
 import { placeAll } from "@/components/video/composer/layout";
 import { Script as ComposerScript } from "@/components/video/composer/types";
 import { clauses } from "@/components/video/composer/auto";
-import { answerOf, directMotion, ideaProblems, reviewMotion, reviewNotes, reviseMotion, scenesOf } from "@/lib/ai/motion-director";
+import { detailsFrom, parseDetails } from "@/lib/project-details";
+import { answerOf, directMotion, ideaProblems, reviewMotion, reviewNotes, rulePlan, scenesOf } from "@/lib/ai/motion-director";
 import { livingStandIn } from "@/components/video/icons/living";
 import { pieceToWord, scriptWords } from "@/components/video/composer/words";
 
@@ -246,15 +247,22 @@ export async function runChecks(): Promise<Check[]> {
     add("review: sees our checks, its improved plan is kept, the brand stays", sent.length === 1 && sent[0].input.includes("YOUR PLAN") && sent[0].input.includes("Problems found") && better.plan.creative.language === "line" && better.plan.creative.journey === "snake" && better.plan.profile.mood === pl.profile.mood, `${better.plan.creative.language}/${better.plan.creative.journey} · mood ${better.plan.profile.mood}`);
     const empty = await reviewMotion(pl, input, undefined, client(answer({}, [])) as never);
     add("review: an answer without scenes changes nothing", empty.plan === pl && empty.problems[0].includes("no scenes"), empty.problems[0]);
-    // "Change it": the same director revises its plan (the direction capped at 1000 words)
+    // the customer's answers (the form) are facts: they win over what was read from the script
+    const customer = { audience: "small clinic owners", features: ["Online booking", "SMS reminders", "Live schedule"], before: ["Paper", "Phone calls"], mood: "premium" as const, use: "ad" as const };
     sent.length = 0;
-    const changed = await reviseMotion(pl, "Make it dark. ".repeat(600), input, undefined, client(answer({ scheme: "dark", language: "cuts" })) as never);
-    const kept = (sent[0]?.input.split("<<<")[1] ?? "").split(/\s+/).filter(Boolean).length;
-    add("Change it: the plan revised (staging too), direction capped at 1000 words", changed.ok && changed.plan.creative.scheme === "dark" && changed.plan.creative.language === "cuts" && changed.plan.profile.look.scheme === "dark" && kept <= 1001 && sent[0].input.includes("THE CURRENT PLAN"), `${kept} words sent · ${changed.plan.creative.language}, ${changed.plan.creative.scheme}`);
-    const failed = await reviseMotion(pl, "blue", input, undefined, client(null) as never);
-    add("Change it: no answer → nothing changes", !failed.ok && failed.plan === pl, failed.problems[0] ?? "");
+    const told = await directMotion({ ...input, category: "clinic & health", customer }, undefined, client(answer({})) as never);
+    const byRule = rulePlan({ ...input, category: "clinic & health", customer });
+    add("the customer's answers reach the director and win over its reading", sent[0].input.includes("THE CUSTOMER'S ANSWERS") && sent[0].input.includes("SMS reminders") && sent[0].input.includes("an ad") && told.plan.profile.mood === "premium" && told.plan.profile.features[1] === "SMS reminders" && told.plan.profile.before.includes("Paper") && byRule.profile.mood === "premium" && byRule.profile.audience === "small clinic owners", `${told.plan.profile.mood} · ${told.plan.profile.features.join(", ")}`);
+    const form = (pairs: [string, string][]) => {
+      const f = new FormData();
+      pairs.forEach(([k, v]) => f.append(k, v));
+      return f;
+    };
+    const full = detailsFrom(form([["category", "online shop"], ["use", "social"], ["mood", "energetic"], ["feature", "Orders"], ["feature", "Stock"], ["feature", "Couriers"], ["before", "Spreadsheets"]]));
+    const missing = detailsFrom(form([["category", "online shop"], ["use", "social"], ["mood", "energetic"], ["feature", "Orders"], ["feature", "Stock"], ["before", "Spreadsheets"]]));
+    add("form: every answer is required", !!full.details && full.details.features.length === 3 && !missing.details && !!missing.error && parseDetails(full.details)?.use === "social" && parseDetails({ category: "nope" }) === null, missing.error ?? "");
     const back = answerOf(pl, ruleVideo);
-    add("Change it: a stored video goes back to the director in its own format", (back.staging as { scheme: string }).scheme === "mixed" && !("scheme" in (back.arts as Record<string, unknown>[])[0]) && (back.scenes as unknown[]).length === ruleVideo.scenes.length, "brand · concept · staging · art · scenes");
+    add("a stored video goes back to the director in its own format", (back.staging as { scheme: string }).scheme === "mixed" && !("scheme" in (back.arts as Record<string, unknown>[])[0]) && (back.scenes as unknown[]).length === ruleVideo.scenes.length, "brand · concept · staging · art · scenes");
     // one camera language per video, its signature at the hero
     const langs = new Set<string>();
     let single = true;

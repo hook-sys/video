@@ -3,58 +3,65 @@
 import { useActionState, useState } from "react";
 import { createProject } from "@/app/projects/actions";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
-import {
-  BRAND_NAME_MAX,
-  CTA_MAX,
-  directionFor,
-  VOICE_SCRIPT_MAX,
-  FORMATS,
-  LOGO_MAX_BYTES,
-  SCREENSHOT_MAX_BYTES,
-  SCREENSHOT_MAX_FILES,
-  STYLE_PRESETS,
-  VOICE_GENDERS,
-  VOICE_LANGUAGES,
-  VOICE_STYLES,
-  estimateVideoSeconds,
-  validateLogo,
-  validateScreenshots,
-  type StylePreset,
-} from "@/lib/projects";
+import { BRAND_CATEGORIES } from "@/lib/studio";
+import { CATEGORY_LABEL, FEATURE_MAX, MOOD_CHOICES, OLD_WAYS, USES, USE_LABEL } from "@/lib/project-details";
+import { AUDIENCE_MAX, BRAND_NAME_MAX, CTA_MAX, directionFor, VOICE_SCRIPT_MAX, FORMATS, LOGO_MAX_BYTES, STYLE_PRESETS, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_STYLES, estimateVideoSeconds, validateLogo, type StylePreset } from "@/lib/projects";
 
 const label = "text-sm font-medium";
 const hint = "text-xs text-foreground/50";
 const input =
-  "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm transition placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
+  "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
 const area =
-  "w-full resize-y rounded-2xl border border-foreground/12 bg-white/80 p-4 text-base leading-relaxed transition placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
+  "w-full resize-y rounded-2xl border border-foreground/12 bg-white/80 p-4 text-base leading-relaxed placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
 
-// No style to pick: every project gets four videos in four different styles.
+// No style to pick: the Motion Director decides the look from the answers.
 const STYLE: StylePreset = "Auto";
 
 export type Prefill = { script: string; brandName: string; websiteUrl: string; cta: string; voice?: string };
 type VoiceOption = { name: string; gender: "female" | "male"; label: string };
 
-export function CreateProjectForm({ maxTotalBytes, prefill, voices = [] }: { maxTotalBytes?: number; prefill?: Prefill; voices?: VoiceOption[] }) {
+// The brand's colour, read from its icon: the most common colourful shade
+// (a black, white or grey icon gives the house blue).
+async function colourOf(url: string): Promise<string> {
+  const img = new Image();
+  img.src = url;
+  await img.decode();
+  const c = document.createElement("canvas");
+  c.width = c.height = 48;
+  const g = c.getContext("2d");
+  if (!g) return "#0A66D6";
+  g.drawImage(img, 0, 0, 48, 48);
+  const px = g.getImageData(0, 0, 48, 48).data;
+  const bins = new Map<number, { n: number; r: number; g: number; b: number }>();
+  for (let i = 0; i < px.length; i += 4) {
+    const [r, gr, b, a] = [px[i], px[i + 1], px[i + 2], px[i + 3]];
+    const max = Math.max(r, gr, b), min = Math.min(r, gr, b);
+    if (a < 200 || max < 40 || max - min < 40) continue;
+    const hue = max === r ? ((gr - b) / (max - min) + 6) % 6 : max === gr ? (b - r) / (max - min) + 2 : (r - gr) / (max - min) + 4;
+    const k = Math.round(hue * 2) % 12;
+    const bin = bins.get(k) ?? { n: 0, r: 0, g: 0, b: 0 };
+    bins.set(k, { n: bin.n + 1, r: bin.r + r, g: bin.g + gr, b: bin.b + b });
+  }
+  const best = [...bins.values()].sort((a, b) => b.n - a.n)[0];
+  if (!best || best.n < 12) return "#0A66D6";
+  const hex = (v: number) => Math.round(v / best.n).toString(16).padStart(2, "0");
+  return `#${hex(best.r)}${hex(best.g)}${hex(best.b)}`.toUpperCase();
+}
+
+export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill; voices?: VoiceOption[] }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState(prefill?.script ?? "");
   const [format, setFormat] = useState<string>(FORMATS[0]);
-  const [logo, setLogo] = useState<{ name: string; url: string; size: number } | null>(null);
+  const [logo, setLogo] = useState<{ name: string; url: string; colour: string | null } | null>(null);
   const [logoError, setLogoError] = useState<string>();
-  const [shots, setShots] = useState<File[]>([]);
-  // The icon and the screenshots share the upload budget on this server.
-  const shotsError = validateScreenshots(shots, maxTotalBytes ? maxTotalBytes - (logo?.size ?? 0) : undefined);
-  const budgetError = maxTotalBytes && (logo?.size ?? 0) > maxTotalBytes ? `The icon must be ${Math.floor(maxTotalBytes / 1024 / 1024)} MB or less.` : undefined;
-  const error = logoError ?? budgetError ?? shotsError ?? state.error;
+  const [before, setBefore] = useState<string[]>([]);
+  const [localError, setLocalError] = useState<string>();
+  const error = logoError ?? localError ?? state.error;
   const seconds = script.trim() ? estimateVideoSeconds(script) : 0;
-  const ready = !!script.trim() && !!logo;
-  const blocked = pending || !!logoError || !!budgetError || !!shotsError;
+  const blocked = pending || !!logoError;
 
   const submit = (
-    <button
-      disabled={blocked}
-      className="w-full rounded-full bg-[#0a66d6] px-6 py-4 text-base font-semibold text-white hover:bg-[#0859bd] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0a66d6]/30 disabled:opacity-60"
-    >
+    <button disabled={blocked} className="w-full rounded-full bg-[#0a66d6] px-6 py-4 text-base font-semibold text-white hover:bg-[#0859bd] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0a66d6]/30 disabled:opacity-60">
       Create video
     </button>
   );
@@ -62,10 +69,22 @@ export function CreateProjectForm({ maxTotalBytes, prefill, voices = [] }: { max
   return (
     <>
       {pending && <WaitingScreen />}
-      <form action={action} className={`grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] ${pending ? "hidden" : ""}`}>
+      <form
+        action={action}
+        onSubmit={(e) => {
+          // (a group of checkboxes can't be "required" in HTML)
+          if (!before.length) {
+            e.preventDefault();
+            setLocalError("Choose what your customers used before.");
+            document.getElementById("before")?.scrollIntoView({ block: "center" });
+          } else setLocalError(undefined);
+        }}
+        className={`grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] ${pending ? "hidden" : ""}`}
+      >
         <input type="hidden" name="direction" value={directionFor(script, STYLE)} />
         <input type="hidden" name="visual_style" value={STYLE_PRESETS[STYLE].visual_style} />
         <input type="hidden" name="format" value={format} />
+        <input type="hidden" name="brand_color" value={logo?.colour ?? ""} />
         {/* Voice style isn't offered to customers; keep the existing default. */}
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
 
@@ -88,11 +107,10 @@ export function CreateProjectForm({ maxTotalBytes, prefill, voices = [] }: { max
             </div>
           </Step>
 
-          <Step n={2} title="Brand" sub="Your icon and brand name reveal the product and close the video.">
+          <Step n={2} title="Your brand" sub="Your icon and name reveal the product and close the video.">
             <div className="grid gap-4 sm:grid-cols-2">
               <Upload
                 title="Icon"
-                required
                 text={logo ? logo.name : "Upload your icon"}
                 sub={`PNG, JPG or WebP · up to ${LOGO_MAX_BYTES / 1024 / 1024} MB`}
                 preview={
@@ -111,45 +129,102 @@ export function CreateProjectForm({ maxTotalBytes, prefill, voices = [] }: { max
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (logo) URL.revokeObjectURL(logo.url);
-                    setLogo(file ? { name: file.name, url: URL.createObjectURL(file), size: file.size } : null);
-                    setLogoError(validateLogo(file));
+                    const problem = validateLogo(file);
+                    setLogoError(problem);
+                    if (!file || problem) return setLogo(null);
+                    const url = URL.createObjectURL(file);
+                    setLogo({ name: file.name, url, colour: null });
+                    colourOf(url)
+                      .then((colour) => setLogo((l) => (l?.url === url ? { ...l, colour } : l)))
+                      .catch(() => setLogo((l) => (l?.url === url ? { ...l, colour: "#0A66D6" } : l)));
                   }}
                 />
               </Upload>
-              <Field title="Brand name" optional>
-                <input name="brand_name" defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="e.g. SeloraX" className={input} />
-              </Field>
-            </div>
-          </Step>
-
-          <Step n={3} title="Product" sub="Optional. Real words and screens from your product make the cards look like it.">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field title="Website" optional>
-                <input name="website_url" defaultValue={prefill?.websiteUrl} type="url" inputMode="url" placeholder="https://yourproduct.com" className={input} />
-              </Field>
-              <Field title="Call to action" optional>
-                <input name="call_to_action" defaultValue={prefill?.cta} maxLength={CTA_MAX} placeholder="e.g. Try it free today" className={input} />
-              </Field>
-              <div className="sm:col-span-2">
-                <Upload
-                  title="Screenshots"
-                  text={shots.length ? `${shots.length} screenshot${shots.length > 1 ? "s" : ""} chosen` : "Upload product screenshots"}
-                  sub={`Up to ${SCREENSHOT_MAX_FILES} · PNG, JPG or WebP · ${SCREENSHOT_MAX_BYTES / 1024 / 1024} MB each`}
-                >
-                  <input
-                    name="screenshots"
-                    type="file"
-                    multiple
-                    accept="image/png,image/jpeg,image/webp"
-                    className="sr-only"
-                    onChange={(e) => setShots(Array.from(e.target.files ?? []))}
-                  />
-                </Upload>
+              <div className="flex flex-col gap-4">
+                <Field title="Company name">
+                  <input name="brand_name" required defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="e.g. SeloraX" className={input} />
+                </Field>
+                <div className="flex flex-col gap-1.5">
+                  <span className={label}>Brand colour</span>
+                  <span className="flex items-center gap-2.5 rounded-xl bg-white/60 px-3.5 py-2.5 text-sm text-foreground/60 ring-1 ring-black/[0.06]">
+                    <span className="size-5 rounded-md ring-1 ring-black/10" style={{ background: logo?.colour ?? "#e6e8ec" }} />
+                    {logo?.colour ? `${logo.colour} · from your icon` : "Taken from your icon"}
+                  </span>
+                </div>
               </div>
             </div>
           </Step>
 
-          <Step n={4} title="Voice">
+          <div className="mt-4 flex flex-col gap-1.5 px-1">
+            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Now, make it unmistakably yours.</h2>
+            <p className="text-foreground/60">Six quick answers. Your director uses every one.</p>
+          </div>
+
+          <Step n={3} title="Your business">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field title="Type of business">
+                <select name="category" required defaultValue="" className={input}>
+                  <option value="" disabled>
+                    Choose one
+                  </option>
+                  {BRAND_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {CATEGORY_LABEL(c)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field title="Who it's for">
+                <input name="target_audience" required maxLength={AUDIENCE_MAX} placeholder="e.g. Owners of small clinics" className={input} />
+              </Field>
+            </div>
+          </Step>
+
+          <Step n={4} title="Your three main features" sub="A few words each. Each one gets its own moment in the video.">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <input key={i} name="feature" required maxLength={FEATURE_MAX} placeholder={["e.g. Online booking", "e.g. SMS reminders", "e.g. Live schedule"][i - 1]} aria-label={`Feature ${i}`} className={input} />
+              ))}
+            </div>
+          </Step>
+
+          <Step n={5} title="What your customers used before" sub="The old way the video starts from. Choose all that apply.">
+            <div id="before" className="flex flex-wrap gap-2">
+              {OLD_WAYS.map((o) => (
+                <label key={o} className="cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="before"
+                    value={o}
+                    className="peer sr-only"
+                    checked={before.includes(o)}
+                    onChange={(e) => setBefore((b) => (e.target.checked ? [...b, o] : b.filter((x) => x !== o)))}
+                  />
+                  <span className="block rounded-full border border-foreground/12 bg-white/70 px-3.5 py-1.5 text-sm hover:border-foreground/30 peer-checked:border-[#0a66d6] peer-checked:bg-[#0a66d6]/10 peer-checked:font-medium peer-checked:text-[#0a66d6] peer-focus-visible:ring-4 peer-focus-visible:ring-[#0a66d6]/25">{o}</span>
+                </label>
+              ))}
+            </div>
+          </Step>
+
+          <Step n={6} title="Mood">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {MOOD_CHOICES.map((m) => (
+                <label key={m.mood} className="cursor-pointer">
+                  <input type="radio" name="mood" value={m.mood} required className="peer sr-only" />
+                  <span className="flex h-full flex-col gap-1 rounded-2xl border border-foreground/12 bg-white/70 p-3 hover:border-foreground/30 peer-checked:border-[#0a66d6] peer-checked:ring-4 peer-checked:ring-[#0a66d6]/15 peer-focus-visible:ring-4 peer-focus-visible:ring-[#0a66d6]/25">
+                    <span className="text-sm font-semibold">{m.label}</span>
+                    <span className="text-[11px] text-foreground/55">{m.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </Step>
+
+          <Step n={7} title="Where the video will be used">
+            <Chips name="use" options={USES} format={(u) => USE_LABEL[u]} />
+          </Step>
+
+          <Step n={8} title="Voice">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field title="Language">
                 <select name="voice_language" required className={input}>
@@ -158,7 +233,10 @@ export function CreateProjectForm({ maxTotalBytes, prefill, voices = [] }: { max
                   ))}
                 </select>
               </Field>
-              <Chips title="Voice" name="voice_gender" options={VOICE_GENDERS} defaultValue={VOICE_GENDERS[0]} format={(g) => (g === "male" ? "Male" : "Female")} />
+              <fieldset className="flex flex-col gap-2">
+                <legend className={`${label} mb-2`}>Voice</legend>
+                <Chips name="voice_gender" options={VOICE_GENDERS} defaultValue={VOICE_GENDERS[0]} format={(g) => (g === "male" ? "Male" : "Female")} />
+              </fieldset>
               {voices.length > 0 && (
                 <Field title="Voice character">
                   <select name="voice_name" defaultValue={voices.some((v) => v.name === prefill?.voice) ? prefill?.voice : ""} className={input}>
@@ -179,7 +257,7 @@ export function CreateProjectForm({ maxTotalBytes, prefill, voices = [] }: { max
             </div>
           </Step>
 
-          <Step n={5} title="Format">
+          <Step n={9} title="Format">
             <fieldset className="flex flex-col gap-2">
               <legend className="sr-only">Format</legend>
               <div className="grid grid-cols-3 gap-3">
@@ -205,31 +283,35 @@ export function CreateProjectForm({ maxTotalBytes, prefill, voices = [] }: { max
             </fieldset>
           </Step>
 
+          <Step n={10} title="The ending" sub="Shown on the last scene, under your icon.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field title="Call to action">
+                <input name="call_to_action" required defaultValue={prefill?.cta} maxLength={CTA_MAX} placeholder="e.g. Start your free trial" className={input} />
+              </Field>
+              <Field title="Website">
+                <input name="website_url" required defaultValue={prefill?.websiteUrl} type="url" inputMode="url" placeholder="https://yourproduct.com" className={input} />
+              </Field>
+            </div>
+          </Step>
+
           {error && <p className="rounded-xl bg-[#fdecea] px-4 py-3 text-sm text-[#a1281b]">{error}</p>}
         </div>
 
-        {/* Summary: a sticky side card on desktop, a bottom bar on mobile. */}
+        {/* Summary: a sticky side card on desktop; the button at the end on mobile. */}
         <aside className="hidden lg:block">
           <div className="sticky top-24 flex flex-col gap-4 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
-            <span className="flex aspect-video items-center justify-center rounded-xl bg-[#1d1d1f]">
-              <span className="rounded-md border-2 border-white/70" style={{ width: (Number(format.split(":")[0]) / Math.max(...format.split(":").map(Number))) * 56, height: (Number(format.split(":")[1]) / Math.max(...format.split(":").map(Number))) * 56 }} />
+            <span className="flex aspect-video items-center justify-center rounded-xl" style={{ background: logo?.colour ?? "#1d1d1f" }}>
+              <span className="rounded-md border-2 border-white/80" style={{ width: (Number(format.split(":")[0]) / Math.max(...format.split(":").map(Number))) * 56, height: (Number(format.split(":")[1]) / Math.max(...format.split(":").map(Number))) * 56 }} />
             </span>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Summary k="Length" v={seconds ? `≈ ${seconds} s` : "—"} />
               <Summary k="Format" v={format} />
             </dl>
-            <ul className="flex flex-col gap-1.5 text-xs text-foreground/60">
-              <Check ok={!!script.trim()}>Voice-over</Check>
-              <Check ok={!!logo}>Icon</Check>
-            </ul>
             {submit}
             <p className="text-center text-[11px] text-foreground/45">1080p · download as MP4</p>
           </div>
         </aside>
-        <div className="flex flex-col gap-2 lg:hidden">
-          <p className="text-center text-xs text-foreground/60">{ready ? (seconds ? `≈ ${seconds} s video` : "Ready") : `${[!script.trim() && "voice-over", !logo && "icon"].filter(Boolean).join(", ")} missing`}</p>
-          {submit}
-        </div>
+        <div className="flex flex-col gap-2 lg:hidden">{submit}</div>
       </form>
     </>
   );
@@ -250,23 +332,19 @@ function Step({ n, title, sub, children }: { n: number; title: string; sub?: str
   );
 }
 
-function Field({ title, optional, children }: { title: string; optional?: boolean; children: React.ReactNode }) {
+function Field({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className={label}>
-        {title} {optional && <span className="font-normal text-foreground/45">(optional)</span>}
-      </span>
+      <span className={label}>{title}</span>
       {children}
     </label>
   );
 }
 
-function Upload({ title, required, text, sub, preview, children }: { title: string; required?: boolean; text: string; sub: string; preview?: React.ReactNode; children: React.ReactNode }) {
+function Upload({ title, text, sub, preview, children }: { title: string; text: string; sub: string; preview?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className={label}>
-        {title} {required ? <span className="text-red-500">*</span> : <span className="font-normal text-foreground/45">(optional)</span>}
-      </span>
+      <span className={label}>{title}</span>
       <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-foreground/20 bg-white/60 px-3 py-4 text-center text-sm hover:border-[#0a66d6]/60 hover:bg-white">
         {preview ?? <span className="flex size-9 items-center justify-center rounded-full bg-[#0a66d6]/10 text-lg text-[#0a66d6]">↑</span>}
         <span className="max-w-full truncate font-medium text-foreground/80">{text}</span>
@@ -277,45 +355,17 @@ function Upload({ title, required, text, sub, preview, children }: { title: stri
   );
 }
 
-// Pill radios.
-function Chips<T extends string>({
-  title,
-  name,
-  options,
-  value,
-  defaultValue,
-  onChange,
-  format = String,
-}: {
-  title: string;
-  name: string;
-  options: readonly T[];
-  value?: T;
-  defaultValue?: T;
-  onChange?: (value: T) => void;
-  format?: (value: T) => string;
-}) {
+// Pill radios (one required).
+function Chips<T extends string>({ name, options, defaultValue, format = String }: { name: string; options: readonly T[]; defaultValue?: T; format?: (value: T) => string }) {
   return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className={`${label} mb-2`}>{title}</legend>
-      <div className="flex flex-wrap gap-2">
-        {options.map((o) => (
-          <label key={o} className="cursor-pointer">
-            <input
-              type="radio"
-              name={name}
-              value={o}
-              required
-              className="peer sr-only"
-              {...(value !== undefined ? { checked: value === o, onChange: () => onChange?.(o) } : { defaultChecked: defaultValue === o })}
-            />
-            <span className="block rounded-full border border-foreground/12 bg-white/70 px-3.5 py-1.5 text-sm hover:border-foreground/30 peer-checked:border-[#0a66d6] peer-checked:bg-[#0a66d6]/10 peer-checked:font-medium peer-checked:text-[#0a66d6] peer-focus-visible:ring-4 peer-focus-visible:ring-[#0a66d6]/25">
-              {format(o)}
-            </span>
-          </label>
-        ))}
-      </div>
-    </fieldset>
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => (
+        <label key={o} className="cursor-pointer">
+          <input type="radio" name={name} value={o} required defaultChecked={defaultValue === o} className="peer sr-only" />
+          <span className="block rounded-full border border-foreground/12 bg-white/70 px-3.5 py-1.5 text-sm hover:border-foreground/30 peer-checked:border-[#0a66d6] peer-checked:bg-[#0a66d6]/10 peer-checked:font-medium peer-checked:text-[#0a66d6] peer-focus-visible:ring-4 peer-focus-visible:ring-[#0a66d6]/25">{format(o)}</span>
+        </label>
+      ))}
+    </div>
   );
 }
 
@@ -325,14 +375,5 @@ function Summary({ k, v }: { k: string; v: string }) {
       <dt className="text-[11px] uppercase tracking-wide text-foreground/45">{k}</dt>
       <dd className="truncate font-medium">{v}</dd>
     </div>
-  );
-}
-
-function Check({ ok, children }: { ok: boolean; children: React.ReactNode }) {
-  return (
-    <li className="flex items-center gap-2">
-      <span className={`flex size-4 items-center justify-center rounded-full text-[10px] ${ok ? "bg-emerald-500 text-white" : "border border-foreground/25"}`}>{ok ? "✓" : ""}</span>
-      <span className={ok ? "text-foreground/80" : ""}>{children}</span>
-    </li>
   );
 }
