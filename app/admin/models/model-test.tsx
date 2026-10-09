@@ -7,15 +7,15 @@ const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 te
 const btn = "inline-flex items-center justify-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:opacity-50";
 
 // One real call with the typed model: output, time and cost side by side.
-export function ModelTest({ defaults }: { defaults: { text: { provider: string; model: string }; voice: { model: string; template: string }; image: { model: string; template: string } } }) {
-  const [kind, setKind] = useState<"text" | "voice" | "image">("text");
+export function ModelTest({ defaults }: { defaults: { text: { provider: string; model: string }; voice: { model: string; template: string } } }) {
+  const [kind, setKind] = useState<"text" | "voice">("text");
   const [result, action, pending] = useActionState<TestResult | null, FormData>(testAiModel, null);
   return (
     <form action={action} className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap gap-2">
-        {(["text", "voice", "image"] as const).map((k) => (
+        {(["text", "voice"] as const).map((k) => (
           <button key={k} type="button" onClick={() => setKind(k)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${kind === k ? "bg-violet-500 text-white" : "bg-white/[0.06] text-zinc-300"}`}>
-            {k === "text" ? "Script / director" : k === "voice" ? "Voice" : "Image"}
+            {k === "text" ? "Script / director" : "Voice"}
           </button>
         ))}
       </div>
@@ -43,12 +43,6 @@ export function ModelTest({ defaults }: { defaults: { text: { provider: string; 
           </div>
         </>
       )}
-      {kind === "image" && (
-        <>
-          <input key="im" name="model" list="image-models" defaultValue={defaults.image.model} placeholder="empty = the saved / environment model" className={input} />
-          <textarea key="it" name="template" rows={2} defaultValue={defaults.image.template} placeholder='Input template, e.g. {"prompt":"{{prompt}}"} (empty = saved / environment)' className={`${input} font-mono text-xs`} />
-        </>
-      )}
       <div className="flex items-center gap-3">
         <button className={btn} disabled={pending}>{pending ? "Testing…" : "Run a test call"}</button>
         <span className="text-xs text-zinc-500">One real, paid call.</span>
@@ -64,10 +58,6 @@ export function ModelTest({ defaults }: { defaults: { text: { provider: string; 
           {result.error && <p className="mt-1 break-words text-rose-200">{result.error}</p>}
           {result.output && <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-zinc-300">{result.output}</pre>}
           {result.audioUrl && <audio controls src={result.audioUrl} className="mt-2 w-full" />}
-          {result.imageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={result.imageUrl} alt="Test image" className="mt-2 max-h-64 rounded-lg" />
-          )}
         </div>
       )}
     </form>

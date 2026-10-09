@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { audit, requireAdmin } from "@/lib/admin";
-import { generateImage, generateVoice, timeWords } from "@/lib/ai/fal";
+import { generateVoice, timeWords } from "@/lib/ai/fal";
 import { type AiConfig, SETTING_KEY, TEXT_TASKS, forgetAiConfig, normalizeConfig, textClient, textCost, unitCost } from "@/lib/ai/models";
 
 // /admin/models: which AI model does each job. Super admins only; every save
@@ -44,11 +44,10 @@ export async function saveAiModels(formData: FormData) {
     text: { provider: text(formData, "text_provider"), model: text(formData, "text_model"), backup: formData.get("text_backup") === "on", openaiDirect: formData.get("text_openai_direct") === "on" },
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: formData.get(`task_${t.id}_on`) === "on", provider: text(formData, `task_${t.id}_provider`), model: text(formData, `task_${t.id}_model`) }])),
     voice: { on: formData.get("voice_on") === "on", model: text(formData, "voice_model"), template: text(formData, "voice_template", 2000), female: text(formData, "voice_female", 80), male: text(formData, "voice_male", 80), choices: text(formData, "voice_choices", 4000), fallback: formData.get("voice_fallback") === "on" },
-    image: { on: formData.get("image_on") === "on", model: text(formData, "image_model"), template: text(formData, "image_template", 2000) },
     prices,
     engine: { voiceOnly: formData.get("engine_voice_only") === "on" },
   });
-  if (!validTemplate(next.voice.template) || !validTemplate(next.image.template)) redirect("/admin/models?error=" + encodeURIComponent("An input template is not a valid JSON object."));
+  if (!validTemplate(next.voice.template)) redirect("/admin/models?error=" + encodeURIComponent("An input template is not a valid JSON object."));
   const { data: before } = await s.db.from("app_settings").select("value").eq("key", SETTING_KEY).maybeSingle();
   if (JSON.stringify(before?.value ?? null) === JSON.stringify(next)) redirect("/admin/models?saved=0");
   const { error } = await s.db.from("app_settings").upsert({ key: SETTING_KEY, value: next, updated_at: new Date().toISOString(), updated_by: s.userId });
@@ -59,7 +58,7 @@ export async function saveAiModels(formData: FormData) {
   redirect("/admin/models?saved=1");
 }
 
-export type TestResult = { ok: boolean; ms?: number; output?: string; audioUrl?: string; imageUrl?: string; tokens?: string; cost?: string; error?: string };
+export type TestResult = { ok: boolean; ms?: number; output?: string; audioUrl?: string; tokens?: string; cost?: string; error?: string };
 
 const Probe = z.object({ tagline: z.string(), words: z.array(z.string()) });
 const usd = (v: number) => `$${v < 0.01 ? v.toFixed(5) : v.toFixed(4)}`;
@@ -107,11 +106,6 @@ export async function testAiModel(_prev: TestResult | null, formData: FormData):
         }
       }
       return { ok: true, ms: Date.now() - started, audioUrl: r.audioUrl, output: heard || `Word timing: yes, from the model (${r.words?.length ?? 0} words) — the video's text and scenes stay in sync with this voice.`, cost: Number.isFinite(priced) ? `${usd(priced)} for ${sample.length} characters (from your prices)` : `${sample.length} characters — add a price per character below` };
-    }
-    if (kind === "image") {
-      const r = await generateImage({ prompt: "Soft abstract gradient shapes and floating glass panels, a calm SaaS product launch backdrop", format: "16:9" }, { on: true, model, template: text(formData, "template", 2000) });
-      const priced = unitCost(config, r.model, 1, () => NaN);
-      return { ok: true, ms: Date.now() - started, imageUrl: r.imageUrl, cost: Number.isFinite(priced) ? `${usd(priced)} (from your prices)` : "add a price per image below" };
     }
     return { ok: false, error: "Unknown test." };
   } catch (e) {

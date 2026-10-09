@@ -16,8 +16,6 @@ export type VoiceResult = {
 };
 // `guardrails` replaces the default abstract-asset guardrails (story assets
 // need photographic product/scene imagery).
-export type ImageInput = { prompt: string; format: string; guardrails?: string };
-export type ImageResult = { model: string; requestId: string; imageUrl: string };
 
 const SCRIPT_MAX = 5_000;
 const TIMEOUT_MS = 55_000;
@@ -28,8 +26,6 @@ const WORD_TIMING_TIMEOUT_MS = 120_000;
 // Input shape differs per Fal model, so it is configured, not guessed.
 // FAL_VOICE_INPUT_TEMPLATE is JSON with {{text}}, {{language}}, {{style}}, {{gender}}, {{voice}} placeholders,
 // e.g. {"text":"{{text}}","language":"{{language}}"}. Defaults to {"text":"{{text}}"}.
-// FAL_IMAGE_INPUT_TEMPLATE uses {{prompt}}, {{format}}, {{aspect_ratio}} ("16:9"), {{image_size}}
-// ("landscape_16_9"). Defaults to {"prompt":"{{prompt}}"}.
 function buildInput(templateJson: string, values: Record<string, string>): Record<string, unknown> {
   const template = JSON.parse(templateJson);
   const fill = (v: unknown): unknown =>
@@ -45,13 +41,12 @@ function buildInput(templateJson: string, values: Record<string, string>): Recor
 
 const MEDIA_EXT = {
   audio: /\.(mp3|wav|ogg|m4a|aac|flac|opus)(\?|$)/i,
-  image: /\.(png|jpe?g|webp)(\?|$)/i,
 };
 
-// Finds the media URL in a model-specific response (e.g. `audio.url`, `images[0].url`).
+// Finds the media URL in a model-specific response (e.g. `audio.url`).
 function findMediaUrl(
   value: unknown,
-  kind: "audio" | "image",
+  kind: "audio",
   inKind = false,
 ): string | undefined {
   if (typeof value === "string")
@@ -70,47 +65,6 @@ function falClient() {
   const credentials = process.env.FAL_KEY;
   if (!credentials) throw new Error("FAL_KEY is not configured.");
   return createFalClient({ credentials });
-}
-
-// fal's named image sizes per video shape ({{image_size}} in a template).
-const IMAGE_SIZE: Record<string, string> = { "16:9": "landscape_16_9", "9:16": "portrait_16_9", "1:1": "square_hd" };
-
-// Appended to every image prompt regardless of manifest content.
-const IMAGE_GUARDRAILS =
-  "Flat vector or clean 3D abstract style, not stock photography. " +
-  "No animals, no animal characters, no mascots, no people, no readable text, no letters, no numbers, no logos.";
-
-// `override`: unsaved settings, for the admin page's test.
-export async function generateImage({ prompt, format, guardrails = IMAGE_GUARDRAILS }: ImageInput, override?: Partial<AiConfig["image"]>): Promise<ImageResult> {
-  // /admin/models first, then the environment
-  const image = { ...(await getAiConfig()).image, ...override };
-  if (!image.on) throw new Error("Image generation is turned off on /admin/models.");
-  const model = image.model || process.env.FAL_IMAGE_MODEL;
-  if (!model) throw new Error("FAL_IMAGE_MODEL is not configured.");
-
-  const input = buildInput(image.template || process.env.FAL_IMAGE_INPUT_TEMPLATE || '{"prompt":"{{prompt}}"}', {
-    prompt: `${prompt.trim().slice(0, 1_000)} ${guardrails}`,
-    format,
-    aspect_ratio: format,
-    image_size: IMAGE_SIZE[format] ?? "landscape_16_9",
-  });
-  // FLUX and Recraft take a named size: the video's shape unless the template set one.
-  if (/flux|recraft/.test(model) && input.image_size === undefined && IMAGE_SIZE[format]) input.image_size = IMAGE_SIZE[format];
-  // fal-ai/nano-banana-2 takes the video's aspect ratio directly ("16:9", "9:16", "1:1").
-  if (model.includes("nano-banana") && input.aspect_ratio === undefined && ["16:9", "9:16", "1:1"].includes(format)) {
-    input.aspect_ratio = format;
-  }
-  try {
-    const result = await falRun(model, input, "image");
-    return { model, requestId: result.requestId, imageUrl: result.url };
-  } catch (e) {
-    // A model chosen on /admin/models that fails falls back to the
-    // environment's (not in the admin page's test).
-    const envModel = process.env.FAL_IMAGE_MODEL;
-    if (override || !image.model || !envModel || envModel === model) throw e;
-    console.warn("image model failed; environment model instead:", { model, error: e instanceof Error ? e.message.slice(0, 300) : String(e) });
-    return generateImage({ prompt, format, guardrails }, { model: envModel, template: process.env.FAL_IMAGE_INPUT_TEMPLATE || "" });
-  }
 }
 
 // Model voice for the customer's gender choice. Defaults are ElevenLabs preset
@@ -199,7 +153,7 @@ export async function timeWords(audioUrl: string, script: string): Promise<{ wor
 
 // One fal call that returns media; errors carry fal's reason (which input
 // field it rejected), not just "Unprocessable Entity".
-async function falRun(model: string, input: Record<string, unknown>, kind: "audio" | "image") {
+async function falRun(model: string, input: Record<string, unknown>, kind: "audio") {
   try {
     const result = await falClient().subscribe(model, { input, abortSignal: AbortSignal.timeout(kind === "audio" ? VOICE_TIMEOUT_MS : TIMEOUT_MS) });
     const url = findMediaUrl(result.data, kind);

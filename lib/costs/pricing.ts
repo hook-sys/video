@@ -6,7 +6,7 @@ import "server-only";
 // provider's current pricing page and entered here (or overridden per
 // environment via COST_PRICING_JSON). A 0 rate still records the operation and
 // quantity; it just estimates $0. Rates are keyed by the models configured in
-// OPENAI_MODEL, FAL_VOICE_MODEL and FAL_IMAGE_MODEL.
+// OPENAI_MODEL and FAL_VOICE_MODEL.
 type Pricing = {
   openai?: Record<string, { input_per_1m_tokens?: number; output_per_1m_tokens?: number }>;
   // per_unit = USD per character (voice models) or per generated image (image models).
@@ -18,7 +18,6 @@ type Pricing = {
 function defaultRates(): Pricing {
   const openaiModel = process.env.OPENAI_MODEL || "gpt-5-mini";
   const voiceModel = process.env.FAL_VOICE_MODEL;
-  const imageModel = process.env.FAL_IMAGE_MODEL;
   return {
     openai: {
       // External source: OpenAI API pricing page (USD per 1M tokens). Unknown → 0.
@@ -27,8 +26,6 @@ function defaultRates(): Pricing {
     fal: {
       // External source: fal.ai model page (USD per character). Unknown → 0.
       ...(voiceModel && { [voiceModel]: { per_unit: 0 } }),
-      // External source: fal.ai model page (USD per image). Unknown → 0.
-      ...(imageModel && { [imageModel]: { per_unit: 0 } }),
     },
     // Assumption to configure: our own compute cost per rendered video second
     // (self-hosted server or Remotion Lambda), measured from benchmark render_ms. Unknown → 0.

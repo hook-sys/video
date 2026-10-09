@@ -10,7 +10,6 @@ export const metadata = { title: "AI models" };
 // Suggestions only: any model name fal (or OpenAI) accepts can be typed.
 const TEXT_MODELS = ["google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "google/gemini-2.5-pro", "openai/gpt-5-mini", "openai/gpt-5-nano", "openai/gpt-5", "anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-4.5", "deepseek/deepseek-chat-v3.1", "qwen/qwen3-235b-a22b", "meta-llama/llama-4-maverick", "gpt-5-mini", "gpt-5-nano"];
 const VOICE_MODELS = ["fal-ai/elevenlabs/tts/turbo-v2.5", "fal-ai/elevenlabs/tts/multilingual-v2", "fal-ai/minimax/speech-02-turbo", "fal-ai/minimax/speech-02-hd", "fal-ai/kokoro/american-english", "fal-ai/chatterbox/text-to-speech", "fal-ai/dia-tts"];
-const IMAGE_MODELS = ["fal-ai/nano-banana-2", "fal-ai/flux/schnell", "fal-ai/flux/dev", "fal-ai/flux-pro/v1.1", "fal-ai/recraft/v3/text-to-image", "fal-ai/ideogram/v3"];
 
 function Toggle({ name, on, disabled }: { name: string; on: boolean; disabled?: boolean }) {
   return (
@@ -42,7 +41,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
     byModel.set(k, m);
   }
   const usage = [...byModel.entries()].sort((a, b) => b[1].cost - a[1].cost);
-  const env = { text: process.env.OPENAI_MODEL || "gpt-5-mini", voice: process.env.FAL_VOICE_MODEL || "—", image: process.env.FAL_IMAGE_MODEL || "—" };
+  const env = { text: process.env.OPENAI_MODEL || "gpt-5-mini", voice: process.env.FAL_VOICE_MODEL || "—" };
   const keys = { fal: !!process.env.FAL_KEY, openai: !!process.env.OPENAI_API_KEY };
   const priceRows = [...Object.entries(c.prices), ...Array.from({ length: 4 }, () => ["", {}] as const)];
 
@@ -60,7 +59,6 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
 
       <datalist id="text-models">{TEXT_MODELS.map((m) => <option key={m} value={m} />)}</datalist>
       <datalist id="voice-models">{VOICE_MODELS.map((m) => <option key={m} value={m} />)}</datalist>
-      <datalist id="image-models">{IMAGE_MODELS.map((m) => <option key={m} value={m} />)}</datalist>
 
       <form action={saveAiModels} className="flex flex-col gap-4">
         <fieldset disabled={!editable} className="flex flex-col gap-4">
@@ -154,19 +152,11 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
             </div>
           </Card>
 
-          <Card title="Images (fal)" action={<Toggle name="image_on" on={c.image.on} />}>
-            <div className="flex flex-col gap-3 text-sm">
-              <p className="text-zinc-500">Off: no AI images; scenes use screenshots, icons and shapes. Empty fields use the environment (model <code>{env.image}</code>). Images never show people or animals.</p>
-              <input name="image_model" list="image-models" defaultValue={c.image.model} placeholder="Model, e.g. fal-ai/flux/schnell" className={input} />
-              <textarea name="image_template" rows={2} defaultValue={c.image.template} placeholder='Input template (JSON). Placeholders: {{prompt}} {{aspect_ratio}} ("16:9") {{image_size}} ("landscape_16_9"). e.g. {"prompt":"{{prompt}}","aspect_ratio":"{{aspect_ratio}}"}. FLUX and Recraft get the video&apos;s size by themselves.' className={`${input} font-mono text-xs`} />
-            </div>
-          </Card>
-
           <Card title="Prices (USD)">
             <div className="flex flex-col gap-3 text-sm">
-              <p className="text-zinc-500">For the cost of each video. Text: per 1M input / output tokens. Voice: per character. Image: per image. Copy them from the model&apos;s page on fal. A model without a price here uses the old environment pricing.</p>
+              <p className="text-zinc-500">For the cost of each video. Text: per 1M input / output tokens. Voice: per character. Copy them from the model&apos;s page on fal. A model without a price here uses the old environment pricing.</p>
               <div className="hidden gap-2 text-xs text-zinc-500 md:grid md:grid-cols-[1fr_120px_120px_120px]">
-                <span>Model</span><span>Input / 1M</span><span>Output / 1M</span><span>Per char / image</span>
+                <span>Model</span><span>Input / 1M</span><span>Output / 1M</span><span>Per character</span>
               </div>
               {priceRows.map(([model, p], i) => (
                 <div key={i} className="grid gap-2 md:grid-cols-[1fr_120px_120px_120px]">
@@ -188,7 +178,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
 
       {editable && (
         <Card title="Test a model">
-          <ModelTest defaults={{ text: { provider: c.text.provider, model: c.text.model }, voice: { model: c.voice.model, template: c.voice.template }, image: { model: c.image.model, template: c.image.template } }} />
+          <ModelTest defaults={{ text: { provider: c.text.provider, model: c.text.model }, voice: { model: c.voice.model, template: c.voice.template } }} />
         </Card>
       )}
 

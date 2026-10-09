@@ -38,7 +38,7 @@ export async function runChecks(): Promise<Check[]> {
   {
     // Nothing saved: the environment's models, every job on.
     const d = normalizeConfig(null);
-    add("nothing saved keeps today's models", JSON.stringify(d) === JSON.stringify(defaultConfig()) && d.text.provider === "openai" && Object.values(d.tasks).every((t) => t.on) && d.voice.on && d.image.on, `${d.text.provider} ${d.text.model}`);
+    add("nothing saved keeps today's models", JSON.stringify(d) === JSON.stringify(defaultConfig()) && d.text.provider === "openai" && Object.values(d.tasks).every((t) => t.on) && d.voice.on, `${d.text.provider} ${d.text.model}`);
     add("the brief can't be turned off", normalizeConfig({ tasks: { brief: { on: false }, judge: { on: false } } }).tasks.brief.on && !normalizeConfig({ tasks: { judge: { on: false } } }).tasks.judge.on, "brief stays on");
     const cfg = normalizeConfig({ prices: { "google/gemini-2.5-flash": { in: 0.3, out: 2.5 } } });
     add("a model's own price is used for its cost", Math.abs(textCost(cfg, "google/gemini-2.5-flash", 1e6, 1e6, () => -1) - 2.8) < 1e-9 && textCost(cfg, "other", 1, 1, () => -1) === -1, "0.30 in + 2.50 out per 1M");
@@ -196,9 +196,9 @@ export async function runChecks(): Promise<Check[]> {
 
   section = "AI only for the voice";
   {
-    const on = effectiveConfig(normalizeConfig({ engine: { voiceOnly: true }, tasks: { composer: { on: true } }, image: { on: true }, voice: { on: false } }));
+    const on = effectiveConfig(normalizeConfig({ engine: { voiceOnly: true }, tasks: { composer: { on: true } }, voice: { on: false } }));
     const offJobs = Object.entries(on.tasks).filter(([, t]) => t.on).map(([k]) => k);
-    add("every AI job but the voice is off (the brief too)", !offJobs.length && !on.image.on && on.voice.on, offJobs.join(", ") || `${Object.keys(on.tasks).length} text jobs off · images off · voice on`);
+    add("every AI job but the voice is off (the brief too)", !offJobs.length && on.voice.on, offJobs.join(", ") || `${Object.keys(on.tasks).length} text jobs off · voice on`);
     add("the Composer composes every video, by rule", !on.tasks.composer.on, "Composer Director off");
     add("off by default; the saved settings are kept", !normalizeConfig(null).engine.voiceOnly && effectiveConfig(normalizeConfig({ tasks: { composer: { on: true } } })).tasks.composer.on, "voiceOnly false → as saved");
     const script = "Most clinics still run their day on phone calls. Bookwell puts your whole clinic in one simple app! Try it free?";
