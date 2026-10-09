@@ -215,8 +215,8 @@ export function surfaceStyle(surface: Surface, pal: Pal, radius: number, lift = 
   const shade = `0 ${Math.round(30 * lift)}px ${Math.round(80 * lift)}px ${pal.shadow}`;
   if (surface === "glass")
     return pal.panelDark
-      ? { background: "linear-gradient(160deg, rgba(255,255,255,0.13), rgba(255,255,255,0.04))", border: "1.5px solid rgba(255,255,255,0.16)", boxShadow: `inset 0 1px 0 rgba(255,255,255,0.22), ${shade}`, borderRadius: r }
-      : { background: pal.dark ? "linear-gradient(160deg, rgba(255,255,255,0.99), rgba(250,250,255,0.93))" : "linear-gradient(160deg, rgba(255,255,255,0.95), rgba(255,255,255,0.82))", border: "1.5px solid rgba(255,255,255,0.95)", boxShadow: `inset 0 1px 0 #fff, ${shade}`, borderRadius: r };
+      ? { background: "linear-gradient(160deg, rgba(255,255,255,0.13), rgba(255,255,255,0.04))", border: "1.5px solid rgba(255,255,255,0.16)", borderTop: "1.5px solid rgba(255,255,255,0.3)", boxShadow: shade, borderRadius: r }
+      : { background: pal.dark ? "linear-gradient(160deg, rgba(255,255,255,0.99), rgba(250,250,255,0.93))" : "linear-gradient(160deg, rgba(255,255,255,0.95), rgba(255,255,255,0.82))", border: "1.5px solid rgba(255,255,255,0.95)", borderTop: "1.5px solid #fff", boxShadow: shade, borderRadius: r };
   if (surface === "outline") return { background: pal.panelDark ? "rgba(255,255,255,0.02)" : pal.panel, border: `2px solid ${pal.panelDark ? pal.faint : pal.panelInk}`, boxShadow: pal.panelDark ? "none" : `8px 8px 0 ${pal.panelInk}`, borderRadius: r };
   if (surface === "soft") return { background: pal.panel, boxShadow: `0 2px 0 ${pal.panelLine}, ${shade}`, borderRadius: r };
   if (surface === "tinted") return { background: pal.panel, border: `1.5px solid ${pal.panelLine}`, boxShadow: shade, borderRadius: r };

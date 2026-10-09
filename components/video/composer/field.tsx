@@ -42,7 +42,8 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
       break;
     case "arcs": {
       const arc = (top: number, flip: boolean, op: number) => (
-        <div style={{ position: "absolute", left: -600, width: 3120, height: 2200, top, borderRadius: "50%", transform: `rotate(${(a.t - 0.5) * 12}deg)`, [flip ? "borderBottom" : "borderTop"]: `3px solid ${hsl(hue, 90, d ? 75 : 55, op)}`, boxShadow: `0 ${flip ? 40 : -40}px 120px -20px ${hsl(hue, 90, 60, op * 0.6)}, inset 0 ${flip ? -60 : 60}px 160px -40px ${hsl(hue, 90, 60, op * 0.5)}` }} />
+        // (its glow outside only: the download draws no inset shadow)
+        <div style={{ position: "absolute", left: -600, width: 3120, height: 2200, top, borderRadius: "50%", transform: `rotate(${(a.t - 0.5) * 12}deg)`, [flip ? "borderBottom" : "borderTop"]: `3px solid ${hsl(hue, 90, d ? 75 : 55, op)}`, boxShadow: `0 ${flip ? 40 : -40}px 120px -20px ${hsl(hue, 90, 60, op * 0.6)}` }} />
       );
       body = (
         <>

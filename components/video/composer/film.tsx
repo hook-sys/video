@@ -319,8 +319,8 @@ function Depth(props: DepthProps) {
   );
   const h = hops[seg];
   if (!seg || raw >= 1 || !h) return layer(seg, {});
-  const fast = raw > 0.08 && raw < 0.92;
-  const blur = (node: ReactNode) => (fast ? <Trail layers={3} lagInFrames={0.35} trailOpacity={0.45}>{node}</Trail> : node);
+  // (no motion-blur trail here: on the scaled layers the download draws it as a grey ghost)
+  const blur = (node: ReactNode) => node;
   if (h.kind === "flip") {
     // the card turns over (round its upright axis, or every other time its
     // level one), drawing back a little as it turns; the canvas shows behind it
@@ -329,7 +329,15 @@ function Depth(props: DepthProps) {
     const ang = 180 * u * sign;
     const s = 1 - 0.24 * Math.sin(raw * Math.PI);
     const edge = Math.sin(raw * Math.PI);
-    const face = (i: number, a: number) => layer(i, { transformOrigin: "50% 50%", transform: `scale(${s.toFixed(4)}) perspective(2600px) ${tilt}(${a.toFixed(2)}deg)` }, true, { borderRadius: 48 * edge, boxShadow: `0 ${(60 * edge).toFixed(0)}px ${(140 * edge).toFixed(0)}px rgba(0,0,0,${(0.45 * edge).toFixed(2)})` });
+    // (turned in the plane — narrowed by the turn's cosine, its near edge
+    // lifted — since the download draws a turn in depth flat or not at all)
+    const face = (i: number, a: number) => {
+      const rad = (a * Math.PI) / 180;
+      const narrow = Math.max(0.002, Math.abs(Math.cos(rad)));
+      const lift = (Math.sin(rad) * 6).toFixed(3);
+      const turn = tilt === "rotateY" ? `scaleX(${narrow.toFixed(4)}) skewY(${lift}deg)` : `scaleY(${narrow.toFixed(4)}) skewX(${lift}deg)`;
+      return layer(i, { transformOrigin: "50% 50%", transform: `scale(${s.toFixed(4)}) ${turn}` }, true, { borderRadius: 48 * edge, boxShadow: `0 ${(60 * edge).toFixed(0)}px ${(140 * edge).toFixed(0)}px rgba(0,0,0,${(0.45 * edge).toFixed(2)})` });
+    };
     const front = Math.abs(ang) < 90;
     return (
       <>
@@ -564,7 +572,8 @@ function Thing({ c, it, idx, travel }: { c: Ctx; it: PlacedItem; idx: number; tr
   // each thing drifts a little on its own (noise, seeded by the thing — never in step with the others)
   const seed = it.id ?? `${it.kind}${idx}`;
   const bob = it.kind === "shape" || it.kind === "cursor" ? "" : ` translate(${(noise2D(seed + "x", c.f / 90, idx) * 4).toFixed(1)}px, ${(noise2D(seed + "y", idx, c.f / 75) * 6).toFixed(1)}px) rotate(${(noise2D(seed + "r", c.f / 120, idx * 0.5) * 0.5).toFixed(2)}deg)`;
-  const tilt = it.tilt ? ` perspective(1600px) rotateY(${it.tilt}deg) rotateX(${(Math.abs(it.tilt) * 0.3).toFixed(1)}deg)` : "";
+  // a thing set at an angle: slanted in the plane (the download draws a turn in depth flat, or not at all inside a moving canvas)
+  const tilt = it.tilt ? ` skewY(${(-it.tilt * 0.22).toFixed(2)}deg) scaleX(${Math.cos((it.tilt * Math.PI) / 180).toFixed(4)})` : "";
   return (
     <div style={{ position: "absolute", left: box.x - bw / 2, top: box.y - bh / 2, width: bw, height: bh, transform: `scale(${scale.toFixed(4)})${tilt}${bob}`, zIndex: it.z }}>
       <div style={{ width: bw, height: bh, ...enter, transform: `${(enter as CSSProperties).transform ?? ""}` }}>

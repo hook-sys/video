@@ -36,7 +36,7 @@ export function Glyph({ c, name, size, tone = "accent", k = 1 }: { c: Ctx; name:
   switch (art.icons) {
     case "bare": return <Icon name={icon} size={size * 0.86} color={onPanel ? pal.accent : pal.accent} strokeWidth={2} draw={k} />;
     case "outline": return box("transparent", onPanel ? pal.panelInk : pal.accent, { border: `2px solid ${onPanel ? pal.panelLine : pal.accent}` });
-    case "duotone": return box(onPanel ? pal.panelSoft : `${fill}22`, fill, { boxShadow: `inset 0 0 0 1.5px ${fill}33` });
+    case "duotone": return box(onPanel ? pal.panelSoft : `${fill}22`, fill, { border: `1.5px solid ${fill}33` });
     case "glass": return box(onPanel ? pal.panelSoft : "rgba(255,255,255,0.92)", pal.fill, { border: "1.5px solid rgba(255,255,255,1)", boxShadow: `0 10px 30px ${pal.shadow}` });
     default: return box(`linear-gradient(140deg, ${fill}, ${tone === "fill2" ? pal.fill : pal.fill2})`, pal.onFill, { boxShadow: `0 ${size * 0.14}px ${size * 0.4}px ${fill}55` });
   }

@@ -1,15 +1,15 @@
 import { renderStillOnWeb } from "@remotion/web-renderer";
-import { FlowScene, type FlowSceneProps } from "@/components/video/flow/flow-scene";
-import type { FlowPlan } from "@/components/video/flow/types";
+import { ComposerFilm } from "@/components/video/composer/film";
+import type { ComposerPlan, ComposerProps } from "@/components/video/composer/types";
 
-// The download path (browser-download.tsx renderPlanToFile) for one frame.
+// The download path (composer-studio.tsx renderToFile) for one frame.
 declare global {
-  interface Window { renderFrame: (plan: FlowPlan, frame: number, scale: number) => Promise<string> }
+  interface Window { renderFrame: (plan: ComposerPlan, frame: number, scale: number) => Promise<string> }
 }
 window.renderFrame = async (plan, frame, scale) => {
-  const inputProps: FlowSceneProps = { plan, audioUrl: null, webAudio: true };
+  const inputProps: ComposerProps = { plan, audioUrl: null, webAudio: true };
   const r = await renderStillOnWeb({
-    composition: { component: FlowScene, id: "FlowScene", width: 1920, height: 1080, fps: 30, durationInFrames: plan.duration, defaultProps: inputProps },
+    composition: { component: ComposerFilm, id: "ComposerFilm", width: 1920, height: 1080, fps: 30, durationInFrames: plan.duration, defaultProps: inputProps },
     inputProps,
     frame,
     scale,

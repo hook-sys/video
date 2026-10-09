@@ -250,7 +250,7 @@ function Device({ c, it, w, h, shot }: P & { shot?: boolean }) {
   }
   const r = v === "watch" ? 70 : 64;
   return (
-    <div style={{ width: w, height: h, borderRadius: r, background: frame, padding: v === "watch" ? 22 : 16, boxSizing: "border-box", boxShadow: `0 50px 120px ${pal.shadow}, inset 0 0 0 2px #3a3d48` }}>
+    <div style={{ width: w, height: h, borderRadius: r, background: frame, padding: v === "watch" ? 22 : 16, boxSizing: "border-box", border: "2px solid #3a3d48", boxShadow: `0 50px 120px ${pal.shadow}` }}>
       <div style={{ width: "100%", height: "100%", borderRadius: r - 14, overflow: "hidden", position: "relative" }}>
         {screen(w - (v === "watch" ? 44 : 32), h - (v === "watch" ? 44 : 32))}
         {v === "phone" && <div style={{ position: "absolute", top: 14, left: "50%", marginLeft: -60, width: 120, height: 34, borderRadius: 20, background: "#000" }} />}

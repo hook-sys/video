@@ -45,8 +45,9 @@ export function enterStyle(kind: EnterKind, k: number, tilt = 0): CSSProperties 
     case "scale": return { opacity: o, transform: `scale(${mix(0.78, 1, k)})${rot}`, filter: blurOf(r * 8) };
     case "pop": return { opacity: o, transform: `scale(${mix(0.4, 1, k)})${rot}` };
     case "blur": return { opacity: o, transform: `scale(${mix(1.08, 1, k)})${rot}`, filter: blurOf(r * 24) };
-    case "flip": return { opacity: o, transform: `perspective(1400px) rotateX(${-70 * r}deg)${rot}`, transformOrigin: "50% 100%" };
-    case "swing": return { opacity: o, transform: `perspective(1400px) rotateY(${55 * r}deg)${rot}`, transformOrigin: "0% 50%" };
+    // (flat: the download draws a turn in depth flat or not at all — see present.tsx)
+    case "flip": return { opacity: o, transform: `scaleY(${mix(0.18, 1, 1 - r).toFixed(3)}) skewX(${(-10 * r).toFixed(2)}deg)${rot}`, transformOrigin: "50% 100%" };
+    case "swing": return { opacity: o, transform: `scaleX(${mix(0.35, 1, 1 - r).toFixed(3)}) skewY(${(8 * r).toFixed(2)}deg)${rot}`, transformOrigin: "0% 50%" };
     case "unfold": return { opacity: clamp01(k * 3), clipPath: `inset(0 ${Math.round(100 * r)}% 0 0 round 24px)`, transform: rot || undefined };
     case "draw": return { opacity: clamp01(k * 3), transform: rot || undefined };
     default: return { opacity: o, transform: `translateY(${80 * r}px)${rot}`, filter: blurOf(r * 10) };
@@ -115,8 +116,9 @@ export function cameraOf(kind: string, p: number, f: number, energy: number): st
     case "drift": return `${breathe} translateX(${mix(36, -36, q) * e}px)`;
     case "push": return `${breathe} scale(${mix(0.975, 1.045, q)})`;
     case "pull": return `${breathe} scale(${mix(1.05, 0.985, q)})`;
-    case "tilt": return `${breathe} rotateY(${mix(-5, 4, q) * e}deg) rotateX(${mix(3, 0, q)}deg)`;
-    case "orbit": return `${breathe} rotateY(${Math.sin(q * Math.PI - Math.PI / 2) * 6 * e}deg) rotateZ(${mix(-0.8, 0.8, q)}deg)`;
+    // (tilt and orbit in the plane: the download draws a turn in depth flat or not at all)
+    case "tilt": return `${breathe} rotate(${(mix(-1.1, 0.8, q) * e).toFixed(3)}deg) skewY(${(mix(-0.7, 0.5, q) * e).toFixed(3)}deg) scale(${mix(1.01, 1.03, q).toFixed(4)})`;
+    case "orbit": return `${breathe} translateX(${(Math.sin(q * Math.PI - Math.PI / 2) * 28 * e).toFixed(1)}px) rotateZ(${mix(-0.8, 0.8, q).toFixed(3)}deg) scale(1.02)`;
     case "rise": return `${breathe} translateY(${mix(26, -22, q) * e}px)`;
     case "float": return `${breathe} translateY(${(noise2D("cam-float", f / 45, 0.5) * 12 * e).toFixed(1)}px)`;
     default: return breathe;

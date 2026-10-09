@@ -69,7 +69,9 @@ function Plate({ c, tb, lh, upper, lower }: { c: Ctx; tb: TextBlock; lh: number;
   const { d, boundingBox: bb } = createRoundedTextBox({ textMeasurements: rows, textAlign: tb.align, horizontalPadding: padX, borderRadius: Math.max(18, size * 0.32) });
   const k = clamp01(enterK(m, f, (tb.words[0]?.at ?? 0) - 10) * 1.4);
   return (
-    <svg width={bb.width} height={bb.height} style={{ position: "absolute", left: -padX, top: -padY, overflow: "visible", opacity: k, filter: `drop-shadow(0 24px 48px ${pal.shadow})` }}>
+    <svg width={bb.width} height={bb.height + 24} style={{ position: "absolute", left: -padX, top: -padY, overflow: "visible", opacity: k }}>
+      {/* (its shadow a soft copy below it: the download draws an SVG's drop-shadow filter as nothing) */}
+      <path d={d} fill={pal.shadow} opacity={0.5} transform="translate(0 16)" />
       <path d={d} fill={pal.dark ? "rgba(10,10,20,0.78)" : "rgba(255,255,255,0.9)"} />
     </svg>
   );
