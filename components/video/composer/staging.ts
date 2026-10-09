@@ -1,6 +1,6 @@
 import { rng } from "./art";
 import { isAccent } from "./layout";
-import type { ComposerPlan, GuideKind, JourneyKind, LinkKind, PlacedScene } from "./types";
+import { STILL_BACKGROUND, type ComposerPlan, type GuideKind, type JourneyKind, type LinkKind, type PlacedScene } from "./types";
 
 // How a video is staged. A studio's rule: ONE camera language for the whole
 // video — variety comes from one video to the next, never inside one — and
@@ -125,7 +125,7 @@ export const withRecap = (plan: ComposerPlan): ComposerPlan => (plan.recap ? pla
 
 // The plan as staged (and its recap's seconds added).
 export function staged(plan: ComposerPlan, s: Staging | null | undefined): ComposerPlan {
-  if (!s || s.family === "cuts") return plan;
+  if (!s || s.family === "cuts" || STILL_BACKGROUND) return plan;
   const out: ComposerPlan = { ...plan, journey: s.journey, link: s.link, links: s.links, guide: s.guide };
   return s.recap && s.journey && s.journey !== "scroll" ? withRecap(out) : out;
 }

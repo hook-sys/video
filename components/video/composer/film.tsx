@@ -17,7 +17,7 @@ import { PAGE, Structure, scrollAt } from "./structure";
 import { type Links, Travellers, linksOf } from "./links";
 import { depthHops, hopAt, innerTransform, isDepth, outerTransform, tunnelAt, zoomAt } from "./depth";
 import { measureText } from "@remotion/layout-utils";
-import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene, TextBlock } from "./types";
+import { STILL_BACKGROUND, type ComposerProps, type EnterKind, type ItemKind, type PlacedItem, type PlacedScene, type TextBlock } from "./types";
 import { H, W, setFrame } from "./frame";
 
 // A Composer film: the Director's scenes on the voice's words. Every scene
@@ -141,7 +141,8 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   const tk = cur ? (flipping ? ramp(f, s.from - 4, 44) : IN_OUT(ramp(f, s.from - 2, Math.max(D(cur), 22)))) : 1;
   const prevA = anchors[Math.max(0, cur - 1)];
   const a = anchors[cur];
-  const anchor: Anchor = { x: mix(prevA.x, a.x, tk), y: mix(prevA.y, a.y, tk), s: mix(prevA.s, a.s, tk), t: mix(prevA.t, a.t, tk) };
+  // (a still background keeps the first scene's light all the way)
+  const anchor: Anchor = STILL_BACKGROUND ? anchors[0] : { x: mix(prevA.x, a.x, tk), y: mix(prevA.y, a.y, tk), s: mix(prevA.s, a.s, tk), t: mix(prevA.t, a.t, tk) };
   const flip = flipping && tk < 1;
   const origin = s.items.find((q) => !isAccent(q))?.box ?? s.text?.box ?? { x: W / 2, y: H / 2, w: 0, h: 0 };
   const fieldOf = (dark: boolean, style?: CSSProperties) => <Field f={f} kind={art.field} pal={dark ? pals.dark : pals.light} hue={art.hue} anchor={anchor} energy={art.energy} overlay={art.overlay} style={style} />;

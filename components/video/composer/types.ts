@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+// The owner's test switch: a still background. The field of light doesn't
+// drift or glide between scenes, and the camera doesn't travel (every video
+// is staged as cuts). Set false to bring the motion back.
+export const STILL_BACKGROUND = true;
+
 // The Composer: a video is composed scene by scene by its Director — every
 // scene's layout, things, motion, camera, background and way in are chosen
 // for the words spoken there. Nothing here is a finished scene: these are

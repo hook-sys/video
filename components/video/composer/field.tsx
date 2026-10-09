@@ -4,7 +4,7 @@ import { AbsoluteFill } from "remotion";
 import type { Pal } from "./art";
 import { hsl } from "./art";
 import { Radial, reachOf, Tiles } from "./radial";
-import type { FieldKind, Overlay } from "./types";
+import { STILL_BACKGROUND, type FieldKind, type Overlay } from "./types";
 import { H, W } from "./frame";
 
 // The background a Composer film plays on: a kind of light (aurora, arcs,
@@ -21,7 +21,9 @@ const glow = (x: number, y: number, w: number, h: number, color: string, at = "5
   return <Radial w={w} h={h} at={[ax, ay]} stops={[[0, color], [stop, color, 0]]} place={{ x: x - w / 2, y: y - h / 2 }} />;
 };
 
-export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: { f: number; kind: FieldKind; pal: Pal; hue: number; anchor: Anchor; energy: number; overlay: Overlay; style?: CSSProperties }) {
+export function Field({ f: frame, kind, pal, hue, anchor: a, energy, overlay, style }: { f: number; kind: FieldKind; pal: Pal; hue: number; anchor: Anchor; energy: number; overlay: Overlay; style?: CSSProperties }) {
+  // (a still background: every frame drawn as the first)
+  const f = STILL_BACKGROUND ? 0 : frame;
   const e = 0.6 + energy * 0.8;
   const d = pal.dark;
   const c1 = hsl(hue, 85, d ? 58 : 66, d ? 0.55 : 0.42);

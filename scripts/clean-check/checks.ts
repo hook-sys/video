@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 // on the Flowly proof plans (four variants) and the four reference films'
 // timings. Rules kept only by review are listed, not checked.
 import { BOOKWELL, FLOWLY } from "@/components/video/composer/fixtures";
-import { FPS } from "@/components/video/composer/types";
+import { FPS, STILL_BACKGROUND } from "@/components/video/composer/types";
 import http from "node:http";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
@@ -195,7 +195,8 @@ export async function runChecks(): Promise<Check[]> {
     add("staging: what the customer had lately is rarer", again <= 6, `${again}/40 the same as the last three`);
     const bare = { ...base, recap: false };
     const recap = staged(bare, { family: "path", journey: "snake", link: "line", links: null, guide: null, recap: true });
-    add("staged recap adds its seconds; cuts change nothing", recap.duration === bare.duration + RECAP && staged(bare, { family: "cuts", journey: null, link: null, links: null, guide: null, recap: true }) === bare, `+${recap.duration - bare.duration} frames`);
+    if (STILL_BACKGROUND) add("still background: every video staged as cuts (no camera travel)", recap === bare && !recap.journey && !recap.link, `journey ${recap.journey ?? "none"}`);
+    else add("staged recap adds its seconds; cuts change nothing", recap.duration === bare.duration + RECAP && staged(bare, { family: "cuts", journey: null, link: null, links: null, guide: null, recap: true }) === bare, `+${recap.duration - bare.duration} frames`);
   }
 
   section = "Motion Director (one director for the whole video)";
