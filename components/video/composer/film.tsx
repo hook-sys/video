@@ -8,10 +8,10 @@ import { type Ctx, CtxC } from "./kit";
 import { isAccent } from "./layout";
 import { IN_OUT, TRANSITION_FRAMES, cameraOf, clamp01, enterK, enterStyle, mix, moverOf, ramp, sceneIn, sceneOut } from "./motion";
 import { Headline } from "./text";
-import { Trail } from "@remotion/motion-blur";
+import { CameraMotionBlur, Trail } from "@remotion/motion-blur";
 import { noise2D } from "@remotion/noise";
 import { Present, presentationOf } from "./present";
-import { JourneyField, Roads, arriving, cameraAt, moves, stations, styleOf, toScreen, worldTransform } from "./journey";
+import { type Cam, JourneyField, Roads, arriving, cameraAt, moves, stations, styleOf, toScreen, turnCam, turnGeometry, worldTransform } from "./journey";
 import { PAGE, Structure, scrollAt } from "./structure";
 import { type Links, Travellers, linksOf } from "./links";
 import { depthHops, hopAt, innerTransform, isDepth, outerTransform, tunnelAt, zoomAt } from "./depth";
@@ -189,7 +189,9 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
 type JourneyProps = Omit<SceneProps, "i" | "journey"> & { bare?: boolean; weight: number; upper: boolean; tracking: number; sceneField: (i: number) => ReactNode };
 function Journey(props: JourneyProps) {
   const f = useCurrentFrame();
-  const st = useMemo(() => stations(props.plan.scenes.length, props.plan.journey ?? "right", props.plan.seed), [props.plan]);
+  // (a turning canvas has its own geometry: each scene a quarter turn from the last)
+  const turn = useMemo(() => (props.plan.link === "turn" ? turnGeometry(props.plan.scenes.length, props.plan.seed) : null), [props.plan]);
+  const st = useMemo(() => turn?.st ?? stations(props.plan.scenes.length, props.plan.journey ?? "right", props.plan.seed), [props.plan, turn]);
   const mv = useMemo(() => moves(props.plan), [props.plan]);
   const arrived = useMemo(() => arriving(props.plan, mv), [props.plan, mv]);
   const { display, weight, tracking, upper } = props;
@@ -197,26 +199,29 @@ function Journey(props: JourneyProps) {
   const L = linksOf(arrived, st, mv, props.texts, (t, size) => (typeof document === "undefined" ? t.length * size * 0.55 : measureText({ text: t, fontFamily: display, fontSize: size, fontWeight: weight, letterSpacing: `${tracking}em`, textTransform: upper ? "uppercase" : "none", validateFontIsLoaded: false }).width), upper);
   const plan = L.plan;
   const kind = plan.journey ?? "right";
-  const style = styleOf(kind);
-  const cam = cameraAt(f, st, mv, L.ends, style);
+  const style = styleOf(kind, plan.link);
+  const camOf = (fr: number) => (turn ? turnCam(fr, turn, mv) : cameraAt(fr, st, mv, L.ends, style));
+  const cam = camOf(f);
   const darks = plan.scenes.map((s) => s.dark);
   const travelling = cam.speed > 10;
-  const world = <JourneyWorld {...props} plan={plan} st={st} mv={mv} L={L} />;
-  // a structure draws its own joins (a map keeps the line round its ring, up to the hub)
-  const roads = kind === "timeline" || kind === "tiles" ? [] : L.hops.map((h, i) => i > 0 && !h && !(kind === "map" && i === st.length - 1));
+  const whip = plan.link === "whip";
+  const world = <JourneyWorld {...props} plan={plan} st={st} mv={mv} L={L} camOf={camOf} rots={turn?.rot} />;
+  // a structure draws its own joins (a map keeps the line round its ring, up to the hub); the camera-only ways have none
+  const roads = kind === "timeline" || kind === "tiles" || whip || turn ? [] : L.hops.map((h, i) => i > 0 && !h && !(kind === "map" && i === st.length - 1));
   return (
     <>
       <JourneyField f={f} cam={cam} st={st} darks={darks} pals={props.pals} hue={plan.art.hue} grid={["beams", "streaks", "horizon", "arcs"].includes(plan.art.field)} />
       <Roads cam={cam} st={st} mv={mv} f={f} pals={props.pals} darks={darks} only={roads} />
       <Structure kind={kind} f={f} cam={cam} st={st} mv={mv} plan={plan} pals={props.pals} font={props.textFamily} />
-      {!props.bare && (travelling ? <Trail layers={4} lagInFrames={0.3} trailOpacity={0.4}>{world}</Trail> : world)}
+      {/* (a whip pan is mostly its blur: a film camera's, the frame averaged over most of its time) */}
+      {!props.bare && (travelling ? whip ? <CameraMotionBlur shutterAngle={300} samples={14}>{world}</CameraMotionBlur> : <Trail layers={4} lagInFrames={0.3} trailOpacity={0.4}>{world}</Trail> : world)}
     </>
   );
 }
-function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv: { start: number; dur: number }[]; L: Links }) {
+function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv: { start: number; dur: number }[]; L: Links; camOf: (f: number) => Cam; rots?: number[] }) {
   const f = useCurrentFrame();
-  const { plan, st, mv, L } = props;
-  const cam = cameraAt(f, st, mv, L.ends, styleOf(plan.journey));
+  const { plan, st, mv, L, rots } = props;
+  const cam = props.camOf(f);
   const n = plan.scenes.length;
   const tiles = plan.journey === "tiles";
   const ctxOf = (i: number): Ctx => ({ f, pal: plan.scenes[i].dark ? props.pals.dark : props.pals.light, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens });
@@ -224,9 +229,10 @@ function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv
   // towards it; it is drawn while it is in view
   const inView = (i: number) => {
     const c = toScreen(st[i], cam);
+    if (rots) return Math.hypot(c.x - 960, c.y - 540) < 1102 + 1160 * cam.z;
     return Math.abs(c.x - 960) < 960 + (960 + 120) * cam.z && Math.abs(c.y - 540) < 540 + (540 + 120) * cam.z;
   };
-  const place = (i: number) => ({ position: "absolute" as const, left: st[i].x - 960, top: st[i].y - 540, width: 1920, height: 1080 });
+  const place = (i: number) => ({ position: "absolute" as const, left: st[i].x - 960, top: st[i].y - 540, width: 1920, height: 1080, ...(rots?.[i] ? { transform: `rotate(${rots[i]}deg)` } : {}) });
   return (
     <AbsoluteFill style={{ transform: worldTransform(cam), transformOrigin: "0 0" }}>
       {plan.scenes.map((_, i) => {
@@ -275,6 +281,24 @@ function Depth(props: DepthProps) {
   if (!seg || raw >= 1 || !h) return layer(seg, {});
   const fast = raw > 0.08 && raw < 0.92;
   const blur = (node: ReactNode) => (fast ? <Trail layers={3} lagInFrames={0.35} trailOpacity={0.45}>{node}</Trail> : node);
+  if (h.kind === "flip") {
+    // the card turns over (round its upright axis, or every other time its
+    // level one), drawing back a little as it turns; the canvas shows behind it
+    const tilt = seg % 2 ? "rotateY" : "rotateX";
+    const sign = seg % 4 < 2 ? 1 : -1;
+    const ang = 180 * u * sign;
+    const s = 1 - 0.24 * Math.sin(raw * Math.PI);
+    const edge = Math.sin(raw * Math.PI);
+    const face = (i: number, a: number) => layer(i, { transformOrigin: "50% 50%", transform: `scale(${s.toFixed(4)}) perspective(2600px) ${tilt}(${a.toFixed(2)}deg)` }, true, { borderRadius: 48 * edge, boxShadow: `0 ${(60 * edge).toFixed(0)}px ${(140 * edge).toFixed(0)}px rgba(0,0,0,${(0.45 * edge).toFixed(2)})` });
+    const front = Math.abs(ang) < 90;
+    return (
+      <>
+        {props.field(plan.scenes[front ? seg - 1 : seg].dark)}
+        <AbsoluteFill style={{ background: `rgba(0,0,0,${(0.3 * edge).toFixed(2)})` }} />
+        {front ? face(seg - 1, ang) : face(seg, ang - 180 * sign)}
+      </>
+    );
+  }
   if (h.kind === "tunnel") {
     const t = tunnelAt(u);
     const around = (S: number) => ({ transform: `translate(960px, 540px) scale(${S.toFixed(5)}) translate(-960px, -540px)` });

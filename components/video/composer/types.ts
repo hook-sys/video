@@ -142,7 +142,9 @@ export type JourneyKind = (typeof JOURNEYS)[number];
 // becomes the next scene's first word. Or deeper instead of sideways (see
 // depth.ts): into the scene's main thing, back out of the next one's, or
 // forward through the scenes.
-export const LINKS = ["line", "carry", "lead", "word", "dive", "reveal", "tunnel"] as const;
+// Or the camera alone: a whip pan, the canvas turning a quarter round a
+// corner, or the scene flipping over like a card with the next on its back.
+export const LINKS = ["line", "carry", "lead", "word", "dive", "reveal", "tunnel", "whip", "turn", "flip"] as const;
 export type LinkKind = (typeof LINKS)[number];
 export const GUIDES = ["plane", "cursor", "orb"] as const;
 export type GuideKind = (typeof GUIDES)[number];

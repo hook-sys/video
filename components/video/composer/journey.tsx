@@ -22,8 +22,12 @@ export const TILE_GAP = 150;
 // How the camera behaves on each kind of canvas: how far back it rests (a
 // wall of tiles shows the gutters), how much it pulls out on the way, whether
 // it leans, and whether the last move shows the whole canvas first.
-export type Style = { rest: number; pull: number; lean: boolean; overview: boolean };
-export function styleOf(kind: JourneyKind | null | undefined): Style {
+export type Style = { rest: number; pull: number; lean: boolean; overview: boolean; soft?: boolean };
+export function styleOf(kind: JourneyKind | null | undefined, link?: string | null): Style {
+  // a whip pan goes straight there, fast, barely pulling out
+  // (on a sine, not the cubic: half the top speed, so a big bright card
+  // whipping past never changes the frame too much at once)
+  if (link === "whip") return { rest: 1, pull: 0.12, lean: false, overview: false, soft: true };
   switch (kind) {
     case "timeline": return { rest: 1, pull: 0.55, lean: false, overview: false };
     case "map": return { rest: 1, pull: 1, lean: true, overview: true };
@@ -74,14 +78,20 @@ export function stations(n: number, kind: JourneyKind, seed: number): P[] {
 // When the camera travels into each scene (frames): it leaves a little before
 // the scene's words start and arrives just after.
 export const MOVE = 60;
+export const WHIP = 26;
 export function moves(plan: ComposerPlan): { start: number; dur: number }[] {
   const sc = plan.scenes;
   // a last move that shows the whole canvas on the way takes longer
   const long = styleOf(plan.journey).overview;
+  // a whip pan is over in a moment (its blur carries it); the more frames'
+  // worth of canvas it crosses (a frame is shorter than it is wide), the longer
+  const whip = plan.link === "whip";
+  const st = whip ? stations(sc.length, plan.journey ?? "right", plan.seed) : [];
+  const span = (i: number) => Math.max(Math.abs(st[i].x - st[i - 1].x) / W, (Math.abs(st[i].y - st[i - 1].y) / H) * 1.3);
   return sc.map((s, i) => {
     if (!i) return { start: -1, dur: 1 };
     const room = s.from - sc[i - 1].from - 16;
-    const dur = Math.max(24, Math.min(long && i === sc.length - 1 ? 110 : MOVE, room));
+    const dur = whip ? Math.max(14, Math.min(Math.round((WHIP * span(i)) / 1.22), room)) : Math.max(24, Math.min(long && i === sc.length - 1 ? 110 : MOVE, room));
     return { start: Math.round(s.from - dur * 0.72), dur };
   });
 }
@@ -128,7 +138,8 @@ export function cameraAt(f: number, st: P[], mv: { start: number; dur: number }[
   let seg = 0;
   for (let i = 1; i < st.length; i++) if (f >= mv[i].start) seg = i;
   const raw = seg ? ramp(f, mv[seg].start, mv[seg].dur) : 1;
-  const k = EASE(raw);
+  const ease = style.soft ? (t: number) => (1 - Math.cos(t * Math.PI)) / 2 : EASE;
+  const k = ease(raw);
   if (!seg || raw >= 1) {
     const p = st[seg];
     return { x: p.x, y: p.y, z: style.rest, rot: 0, seg, k: 1, speed: 0 };
@@ -149,13 +160,51 @@ export function cameraAt(f: number, st: P[], mv: { start: number; dur: number }[
   const wOf = (rr: number) => (over ? smooth(clamp01(Math.min(rr, 1 - rr) / 0.38)) : 0);
   const raw2 = ramp(f + 1, mv[seg].start, mv[seg].dur);
   const p = at(k, wOf(raw));
-  const p2 = at(EASE(raw2), wOf(raw2));
+  const p2 = at(ease(raw2), wOf(raw2));
   // it pulls out on the way (the further, the more) and leans into the turn
   const dist = Math.hypot(sb.x - sa.x, sb.y - sa.y);
   let z = style.rest * (1 - Math.sin(raw * Math.PI) * Math.min(0.46, 0.2 + dist / 7000) * style.pull);
   if (over) z = Math.exp(mix(Math.log(z), Math.log(over.z), wOf(raw)));
   const rot = style.lean ? Math.sin(raw * Math.PI) * Math.sign(sb.x - sa.x || 1) * (sb.y >= sa.y ? 1.4 : -1.4) * (1 - wOf(raw)) : 0;
   return { x: p.x, y: p.y, z, rot, seg, k, speed: Math.hypot(p2.x - p.x, p2.y - p.y) };
+}
+
+// The canvas turning a quarter round a corner: each scene lies a quarter turn
+// from the last about a point just off one side of it (alternating sides,
+// turning either way), so on the way the camera swings round that point and
+// the scene goes out like a door as the next swings in.
+export type Turn = { st: P[]; rot: number[]; pivot: P[]; dir: number[] };
+const TURN_D = 1580;
+export function turnGeometry(n: number, seed: number): Turn {
+  const st: P[] = [{ x: 0, y: 0 }], rot = [0], pivot: P[] = [{ x: 0, y: 0 }], dir = [0];
+  for (let i = 1; i < n; i++) {
+    const side = i % 2 ? 1 : -1;
+    const d = noise2D(`turn${seed}`, i * 1.7, 0.5) >= 0 ? 1 : -1;
+    const a = (rot[i - 1] * Math.PI) / 180;
+    const P = { x: st[i - 1].x + Math.cos(a) * side * TURN_D, y: st[i - 1].y + Math.sin(a) * side * TURN_D };
+    const q = (d * Math.PI) / 2, rx = st[i - 1].x - P.x, ry = st[i - 1].y - P.y;
+    st.push({ x: P.x + rx * Math.cos(q) - ry * Math.sin(q), y: P.y + rx * Math.sin(q) + ry * Math.cos(q) });
+    rot.push(rot[i - 1] + d * 90);
+    pivot.push(P);
+    dir.push(d);
+  }
+  return { st, rot, pivot, dir };
+}
+export function turnCam(f: number, g: Turn, mv: { start: number; dur: number }[]): Cam {
+  let seg = 0;
+  for (let i = 1; i < g.st.length; i++) if (f >= mv[i].start) seg = i;
+  const raw = seg ? ramp(f, mv[seg].start, mv[seg].dur) : 1;
+  if (!seg || raw >= 1) return { x: g.st[seg].x, y: g.st[seg].y, z: 1, rot: -g.rot[seg], seg, k: 1, speed: 0 };
+  // the camera goes straight from one scene to the next (not round the
+  // corner's point, which would leave both scenes at the frame's edges) while
+  // it turns, pulled well back so both are in view as they swing round
+  const at = (r: number) => {
+    const u = (1 - Math.cos(r * Math.PI)) / 2;
+    const a = g.st[seg - 1], b = g.st[seg];
+    return { x: mix(a.x, b.x, u), y: mix(a.y, b.y, u), u };
+  };
+  const p = at(raw), p2 = at(ramp(f + 1, mv[seg].start, mv[seg].dur));
+  return { x: p.x, y: p.y, z: 1 - Math.sin(raw * Math.PI) * 0.62, rot: -(g.rot[seg - 1] + g.dir[seg] * 90 * p.u), seg, k: p.u, speed: Math.hypot(p2.x - p.x, p2.y - p.y) };
 }
 
 // canvas → screen
@@ -202,7 +251,10 @@ export function JourneyField({ f, cam, st, darks, pals, hue, grid }: { f: number
   return (
     <AbsoluteFill style={{ background: `linear-gradient(155deg, ${bg}, ${bg2})`, overflow: "hidden" }}>
       {glows}
-      <Tiles w={W} h={H} kind={grid ? "grid" : "dots"} gap={gap} size={grid ? 0.8 : 1.8 * cam.z} color={hsl(hue, 40, d ? 75 : 40, d ? 0.22 : 0.18)} dx={ox} dy={oy} />
+      {/* (the field turns with the camera: drawn twice the frame's size, turned about its middle) */}
+      <div style={{ position: "absolute", left: -W / 2, top: -H / 2, width: W * 2, height: H * 2, transform: cam.rot ? `rotate(${cam.rot.toFixed(3)}deg)` : undefined }}>
+        <Tiles w={W * 2} h={H * 2} kind={grid ? "grid" : "dots"} gap={gap} size={grid ? 0.8 : 1.8 * cam.z} color={hsl(hue, 40, d ? 75 : 40, d ? 0.22 : 0.18)} dx={ox} dy={oy} />
+      </div>
     </AbsoluteFill>
   );
 }

@@ -15,7 +15,9 @@ import type { Box, ComposerPlan, PlacedItem } from "./types";
 // Everything is drawn flat (2D scale), never CSS 3D.
 
 type Move = { start: number; dur: number };
-export const DEPTHS = ["dive", "reveal", "tunnel"] as const;
+// (and flip: the scene turns over like a card, the next scene on its back —
+// each scene a card of its own, so it lives here with the others)
+export const DEPTHS = ["dive", "reveal", "tunnel", "flip"] as const;
 export type DepthKind = (typeof DEPTHS)[number];
 export const isDepth = (k: string | null | undefined): k is DepthKind => !!k && (DEPTHS as readonly string[]).includes(k);
 
@@ -38,6 +40,7 @@ export function depthHops(plan: ComposerPlan, mv: Move[]): { plan: ComposerPlan;
     const big = (it: PlacedItem) => it.box.w >= 220 && it.box.h >= 150 && it.kind !== "button";
     // something of the next scene to see in the window from the start
     const shows = B.items.some((it) => !isAccent(it) && it.at <= B.from + 24);
+    if (want === "flip") return { kind: "flip", c: { x: 960, y: 540 }, s: 1, item: -1 };
     if (want === "dive" && shows) {
       const w = A.items.map((it, j) => ({ it, j })).filter(({ it }) => !isAccent(it) && it.at <= lift && big(it)).sort((x, y) => area(y.it.box) - area(x.it.box))[0];
       if (w) {
