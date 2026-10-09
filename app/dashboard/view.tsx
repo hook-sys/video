@@ -4,7 +4,7 @@ import Link from "next/link";
 import { logout } from "@/app/auth/actions";
 import { projectTitle, videoState } from "@/lib/project-status";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { Desk, Mark, useWindows } from "@/components/site/windows";
+import { Desk, Mark, remember, useWindows } from "@/components/site/windows";
 import { STATE_UI, ago, monthStart, pipelineProgress } from "./helpers";
 import type { DashboardRow } from "./page";
 import "@/components/site/site.css";
@@ -37,7 +37,7 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
           <Mark />
           MotionBrief
         </Link>
-        <Link href="/projects/new" className="gs-btn">
+        <Link href="/projects/new" onClick={remember} className="gs-btn">
           New video
         </Link>
       </header>
@@ -51,7 +51,7 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
                 <p className="gs-kicker">Welcome back, {name}</p>
                 <h2>Your videos</h2>
               </div>
-              <Link href="/projects/new" className="gs-btn big">
+              <Link href="/projects/new" onClick={remember} className="gs-btn big">
                 Create a video
               </Link>
             </div>
@@ -78,7 +78,7 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
                   {active.map((p) => {
                     const { pct, label } = pipelineProgress(p.pipeline_step, p.state);
                     return (
-                      <Link key={p.id} href={`/projects/${p.id}`} className="gs-run">
+                      <Link key={p.id} href={`/projects/${p.id}`} className="gs-run" onClick={remember}>
                         <b>{projectTitle(p)}</b>
                         <span>{label}…</span>
                         <div className="gs-bar-track">
@@ -97,7 +97,7 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
                 <div className="gs-empty">
                   <b>No videos yet</b>
                   <p>Your first video is one brief away.</p>
-                  <Link href="/projects/new" className="gs-btn">
+                  <Link href="/projects/new" onClick={remember} className="gs-btn">
                     Create your first video
                   </Link>
                 </div>
@@ -107,7 +107,7 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
                     const ui = STATE_UI[p.state];
                     const src = p.video_path ? previews[p.video_path] : undefined;
                     return (
-                      <Link key={p.id} href={`/projects/${p.id}`} className="gs-card">
+                      <Link key={p.id} href={`/projects/${p.id}`} className="gs-card" onClick={remember}>
                         <div className="gs-thumb" style={{ background: p.brand_color ?? "#1d1d1f" }}>
                           {src ? <video src={`${src}#t=1.5`} preload="metadata" muted playsInline /> : <Mark />}
                           {p.duration_seconds ? (
@@ -158,7 +158,7 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
             </div>
             <div className="gs-row" style={{ marginTop: 24 }}>
               {admin && (
-                <Link href="/admin" className="gs-btn ghost">
+                <Link href="/admin" onClick={remember} className="gs-btn ghost">
                   Admin panel
                 </Link>
               )}
@@ -191,7 +191,7 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
           <small>Account</small>
         </Link>
         {admin && (
-          <Link href="/admin">
+          <Link href="/admin" onClick={remember}>
             <span className="gs-tile t3">
               <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
                 <path d="M5 7h14M5 12h14M5 17h14" />
@@ -204,7 +204,7 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
           </Link>
         )}
         <span className="gs-sep" aria-hidden="true" />
-        <Link href="/projects/new">
+        <Link href="/projects/new" onClick={remember}>
           <span className="gs-tile t4">
             <svg viewBox="0 0 24 24" fill="none" stroke="#0a66d6" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <path d="M12 6v12M6 12h12" />

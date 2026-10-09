@@ -45,7 +45,7 @@ export default async function AdminOverview() {
         <Stat label="Cost · 30 days" value={usd(cost30)} hint="Estimated provider cost" />
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Videos per day · last 14 days" className="lg:col-span-2" action={<span className="flex gap-3 text-xs text-zinc-500"><span><i className="mr-1 inline-block size-2 rounded-full bg-violet-500" />created</span><span><i className="mr-1 inline-block size-2 rounded-full bg-rose-400" />failed</span></span>}>
+        <Card title="Videos per day · last 14 days" className="lg:col-span-2" action={<span className="flex gap-3 text-xs text-zinc-500"><span><i className="mr-1 inline-block size-2 rounded-full bg-[#0a66d6]" />created</span><span><i className="mr-1 inline-block size-2 rounded-full bg-rose-400" />failed</span></span>}>
           <Bars data={days} />
         </Card>
         <Card title="Right now">
@@ -56,12 +56,12 @@ export default async function AdminOverview() {
                 <span className="tabular-nums text-zinc-300">{count(st)}</span>
               </div>
             ))}
-            <Link href="/admin/queue" className="mt-2 text-xs text-violet-300 hover:underline">Open render queue →</Link>
+            <Link href="/admin/queue" className="mt-2 text-xs text-[#9cc2ff] hover:underline">Open render queue →</Link>
           </div>
         </Card>
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Latest videos" className="lg:col-span-2" action={<Link href="/admin/videos" className="text-xs text-violet-300 hover:underline">All videos →</Link>}>
+        <Card title="Latest videos" className="lg:col-span-2" action={<Link href="/admin/videos" className="text-xs text-[#9cc2ff] hover:underline">All videos →</Link>}>
           <Table head={["Video", "Owner", "Status", "Created"]}>
             {all.slice(0, 8).map((p) => {
               const [label, tone] = STATE_LABEL[videoState(p)];
@@ -76,7 +76,7 @@ export default async function AdminOverview() {
             })}
           </Table>
         </Card>
-        <Card title="Most broken video rules · 30 days" action={<Link href="/admin/quality" className="text-xs text-violet-300 hover:underline">Quality →</Link>}>
+        <Card title="Most broken video rules · 30 days" action={<Link href="/admin/quality" className="text-xs text-[#9cc2ff] hover:underline">Quality →</Link>}>
           <div className="flex flex-col gap-3">
             {topRules.length ? topRules.map(([id, n]) => <HBar key={id} label={<span title={RULE_BY_ID.get(id)?.never}>{id}</span>} value={n} max={topRules[0][1]} />) : <p className="text-sm text-zinc-500">No mistakes logged in 30 days.</p>}
           </div>

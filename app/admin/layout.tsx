@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Logo } from "@/components/brand/logo";
+import { Desk, Mark } from "@/components/site/windows";
+import "@/components/site/site.css";
 import { logout } from "@/app/auth/actions";
 import { requireAdmin } from "@/lib/admin";
 import { AdminNav } from "./_components/nav";
@@ -20,24 +21,38 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
     .or("pipeline_status.eq.failed,render_status.eq.failed,render_4k_status.eq.failed");
 
   return (
-    <div className="min-h-screen bg-[#08080c] text-zinc-200 [color-scheme:dark]">
-      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center gap-4 border-b border-white/[0.06] bg-[#08080c]/85 px-5 backdrop-blur">
-        <Link href="/admin" className="text-white">
-          <Logo size={26} />
+    <div className="gs gs-dark">
+      <Desk />
+      <header className="gs-bar gs-glass admin">
+        <Link href="/admin" className="gs-brand">
+          <Mark />
+          MotionBrief
         </Link>
         <Badge tone="violet">{ROLE_LABEL[s.role]}</Badge>
-        <div className="ml-auto hidden items-center gap-4 text-sm sm:flex lg:mr-0">
+        <div className="ml-auto hidden items-center gap-3 text-sm sm:flex">
           <span className="text-zinc-500">{s.email}</span>
-          <Link href="/dashboard" className="text-zinc-400 hover:text-white">Open app →</Link>
+          <Link href="/dashboard" className="gs-plain">
+            Open app
+          </Link>
           <form action={logout}>
-            <button className="rounded-lg border border-white/10 px-3 py-1.5 text-zinc-300 hover:bg-white/5">Log out</button>
+            <button className="gs-btn ghost">Log out</button>
           </form>
         </div>
       </header>
-      <div className="pt-16">
-        <AdminNav badges={{ "/admin/queue": failed ?? 0 }} />
-        <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 py-8 lg:pl-[calc(16rem+2rem)]">{children}</main>
-      </div>
+      <AdminNav badges={{ "/admin/queue": failed ?? 0 }} />
+      <main className="gs-admin-stage">
+        <section className="gs-win gs-glass">
+          <div className="gs-titlebar">
+            <div className="gs-dots" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </div>
+            <span>Admin</span>
+          </div>
+          <div className="flex flex-col gap-6 p-5 sm:p-8">{children}</div>
+        </section>
+      </main>
     </div>
   );
 }

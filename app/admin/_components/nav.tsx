@@ -53,10 +53,10 @@ export function AdminNav({ badges }: { badges: Record<string, number> }) {
   const active = (href: string) => (href === "/admin" ? path === href : path.startsWith(href));
   return (
     <>
-      <button onClick={() => setOpen(!open)} className="fixed right-4 top-4 z-50 rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-white lg:hidden" aria-label="Menu">
+      <button onClick={() => setOpen(!open)} className="gs-glass fixed right-6 top-[22px] z-50 rounded-full px-3.5 py-1.5 text-sm text-white lg:hidden" aria-label="Menu">
         {open ? "Close" : "Menu"}
       </button>
-      <nav className={`${open ? "flex" : "hidden"} fixed bottom-0 left-0 top-16 z-40 w-64 flex-col gap-6 overflow-y-auto border-r border-white/[0.06] bg-[#0c0c12] px-3 py-5 lg:flex`}>
+      <nav className={`${open ? "flex" : "hidden"} gs-glass fixed bottom-6 left-4 top-[96px] z-40 w-60 flex-col gap-6 overflow-y-auto rounded-[22px] px-3 py-5 lg:flex`}>
         {GROUPS.map((g) => (
           <div key={g.title}>
             <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-600">{g.title}</p>
@@ -65,9 +65,9 @@ export function AdminNav({ badges }: { badges: Record<string, number> }) {
                 key={it.href}
                 href={it.href}
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${active(it.href) ? "bg-white/[0.08] text-white" : "text-zinc-400 hover:bg-white/[0.04] hover:text-white"}`}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${active(it.href) ? "bg-white/[0.12] text-white" : "text-zinc-400 hover:bg-white/[0.06] hover:text-white"}`}
               >
-                <Icon d={I[it.icon]} className={`size-4 ${active(it.href) ? "text-violet-300" : ""}`} />
+                <Icon d={I[it.icon]} className={`size-4 ${active(it.href) ? "text-[#9cc2ff]" : ""}`} />
                 <span className="flex-1">{it.label}</span>
                 {!!badges[it.href] && <span className="rounded-full bg-rose-500/20 px-1.5 text-[11px] font-semibold text-rose-300">{badges[it.href]}</span>}
               </Link>

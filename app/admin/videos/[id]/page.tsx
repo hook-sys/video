@@ -76,7 +76,7 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
         <Card title="Details">
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             {[
-              ["Owner", owner ? <Link key="o" href={`/admin/users/${owner.id}`} className="text-violet-300 hover:underline">{owner.email}</Link> : "—"],
+              ["Owner", owner ? <Link key="o" href={`/admin/users/${owner.id}`} className="text-[#9cc2ff] hover:underline">{owner.email}</Link> : "—"],
               ["Website", p.website_url ?? "—"],
               ["Length", p.duration_seconds ? `${p.duration_seconds}s` : "—"],
               ["Format", p.format ?? "—"],

@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { type TestResult, testAiModel } from "./actions";
 
-const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-violet-400/60";
+const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-[#4f8ff0]/70";
 const btn = "inline-flex items-center justify-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:opacity-50";
 
 // One real call with the typed model: output, time and cost side by side.
@@ -14,7 +14,7 @@ export function ModelTest({ defaults }: { defaults: { text: { provider: string; 
     <form action={action} className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap gap-2">
         {(["text", "voice"] as const).map((k) => (
-          <button key={k} type="button" onClick={() => setKind(k)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${kind === k ? "bg-violet-500 text-white" : "bg-white/[0.06] text-zinc-300"}`}>
+          <button key={k} type="button" onClick={() => setKind(k)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${kind === k ? "bg-[#0a66d6] text-white" : "bg-white/[0.06] text-zinc-300"}`}>
             {k === "text" ? "Script / director" : "Voice"}
           </button>
         ))}

@@ -101,7 +101,7 @@ export default async function UserPage({ params }: PageProps<"/admin/users/[id]"
             <tr key={i}>
               <td className={`${td} text-zinc-500`}>{ago(l.created_at)}</td>
               <td className={td}>{l.actor_email}</td>
-              <td className={td}><code className="text-xs text-violet-300">{l.action}</code></td>
+              <td className={td}><code className="text-xs text-[#9cc2ff]">{l.action}</code></td>
               <td className={`${td} text-xs text-zinc-500`}>{JSON.stringify(l.detail)}</td>
             </tr>
           ))}

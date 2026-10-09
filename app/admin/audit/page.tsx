@@ -19,7 +19,7 @@ export default async function AuditPage() {
             <tr key={l.id}>
               <td className={`${td} whitespace-nowrap text-zinc-500`} title={new Date(l.created_at).toISOString()}>{ago(l.created_at)}</td>
               <td className={td}>{l.actor_email ?? "—"}</td>
-              <td className={td}><code className="text-xs text-violet-300">{l.action}</code></td>
+              <td className={td}><code className="text-xs text-[#9cc2ff]">{l.action}</code></td>
               <td className={td}>
                 {l.target_id && LINK[l.target_type] ? (
                   <Link href={`${LINK[l.target_type]}${l.target_id}`} className="text-xs text-zinc-300 hover:underline">{l.target_type} {String(l.target_id).slice(0, 8)}</Link>

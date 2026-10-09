@@ -23,7 +23,7 @@ export default async function ContentPage() {
         <Stat label="Demo videos" value={`${ready}/${DEMOS.length}`} hint="Ready on the landing page" tone={ready === DEMOS.length ? "good" : "warn"} />
         <Stat label="Sound effects" value={SFX.length} />
         <Stat label="Fonts" value={(fonts as unknown[]).length} hint={[...categories.entries()].map(([k, n]) => `${n} ${k}`).join(" · ")} />
-        <Stat label="Landing page" value={<Link href="/" className="text-violet-300 hover:underline">Open ↗</Link>} />
+        <Stat label="Landing page" value={<Link href="/" className="text-[#9cc2ff] hover:underline">Open ↗</Link>} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Landing demo gallery">

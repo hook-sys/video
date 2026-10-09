@@ -113,6 +113,37 @@ export function useWindows<W extends string>(initial: W, path: Record<W, string>
   return { current, open, win, iconRef };
 }
 
+// Going to another page: what was clicked is remembered for a moment, and
+// that page's window (AppShell) opens out of it.
+const FROM = "gs-from";
+export function remember(e: React.MouseEvent<HTMLElement>) {
+  const el = e.currentTarget.querySelector(".gs-tile") ?? e.currentTarget;
+  const r = el.getBoundingClientRect();
+  try {
+    sessionStorage.setItem(FROM, JSON.stringify({ x: r.left, y: r.top, w: r.width, h: r.height, at: Date.now() }));
+  } catch {
+    // (no storage: the window simply appears)
+  }
+}
+// A window opening out of what was clicked on the page before.
+export function useArrival(ref: React.RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    let from: { x: number; y: number; w: number; h: number; at: number } | null = null;
+    try {
+      from = JSON.parse(sessionStorage.getItem(FROM) ?? "null");
+      sessionStorage.removeItem(FROM);
+    } catch {
+      from = null;
+    }
+    const win = ref.current;
+    if (!win || !from || Date.now() - from.at > 8000 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const w = win.getBoundingClientRect();
+    const dx = from.x + from.w / 2 - (w.left + w.width / 2), dy = from.y + from.h / 2 - (w.top + w.height / 2);
+    win.animate([{ transform: `translate(${dx}px, ${dy}px) scale(${from.w / w.width})` }, { transform: "none" }], OPEN);
+    win.animate([{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 1 }], { duration: OPEN.duration, easing: "linear" });
+  }, [ref]);
+}
+
 // The still desk the glass sits on.
 export function Desk() {
   return (

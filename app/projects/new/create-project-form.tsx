@@ -27,13 +27,12 @@ import {
 const label = "text-sm font-medium";
 const hint = "text-xs text-foreground/50";
 const input =
-  "w-full rounded-xl border border-foreground/12 bg-background px-3.5 py-2.5 text-sm transition placeholder:text-foreground/35 focus:border-violet-500 focus:outline-none focus:ring-4 focus:ring-violet-500/15";
+  "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm transition placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
 const area =
-  "w-full resize-y rounded-2xl border border-foreground/12 bg-background p-4 text-base leading-relaxed transition placeholder:text-foreground/35 focus:border-violet-500 focus:outline-none focus:ring-4 focus:ring-violet-500/15";
+  "w-full resize-y rounded-2xl border border-foreground/12 bg-white/80 p-4 text-base leading-relaxed transition placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
 
 // No style to pick: every project gets four videos in four different styles.
 const STYLE: StylePreset = "Auto";
-const AUTO_BG = "linear-gradient(135deg, #e0e7ff, #f5d0fe 50%, #0f172a 50.5%, #312e81)";
 
 export type Prefill = { script: string; brandName: string; websiteUrl: string; cta: string; voice?: string };
 type VoiceOption = { name: string; gender: "female" | "male"; label: string };
@@ -56,16 +55,16 @@ export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = []
   const submit = (
     <button
       disabled={blocked}
-      className="w-full rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-4 text-base font-semibold text-white shadow-lg shadow-violet-600/25 transition hover:shadow-xl hover:shadow-violet-600/35 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/30 disabled:opacity-60"
+      className="w-full rounded-full bg-[#0a66d6] px-6 py-4 text-base font-semibold text-white hover:bg-[#0859bd] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0a66d6]/30 disabled:opacity-60"
     >
-      ✦ Generate video
+      Create video
     </button>
   );
 
   return (
     <>
       {pending && <WaitingScreen plan={waiting.plan} captions={waiting.captions} />}
-      <form action={action} className={`grid gap-6 pb-28 lg:grid-cols-[minmax(0,1fr)_300px] lg:pb-0 ${pending ? "hidden" : ""}`}>
+      <form action={action} className={`grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] ${pending ? "hidden" : ""}`}>
         <input type="hidden" name="direction" value={directionFor(script, STYLE)} />
         <input type="hidden" name="visual_style" value={STYLE_PRESETS[STYLE].visual_style} />
         <input type="hidden" name="format" value={format} />
@@ -194,10 +193,10 @@ export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = []
                       type="button"
                       onClick={() => setFormat(f)}
                       aria-pressed={format === f}
-                      className={`flex flex-col items-center gap-2 rounded-2xl border p-3 transition ${format === f ? "border-violet-500 bg-violet-500/[0.06] ring-4 ring-violet-500/15" : "border-foreground/12 hover:border-foreground/30"}`}
+                      className={`flex flex-col items-center gap-2 rounded-2xl border bg-white/70 p-3 ${format === f ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/12 hover:border-foreground/30"}`}
                     >
                       <span className="flex h-12 items-center justify-center">
-                        <span className={`rounded-md border-2 ${format === f ? "border-violet-500" : "border-foreground/30"}`} style={{ width: (w / Math.max(w, h)) * 44, height: (h / Math.max(w, h)) * 44 }} />
+                        <span className={`rounded-md border-2 ${format === f ? "border-[#0a66d6]" : "border-foreground/30"}`} style={{ width: (w / Math.max(w, h)) * 44, height: (h / Math.max(w, h)) * 44 }} />
                       </span>
                       <span className="text-sm font-medium">{f}</span>
                       <span className="text-[11px] text-foreground/50">{f === "16:9" ? "Web, YouTube" : f === "9:16" ? "Reels, TikTok" : "Feed"}</span>
@@ -208,14 +207,14 @@ export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = []
             </fieldset>
           </Step>
 
-          {error && <p className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
+          {error && <p className="rounded-xl bg-[#fdecea] px-4 py-3 text-sm text-[#a1281b]">{error}</p>}
         </div>
 
         {/* Summary: a sticky side card on desktop, a bottom bar on mobile. */}
         <aside className="hidden lg:block">
-          <div className="sticky top-24 flex flex-col gap-4 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
-            <span className="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl text-3xl text-white drop-shadow" style={{ background: AUTO_BG }}>
-              ✦
+          <div className="sticky top-24 flex flex-col gap-4 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
+            <span className="flex aspect-video items-center justify-center rounded-xl bg-[#1d1d1f]">
+              <span className="rounded-md border-2 border-white/70" style={{ width: (Number(format.split(":")[0]) / Math.max(...format.split(":").map(Number))) * 56, height: (Number(format.split(":")[1]) / Math.max(...format.split(":").map(Number))) * 56 }} />
             </span>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Summary k="Length" v={seconds ? `≈ ${seconds} s` : "—"} />
@@ -226,17 +225,12 @@ export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = []
               <Check ok={!!logo}>Icon</Check>
             </ul>
             {submit}
-            <p className="text-center text-[11px] text-foreground/45">1080p · 4K download available after</p>
+            <p className="text-center text-[11px] text-foreground/45">1080p · download as MP4</p>
           </div>
         </aside>
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-foreground/10 bg-background/90 px-4 py-3 backdrop-blur-xl lg:hidden">
-          <div className="mx-auto flex max-w-2xl items-center gap-3">
-            <div className="shrink-0 text-xs text-foreground/60">
-              <p className="font-semibold text-foreground">{seconds ? `≈ ${seconds} s` : "New video"}</p>
-              <p>{ready ? "Ready" : `${[!script.trim() && "voice-over", !logo && "icon"].filter(Boolean).join(", ")} missing`}</p>
-            </div>
-            <div className="flex-1">{submit}</div>
-          </div>
+        <div className="flex flex-col gap-2 lg:hidden">
+          <p className="text-center text-xs text-foreground/60">{ready ? (seconds ? `≈ ${seconds} s video` : "Ready") : `${[!script.trim() && "voice-over", !logo && "icon"].filter(Boolean).join(", ")} missing`}</p>
+          {submit}
         </div>
       </form>
     </>
@@ -245,9 +239,9 @@ export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = []
 
 function Step({ n, title, sub, children }: { n: number; title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-4 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5 sm:p-6">
+    <section className="flex flex-col gap-4 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06] sm:p-6">
       <div className="flex items-start gap-3">
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-fuchsia-500 text-xs font-bold text-white">{n}</span>
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-[#1d1d1f] text-xs font-bold text-white">{n}</span>
         <div>
           <h2 className="text-base font-semibold">{title}</h2>
           {sub && <p className="mt-0.5 text-xs text-foreground/55">{sub}</p>}
@@ -275,8 +269,8 @@ function Upload({ title, required, text, sub, preview, children }: { title: stri
       <span className={label}>
         {title} {required ? <span className="text-red-500">*</span> : <span className="font-normal text-foreground/45">(optional)</span>}
       </span>
-      <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-foreground/20 px-3 py-4 text-center text-sm transition hover:border-violet-500/60 hover:bg-violet-500/[0.04]">
-        {preview ?? <span className="flex size-9 items-center justify-center rounded-full bg-violet-500/10 text-lg text-violet-600 dark:text-violet-300">↑</span>}
+      <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-foreground/20 bg-white/60 px-3 py-4 text-center text-sm hover:border-[#0a66d6]/60 hover:bg-white">
+        {preview ?? <span className="flex size-9 items-center justify-center rounded-full bg-[#0a66d6]/10 text-lg text-[#0a66d6]">↑</span>}
         <span className="max-w-full truncate font-medium text-foreground/80">{text}</span>
         <span className="max-w-full truncate text-[11px] text-foreground/45">{sub}</span>
         {children}
@@ -317,7 +311,7 @@ function Chips<T extends string>({
               className="peer sr-only"
               {...(value !== undefined ? { checked: value === o, onChange: () => onChange?.(o) } : { defaultChecked: defaultValue === o })}
             />
-            <span className="block rounded-full border border-foreground/12 px-3.5 py-1.5 text-sm transition hover:border-foreground/30 peer-checked:border-violet-500 peer-checked:bg-violet-500/10 peer-checked:font-medium peer-checked:text-violet-700 peer-focus-visible:ring-4 peer-focus-visible:ring-violet-500/25 dark:peer-checked:text-violet-300">
+            <span className="block rounded-full border border-foreground/12 bg-white/70 px-3.5 py-1.5 text-sm hover:border-foreground/30 peer-checked:border-[#0a66d6] peer-checked:bg-[#0a66d6]/10 peer-checked:font-medium peer-checked:text-[#0a66d6] peer-focus-visible:ring-4 peer-focus-visible:ring-[#0a66d6]/25">
               {format(o)}
             </span>
           </label>

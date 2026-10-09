@@ -12,7 +12,8 @@ import { getProjectCostSummary } from "@/lib/costs/benchmark";
 import { canUseDevTools } from "@/lib/dev-tools";
 import { getStoredAiConfig } from "@/lib/ai/models";
 import { SubmitButton } from "@/components/submit-button";
-import { Logo } from "@/components/brand/logo";
+import { AppShell } from "@/components/site/app-shell";
+import { userAccess } from "@/lib/admin";
 import { type ComposerView, buildRenderInput } from "@/lib/render-input";
 import { BackToDashboard } from "./back-to-dashboard";
 import { ComposerStudio } from "./composer-studio";
@@ -33,6 +34,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
     data: { user },
   } = await supabase.auth.getUser();
   const dev = !!user && (await canUseDevTools(supabase, user.id));
+  const admin = user ? (await userAccess(supabase, user.id)).admin : false;
   // ("AI only for the voice": a change is a new version, composed by rule)
   const byRule = (await getStoredAiConfig()).engine.voiceOnly;
 
@@ -99,28 +101,18 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const look = direction.match(/^Look:\s*(.+)$/m)?.[1]?.trim() ?? "Auto";
   const title = project.brand_name || "Your video";
   const status =
-    project.pipeline_status === "completed" ? { label: "Ready", cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" }
-    : project.pipeline_status === "preview_ready" ? { label: "Preview ready", cls: "bg-sky-500/15 text-sky-600 dark:text-sky-300" }
-    : project.pipeline_status === "running" ? { label: "Creating", cls: "bg-violet-500/15 text-violet-600 dark:text-violet-300" }
-    : project.pipeline_status === "failed" ? { label: "Failed", cls: "bg-rose-500/15 text-rose-600 dark:text-rose-300" }
-    : project.pipeline_status === "needs_input" ? { label: "Needs your input", cls: "bg-amber-500/15 text-amber-600 dark:text-amber-300" }
+    project.pipeline_status === "completed" ? { label: "Ready", cls: "bg-[#e3f4e8] text-[#1e7a3c]" }
+    : project.pipeline_status === "preview_ready" ? { label: "Preview ready", cls: "bg-[#e5effc] text-[#0a5cc2]" }
+    : project.pipeline_status === "running" ? { label: "Creating", cls: "bg-[#e5effc] text-[#0a5cc2]" }
+    : project.pipeline_status === "failed" ? { label: "Failed", cls: "bg-[#fdecea] text-[#a1281b]" }
+    : project.pipeline_status === "needs_input" ? { label: "Needs your input", cls: "bg-[#fff3df] text-[#8a5300]" }
     : { label: "Draft", cls: "bg-foreground/10 text-foreground/60" };
-  const primaryBtn = "inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 px-5 py-3.5 font-semibold text-white shadow-lg shadow-violet-600/25 transition hover:brightness-110 disabled:opacity-60";
-  const secondaryBtn = "inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-foreground/15 px-5 py-3 font-semibold transition hover:bg-foreground/5";
+  const primaryBtn = "inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#0a66d6] px-5 py-3.5 font-semibold text-white hover:bg-[#0859bd] disabled:opacity-60";
+  const secondaryBtn = "inline-flex w-full items-center justify-center gap-2 rounded-full bg-white/80 px-5 py-3 font-semibold ring-1 ring-black/[0.08] hover:bg-white disabled:opacity-60";
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-background">
-      <header className="sticky top-0 z-20 border-b border-foreground/[0.07] bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
-          <Link href="/dashboard" aria-label="MotionBrief home">
-            <Logo size={28} className="text-lg" />
-          </Link>
-          <Link href="/projects/new" className="ml-auto inline-flex rounded-xl bg-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90">
-            + New video
-          </Link>
-        </div>
-      </header>
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+    <AppShell title={title} admin={admin} active={null} initial={(user?.email ?? "?")[0]} wide>
+    <div className="flex flex-col gap-6">
       <AutoRefresh active={project.pipeline_status === "running"} />
       <BackToDashboard />
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -139,7 +131,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             ]
               .filter(Boolean)
               .map((c) => (
-                <span key={c} className="rounded-full border border-foreground/10 px-2.5 py-1 text-foreground/65">{c}</span>
+                <span key={c} className="rounded-full bg-white/70 px-2.5 py-1 text-foreground/65 ring-1 ring-black/[0.06]">{c}</span>
               ))}
           </div>
         </div>
@@ -152,15 +144,15 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
         <ComposerStudio projectId={id} plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={audioUrl} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} byRule={byRule} about={composer.about} />
       )}
       {ready && !composer && (
-        <section className="rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-6 text-sm text-foreground/65">This video can&apos;t be shown: its voice is missing. Try again from a new video.</section>
+        <section className="rounded-2xl bg-white/70 p-6 text-sm text-foreground/65 ring-1 ring-black/[0.06]">This video can&apos;t be shown: its voice is missing. Try again from a new video.</section>
       )}
 
       {(project.pipeline_status === "failed" ||
         project.pipeline_status === "needs_input" ||
         project.pipeline_status === "idle") && (
-        <section className="flex flex-col items-center gap-4 rounded-3xl border border-foreground/10 bg-gradient-to-b from-violet-500/[0.05] to-transparent px-6 py-14 text-center">
-          <div className={`flex size-14 items-center justify-center rounded-full text-2xl ${project.pipeline_status === "idle" ? "bg-violet-500/15 text-violet-600 dark:text-violet-300" : "bg-rose-500/15 text-rose-600 dark:text-rose-300"}`}>
-            {project.pipeline_status === "idle" ? "✦" : "!"}
+        <section className="flex flex-col items-center gap-4 rounded-2xl bg-white/70 px-6 py-14 text-center ring-1 ring-black/[0.06]">
+          <div className={`flex size-14 items-center justify-center rounded-full text-2xl ${project.pipeline_status === "idle" ? "bg-[#0a66d6]/10 text-[#0a66d6]" : "bg-[#fdecea] text-[#a1281b]"}`}>
+            {project.pipeline_status === "idle" ? "▶" : "!"}
           </div>
           <h2 className="text-xl font-semibold">
             {project.pipeline_status === "idle" ? "Ready to generate" : project.pipeline_status === "needs_input" ? "We need a bit more to work with" : "This one didn't finish"}
@@ -179,7 +171,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           ) : (
             <form action={retryPipeline.bind(null, id)}>
               <SubmitButton pendingLabel="Starting…" className={`${primaryBtn} w-auto px-6`}>
-                {project.pipeline_status === "failed" ? "↻ Try again" : "✦ Generate video"}
+                {project.pipeline_status === "failed" ? "Try again" : "Create video"}
               </SubmitButton>
             </form>
           )}
@@ -188,11 +180,11 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {project.pipeline_status !== "running" && (
         <section className="grid gap-4 md:grid-cols-2">
-          <div className="flex flex-col gap-2 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
+          <div className="flex flex-col gap-2 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
             <h2 className="text-sm font-semibold">Script</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/75">{voiceScript || "—"}</p>
           </div>
-          <div className="flex flex-col gap-2 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
+          <div className="flex flex-col gap-2 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
             <h2 className="text-sm font-semibold">What viewers see</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/75">{project.advanced_direction || "Chosen automatically from your script."}</p>
             <dl className="mt-2 grid grid-cols-2 gap-3 border-t border-foreground/[0.07] pt-3 text-xs">
@@ -355,7 +347,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           </dl>
         </section>
       )}
-    </main>
     </div>
+    </AppShell>
   );
 }

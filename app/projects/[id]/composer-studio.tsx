@@ -100,13 +100,9 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <span className="rounded-full bg-violet-500/15 px-2.5 py-0.5 text-xs font-semibold text-violet-600 dark:text-violet-300">Composer</span>
-        <span className="text-xs text-foreground/50">Every scene composed by the Director for your words.</span>
-      </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section className="flex min-w-0 flex-col gap-3">
-          <div className="overflow-hidden rounded-3xl border border-foreground/10 bg-black shadow-2xl shadow-violet-900/20">
+          <div className="overflow-hidden rounded-2xl bg-black shadow-xl shadow-black/15 ring-1 ring-black/10">
             <Player
               key={`${selected}:${plan.seed}:${plan.w ?? 1920}`}
               component={ComposerFilm}
@@ -131,7 +127,7 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
           {plans.length > 1 && (
             <div className="flex flex-wrap gap-2">
               {plans.map((p, i) => (
-                <button key={`${i}:${p.seed}`} type="button" onClick={() => setPicked(i)} title={i ? changes[i - 1]?.direction.slice(0, 300) : "The Director's video"} className={`flex flex-col items-start rounded-2xl border px-3 py-2 text-left transition ${i === selected ? "border-violet-500 bg-violet-500/10" : "border-foreground/10 hover:bg-foreground/5"}`}>
+                <button key={`${i}:${p.seed}`} type="button" onClick={() => setPicked(i)} title={i ? changes[i - 1]?.direction.slice(0, 300) : "The Director's video"} className={`flex flex-col items-start rounded-2xl border bg-white/70 px-3 py-2 text-left ${i === selected ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/10 hover:bg-white"}`}>
                   <span className="text-sm font-semibold">Version {i + 1}</span>
                   <span className="max-w-[180px] truncate text-xs text-foreground/55">{i ? changes[i - 1]?.direction ?? "" : "Original"}</span>
                 </button>
@@ -140,25 +136,25 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
           )}
         </section>
         <aside className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
+          <div className="flex flex-col gap-3 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
             <h2 className="text-sm font-semibold">Download</h2>
             <button type="button" disabled={busy} onClick={download} className={className}>
-              {busy ? `Rendering · ${Math.round(progress * 100)}%…` : plans.length > 1 ? `↓ Download version ${selected + 1}` : "↓ Download video"}
+              {busy ? `Rendering · ${Math.round(progress * 100)}%…` : plans.length > 1 ? `Download version ${selected + 1}` : "Download video"}
             </button>
             {busy && (
               <>
                 <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
-                  <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
+                  <div className="h-full rounded-full bg-[#0a66d6]" style={{ width: `${Math.round(progress * 100)}%` }} />
                 </div>
                 <button type="button" onClick={() => abort.current?.abort()} className="text-xs text-foreground/55 hover:text-foreground">
                   Cancel
                 </button>
               </>
             )}
-            {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+            {error && <p className="text-xs text-[#a1281b]">{error}</p>}
             <p className="text-xs text-foreground/50">Rendered in this browser (1080p). Keep this tab open until it finishes.</p>
           </div>
-          <div className="flex flex-col gap-3 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
+          <div className="flex flex-col gap-3 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
             <div className="flex items-baseline justify-between">
               <h2 className="text-sm font-semibold">{byRule ? "Another version" : "Change it"}</h2>
               <span className="text-xs text-foreground/50">{left} of {COMPOSER_CHANGES} left</span>
@@ -167,7 +163,7 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
               <>
                 <p className="text-xs text-foreground/55">A new version of this video: another look and another way of telling it. Your script and voice stay the same.</p>
                 <button type="button" disabled={!left || pending || busy} onClick={change} className={secondaryClassName}>
-                  {pending ? "Making a new version…" : left ? "↻ New version" : "No versions left"}
+                  {pending ? "Making a new version…" : left ? "New version" : "No versions left"}
                 </button>
               </>
             ) : (
@@ -175,23 +171,23 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
             <p className="text-xs text-foreground/55">Tell the Director what to change — colours, mood, pace, any scene, what to show. Your script and voice stay the same.</p>
                 <div className="flex flex-wrap gap-1.5">
                   {QUICK.map(([label, line]) => (
-                    <button key={label} type="button" disabled={!left || pending} onClick={() => setDirection((d) => (d.trim() ? `${d.trim()}\n${line}` : line))} className="rounded-full border border-foreground/10 px-2.5 py-1 text-xs hover:bg-foreground/5 disabled:opacity-40">
+                    <button key={label} type="button" disabled={!left || pending} onClick={() => setDirection((d) => (d.trim() ? `${d.trim()}\n${line}` : line))} className="rounded-full bg-white/70 px-2.5 py-1 text-xs ring-1 ring-black/[0.08] hover:bg-white disabled:opacity-40">
                       {label}
                     </button>
                   ))}
                 </div>
-                <textarea value={direction} onChange={(e) => setDirection(e.target.value)} disabled={!left || pending} rows={6} placeholder={'e.g. "Make the opening darker and more dramatic. In the scene about reminders show a phone with the notification. Use blue instead of purple."'} className="w-full resize-y rounded-xl border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-violet-500 disabled:opacity-50" />
+                <textarea value={direction} onChange={(e) => setDirection(e.target.value)} disabled={!left || pending} rows={6} placeholder={'e.g. "Make the opening darker and more dramatic. In the scene about reminders show a phone with the notification. Use blue instead of purple."'} className="w-full resize-y rounded-xl border border-foreground/10 bg-white/80 px-3 py-2 text-sm outline-none focus:border-[#0a66d6] disabled:opacity-50" />
                 <div className="flex items-center justify-between text-xs">
-                  <span className={count > CHANGE_WORDS ? "text-rose-600 dark:text-rose-400" : "text-foreground/50"}>
+                  <span className={count > CHANGE_WORDS ? "text-[#a1281b]" : "text-foreground/50"}>
                     {count} / {CHANGE_WORDS} words
                   </span>
                 </div>
                 <button type="button" disabled={!left || pending || !count || count > CHANGE_WORDS || busy} onClick={change} className={secondaryClassName}>
-                  {pending ? "Changing your video…" : left ? "✎ Change it" : "No changes left"}
+                  {pending ? "Changing your video…" : left ? "Change it" : "No changes left"}
                 </button>
               </>
             )}
-            {note && <p className={`text-xs ${note.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>{note.message}</p>}
+            {note && <p className={`text-xs ${note.ok ? "text-[#1e7a3c]" : "text-[#a1281b]"}`}>{note.message}</p>}
           </div>
         </aside>
       </div>

@@ -37,7 +37,7 @@ export default async function QualityPage({ searchParams }: PageProps<"/admin/qu
               <tr key={i}>
                 <td className={td}><Badge tone="amber">{m.rule_id}</Badge></td>
                 <td className={`${td} max-w-[220px] truncate text-xs text-zinc-400`} title={m.detail ?? ""}>{m.detail}</td>
-                <td className={td}>{m.project_id ? <Link href={`/admin/videos/${m.project_id}`} className="text-xs text-violet-300 hover:underline">open</Link> : "—"}</td>
+                <td className={td}>{m.project_id ? <Link href={`/admin/videos/${m.project_id}`} className="text-xs text-[#9cc2ff] hover:underline">open</Link> : "—"}</td>
                 <td className={`${td} text-xs text-zinc-500`}>{ago(m.created_at)}</td>
               </tr>
             ))}
@@ -56,7 +56,7 @@ export default async function QualityPage({ searchParams }: PageProps<"/admin/qu
           <Table head={["Rule", "Never", "Note", "Status", ""]} empty="No custom rules yet.">
             {(custom ?? []).map((r) => (
               <tr key={r.id}>
-                <td className={td}><code className="text-xs text-violet-300">{r.id}</code></td>
+                <td className={td}><code className="text-xs text-[#9cc2ff]">{r.id}</code></td>
                 <td className={`${td} text-sm`}>{r.never}</td>
                 <td className={`${td} text-xs text-zinc-500`}>{r.note ?? "—"}</td>
                 <td className={td}><Badge tone={r.active ? "green" : "gray"}>{r.active ? "active" : "off"}</Badge></td>
@@ -74,7 +74,7 @@ export default async function QualityPage({ searchParams }: PageProps<"/admin/qu
         <Table head={["Rule", "Never", "Enforced by", "Seen in"]}>
           {VIDEO_RULES.map((r) => (
             <tr key={r.id}>
-              <td className={td}><code className="text-xs text-violet-300">{r.id}</code></td>
+              <td className={td}><code className="text-xs text-[#9cc2ff]">{r.id}</code></td>
               <td className={`${td} text-sm`}>{r.never}</td>
               <td className={td}><div className="flex flex-wrap gap-1">{r.enforced.map((e) => <Badge key={e} tone={e === "code" ? "green" : e === "detect" ? "blue" : "gray"}>{e}</Badge>)}</div></td>
               <td className={`${td} text-xs text-zinc-500`}>{r.seen}</td>

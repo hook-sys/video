@@ -30,7 +30,7 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
                   {s.type === "bool" ? (
                     <label className="flex cursor-pointer items-center gap-3 md:justify-end">
                       <input type="checkbox" name={s.key} defaultChecked={values[s.key] === true} className="peer sr-only" />
-                      <span className="relative h-6 w-11 rounded-full bg-zinc-700 transition after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition peer-checked:bg-violet-500 peer-checked:after:translate-x-5" />
+                      <span className="relative h-6 w-11 rounded-full bg-zinc-700 transition after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition peer-checked:bg-[#0a66d6] peer-checked:after:translate-x-5" />
                     </label>
                   ) : (
                     <input name={s.key} type={s.type === "number" ? "number" : "text"} min={0} defaultValue={String(values[s.key])} className={input} />

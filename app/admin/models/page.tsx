@@ -15,7 +15,7 @@ function Toggle({ name, on, disabled }: { name: string; on: boolean; disabled?: 
   return (
     <label className={`flex items-center gap-3 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
       <input type="checkbox" name={name} defaultChecked={on} disabled={disabled} className="peer sr-only" />
-      <span className="relative h-6 w-11 shrink-0 rounded-full bg-zinc-700 transition after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition peer-checked:bg-violet-500 peer-checked:after:translate-x-5" />
+      <span className="relative h-6 w-11 shrink-0 rounded-full bg-zinc-700 transition after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition peer-checked:bg-[#0a66d6] peer-checked:after:translate-x-5" />
     </label>
   );
 }

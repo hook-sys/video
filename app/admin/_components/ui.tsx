@@ -44,7 +44,7 @@ const BADGE = {
   green: "bg-emerald-500/15 text-emerald-300",
   red: "bg-rose-500/15 text-rose-300",
   amber: "bg-amber-500/15 text-amber-300",
-  violet: "bg-violet-500/20 text-violet-300",
+  violet: "bg-[#0a66d6]/25 text-[#9cc2ff]",
   blue: "bg-sky-500/15 text-sky-300",
 };
 export type BadgeTone = keyof typeof BADGE;
@@ -81,7 +81,7 @@ export function Bars({ data, height = 140 }: { data: { label: string; a: number;
         <div key={d.label} className="group flex h-full flex-1 flex-col items-center justify-end gap-1" title={`${d.label}: ${d.a}${d.b !== undefined ? ` / ${d.b}` : ""}`}>
           <div className="flex w-full flex-col justify-end overflow-hidden rounded-md" style={{ height: `${((d.a + (d.b ?? 0)) / max) * 100}%`, minHeight: 2 }}>
             {!!d.b && <div className="w-full bg-rose-400/70" style={{ flex: d.b }} />}
-            <div className="w-full bg-gradient-to-t from-violet-600 to-fuchsia-400" style={{ flex: d.a || 0.0001 }} />
+            <div className="w-full bg-[#4f8ff0]" style={{ flex: d.a || 0.0001 }} />
           </div>
           <span className="text-[10px] text-zinc-600 group-hover:text-zinc-300">{d.label}</span>
         </div>
@@ -95,7 +95,7 @@ export function HBar({ label, value, max, prefix = "" }: { label: React.ReactNod
     <div className="flex min-w-0 items-center gap-3 text-sm">
       <div className="w-28 shrink-0 truncate text-zinc-300">{label}</div>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
-        <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-400" style={{ width: `${max ? (value / max) * 100 : 0}%` }} />
+        <div className="h-full rounded-full bg-[#4f8ff0]" style={{ width: `${max ? (value / max) * 100 : 0}%` }} />
       </div>
       <div className="w-14 shrink-0 text-right tabular-nums text-zinc-400">{prefix}{value.toLocaleString()}</div>
     </div>
@@ -104,7 +104,7 @@ export function HBar({ label, value, max, prefix = "" }: { label: React.ReactNod
 
 export function Notice({ children, tone = "info" }: { children: React.ReactNode; tone?: "info" | "warn" }) {
   return (
-    <div className={`rounded-xl border px-4 py-3 text-sm ${tone === "warn" ? "border-amber-400/20 bg-amber-400/[0.06] text-amber-200" : "border-violet-400/20 bg-violet-400/[0.06] text-violet-200"}`}>
+    <div className={`rounded-xl border px-4 py-3 text-sm ${tone === "warn" ? "border-amber-400/20 bg-amber-400/[0.06] text-amber-200" : "border-[#4f8ff0]/25 bg-[#4f8ff0]/[0.08] text-[#c9ddff]"}`}>
       {children}
     </div>
   );
@@ -129,4 +129,4 @@ export function Filters({ items, current, base, param = "status" }: { items: { v
 export const btn = "inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:bg-white/10 disabled:opacity-50";
 export const btnPrimary = "inline-flex items-center justify-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:opacity-50";
 export const btnDanger = "inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50";
-export const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-violet-400/60";
+export const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-[#4f8ff0]/70";

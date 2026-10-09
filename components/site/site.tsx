@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { login, signup } from "@/app/auth/actions";
 import { DEMOS } from "@/components/landing/demos";
-import { Desk, Mark, useWindows } from "./windows";
+import { Desk, Mark, remember, useWindows } from "./windows";
 import "./site.css";
 
 // The site before login: one glass window at a time over a still desk, and a
@@ -35,7 +35,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
           MotionBrief
         </Link>
         {signedIn ? (
-          <Link href="/dashboard" className="gs-btn">
+          <Link href="/dashboard" className="gs-btn" onClick={remember}>
             Dashboard
           </Link>
         ) : (
@@ -69,7 +69,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
                 <p className="gs-lead">Send us your website or your own script. You get a narrated motion video, every scene drawn for the words spoken in it.</p>
                 <div className="gs-row">
                   {signedIn ? (
-                    <Link href="/projects/new" className="gs-btn big">
+                    <Link href="/projects/new" onClick={remember} className="gs-btn big">
                       Create video
                     </Link>
                   ) : (
@@ -242,7 +242,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
         ))}
         <span className="gs-sep" aria-hidden="true" />
         {signedIn ? (
-          <Link href="/projects/new">
+          <Link href="/projects/new" onClick={remember}>
             <span className="gs-tile t4">
               <svg viewBox="0 0 24 24" fill="none" stroke="#0a66d6" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
                 <path d="M12 6v12M6 12h12" />
