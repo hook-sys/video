@@ -1,118 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { login, signup } from "@/app/auth/actions";
 import { DEMOS } from "@/components/landing/demos";
+import { Desk, Mark, useWindows } from "./windows";
 import "./site.css";
 
 // The site before login: one glass window at a time over a still desk, and a
-// dock for the menu. The one motion is a window opening — it grows smoothly
-// straight out of the icon (or button) that was clicked, the way a Mac window
-// comes out of its Dock icon, while the one it replaces shrinks back into its
-// own icon. /, /login and /signup all render this; switching windows changes
-// the address without loading a page, and Back goes to the window before.
+// dock for the menu; a window opens out of the icon clicked (windows.tsx).
+// /, /login and /signup all render this.
 
 export type SiteWindow = "overview" | "how" | "examples" | "login" | "signup";
 const PATH: Record<SiteWindow, string> = { overview: "/", how: "/#how", examples: "/#examples", login: "/login", signup: "/signup" };
 const TITLE: Record<SiteWindow, string> = { overview: "Overview", how: "How it works", examples: "Examples", login: "Log in", signup: "Start free" };
 const windowAt = (l: Location): SiteWindow => (l.pathname.startsWith("/login") ? "login" : l.pathname.startsWith("/signup") ? "signup" : l.hash === "#how" ? "how" : l.hash === "#examples" ? "examples" : "overview");
 
-const OPEN = { duration: 640, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
-const CLOSE = { duration: 360, easing: "cubic-bezier(0.55, 0, 0.75, 0.25)" };
-const DELAY = 90;
-
-// a window shrunk, evenly, onto the centre of an icon
-function onto(win: HTMLElement, icon: Element) {
-  const w = win.getBoundingClientRect(), r = icon.getBoundingClientRect();
-  const dx = r.left + r.width / 2 - (w.left + w.width / 2), dy = r.top + r.height / 2 - (w.top + w.height / 2);
-  return `translate(${dx}px, ${dy}px) scale(${r.width / w.width})`;
-}
-
 type Props = { initial: SiteWindow; signedIn: boolean; error?: string; message?: string };
 
 export function Site({ initial, signedIn, error, message }: Props) {
-  const [current, setCurrent] = useState<SiteWindow>(initial);
-  const [leaving, setLeaving] = useState<SiteWindow | null>(null);
-  const now = useRef<SiteWindow>(initial);
-  const wins = useRef<Partial<Record<SiteWindow, HTMLElement | null>>>({});
-  const icons = useRef<Partial<Record<SiteWindow, HTMLElement | null>>>({});
-  const from = useRef<Element | null>(null);
-  const moving = useRef(false);
-
-  const show = useCallback((id: SiteWindow, clicked: Element | null, push: boolean) => {
-    if (id === now.current) return;
-    from.current = clicked;
-    // (with reduced motion the window simply changes)
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    moving.current = !still;
-    if (!still) setLeaving(now.current);
-    now.current = id;
-    setCurrent(id);
-    if (push) window.history.pushState(null, "", PATH[id]);
-  }, []);
-
-  // the motion, once both windows are on the page
-  useLayoutEffect(() => {
-    if (!moving.current) return;
-    moving.current = false;
-    window.scrollTo({ top: 0 });
-    const next = wins.current[current];
-    if (!next) return;
-    next.getAnimations().forEach((a) => a.cancel());
-    next.style.visibility = "";
-    const prev = leaving ? wins.current[leaving] : null;
-    if (prev && leaving) {
-      prev.getAnimations().forEach((a) => a.cancel());
-      const back = icons.current[leaving];
-      const out = prev.animate([{ transform: "none", opacity: 1 }, { opacity: 0, offset: 0.4 }, { transform: back ? onto(prev, back) : "scale(0.9)", opacity: 0 }], CLOSE);
-      out.finished
-        .then(() => {
-          prev.style.visibility = "hidden";
-          setLeaving((l) => (l === leaving ? null : l));
-        })
-        .catch(() => {});
-    }
-    const icon = from.current?.isConnected ? from.current : icons.current[current];
-    if (icon) {
-      next.animate([{ transform: onto(next, icon) }, { transform: "none" }], { ...OPEN, delay: DELAY, fill: "backwards" });
-      next.animate([{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 1 }], { duration: OPEN.duration, delay: DELAY, easing: "linear", fill: "backwards" });
-    }
-  }, [current, leaving]);
-
-  // Back and Forward move between windows; an address with #how or #examples opens that window
-  useEffect(() => {
-    const go = () => show(windowAt(window.location), icons.current[windowAt(window.location)] ?? null, false);
-    if (windowAt(window.location) !== now.current) go();
-    window.addEventListener("popstate", go);
-    return () => window.removeEventListener("popstate", go);
-  }, [show]);
-
-  const open = (id: SiteWindow) => (e: React.MouseEvent<HTMLElement>) => {
-    e.preventDefault();
-    show(id, e.currentTarget.querySelector(".gs-tile") ?? e.currentTarget, true);
-  };
-  const win = (id: SiteWindow, body: React.ReactNode) =>
-    id === current || id === leaving ? (
-      <section
-        key={id}
-        ref={(el) => {
-          wins.current[id] = el;
-        }}
-        className={`gs-win gs-glass${id === leaving ? " leaving" : ""}`}
-        aria-hidden={id === leaving || undefined}
-      >
-        <div className="gs-titlebar">
-          <div className="gs-dots" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </div>
-          <span>{TITLE[id]}</span>
-        </div>
-        <div className="gs-body">{body}</div>
-      </section>
-    ) : null;
+  const { current, open, win, iconRef } = useWindows(initial, PATH, windowAt, TITLE);
   const play = (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
       <path d="M5 3v12l10-6z" fill="#1d1d1f" />
@@ -121,19 +27,11 @@ export function Site({ initial, signedIn, error, message }: Props) {
 
   return (
     <div className="gs">
-      <div className="gs-desk" aria-hidden="true">
-        <i className="d1" />
-        <i className="d2" />
-        <i className="d3" />
-      </div>
+      <Desk />
 
       <header className="gs-bar gs-glass">
         <Link href="/" className="gs-brand" onClick={open("overview")}>
-          <span className="gs-mark">
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <path d="M3.2 1.6v8.8L10 6z" fill="#fff" />
-            </svg>
-          </span>
+          <Mark />
           MotionBrief
         </Link>
         {signedIn ? (
@@ -144,9 +42,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
           <>
             <Link
               href="/login"
-              ref={(el) => {
-                icons.current.login = el;
-              }}
+              ref={iconRef("login")}
               className="gs-plain"
               onClick={open("login")}
             >
@@ -334,9 +230,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
         ).map(([id, tone, glyph]) => (
           <Link key={id} href={PATH[id]} onClick={open(id)} aria-current={current === id ? "page" : undefined}>
               <span
-              ref={(el) => {
-                icons.current[id] = el;
-              }}
+              ref={iconRef(id)}
               className={`gs-tile ${tone}`}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -359,9 +253,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
         ) : (
           <Link href="/signup" onClick={open("signup")} aria-current={current === "signup" ? "page" : undefined}>
             <span
-              ref={(el) => {
-                icons.current.signup = el;
-              }}
+              ref={iconRef("signup")}
               className="gs-tile t4"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="#0a66d6" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">

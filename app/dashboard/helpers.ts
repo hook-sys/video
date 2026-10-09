@@ -22,12 +22,13 @@ export function pipelineProgress(step: string | null, state: VideoState) {
   return i < 0 ? { pct: 0.05, label: "Starting" } : { pct: (i + 0.5) / PIPELINE_STEPS.length, label: PIPELINE_STEPS[i].label };
 }
 
-export const STATE_UI: Record<VideoState, { label: string; cls: string }> = {
-  completed: { label: "Ready", cls: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" },
-  rendering: { label: "Rendering", cls: "bg-sky-500/15 text-sky-600 dark:text-sky-300" },
-  generating: { label: "Creating", cls: "bg-violet-500/15 text-violet-600 dark:text-violet-300" },
-  failed: { label: "Failed", cls: "bg-rose-500/15 text-rose-600 dark:text-rose-300" },
-  needs_input: { label: "Needs your input", cls: "bg-amber-500/15 text-amber-600 dark:text-amber-300" },
-  preview_ready: { label: "Preview ready", cls: "bg-sky-500/15 text-sky-600 dark:text-sky-300" },
-  draft: { label: "Draft", cls: "bg-foreground/10 text-foreground/60" },
+// Each state's label and its pill (site.css .gs-pill.*).
+export const STATE_UI: Record<VideoState, { label: string; tone: "ok" | "busy" | "bad" | "wait" | "plain" }> = {
+  completed: { label: "Ready", tone: "ok" },
+  rendering: { label: "Rendering", tone: "busy" },
+  generating: { label: "Creating", tone: "busy" },
+  failed: { label: "Failed", tone: "bad" },
+  needs_input: { label: "Needs your input", tone: "wait" },
+  preview_ready: { label: "Preview ready", tone: "busy" },
+  draft: { label: "Draft", tone: "plain" },
 };

@@ -155,3 +155,51 @@
   .gs-dock small { display: none; }
   .gs-sep { margin: 4px 0; }
 }
+
+/* ── the dashboard (app/dashboard/view.tsx) ── */
+.gs-kicker { font-size: 14px; color: var(--gs-ink-2); margin: 0 0 4px; }
+.gs-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.gs-head h2 { margin: 0; }
+.gs-facts.four { grid-template-columns: repeat(4, 1fr); margin-top: 24px; }
+.gs-facts strong { display: block; font-size: 26px; font-weight: 700; letter-spacing: -0.03em; margin: 2px 0; font-variant-numeric: tabular-nums; }
+.gs-facts small { display: block; font-size: 12px; color: var(--gs-ink-2); text-transform: uppercase; letter-spacing: 0.06em; }
+.gs-section { margin-top: 32px; }
+.gs-section h3 { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
+.gs-running { display: grid; gap: 10px; }
+.gs-run { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center; padding: 16px 18px; border-radius: 16px; background: rgba(255, 255, 255, 0.72); box-shadow: 0 0 0 1px var(--gs-edge); color: inherit; text-decoration: none; }
+.gs-run:hover { background: #fff; }
+.gs-run b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-run span { font-size: 13px; color: var(--gs-ink-2); }
+.gs-bar-track { grid-column: 1 / -1; height: 6px; border-radius: 99px; background: rgba(29, 29, 31, 0.08); overflow: hidden; }
+.gs-bar-track i { display: block; height: 100%; border-radius: 99px; background: var(--gs-accent); }
+.gs-videos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.gs-card { display: block; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px var(--gs-edge), 0 16px 34px -24px rgba(29, 29, 31, 0.4); color: inherit; text-decoration: none; }
+.gs-card:hover { box-shadow: 0 0 0 1px rgba(29, 29, 31, 0.16), 0 16px 34px -20px rgba(29, 29, 31, 0.45); }
+.gs-thumb { position: relative; aspect-ratio: 16 / 9; display: grid; place-items: center; }
+.gs-thumb video { width: 100%; height: 100%; object-fit: cover; }
+.gs-thumb .gs-mark { width: 40px; height: 40px; border-radius: 11px; background: rgba(255, 255, 255, 0.92); }
+.gs-thumb .gs-mark path { fill: #1d1d1f; }
+.gs-thumb .len { position: absolute; right: 8px; bottom: 8px; font-size: 11px; font-weight: 500; color: #fff; background: rgba(0, 0, 0, 0.6); padding: 2px 6px; border-radius: 6px; }
+.gs-card-body { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px 14px; }
+.gs-card-body b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-card-body span { font-size: 12px; color: var(--gs-ink-2); }
+.gs-card-body > div { min-width: 0; }
+.gs-pill { flex: none; font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 99px; background: #f2f2f4; color: var(--gs-ink-2); }
+.gs-pill.ok { background: #e3f4e8; color: #1e7a3c; }
+.gs-pill.busy { background: #e5effc; color: #0a5cc2; }
+.gs-pill.bad { background: #fdecea; color: #a1281b; }
+.gs-pill.wait { background: #fff3df; color: #8a5300; }
+.gs-empty { text-align: center; padding: 48px 20px; border-radius: 18px; border: 1px dashed rgba(29, 29, 31, 0.16); }
+.gs-empty b { display: block; font-size: 18px; margin-bottom: 4px; }
+.gs-empty p { color: var(--gs-ink-2); margin: 0 0 18px; }
+.gs-account { max-width: 520px; display: grid; gap: 1px; border-radius: 16px; overflow: hidden; background: rgba(29, 29, 31, 0.07); margin-top: 24px; }
+.gs-account div { display: flex; justify-content: space-between; gap: 16px; padding: 14px 18px; background: rgba(255, 255, 255, 0.72); font-size: 15px; }
+.gs-account div span { color: var(--gs-ink-2); }
+.gs-account div b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gs-tile.t5 { background: #2f8f83; }
+.gs-tile .initial { color: #fff; font-size: 22px; font-weight: 600; text-transform: uppercase; line-height: 1; }
+@media (max-width: 960px) { .gs-videos { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 760px) {
+  .gs-facts.four { grid-template-columns: repeat(2, 1fr); }
+  .gs-videos { grid-template-columns: 1fr; }
+}
