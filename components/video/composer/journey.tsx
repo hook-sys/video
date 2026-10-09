@@ -207,6 +207,21 @@ export function turnCam(f: number, g: Turn, mv: { start: number; dur: number }[]
   return { x: p.x, y: p.y, z: 1 - Math.sin(raw * Math.PI) * 0.62, rot: -(g.rot[seg - 1] + g.dir[seg] * 90 * p.u), seg, k: p.u, speed: Math.hypot(p2.x - p.x, p2.y - p.y) };
 }
 
+// The recap: after the last scene the camera pulls back until the whole
+// canvas is in view (every scene where it was, the way between them drawn),
+// straightening as it goes, and holds there while the brand comes up over it.
+// It adds its own seconds to the film.
+export const RECAP = 130;
+export const withRecap = (plan: ComposerPlan): ComposerPlan => (plan.recap ? plan : { ...plan, recap: true, duration: plan.duration + RECAP });
+// (on a sine: the zoom goes a long way, so its fastest moment must stay calm)
+export const recapAt = (f: number, duration: number) => (1 - Math.cos(ramp(f, duration - RECAP, 66) * Math.PI)) / 2;
+export function recapped(cam: Cam, f: number, duration: number, st: P[]): Cam {
+  const k = recapAt(f, duration);
+  if (k <= 0) return cam;
+  const o = overviewOf(st);
+  return { ...cam, x: mix(cam.x, o.c.x, k), y: mix(cam.y, o.c.y, k), z: Math.exp(mix(Math.log(cam.z), Math.log(o.z), k)), rot: mix(cam.rot, 0, k), speed: 0 };
+}
+
 // canvas → screen
 export function toScreen(p: P, cam: Cam, depth = 1): P {
   const dx = (p.x - cam.x) * cam.z * depth, dy = (p.y - cam.y) * cam.z * depth;

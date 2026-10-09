@@ -11,7 +11,7 @@ import { Headline } from "./text";
 import { CameraMotionBlur, Trail } from "@remotion/motion-blur";
 import { noise2D } from "@remotion/noise";
 import { Present, presentationOf } from "./present";
-import { type Cam, JourneyField, Roads, arriving, cameraAt, moves, stations, styleOf, toScreen, turnCam, turnGeometry, worldTransform } from "./journey";
+import { type Cam, JourneyField, RECAP, Roads, arriving, cameraAt, moves, recapped, stations, styleOf, toScreen, turnCam, turnGeometry, worldTransform } from "./journey";
 import { PAGE, Structure, scrollAt } from "./structure";
 import { type Links, Travellers, linksOf } from "./links";
 import { depthHops, hopAt, innerTransform, isDepth, outerTransform, tunnelAt, zoomAt } from "./depth";
@@ -200,7 +200,10 @@ function Journey(props: JourneyProps) {
   const plan = L.plan;
   const kind = plan.journey ?? "right";
   const style = styleOf(kind, plan.link);
-  const camOf = (fr: number) => (turn ? turnCam(fr, turn, mv) : cameraAt(fr, st, mv, L.ends, style));
+  const camOf = (fr: number) => {
+    const c = turn ? turnCam(fr, turn, mv) : cameraAt(fr, st, mv, L.ends, style);
+    return plan.recap ? recapped(c, fr, plan.duration, st) : c;
+  };
   const cam = camOf(f);
   const darks = plan.scenes.map((s) => s.dark);
   const travelling = cam.speed > 10;
@@ -215,7 +218,43 @@ function Journey(props: JourneyProps) {
       <Structure kind={kind} f={f} cam={cam} st={st} mv={mv} plan={plan} pals={props.pals} font={props.textFamily} />
       {/* (a whip pan is mostly its blur: a film camera's, the frame averaged over most of its time) */}
       {!props.bare && (travelling ? whip ? <CameraMotionBlur shutterAngle={300} samples={14}>{world}</CameraMotionBlur> : <Trail layers={4} lagInFrames={0.3} trailOpacity={0.4}>{world}</Trail> : world)}
+      {plan.recap && <RecapCard {...props} plan={plan} />}
     </>
+  );
+}
+
+// The brand over the whole canvas at the end of a recap: its name and mark,
+// its address, and its ask, on a soft veil so they read over the scenes.
+function RecapCard(props: JourneyProps) {
+  const f = useCurrentFrame();
+  const { plan } = props;
+  const at = plan.duration - RECAP + 58;
+  const veil = clamp01((f - at + 6) / 22);
+  if (veil <= 0) return null;
+  const last = plan.scenes[plan.scenes.length - 1];
+  const pal = last.dark ? props.pals.dark : props.pals.light;
+  const c: Ctx = { f, pal, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens };
+  const logo: PlacedItem = { kind: "logo", at, hit: null, sub: plan.brand.url || null, box: { x: 960, y: 470, w: 760, h: 0 }, scale: 1, z: 1 };
+  const button: PlacedItem = { kind: "button", at: at + 14, hit: at + 44, title: plan.brand.cta, box: { x: 960, y: 700, w: 560, h: 0 }, scale: 1, z: 1 };
+  const draw = (it: PlacedItem) => {
+    const [bw, bh] = baseSize(it);
+    const k = enterK(props.m, f, it.at);
+    return (
+      <div style={{ position: "absolute", left: it.box.x - bw / 2, top: it.box.y - bh / 2, width: bw, height: bh, transform: `scale(${((it.box.w / bw) * mix(0.92, 1, k)).toFixed(4)})`, opacity: clamp01(k * 1.6) }}>
+        <ItemBody c={c} it={it} w={bw} h={bh} />
+      </div>
+    );
+  };
+  return (
+    <AbsoluteFill>
+      {/* the canvas stays in view around a plate the brand sits on */}
+      <AbsoluteFill style={{ background: pal.bg, opacity: 0.45 * veil }} />
+      <div style={{ position: "absolute", left: 960 - 560, top: 560 - 300, width: 1120, height: 600, borderRadius: 56, background: pal.bg, opacity: veil, transform: `scale(${mix(0.94, 1, veil).toFixed(4)})`, boxShadow: `0 40px 120px ${pal.shadow}, 0 0 0 2px ${pal.dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }} />
+      <CtxC.Provider value={c}>
+        {draw(logo)}
+        {draw(button)}
+      </CtxC.Provider>
+    </AbsoluteFill>
   );
 }
 function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv: { start: number; dur: number }[]; L: Links; camOf: (f: number) => Cam; rots?: number[] }) {

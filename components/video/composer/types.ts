@@ -161,5 +161,8 @@ export type ComposerPlan = {
   journey?: JourneyKind | null;
   link?: LinkKind | null;
   guide?: GuideKind | null;
+  // a journey's last seconds: the camera pulls back to show the whole way the
+  // film came, and the brand comes up over it (see journey.tsx withRecap)
+  recap?: boolean | null;
 };
 export type ComposerProps = { plan: ComposerPlan; audioUrl?: string | null; webAudio?: boolean; bare?: boolean };
