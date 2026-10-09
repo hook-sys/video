@@ -134,6 +134,25 @@ export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed
 // the hero moment (word indexes), the motif.
 export type Creative = { language: Language; journey?: JourneyKind | null; guide?: GuideKind | null; recap?: boolean; scheme?: "dark" | "light" | "mixed"; hero?: number | null; turn?: number | null; motif?: { icon: string; label: string } | null };
 
+// What a "Change it" direction asks of the staging (lib/ai/composer-director.ts):
+// only what it changes; the rest is kept.
+export type StagingChange = { language?: Language; journey?: JourneyKind | null; guide?: GuideKind | null; recap?: boolean; scheme?: "dark" | "light" | "mixed"; turn?: number; hero?: number };
+
+// The plan a changed video is built inside: the one before it (its own camera
+// language, not only the first plan's), with what the direction changed — and
+// the revised art's scheme, so "make it dark" is not undone by the first plan.
+export function reviseCreative(base: Creative | null | undefined, current: Staging | null | undefined, change: StagingChange | null | undefined, artScheme?: "dark" | "light" | "mixed" | null): Creative | null {
+  const c = change ?? {};
+  const language = c.language ?? current?.language ?? base?.language;
+  if (!language) return base ?? null;
+  const same = language === (current?.language ?? base?.language);
+  const path = ["line", "carry", "words", "guide"].includes(language);
+  // (a new language takes its own path and guide unless the direction names them)
+  const journey = path ? (c.journey ?? (same ? (base?.journey ?? (current?.journey && current.journey !== "scroll" ? current.journey : null)) : null)) : null;
+  const guide = language === "guide" ? (c.guide ?? (same ? (base?.guide ?? current?.guide ?? null) : null)) : null;
+  return { ...base, language, journey, guide, recap: c.recap ?? base?.recap ?? current?.recap, scheme: c.scheme ?? artScheme ?? base?.scheme, hero: c.hero ?? base?.hero, turn: c.turn ?? base?.turn };
+}
+
 // A script shaped by the plan and the house rules (rules.ts): the plan's
 // scheme, the brand's energy; a motif badge where the story turns and at the
 // hero moment (the AI Director places its own); one dark → light turn; the

@@ -20,7 +20,7 @@ import { highlightOf, SHOWN } from "@/components/video/composer/highlight";
 import { COMPOSED, layoutFits } from "@/components/video/composer/layout";
 import { retimeScript } from "@/lib/voice-timing";
 import { directionFor, lockedVoiceScript, voiceChoiceOf, withVoiceChoice } from "@/lib/projects";
-import { composeVariants, fitScript, scriptFromIdeas, type Ideas } from "@/components/video/composer/variants";
+import { composeVariants, fitScript, reviseCreative, scriptFromIdeas, type Ideas } from "@/components/video/composer/variants";
 import { placeAll } from "@/components/video/composer/layout";
 import { Script as ComposerScript } from "@/components/video/composer/types";
 import { clauses } from "@/components/video/composer/auto";
@@ -185,6 +185,17 @@ export async function runChecks(): Promise<Check[]> {
     const changed = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "Make it darker. ".repeat(600) }, undefined, reviser as never);
     const kept = (sent.split("<<<")[1] ?? "").split(/\s+/).filter(Boolean).length;
     add("Change it: direction capped at 1000 words, plan revised", !!changed.ideas && (changed.ideas.arts[0] as { scheme?: string }).scheme === "dark" && kept <= 1001 && sent.includes("THE CURRENT PLAN"), `${kept} words sent`);
+    // the direction may change how the video moves; what it leaves (null) is kept, and the first plan no longer undoes it
+    const mover = { responses: { parse: async (req: { input: string }) => { sent = req.input; return { id: "r", usage: null, output_parsed: { arts: [{ ...ideas.arts[0], scheme: "mixed" }], scenes: plan0.scenes, staging: { language: "carry", journey: null, guide: null, recap: null, scheme: "mixed", turn: 6, hero: 9999 } } }; } } };
+    const moved = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "Calm, open dark and turn bright when Flowly appears", staging: { language: "depth", scheme: "light", turn: 3, hero: 8 } }, undefined, mover as never);
+    add("Change it: the current staging goes to the model, its staging change comes back", sent.includes("THE CURRENT STAGING") && sent.includes('"depth"') && moved.staging?.language === "carry" && moved.staging.scheme === "mixed" && moved.staging.turn === 6 && moved.staging.hero == null, JSON.stringify(moved.staging));
+    const firstPlan = { language: "depth" as const, journey: null, guide: null, recap: false, scheme: "light" as const, hero: 8, turn: 3 };
+    const merged = reviseCreative(firstPlan, { family: "depth", language: "depth", journey: null, link: "tunnel", links: null, guide: null, recap: false }, moved.staging, "mixed");
+    const rebuilt = composeVariants({ words, brand: plans[0].brand, duration: plans[0].duration, seed: 11, ideas: moved.ideas, count: 1, creative: merged });
+    const sc = rebuilt.plans[0].scenes;
+    add("Change it: new camera language and dark → light turn are built (not undone by the first plan)", rebuilt.videos[0].staging?.language === "carry" && rebuilt.plans[0].art.scheme === "mixed" && sc[0].dark && !sc[sc.length - 1].dark && merged?.hero === 8, `${rebuilt.videos[0].staging?.language} · ${sc.map((x) => (x.dark ? "D" : "L")).join("")}`);
+    const kept2 = reviseCreative(firstPlan, { family: "depth", language: "depth", journey: null, link: "tunnel", links: null, guide: null, recap: false }, null, "dark");
+    add("Change it: no staging change keeps the language; the revised art's scheme wins", kept2?.language === "depth" && kept2.scheme === "dark" && kept2.turn === 3, `${kept2?.language} · ${kept2?.scheme}`);
     const failed = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "blue" }, undefined, { responses: { parse: async () => ({ id: "r", usage: null, output_parsed: null }) } } as never);
     add("Change it: no answer → nothing changes", !failed.ideas, failed.problems[0] ?? "");
     // the Download button renders in the browser (web-renderer), which can't paint

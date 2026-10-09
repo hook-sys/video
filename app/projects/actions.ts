@@ -55,7 +55,7 @@ import { scorePlan } from "@/components/video/composer/score";
 import { pickLanguage, type BrandProfile, type CreativePlan } from "@/lib/studio";
 import { frameOf } from "@/components/video/composer/frame";
 import { CHANGE_WORDS, COMPOSER_CHANGES } from "@/components/video/composer/types";
-import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
+import { type StoredComposition, composeVariants, reviseCreative } from "@/components/video/composer/variants";
 import { scriptWords } from "@/components/video/composer/words";
 import { neverList } from "@/lib/video-rules";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
@@ -838,25 +838,33 @@ export async function changeComposerVideo(projectId: string, direction: string):
   const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
   const brand = { name: project.brand_name?.trim() || raw?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || raw?.cta || "Get started", url: host, icon: null };
   let usage: BriefUsage | null = null;
-  const result = byRule ? { ideas: null, ms: 0, problems: [] as string[] } : await reviseComposerPlan({ words, brand, product: raw?.product_summary ?? null, plan: ideasOf(current.script), direction: text }, (u) => (usage = u));
-  const seed = (current.seed + 7919) >>> 0;
-  // the plan stays (a new version by rule takes another camera language than the ones before)
   const stored = composer.creative ?? null;
-  const creative = stored && byRule && composer.profile ? { ...stored, language: pickLanguage(composer.profile.mood, seed, composer.videos.map((v) => v.staging?.language)) } : stored;
+  // how the video moves now (the reviser may change it: camera language, scheme, turn, hero)
+  const now = current.staging ?? null;
+  const staging = { language: now?.language ?? stored?.language ?? "cuts", journey: now?.journey ?? null, guide: now?.guide ?? null, recap: now?.recap ?? null, scheme: current.script.art.scheme, turn: stored?.turn ?? null, hero: stored?.hero ?? null };
+  const result = byRule ? { ideas: null, ms: 0, problems: [] as string[], staging: null } : await reviseComposerPlan({ words, brand, product: raw?.product_summary ?? null, plan: ideasOf(current.script), direction: text, staging }, (u) => (usage = u));
+  const seed = (current.seed + 7919) >>> 0;
+  // by rule: the plan stays, the new version takes another camera language than the ones before;
+  // by the Director: the version before it, with what the direction changed (its staging and scheme)
+  const artScheme = (result.ideas?.arts[0] as { scheme?: string } | undefined)?.scheme;
+  const creative = byRule
+    ? stored && composer.profile ? { ...stored, language: pickLanguage(composer.profile.mood, seed, composer.videos.map((v) => v.staging?.language)) } : stored
+    : reviseCreative(stored, now, result.staging, artScheme === "dark" || artScheme === "light" || artScheme === "mixed" ? artScheme : null);
   const look = composer.profile ? { scheme: composer.profile.look.scheme, energy: composer.profile.look.energy } : null;
   const set = result.ideas || byRule ? composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed, ideas: result.ideas ?? undefined, count: 1, avoidStaging: composer.videos.map((v) => v.staging ?? null), creative, look, size: frameOf(project.format) }) : null;
   const video = set?.videos[0] && (byRule || set.videos[0].source === "director") ? set.videos[0] : null;
   const changes = [...(composer.changes ?? []), { direction: text.slice(0, 9000), at: new Date().toISOString(), ok: !!video }];
   await admin
     .from("projects")
-    .update({ brief: { ...(project.brief as object), composer: { ...composer, videos: video ? [...composer.videos, video] : composer.videos, changes } } })
+    // (the plan changed with it: the next change starts from this version)
+    .update({ brief: { ...(project.brief as object), composer: { ...composer, videos: video ? [...composer.videos, video] : composer.videos, changes, ...(video && !byRule && stored && creative ? { creative: { ...stored, ...creative } } : {}) } } })
     .eq("id", projectId)
     .eq("user_id", user.id);
   const u = usage as BriefUsage | null;
   if (u && (u.inputTokens || u.outputTokens)) {
     await recordCost(admin, { project_id: projectId, user_id: user.id, operation: "openai_brief", model: u.model, quantity: u.inputTokens + u.outputTokens, estimated_cost_usd: usageCost(ai, u, (i, o) => openaiCost(u.model, i, o)), metadata: { kind: "composer_change", input_tokens: u.inputTokens, output_tokens: u.outputTokens, words: count, ok: !!video } });
   }
-  console.info("composer change:", { projectId, ok: !!video, ms: result.ms, words: count, problems: [...result.problems, ...(set?.problems ?? [])].slice(0, 8) });
+  console.info("composer change:", { projectId, ok: !!video, ms: result.ms, words: count, staging: result.staging ?? null, problems: [...result.problems, ...(set?.problems ?? [])].slice(0, 8) });
   revalidatePath(`/projects/${projectId}`);
   if (!video) return { ok: false, message: "The change didn't work this time — your video is as it was, and no change was used. Try again or say it differently." };
   return { ok: true, message: `Done — version ${composer.videos.length + 1}. ${COMPOSER_CHANGES - done - 1} change${COMPOSER_CHANGES - done - 1 === 1 ? "" : "s"} left.` };
