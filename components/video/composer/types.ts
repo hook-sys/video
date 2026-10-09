@@ -134,6 +134,14 @@ export type PlacedScene = {
 };
 export const JOURNEYS = ["right", "zigzag", "down", "diagonal", "snake"] as const;
 export type JourneyKind = (typeof JOURNEYS)[number];
+// How one scene leads to the next on a journey: a line drawn between them,
+// the scene's main thing carried on into the next, a guide (a paper plane, a
+// cursor, a point of light) the camera follows, or a word that stays and
+// becomes the next scene's first word.
+export const LINKS = ["line", "carry", "lead", "word"] as const;
+export type LinkKind = (typeof LINKS)[number];
+export const GUIDES = ["plane", "cursor", "orb"] as const;
+export type GuideKind = (typeof GUIDES)[number];
 export type ComposerPlan = {
   v: 1;
   duration: number;
@@ -145,5 +153,7 @@ export type ComposerPlan = {
   source: "director" | "auto";
   // one canvas, the camera travelling from scene to scene (see journey.tsx)
   journey?: JourneyKind | null;
+  link?: LinkKind | null;
+  guide?: GuideKind | null;
 };
 export type ComposerProps = { plan: ComposerPlan; audioUrl?: string | null; webAudio?: boolean; bare?: boolean };

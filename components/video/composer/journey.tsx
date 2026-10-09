@@ -12,7 +12,7 @@ import type { ComposerPlan, JourneyKind } from "./types";
 // goes) instead of one scene giving way to the next. The background belongs
 // to the canvas, so it streams past while the camera moves.
 
-type P = { x: number; y: number };
+export type P = { x: number; y: number };
 export const W = 1920;
 export const H = 1080;
 const STEP_X = 2350;
@@ -64,25 +64,30 @@ export function arriving(plan: ComposerPlan, mv: { start: number; dur: number }[
 }
 
 // The road from one place to the next: a gentle S between the two scenes.
-function road(a: P, b: P): [P, P, P, P] {
+export function road(a: P, b: P): [P, P, P, P] {
   const dx = b.x - a.x, dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
   const nx = -dy / len, ny = dx / len;
   const bend = len * 0.16;
   return [a, { x: a.x + dx * 0.35 + nx * bend, y: a.y + dy * 0.35 + ny * bend }, { x: a.x + dx * 0.65 - nx * bend, y: a.y + dy * 0.65 - ny * bend }, b];
 }
-const bez = ([a, b, c, d]: [P, P, P, P], t: number): P => {
+export const bez = ([a, b, c, d]: [P, P, P, P], t: number): P => {
   const u = 1 - t;
   return { x: u * u * u * a.x + 3 * u * u * t * b.x + 3 * u * t * t * c.x + t * t * t * d.x, y: u * u * u * a.y + 3 * u * u * t * b.y + 3 * u * t * t * c.y + t * t * t * d.y };
 };
 // ease in and out, a little longer at both ends than the middle
-const EASE = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+export const EASE = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 export type Cam = { x: number; y: number; z: number; rot: number; seg: number; k: number; speed: number };
 
 // Where the camera is at frame f (on the canvas), how far out it has pulled,
-// and which stretch of road it is on.
-export function cameraAt(f: number, st: P[], mv: { start: number; dur: number }[]): Cam {
+// and which stretch of road it is on. With `ends` the camera keeps a thing in
+// view on the way instead of the scenes' middles: it travels along that
+// thing's road (from where it is in one scene to where it lands in the next),
+// keeping the thing where it was on screen at the start and where it will be
+// at the end.
+export type Ends = { a: P; b: P } | null;
+export function cameraAt(f: number, st: P[], mv: { start: number; dur: number }[], ends?: Ends[]): Cam {
   let seg = 0;
   for (let i = 1; i < st.length; i++) if (f >= mv[i].start) seg = i;
   const raw = seg ? ramp(f, mv[seg].start, mv[seg].dur) : 1;
@@ -91,13 +96,20 @@ export function cameraAt(f: number, st: P[], mv: { start: number; dur: number }[
     const p = st[seg];
     return { x: p.x, y: p.y, z: 1, rot: 0, seg, k: 1, speed: 0 };
   }
-  const a = st[seg - 1], b = st[seg];
-  const p = bez(road(a, b), k);
-  const p2 = bez(road(a, b), EASE(ramp(f + 1, mv[seg].start, mv[seg].dur)));
+  const sa = st[seg - 1], sb = st[seg];
+  const e = ends?.[seg];
+  const a = e?.a ?? sa, b = e?.b ?? sb;
+  const r = road(a, b);
+  const at = (t: number): P => {
+    const q = bez(r, t);
+    return { x: q.x - mix(a.x - sa.x, b.x - sb.x, t), y: q.y - mix(a.y - sa.y, b.y - sb.y, t) };
+  };
+  const p = at(k);
+  const p2 = at(EASE(ramp(f + 1, mv[seg].start, mv[seg].dur)));
   // it pulls out on the way (the further, the more) and leans into the turn
-  const dist = Math.hypot(b.x - a.x, b.y - a.y);
+  const dist = Math.hypot(sb.x - sa.x, sb.y - sa.y);
   const z = 1 - Math.sin(raw * Math.PI) * Math.min(0.46, 0.2 + dist / 7000);
-  const rot = Math.sin(raw * Math.PI) * Math.sign(b.x - a.x || 1) * (b.y >= a.y ? 1.4 : -1.4);
+  const rot = Math.sin(raw * Math.PI) * Math.sign(sb.x - sa.x || 1) * (sb.y >= sa.y ? 1.4 : -1.4);
   return { x: p.x, y: p.y, z, rot, seg, k, speed: Math.hypot(p2.x - p.x, p2.y - p.y) };
 }
 
@@ -153,9 +165,10 @@ export function JourneyField({ f, cam, st, darks, pals, hue, grid }: { f: number
 // The line that joins one scene to the next: drawn as the camera travels,
 // its head a bright point the camera follows; the roads already travelled
 // stay on the canvas.
-export function Roads({ cam, st, mv, f, pals, darks }: { cam: Cam; st: P[]; mv: { start: number; dur: number }[]; f: number; pals: { dark: Pal; light: Pal }; darks: boolean[] }) {
+export function Roads({ cam, st, mv, f, pals, darks, only }: { cam: Cam; st: P[]; mv: { start: number; dur: number }[]; f: number; pals: { dark: Pal; light: Pal }; darks: boolean[]; only?: boolean[] }) {
   const out: ReactNode[] = [];
   for (let i = 1; i < st.length; i++) {
+    if (only && !only[i]) continue;
     const k = EASE(ramp(f, mv[i].start - 4, mv[i].dur * 0.9));
     if (k <= 0) continue;
     const [a, b, c, d] = road(st[i - 1], st[i]).map((p) => toScreen(p, cam));

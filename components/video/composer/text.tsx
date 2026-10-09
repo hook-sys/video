@@ -8,7 +8,7 @@ import type { TextBlock } from "./types";
 // The spoken words on screen: each word comes in as it is said, in the art
 // direction's face, case and tracking; the key words in its key style.
 
-export function Headline({ c, tb, out = 0, plate }: { c: Ctx; tb: TextBlock; out?: number; plate?: boolean }) {
+export function Headline({ c, tb, out = 0, plate, hide }: { c: Ctx; tb: TextBlock; out?: number; plate?: boolean; hide?: (wi: number) => boolean }) {
   const { art, pal, f, m } = c;
   const upper = art.case === "upper";
   const lower = art.case === "lower";
@@ -36,7 +36,7 @@ export function Headline({ c, tb, out = 0, plate }: { c: Ctx; tb: TextBlock; out
               const k = enterK(m, f, at - 2, tb.reveal === "type" ? Math.max(6, w.t.length * 1.6) : m.dur);
               const text = upper ? w.t.toUpperCase() : lower ? w.t.toLowerCase() : w.t;
               return (
-                <span key={wi} style={{ position: "relative", display: "inline-block", marginRight: `${upper ? 0.24 : 0.26}em`, fontFamily: c.display, fontSize: size, fontWeight: art.weight, letterSpacing: `${art.tracking}em`, color: pal.ink, ...(tb.reveal === "mask" || tb.reveal === "rise" ? { overflow: tb.reveal === "mask" ? "hidden" : undefined, paddingBottom: "0.08em", marginBottom: "-0.08em" } : {}) }}>
+                <span key={wi} style={{ position: "relative", display: "inline-block", marginRight: `${upper ? 0.24 : 0.26}em`, fontFamily: c.display, fontSize: size, fontWeight: art.weight, letterSpacing: `${art.tracking}em`, color: pal.ink, visibility: hide?.(wi) ? "hidden" : undefined, ...(tb.reveal === "mask" || tb.reveal === "rise" ? { overflow: tb.reveal === "mask" ? "hidden" : undefined, paddingBottom: "0.08em", marginBottom: "-0.08em" } : {}) }}>
                   <Word c={c} text={text} k={k} reveal={tb.reveal} keyed={w.key} at={at} />
                 </span>
               );

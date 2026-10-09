@@ -12,6 +12,7 @@ import { Trail } from "@remotion/motion-blur";
 import { noise2D } from "@remotion/noise";
 import { Present, presentationOf } from "./present";
 import { JourneyField, Roads, arriving, cameraAt, moves, stations, worldTransform } from "./journey";
+import { type Links, Travellers, linksOf } from "./links";
 import { measureText } from "@remotion/layout-utils";
 import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene, TextBlock } from "./types";
 
@@ -142,7 +143,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   const reach = Math.hypot(Math.max(origin.x, 1920 - origin.x), Math.max(origin.y, 1080 - origin.y));
   const clip = flip ? `circle(${Math.round(Math.sqrt(tk) * reach)}px at ${Math.round(origin.x)}px ${Math.round(origin.y)}px)` : undefined;
   if (plan.journey) {
-    const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf };
+    const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf, weight, upper, tracking };
     return (
       <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
         <Journey {...props} bare={bare} />
@@ -163,29 +164,34 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
 // A journey: one canvas, each scene in its own place on it, the camera
 // travelling between them along the line it draws (see journey.tsx). While it
 // travels the whole view leaves a short trail.
-type JourneyProps = Omit<SceneProps, "i" | "journey"> & { bare?: boolean };
+type JourneyProps = Omit<SceneProps, "i" | "journey"> & { bare?: boolean; weight: number; upper: boolean; tracking: number };
 function Journey(props: JourneyProps) {
   const f = useCurrentFrame();
   const st = useMemo(() => stations(props.plan.scenes.length, props.plan.journey ?? "right", props.plan.seed), [props.plan]);
   const mv = useMemo(() => moves(props.plan), [props.plan]);
-  const plan = useMemo(() => arriving(props.plan, mv), [props.plan, mv]);
-  const cam = cameraAt(f, st, mv);
+  const arrived = useMemo(() => arriving(props.plan, mv), [props.plan, mv]);
+  const { display, weight, tracking, upper } = props;
+  // how the scenes are joined (see links.tsx); the words measured in the face
+  const L = linksOf(arrived, st, mv, props.texts, (t, size) => (typeof document === "undefined" ? t.length * size * 0.55 : measureText({ text: t, fontFamily: display, fontSize: size, fontWeight: weight, letterSpacing: `${tracking}em`, textTransform: upper ? "uppercase" : "none", validateFontIsLoaded: false }).width), upper);
+  const plan = L.plan;
+  const cam = cameraAt(f, st, mv, L.ends);
   const darks = plan.scenes.map((s) => s.dark);
   const travelling = cam.speed > 10;
-  const world = <JourneyWorld {...props} plan={plan} st={st} mv={mv} />;
+  const world = <JourneyWorld {...props} plan={plan} st={st} mv={mv} L={L} />;
   return (
     <>
       <JourneyField f={f} cam={cam} st={st} darks={darks} pals={props.pals} hue={plan.art.hue} grid={["beams", "streaks", "horizon", "arcs"].includes(plan.art.field)} />
-      <Roads cam={cam} st={st} mv={mv} f={f} pals={props.pals} darks={darks} />
+      <Roads cam={cam} st={st} mv={mv} f={f} pals={props.pals} darks={darks} only={L.hops.map((h, i) => i > 0 && !h)} />
       {!props.bare && (travelling ? <Trail layers={4} lagInFrames={0.3} trailOpacity={0.4}>{world}</Trail> : world)}
     </>
   );
 }
-function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv: { start: number; dur: number }[] }) {
+function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv: { start: number; dur: number }[]; L: Links }) {
   const f = useCurrentFrame();
-  const { plan, st, mv } = props;
-  const cam = cameraAt(f, st, mv);
+  const { plan, st, mv, L } = props;
+  const cam = cameraAt(f, st, mv, L.ends);
   const n = plan.scenes.length;
+  const ctxOf = (i: number): Ctx => ({ f, pal: plan.scenes[i].dark ? props.pals.dark : props.pals.light, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens });
   return (
     <AbsoluteFill style={{ transform: worldTransform(cam), transformOrigin: "0 0" }}>
       {plan.scenes.map((_, i) => {
@@ -195,15 +201,16 @@ function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv
         if (f < start || f > end) return null;
         return (
           <div key={i} style={{ position: "absolute", left: st[i].x - 960, top: st[i].y - 540, width: 1920, height: 1080 }}>
-            <SceneBody {...props} i={i} journey={{ start, end }} />
+            <SceneBody {...props} i={i} journey={{ start, end, hidden: (j) => L.hidden(i, j, f), hiddenWord: (wi) => L.hiddenWord(i, wi, f), dim: L.dim(i, f) }} />
           </div>
         );
       })}
+      <Travellers f={f} L={L} st={st} mv={mv} ctxOf={ctxOf} display={props.display} weight={props.weight} tracking={props.tracking} upper={props.upper} lower={plan.art.case === "lower"} />
     </AbsoluteFill>
   );
 }
 
-type SceneProps = { journey?: { start: number; end: number }; i: number; plan: ComposerProps["plan"]; pals: { dark: ReturnType<typeof palette>; light: ReturnType<typeof palette> }; m: ReturnType<typeof moverOf>; display: string; textFamily: string; screens: string[]; texts: (TextBlock | null)[]; D: (i: number) => number; field: (dark: boolean) => ReactNode };
+type SceneProps = { journey?: { start: number; end: number; hidden?: (item: number) => boolean; hiddenWord?: (wi: number) => boolean; dim?: number }; i: number; plan: ComposerProps["plan"]; pals: { dark: ReturnType<typeof palette>; light: ReturnType<typeof palette> }; m: ReturnType<typeof moverOf>; display: string; textFamily: string; screens: string[]; texts: (TextBlock | null)[]; D: (i: number) => number; field: (dark: boolean) => ReactNode };
 
 // A scene; during a fast way in or out it leaves a short trail (Remotion's
 // motion blur as layers — it renders the same in the browser's download).
@@ -259,7 +266,7 @@ function SceneBody(props: SceneProps) {
   // things that travel on into the next scene leave this one as it goes
   const travels = (it: PlacedItem) => !J && !!(it.id && next?.items.some((q) => q.id === it.id && q.from)) && f >= next.from - 2;
   const sorted = [...sc.items].sort((x, y) => x.z - y.z);
-  const still = J ? sorted : sorted.filter((it) => !it.from);
+  const still = J ? sorted.filter((it) => !J.hidden?.(sc.items.indexOf(it))) : sorted.filter((it) => !it.from);
   const moving = J ? [] : sorted.filter((it) => it.from);
   let body = (
     <AbsoluteFill style={inStyle}>
@@ -267,7 +274,7 @@ function SceneBody(props: SceneProps) {
         <AbsoluteFill style={{ transform: cam, transformStyle: J ? undefined : "preserve-3d" }}>
           <CtxC.Provider value={c}>
             {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} />)}
-            {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over"} />}
+            {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over"} hide={J?.hiddenWord} out={J?.dim} />}
             {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} />)}
           </CtxC.Provider>
         </AbsoluteFill>
