@@ -132,6 +132,8 @@ export type PlacedScene = {
   items: PlacedItem[];
   seed: number;
 };
+export const JOURNEYS = ["right", "zigzag", "down", "diagonal", "snake"] as const;
+export type JourneyKind = (typeof JOURNEYS)[number];
 export type ComposerPlan = {
   v: 1;
   duration: number;
@@ -141,5 +143,7 @@ export type ComposerPlan = {
   scenes: PlacedScene[];
   seed: number;
   source: "director" | "auto";
+  // one canvas, the camera travelling from scene to scene (see journey.tsx)
+  journey?: JourneyKind | null;
 };
 export type ComposerProps = { plan: ComposerPlan; audioUrl?: string | null; webAudio?: boolean; bare?: boolean };

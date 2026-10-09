@@ -11,6 +11,7 @@ import { Headline } from "./text";
 import { Trail } from "@remotion/motion-blur";
 import { noise2D } from "@remotion/noise";
 import { Present, presentationOf } from "./present";
+import { JourneyField, Roads, arriving, cameraAt, moves, stations, worldTransform } from "./journey";
 import { measureText } from "@remotion/layout-utils";
 import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene, TextBlock } from "./types";
 
@@ -140,6 +141,15 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   // (the circle's area grows evenly until it reaches the farthest corner)
   const reach = Math.hypot(Math.max(origin.x, 1920 - origin.x), Math.max(origin.y, 1080 - origin.y));
   const clip = flip ? `circle(${Math.round(Math.sqrt(tk) * reach)}px at ${Math.round(origin.x)}px ${Math.round(origin.y)}px)` : undefined;
+  if (plan.journey) {
+    const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf };
+    return (
+      <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
+        <Journey {...props} bare={bare} />
+        {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+      </AbsoluteFill>
+    );
+  }
   return (
     <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
       {flip && fieldOf(scenes[cur - 1].dark)}
@@ -150,7 +160,50 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   );
 }
 
-type SceneProps = { i: number; plan: ComposerProps["plan"]; pals: { dark: ReturnType<typeof palette>; light: ReturnType<typeof palette> }; m: ReturnType<typeof moverOf>; display: string; textFamily: string; screens: string[]; texts: (TextBlock | null)[]; D: (i: number) => number; field: (dark: boolean) => ReactNode };
+// A journey: one canvas, each scene in its own place on it, the camera
+// travelling between them along the line it draws (see journey.tsx). While it
+// travels the whole view leaves a short trail.
+type JourneyProps = Omit<SceneProps, "i" | "journey"> & { bare?: boolean };
+function Journey(props: JourneyProps) {
+  const f = useCurrentFrame();
+  const st = useMemo(() => stations(props.plan.scenes.length, props.plan.journey ?? "right", props.plan.seed), [props.plan]);
+  const mv = useMemo(() => moves(props.plan), [props.plan]);
+  const plan = useMemo(() => arriving(props.plan, mv), [props.plan, mv]);
+  const cam = cameraAt(f, st, mv);
+  const darks = plan.scenes.map((s) => s.dark);
+  const travelling = cam.speed > 10;
+  const world = <JourneyWorld {...props} plan={plan} st={st} mv={mv} />;
+  return (
+    <>
+      <JourneyField f={f} cam={cam} st={st} darks={darks} pals={props.pals} hue={plan.art.hue} grid={["beams", "streaks", "horizon", "arcs"].includes(plan.art.field)} />
+      <Roads cam={cam} st={st} mv={mv} f={f} pals={props.pals} darks={darks} />
+      {!props.bare && (travelling ? <Trail layers={4} lagInFrames={0.3} trailOpacity={0.4}>{world}</Trail> : world)}
+    </>
+  );
+}
+function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv: { start: number; dur: number }[] }) {
+  const f = useCurrentFrame();
+  const { plan, st, mv } = props;
+  const cam = cameraAt(f, st, mv);
+  const n = plan.scenes.length;
+  return (
+    <AbsoluteFill style={{ transform: worldTransform(cam), transformOrigin: "0 0" }}>
+      {plan.scenes.map((_, i) => {
+        // a scene is there from when the camera sets off towards it until it has arrived at the next
+        const start = i ? mv[i].start - 2 : 0;
+        const end = i < n - 1 ? mv[i + 1].start + mv[i + 1].dur + 2 : plan.duration;
+        if (f < start || f > end) return null;
+        return (
+          <div key={i} style={{ position: "absolute", left: st[i].x - 960, top: st[i].y - 540, width: 1920, height: 1080 }}>
+            <SceneBody {...props} i={i} journey={{ start, end }} />
+          </div>
+        );
+      })}
+    </AbsoluteFill>
+  );
+}
+
+type SceneProps = { journey?: { start: number; end: number }; i: number; plan: ComposerProps["plan"]; pals: { dark: ReturnType<typeof palette>; light: ReturnType<typeof palette> }; m: ReturnType<typeof moverOf>; display: string; textFamily: string; screens: string[]; texts: (TextBlock | null)[]; D: (i: number) => number; field: (dark: boolean) => ReactNode };
 
 // A scene; during a fast way in or out it leaves a short trail (Remotion's
 // motion blur as layers — it renders the same in the browser's download).
@@ -171,7 +224,8 @@ function SceneLayer(props: SceneProps) {
 
 // One scene, reading the frame itself (so the trail can sample it a moment
 // earlier): its way in and out, camera, words and things.
-function SceneBody({ i, plan, pals, m, display, textFamily, screens, texts, D, field }: SceneProps) {
+function SceneBody(props: SceneProps) {
+  const { i, plan, pals, m, display, textFamily, screens, texts, D, field } = props;
   const f = useCurrentFrame();
   const scenes = plan.scenes;
   const sc = scenes[i];
@@ -185,29 +239,32 @@ function SceneBody({ i, plan, pals, m, display, textFamily, screens, texts, D, f
   const together = !last && (/^(push|whip)/.test(next.enter) || !!presentationOf(next.enter));
   const dOut = last ? 0 : together ? D(i + 1) : sc.dark ? 20 : 14;
   const outAt = together ? sc.to - 2 : sc.to - 4;
-  const start = sc.from - 2;
-  const end = last ? plan.duration : outAt + dOut;
+  // (on a journey the scene simply stays where it is on the canvas while the camera comes and goes)
+  const J = props.journey;
+  const start = J ? J.start : sc.from - 2;
+  const end = J ? J.end : last ? plan.duration : outAt + dOut;
   if (f < start || f > end) return null;
-  const kin = i ? IN_OUT(ramp(f, start, dIn)) : 1;
-  const kout = last ? 0 : IN_OUT(ramp(f, outAt, dOut));
+  const kin = J ? 1 : i ? IN_OUT(ramp(f, start, dIn)) : 1;
+  const kout = J ? 0 : last ? 0 : IN_OUT(ramp(f, outAt, dOut));
   const pal = sc.dark ? pals.dark : pals.light;
   const c: Ctx = { f, pal, art, m, display, text: textFamily, brand, screens };
   const o = sc.items.find((q) => !isAccent(q))?.box ?? sc.text?.box ?? { x: 960, y: 540 };
-  const pin = presentationOf(sc.enter, sc.seed);
-  const pout = next ? presentationOf(next.enter, next.seed) : null;
+  const pin = J ? null : presentationOf(sc.enter, sc.seed);
+  const pout = J || !next ? null : presentationOf(next.enter, next.seed);
   const outStyle = kout > 0 && !pout ? sceneOut(next.enter, kout) : undefined;
   const inStyle = kin < 1 && !pin ? sceneIn(sc.enter, kin, o) : undefined;
   const p = clamp01((f - sc.from) / Math.max(1, sc.to - sc.from));
-  const cam = cameraOf(sc.camera, p, f, art.energy);
+  // (on a journey the travelling camera is the movement; the scene keeps only its breathing, flat)
+  const cam = cameraOf(J ? "still" : sc.camera, p, f, art.energy);
   // things that travel on into the next scene leave this one as it goes
-  const travels = (it: PlacedItem) => !!(it.id && next?.items.some((q) => q.id === it.id && q.from)) && f >= next.from - 2;
+  const travels = (it: PlacedItem) => !J && !!(it.id && next?.items.some((q) => q.id === it.id && q.from)) && f >= next.from - 2;
   const sorted = [...sc.items].sort((x, y) => x.z - y.z);
-  const still = sorted.filter((it) => !it.from);
-  const moving = sorted.filter((it) => it.from);
+  const still = J ? sorted : sorted.filter((it) => !it.from);
+  const moving = J ? [] : sorted.filter((it) => it.from);
   let body = (
     <AbsoluteFill style={inStyle}>
-      <AbsoluteFill style={{ perspective: 1800, perspectiveOrigin: "50% 45%" }}>
-        <AbsoluteFill style={{ transform: cam, transformStyle: "preserve-3d" }}>
+      <AbsoluteFill style={J ? undefined : { perspective: 1800, perspectiveOrigin: "50% 45%" }}>
+        <AbsoluteFill style={{ transform: cam, transformStyle: J ? undefined : "preserve-3d" }}>
           <CtxC.Provider value={c}>
             {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} />)}
             {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over"} />}
