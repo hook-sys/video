@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from "node:fs";
 // Checks for the clean explainer's rulebook (components/video/clean/rules.ts)
 // on the Flowly proof plans (four variants) and the four reference films'
 // timings. Rules kept only by review are listed, not checked.
@@ -461,6 +462,11 @@ export async function runChecks(): Promise<Check[]> {
     add("Change it: direction capped at 1000 words, plan revised", !!changed.ideas && (changed.ideas.arts[0] as { scheme?: string }).scheme === "dark" && kept <= 1001 && sent.includes("THE CURRENT PLAN"), `${kept} words sent`);
     const failed = await reviseComposerPlan({ words, brand: { name: "Flowly", color: "#6a5bff", cta: "Try", url: "" }, plan: plan0, direction: "blue" }, undefined, { responses: { parse: async () => ({ id: "r", usage: null, output_parsed: null }) } } as never);
     add("Change it: no answer → nothing changes", !failed.ideas, failed.problems[0] ?? "");
+    // the Download button renders in the browser (web-renderer), which can't paint
+    // CSS radial gradients or backdrop blur — the Composer draws those as SVG
+    const dir = "components/video/composer";
+    const css = readdirSync(dir).filter((n) => /\.tsx?$/.test(n) && n !== "radial.tsx").flatMap((n) => (readFileSync(`${dir}/${n}`, "utf8").match(/radial-gradient\(|conic-gradient\(|backdropFilter/g) ?? []).map((m) => `${n}: ${m}`));
+    add("download-safe drawing (no CSS radial gradients / backdrop blur)", css.length === 0, css.slice(0, 3).join(" · ") || "SVG gradients");
     add("engine switch defaults off", normalizeConfig(null).engine.composer === "off" && normalizeConfig({ engine: { composer: "admins" } }).engine.composer === "admins" && normalizeConfig({ engine: { composer: "x" } }).engine.composer === "off", "off · admins · bad → off");
   }
 

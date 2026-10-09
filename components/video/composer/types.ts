@@ -35,7 +35,7 @@ export const CARD_VARIANTS = ["list", "kpi", "form", "chat", "notify", "invoice"
 export const CHART_VARIANTS = ["bars", "line", "area", "donut", "ring", "progress", "columns", "spark"] as const;
 export const DEVICE_VARIANTS = ["phone", "browser", "laptop", "tablet", "watch"] as const;
 export const FLOW_VARIANTS = ["chain", "hub", "ring", "fan", "merge"] as const;
-export const SHAPE_VARIANTS = ["ring", "orb", "arrow", "spark", "grid", "line", "plus", "wave"] as const;
+export const SHAPE_VARIANTS = ["ring", "orb", "arrow", "spark", "grid", "line", "plus", "wave", "star", "burst", "hex"] as const;
 export const SIZES = ["s", "m", "l"] as const;
 
 export type FieldKind = (typeof FIELDS)[number];

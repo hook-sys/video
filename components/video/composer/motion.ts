@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { Easing, interpolate, spring } from "remotion";
 import type { ArtT, EnterKind, TransitionKind } from "./types";
+import { noise2D } from "@remotion/noise";
 
 // How things move in a Composer film: the art direction's motion character
 // (soft, snappy, springy, glide) sets every curve and duration.
@@ -107,7 +108,8 @@ export function sceneOut(kind: TransitionKind, k: number): CSSProperties {
 // The camera on a scene's things over the scene (p 0 → 1).
 export function cameraOf(kind: string, p: number, f: number, energy: number): string {
   const e = 0.5 + energy;
-  const breathe = `translate(${(Math.sin(f / 47) * 5 * e).toFixed(1)}px, ${(Math.cos(f / 61) * 4 * e).toFixed(1)}px)`;
+  // (a hand-held drift — Remotion's noise: never the same loop twice)
+  const breathe = `translate(${(noise2D("cam-x", f / 70, 0) * 7 * e).toFixed(1)}px, ${(noise2D("cam-y", 0, f / 85) * 5 * e).toFixed(1)}px)`;
   const q = IN_OUT(clamp01(p));
   switch (kind) {
     case "drift": return `${breathe} translateX(${mix(36, -36, q) * e}px)`;
@@ -116,7 +118,7 @@ export function cameraOf(kind: string, p: number, f: number, energy: number): st
     case "tilt": return `${breathe} rotateY(${mix(-5, 4, q) * e}deg) rotateX(${mix(3, 0, q)}deg)`;
     case "orbit": return `${breathe} rotateY(${Math.sin(q * Math.PI - Math.PI / 2) * 6 * e}deg) rotateZ(${mix(-0.8, 0.8, q)}deg)`;
     case "rise": return `${breathe} translateY(${mix(26, -22, q) * e}px)`;
-    case "float": return `${breathe} translateY(${Math.sin(f / 38) * 8 * e}px)`;
+    case "float": return `${breathe} translateY(${(noise2D("cam-float", f / 45, 0.5) * 12 * e).toFixed(1)}px)`;
     default: return breathe;
   }
 }

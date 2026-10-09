@@ -9,6 +9,7 @@ import { isAccent } from "./layout";
 import { IN_OUT, TRANSITION_FRAMES, cameraOf, clamp01, enterK, enterStyle, mix, moverOf, ramp, sceneIn, sceneOut } from "./motion";
 import { Headline } from "./text";
 import { Trail } from "@remotion/motion-blur";
+import { noise2D } from "@remotion/noise";
 import { Present, presentationOf } from "./present";
 import { measureText } from "@remotion/layout-utils";
 import type { ComposerProps, EnterKind, ItemKind, PlacedItem, PlacedScene, TextBlock } from "./types";
@@ -255,7 +256,9 @@ function Thing({ c, it, idx, travel }: { c: Ctx; it: PlacedItem; idx: number; tr
   const scale = box.w / bw;
   const kind = it.enter ?? DEFAULT_ENTER[it.kind] ?? "rise";
   const enter = travel ? {} : enterStyle(kind, k);
-  const bob = it.kind === "shape" || it.kind === "cursor" ? "" : ` translateY(${(Math.sin(c.f / (36 + (idx % 5) * 7) + idx) * 5).toFixed(1)}px)`;
+  // each thing drifts a little on its own (noise, seeded by the thing — never in step with the others)
+  const seed = it.id ?? `${it.kind}${idx}`;
+  const bob = it.kind === "shape" || it.kind === "cursor" ? "" : ` translate(${(noise2D(seed + "x", c.f / 90, idx) * 4).toFixed(1)}px, ${(noise2D(seed + "y", idx, c.f / 75) * 6).toFixed(1)}px) rotate(${(noise2D(seed + "r", c.f / 120, idx * 0.5) * 0.5).toFixed(2)}deg)`;
   const tilt = it.tilt ? ` perspective(1600px) rotateY(${it.tilt}deg) rotateX(${(Math.abs(it.tilt) * 0.3).toFixed(1)}deg)` : "";
   return (
     <div style={{ position: "absolute", left: box.x - bw / 2, top: box.y - bh / 2, width: bw, height: bh, transform: `scale(${scale.toFixed(4)})${tilt}${bob}`, zIndex: it.z }}>

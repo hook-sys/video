@@ -1,4 +1,6 @@
 import type { CSSProperties } from "react";
+import { measureText } from "@remotion/layout-utils";
+import { createRoundedTextBox } from "@remotion/rounded-text-box";
 import type { Ctx } from "./kit";
 import { clamp01, enterK, mix } from "./motion";
 import type { TextBlock } from "./types";
@@ -17,30 +19,59 @@ export function Headline({ c, tb, out = 0, plate }: { c: Ctx; tb: TextBlock; out
   const kickerK = tb.kicker ? enterK(m, f, (tb.words[0]?.at ?? 0) - 8) : 0;
   return (
     <div style={{ position: "absolute", left: box.x - box.w / 2, top: box.y - box.h / 2, width: box.w, height: box.h, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: tb.align === "center" ? "center" : tb.align === "right" ? "flex-end" : "flex-start", opacity: 1 - out, zIndex: 3 }}>
-      {plate && <div style={{ position: "absolute", inset: `${-size * 0.45}px ${-size * 0.6}px`, borderRadius: Math.max(24, art.radius * 1.5), background: pal.dark ? "rgba(8,8,16,0.55)" : "rgba(255,255,255,0.72)", backdropFilter: "blur(24px)", boxShadow: `0 40px 120px ${pal.shadow}`, opacity: clamp01(enterK(m, f, (tb.words[0]?.at ?? 0) - 10) * 1.4) }} />}
       {tb.kicker && (
         <div style={{ fontFamily: c.text, fontSize: Math.max(24, Math.round(size * 0.26)), fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: pal.accent, marginBottom: Math.round(size * 0.22), opacity: clamp01(kickerK * 1.5), transform: `translateY(${(1 - kickerK) * 14}px)`, display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{ width: 36 * kickerK, height: 3, background: pal.accent, borderRadius: 2 }} />
           {tb.kicker}
         </div>
       )}
-      {lines.map((line, li) => (
-        <div key={li} style={{ display: "flex", flexWrap: "nowrap", justifyContent: tb.align === "center" ? "center" : tb.align === "right" ? "flex-end" : "flex-start", lineHeight: lh, whiteSpace: "nowrap" }}>
-          {line.map((wi) => {
-            const w = tb.words[wi];
-            const lineAt = tb.words[line[0]].at;
-            const at = tb.reveal === "line" ? lineAt : w.at;
-            const k = enterK(m, f, at - 2, tb.reveal === "type" ? Math.max(6, w.t.length * 1.6) : m.dur);
-            const text = upper ? w.t.toUpperCase() : lower ? w.t.toLowerCase() : w.t;
-            return (
-              <span key={wi} style={{ position: "relative", display: "inline-block", marginRight: `${upper ? 0.24 : 0.26}em`, fontFamily: c.display, fontSize: size, fontWeight: art.weight, letterSpacing: `${art.tracking}em`, color: pal.ink, ...(tb.reveal === "mask" || tb.reveal === "rise" ? { overflow: tb.reveal === "mask" ? "hidden" : undefined, paddingBottom: "0.08em", marginBottom: "-0.08em" } : {}) }}>
-                <Word c={c} text={text} k={k} reveal={tb.reveal} keyed={w.key} at={at} />
-              </span>
-            );
-          })}
-        </div>
-      ))}
+      <div style={{ position: "relative" }}>
+        {plate && <Plate c={c} tb={tb} lh={lh} upper={upper} lower={lower} />}
+        {lines.map((line, li) => (
+          <div key={li} style={{ display: "flex", flexWrap: "nowrap", justifyContent: tb.align === "center" ? "center" : tb.align === "right" ? "flex-end" : "flex-start", lineHeight: lh, whiteSpace: "nowrap" }}>
+            {line.map((wi) => {
+              const w = tb.words[wi];
+              const lineAt = tb.words[line[0]].at;
+              const at = tb.reveal === "line" ? lineAt : w.at;
+              const k = enterK(m, f, at - 2, tb.reveal === "type" ? Math.max(6, w.t.length * 1.6) : m.dur);
+              const text = upper ? w.t.toUpperCase() : lower ? w.t.toLowerCase() : w.t;
+              return (
+                <span key={wi} style={{ position: "relative", display: "inline-block", marginRight: `${upper ? 0.24 : 0.26}em`, fontFamily: c.display, fontSize: size, fontWeight: art.weight, letterSpacing: `${art.tracking}em`, color: pal.ink, ...(tb.reveal === "mask" || tb.reveal === "rise" ? { overflow: tb.reveal === "mask" ? "hidden" : undefined, paddingBottom: "0.08em", marginBottom: "-0.08em" } : {}) }}>
+                  <Word c={c} text={text} k={k} reveal={tb.reveal} keyed={w.key} at={at} />
+                </span>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
+  );
+}
+
+// The plate behind words laid over a picture: a box that hugs each line
+// (Remotion's rounded text box, on the lines measured in the face), drawn as
+// SVG so the download paints it as the Preview does.
+function Plate({ c, tb, lh, upper, lower }: { c: Ctx; tb: TextBlock; lh: number; upper: boolean; lower: boolean }) {
+  const { art, pal, f, m } = c;
+  const size = tb.size;
+  const gap = (upper ? 0.24 : 0.26) * size;
+  const widthOf = (t: string) => (typeof document === "undefined" ? t.length * size * 0.55 : measureText({ text: upper ? t.toUpperCase() : lower ? t.toLowerCase() : t, fontFamily: c.display, fontSize: size, fontWeight: art.weight, letterSpacing: `${art.tracking}em`, validateFontIsLoaded: false }).width);
+  const padY = size * 0.28;
+  // a line's box opens as the line starts (the words fill it as they are said)
+  const shown = tb.lines.map((line) => enterK(m, f, tb.words[line[0]].at - 6, 10)).filter((k) => k > 0);
+  if (!shown.length) return null;
+  const rows = shown.map((k, li) => {
+    const line = tb.lines[li];
+    const width = line.reduce((sum, wi) => sum + widthOf(tb.words[wi].t) + gap, 0);
+    return { width: width * mix(0.4, 1, k), height: (size * lh + (li === 0 ? padY : 0) + (li === tb.lines.length - 1 ? padY : 0)) * (li === 0 ? 1 : k) };
+  });
+  const padX = size * 0.42;
+  const { d, boundingBox: bb } = createRoundedTextBox({ textMeasurements: rows, textAlign: tb.align, horizontalPadding: padX, borderRadius: Math.max(18, size * 0.32) });
+  const k = clamp01(enterK(m, f, (tb.words[0]?.at ?? 0) - 10) * 1.4);
+  return (
+    <svg width={bb.width} height={bb.height} style={{ position: "absolute", left: -padX, top: -padY, overflow: "visible", opacity: k, filter: `drop-shadow(0 24px 48px ${pal.shadow})` }}>
+      <path d={d} fill={pal.dark ? "rgba(10,10,20,0.78)" : "rgba(255,255,255,0.9)"} />
+    </svg>
   );
 }
 

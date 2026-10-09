@@ -5,6 +5,8 @@ import { CARD_W, Card, cardHeight } from "./cards";
 export { baseSize } from "./sizes";
 import { LivingIcon, lottieFor } from "./lottie";
 import { Radial, Tiles } from "./radial";
+import { makePolygon, makeSpark, makeStar } from "@remotion/shapes";
+import { noise2D } from "@remotion/noise";
 import { Connector, drawn, smoothPath } from "./paths";
 import { type Ctx, Glyph, Initial, Mark, Tick, countUp, kIn, show, surf } from "./kit";
 import { clamp01, mix } from "./motion";
@@ -484,7 +486,27 @@ function Shape({ c, it, w, h }: P) {
       </div>
     );
   if (v === "plus") return <Icon name="plus" size={w} color={pal.accent} strokeWidth={1.5} />;
-  if (v === "spark") return <Icon name="sparkles" size={w} color={pal.accent} strokeWidth={1.5} />;
+  // Remotion's shapes: drawn on (outline first), then filled; a spark twinkles,
+  // a burst turns slowly, a star and a hex settle with a little spin
+  if (v === "spark" || v === "star" || v === "burst" || v === "hex") {
+    const s = Math.min(w, h);
+    const shape =
+      v === "spark" ? makeSpark({ width: s * 0.8, height: s * 0.8, edgeRoundness: 0.9 }) :
+      v === "star" ? makeStar({ points: 5, innerRadius: s * 0.2, outerRadius: s * 0.42, cornerRadius: s * 0.04 }) :
+      v === "burst" ? makeStar({ points: 14, innerRadius: s * 0.33, outerRadius: s * 0.44, cornerRadius: s * 0.01 }) :
+      makePolygon({ points: 6, radius: s * 0.42, cornerRadius: s * 0.06 });
+    const draw = kIn(c, it.at, 26);
+    const fill = kIn(c, it.at + 14, 16);
+    const turn = v === "burst" ? f * 0.4 : v === "spark" ? 0 : (1 - draw) * -40;
+    const twinkle = v === "spark" ? 1 + noise2D(`spark${it.id ?? ""}`, f / 25, 0) * 0.12 : 1;
+    return (
+      <svg width={w} height={h} style={{ overflow: "visible" }}>
+        <g transform={`translate(${w / 2} ${h / 2}) rotate(${turn}) scale(${twinkle}) translate(${-shape.width / 2} ${-shape.height / 2})`}>
+          <path d={shape.path} fill={v === "burst" ? pal.fill2 : pal.accent} fillOpacity={fill * (v === "hex" ? 0.22 : 0.95)} stroke={pal.accent} strokeWidth={Math.max(3, s * 0.02)} strokeLinejoin="round" pathLength={1} strokeDasharray={`${draw} 1`} />
+        </g>
+      </svg>
+    );
+  }
   if (v === "arrow") return <Icon name="arrow-up-right" size={w} color={pal.accent} strokeWidth={1.6} draw={kIn(c, it.at, 24)} />;
   if (v === "line" || v === "wave")
     return (

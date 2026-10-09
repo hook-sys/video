@@ -41,7 +41,7 @@ ITEMS (the parts). Every item: { kind, at (word index it appears on, inside the 
 - icon: one big icon (+ optional title 1–2 words). badge: a small pill on a corner of a thing: icon + title (2–3 words: "Paid", "Reminder sent") or value.
 - logo: the brand's mark and name (the product reveal). button: the call to action (title: the CTA text, sub: the website); hit: the click.
 - avatars: people as initials only (rows titles = first names). quote: a short testimonial (title) by sub (a name).
-- shape: decoration (ring, orb, arrow, spark, grid, line, plus, wave).
+- shape: decoration (ring, orb, arrow, spark, grid, line, plus, wave, star, burst, hex).
 Icons: Lucide names that picture the thing LITERALLY (calendar, file-text, bell-ring, credit-card, receipt, messages-square, search, video, list-checks, clock, zap, shield-check, package…). Never people, faces, hands or animals.
 - 1–3 items per scene (a badge may be added). Fewer, bigger things read better than many small ones. Use a phone/browser/laptop for "the app does X" moments; chips/flow/steps for spoken lists; stat/chart only for spoken numbers; compare for "no more …"; logo when the product is named first; button on the closing line.
 - Never write on screen a number or claim the narration does not make (UI rows may carry realistic sample data).

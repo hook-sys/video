@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { noise2D } from "@remotion/noise";
 import { AbsoluteFill } from "remotion";
 import type { Pal } from "./art";
 import { hsl } from "./art";
@@ -25,7 +26,8 @@ export function Field({ f, kind, pal, hue, anchor: a, energy, overlay, style }: 
   const c1 = hsl(hue, 85, d ? 58 : 66, d ? 0.55 : 0.42);
   const c2 = hsl(hue + 40 + a.t * 60, 80, d ? 55 : 72, d ? 0.42 : 0.38);
   const c3 = hsl(hue - 30 - a.t * 40, 75, d ? 50 : 80, d ? 0.3 : 0.5);
-  const sway = (k: number, amp = 60) => Math.sin(f / (70 + k * 11) + k) * amp * e;
+  // the light wanders (noise — a slow, unrepeating drift)
+  const sway = (k: number, amp = 60) => noise2D(`sway${k}`, f / (110 + k * 13), k) * amp * 1.3 * e;
   const base: CSSProperties = { background: kind === "plain" || kind === "discs" ? pal.bg : `linear-gradient(${150 + a.t * 60}deg, ${pal.bg}, ${pal.bg2})`, overflow: "hidden", ...style };
   let body: ReactNode = null;
   switch (kind) {
