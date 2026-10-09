@@ -10,11 +10,11 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { countUsage, defaultConfig, normalizeConfig, parseVoiceChoices, textClient, textCost, usageCost } from "@/lib/ai/models";
 import { ruleBrief } from "@/lib/rule-brief";
 import { RECAP, stageOf, staged, stagingName } from "@/components/video/composer/staging";
-import { ruleCreative, ruleProfile } from "@/lib/studio";
+import { ruleCreative, ruleProfile, sentencesOf } from "@/lib/studio";
 import { scorePlan } from "@/components/video/composer/score";
 import { houseRules, varyLayouts } from "@/components/video/composer/rules";
 import { highlightOf, SHOWN } from "@/components/video/composer/highlight";
-import { COMPOSED, layoutFits } from "@/components/video/composer/layout";
+import { COMPOSED, MIN_SCENE, layoutFits, paced } from "@/components/video/composer/layout";
 import { retimeScript } from "@/lib/voice-timing";
 import { directionFor, lockedVoiceScript, voiceChoiceOf, withVoiceChoice } from "@/lib/projects";
 import { composeVariants, fitScript, scriptFromIdeas, type Ideas } from "@/components/video/composer/variants";
@@ -22,7 +22,7 @@ import { placeAll } from "@/components/video/composer/layout";
 import { Script as ComposerScript } from "@/components/video/composer/types";
 import { clauses } from "@/components/video/composer/auto";
 import { detailsFrom, parseDetails } from "@/lib/project-details";
-import { answerOf, directMotion, ideaProblems, reviewMotion, reviewNotes, rulePlan, scenesOf } from "@/lib/ai/motion-director";
+import { MotionModel, answerOf, directMotion, ideaProblems, mendAnswer, reviewMotion, reviewNotes, rulePlan, scenesOf } from "@/lib/ai/motion-director";
 import { livingStandIn } from "@/components/video/icons/living";
 import { pieceToWord, scriptWords } from "@/components/video/composer/words";
 
@@ -224,24 +224,26 @@ export async function runChecks(): Promise<Check[]> {
       scenes,
     });
     const sent: { instructions: string; input: string }[] = [];
-    const client = (out: unknown) => ({ responses: { parse: async (r: { instructions: string; input: string }) => (sent.push(r), { id: "m", usage: { input_tokens: 1000, output_tokens: 2000 }, output_parsed: out }) } });
+    // (the Story Analyst is asked first: it gets its own breakdown back)
+    const analysis = { audience: "clinic owners", pain: "missed calls", promise: "a full calendar", proof: "online booking", arc: "from phone calls to a calendar that fills itself", look: "calm and clinical", scenes: [{ from: 0, to: 8, beat: "hook", message: "the clinic's day", show: "a busy front desk", words: "Bookwell", why: "the pain first" }] };
+    const client = (out: unknown) => ({ responses: { parse: async (r: { instructions: string; input: string; text?: { format?: { name?: string } } }) => (sent.push(r), { id: "m", usage: { input_tokens: 1000, output_tokens: 2000 }, output_parsed: r.text?.format?.name === "story_analysis" ? analysis : out }) } });
     const input = { name: "Bookwell", color: "#4f46e5", cta: "Book a demo", words: bw.words, earlier: [{ idea: "old idea", language: "line" as const }], never: "- never use red", seed: 7 };
     let billed = 0;
     const md = await directMotion(input, (u) => (billed = u.inputTokens + u.outputTokens), client(answer({})) as never);
     const pl = md.plan;
-    add("Motion Director: one call writes the brand, the concept, the staging, the art and every scene", sent.length === 1 && billed === 3000 && pl.source === "ai" && !!pl.ideas && pl.ideas.scenes.length === sceneIdeas.scenes.length && pl.creative.idea === "a calendar that fills itself" && pl.creative.language === "carry", `1 call · ${pl.ideas?.scenes.length} scenes · ${pl.creative.language}`);
-    add("Motion Director: gets the rulebook, the team's never list and this brand's earlier videos", sent[0].instructions.includes("HOUSE RULES") && sent[0].instructions.includes("never use red") && sent[0].instructions.includes("STAGING") && sent[0].input.includes("old idea") && sent[0].input.includes("EARLIER"), "rules · never list · earlier ideas");
+    add("Story Analyst first, then one Director call writes the brand, the concept, the staging, the art and every scene", sent.length === 2 && sent[0].instructions.includes("story analyst") && sent[1].input.includes("STORY ANALYST'S BREAKDOWN") && md.analysis?.pain === "missed calls" && billed === 6000 && pl.source === "ai" && !!pl.ideas && pl.ideas.scenes.length === sceneIdeas.scenes.length && pl.creative.idea === "a calendar that fills itself" && pl.creative.language === "carry", `analyst + 1 call · ${pl.ideas?.scenes.length} scenes · ${pl.creative.language}`);
+    add("Motion Director: gets the rulebook, the team's never list and this brand's earlier videos", sent[1].instructions.includes("HOUSE RULES") && sent[1].instructions.includes("never use red") && sent[1].instructions.includes("STAGING") && sent[1].input.includes("old idea") && sent[1].input.includes("EARLIER"), "rules · never list · earlier ideas");
     add("Motion Director: unsaid words and numbers dropped, a bad hero mended", pl.profile.keywords.includes("clinic") && !pl.profile.keywords.includes("rocket") && !pl.profile.numbers.length && pl.profile.look.energy <= 0.85 && pl.creative.hero < n && pl.creative.journey === "right", `${pl.profile.keywords.join(", ")} · hero word ${pl.creative.hero}`);
     add("Motion Director: dark or light is decided once (the staging), everywhere the same", pl.creative.scheme === "mixed" && pl.profile.look.scheme === "mixed" && (pl.ideas!.arts[0] as { scheme?: string }).scheme === "mixed", "staging · brand look · art: mixed");
     const built = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 11, ideas: pl.ideas, count: 1, creative: pl.creative });
     const bsc = built.plans[0].scenes;
-    add("its video is built as it decided (nothing else overrides it)", built.videos[0].source === "director" && built.videos[0].staging?.language === "carry" && built.plans[0].art.scheme === "mixed" && bsc[0].dark && !bsc[bsc.length - 1].dark, `${built.videos[0].staging?.language} · ${bsc.map((x) => (x.dark ? "D" : "L")).join("")}`);
+    add("its video is built as it decided, on one background (never turning dark ↔ light)", built.videos[0].source === "director" && built.videos[0].staging?.language === "carry" && bsc.every((x) => x.dark === bsc[0].dark), `${built.videos[0].staging?.language} · ${bsc.map((x) => (x.dark ? "D" : "L")).join("")}`);
     const down = await directMotion(input, undefined, { responses: { parse: async () => { throw new Error("down"); } } } as never);
     add("Motion Director: a failed call → the plan by rule (the Composer pictures the scenes)", down.plan.source === "rule" && !down.plan.ideas && down.problems[0].includes("down"), down.problems[0]);
     // its review on the voice's times: kept when not worse; the brand stays
     sent.length = 0;
     const better = await reviewMotion(pl, input, undefined, client({ ...answer({ language: "line", journey: "snake" }), brand: { ...answer({}).brand, mood: "energetic" } }) as never);
-    add("review: sees our checks, its improved plan is kept, the brand stays", sent.length === 1 && sent[0].input.includes("YOUR PLAN") && sent[0].input.includes("Problems found") && better.plan.creative.language === "line" && better.plan.creative.journey === "snake" && better.plan.profile.mood === pl.profile.mood, `${better.plan.creative.language}/${better.plan.creative.journey} · mood ${better.plan.profile.mood}`);
+    add("review: sees our checks, its improved plan is kept, the brand stays", sent.length >= 1 && sent.length <= 2 && sent[0].input.includes("YOUR PLAN") && sent[0].input.includes("Problems found") && better.plan.creative.language === "line" && better.plan.creative.journey === "snake" && better.plan.profile.mood === pl.profile.mood, `${better.plan.creative.language}/${better.plan.creative.journey} · mood ${better.plan.profile.mood}`);
     const empty = await reviewMotion(pl, input, undefined, client(answer({}, [])) as never);
     add("review: an answer without scenes changes nothing", empty.plan === pl && empty.problems[0].includes("no scenes"), empty.problems[0]);
     // the customer's answers (the form) are facts: they win over what was read from the script
@@ -333,6 +335,41 @@ export async function runChecks(): Promise<Check[]> {
     const same = { ...base, scenes: base.scenes.map((x) => ({ ...x, layout: "split-left" as const, items: x.items.length ? x.items : [it("icon")] })) };
     const varied = varyLayouts(same, 5).scenes;
     add("the same layout everywhere is varied", varied.slice(0, -1).every((x, i) => i === 0 || x.layout !== varied[i - 1].layout), varied.map((x) => x.layout).join(" "));
+  }
+
+  section = "seen, whole and mended (pacing, words, Bengali, the Director's answer)";
+  {
+    const bw = BOOKWELL;
+    const dur = Math.round((bw.words[bw.words.length - 1].end + 1.2) * FPS);
+    const frameOf = (i: number) => Math.round((bw.words[Math.max(0, Math.min(bw.words.length - 1, i))]?.start ?? 0) * FPS);
+    // a scene on every word: paced into scenes long enough to be seen
+    const tiny = bw.words.map((_, i) => ({ at: i, text: { from: i, to: i, size: "m" as const, key: [], reveal: "word" as const }, layout: "center" as const, items: i === bw.words.length - 1 ? [{ kind: "button" as const, at: i, title: "Book" }] : [] }));
+    const p = paced(tiny as never, frameOf, dur);
+    const lens = p.map((x, i) => (i < p.length - 1 ? frameOf(p[i + 1].at) : dur) - frameOf(x.at));
+    add("every scene held long enough to be seen (short ones joined; the ask kept)", lens.every((l) => l >= MIN_SCENE) && p.at(-1)!.items.some((it) => it.kind === "button") && p[0].at === 0, `${tiny.length} → ${p.length} scenes · shortest ${(Math.min(...lens) / FPS).toFixed(1)} s`);
+    let built = 0, short = 0;
+    for (const seed of [2, 9, 23]) {
+      const plan = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed, count: 1 }).plans[0];
+      plan.scenes.slice(0, -1).forEach((sc) => (built++, sc.to - sc.from < MIN_SCENE - 8 && short++));
+      if (plan.scenes.some((sc) => sc.dark !== plan.scenes[0].dark)) short += 100;
+    }
+    add("built videos: no scene too short, one background each", short === 0, `${built} scenes · ${short} too short`);
+    // the Bengali দাঁড়ি ends a sentence
+    const bn = "আপনার স্টোরে প্রতিদিন একই কাজ। চলুন দেখি কীভাবে সব অটোমেটিক হয়। ফ্রিতে শুরু করুন।".split(" ").map((text, i) => ({ text, start: i * 0.5, end: i * 0.5 + 0.4 }));
+    add("the Bengali দাঁড়ি (।) ends a sentence", sentencesOf(bn).length === 3, `${sentencesOf(bn).length} sentences`);
+    // a whole short sentence is shown as it is; a long one never cut mid-phrase
+    const ws = "Install in two minutes and get your evenings back.".split(" ").map((text, i) => ({ text, start: i * 0.3, end: i * 0.3 + 0.25 }));
+    const [a, b] = highlightOf(ws, 0, ws.length - 1, new Set());
+    add("a short sentence is shown whole (never \"… and get\")", a === 0 && b === ws.length - 1, ws.slice(a, b + 1).map((w) => w.text).join(" "));
+    // the Director's slips are mended, never the whole plan lost
+    const raw = JSON.parse(JSON.stringify(answerOf(rulePlan({ name: "Bookwell", words: bw.words, seed: 3 }), composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 3, count: 1 }).videos[0].script)));
+    raw.staging.language = "whip";
+    raw.staging.scheme = "mixed";
+    raw.scenes[1].options[0].items.push({ kind: "hologram", at: 3 }, { kind: "icon", at: 3, size: "xl", icon: "star" });
+    raw.scenes[0].text.size = "huge";
+    const mended = MotionModel.safeParse(mendAnswer(raw));
+    const items1 = mended.success ? mended.data.scenes[1].options[0].items : [];
+    add("a slip in the Director's answer is mended (size, kind, whip, mixed)", mended.success && !items1.some((it) => (it.kind as string) === "hologram") && items1.some((it) => it.kind === "icon" && it.size === "l") && mended.data.staging.language === "line" && mended.data.staging.scheme === "dark" && mended.data.scenes[0].text?.size === "m", mended.success ? "parsed" : mended.error.issues[0]?.message ?? "failed");
   }
 
   section = "composer frames (16:9, 9:16, 1:1)";

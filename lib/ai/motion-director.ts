@@ -6,20 +6,26 @@ import type { BriefUsage } from "@/lib/ai/product-brief";
 import { countUsage, textAi } from "@/lib/ai/models";
 import { HOUSE_RULES, extraRules } from "@/lib/ai/house-rules";
 import { DISPLAY_FACES, TEXT_FACES } from "@/components/video/composer/art";
-import { LANGUAGES, LANGUAGE_NOTES, type Language } from "@/components/video/composer/staging";
+import { IN_USE, LANGUAGES, LANGUAGE_NOTES, type Language } from "@/components/video/composer/staging";
+import { SHOWN } from "@/components/video/composer/highlight";
+import { MIN_SCENE } from "@/components/video/composer/layout";
 import { ARRANGES, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, FIELDS, FLOW_VARIANTS, ITEM_KINDS, LAYOUTS, type ScriptT, type Word } from "@/components/video/composer/types";
 import { type Ideas, composeVariants } from "@/components/video/composer/variants";
 import { BEATS, BRAND_CATEGORIES, type BrandProfile, type CreativePlan, LANGUAGE_WEIGHTS, MOODS, type Mood, ruleCreative, ruleProfile, sentencesOf } from "@/lib/studio";
+import { FPS } from "@/components/video/composer/types";
 import { USE_NOTE, type Use } from "@/lib/project-details";
 
-// The Motion Director: the one director of a video. In one answer it decides
+// The directors of a video. The Story Analyst reads the script first, deeply
+// (who it speaks to, the pain, the promise, the proof) and splits it into
+// scenes long enough to be seen, each with what it means and what to show.
+// The Motion Director then plans the video on that breakdown. In one answer it decides
 // everything a studio decides — the brand (what it is, its mood and look),
 // the concept (the one idea, the motif, where the story turns, the hero
 // moment), the staging (one camera language; dark, light, or dark until the
 // turn), the art direction, and every scene — so no decision is made twice
 // and nothing it decides is undone by another. It plans from the script
 // alongside the voice; once the voice is timed it reviews its own plan with
-// what our layout check found. "Change it" revises the same plan. Its plan
+// what our layout check found (twice when problems remain). Its plan
 // is split here into the parts the Composer builds from (a brand profile, a
 // creative plan, the scenes). Never throws: no model or a bad answer → the
 // plan by rule (lib/studio.ts) and the Composer's own scenes.
@@ -41,18 +47,18 @@ AVOID the ideas and camera languages listed under EARLIER (this brand's earlier 
 
 const STAGING_PART = `3. STAGING — how the whole video moves (the camera and the ways between scenes are drawn from it; you picture the scenes):
 - language: ONE camera language for the whole video (variety is between videos, never inside one):
-${LANGUAGES.map((l) => `  ${l}: ${LANGUAGE_NOTES[l]}`).join("\n")}
+${IN_USE.map((l) => `  ${l}: ${LANGUAGE_NOTES[l]}`).join("\n")}
 - journey: for line|carry|words|guide, the canvas path right|zigzag|down|diagonal|snake; else null. guide: for guide, plane|cursor|orb; else null.
 - recap: true to end by pulling back over the whole way the video came (canvas languages only).
-- scheme: dark|light|mixed — the background; mixed is dark until the turn, light from it. (The only place dark or light is decided.)`;
+- scheme: dark|light — ONE background for the whole video, never changing (the only place dark or light is decided; never mixed).`;
 
 const ART_PART = `4. ART — exactly 1 "art" in "arts", the one visual identity that suits THIS brand:
 { name (2–3 words), hue 0–360 (close to the brand colour unless another serves the story better), harmony mono|analogous|complement|split|triad, field ${FIELDS.join("|")}, overlay none|grain|particles|sheen|vignette|lines, surface glass|solid|outline|soft|tinted|ink, radius 0–40, display (headline face) one of: ${DISPLAY_FACES.map((f) => f.slug).join(", ")}, text (UI face) one of: ${TEXT_FACES.map((f) => f.slug).join(", ")}, weight 500–850, case sentence|upper|lower, tracking -0.05..0.02, key color|pill|underline|gradient|box|outline|italic|glow, motion soft|snappy|springy|glide, pace 0.85–1.25, camera drift|push|pull|tilt|float|orbit|rise, icons tile|round|bare|duotone|outline|glass, energy 0.2–0.85 }.
 Taste: condensed faces (oswald, bebas-neue, anton, big-shoulders-display) only in upper case; serif faces with sentence case and italic/underline/color keys; wide faces (unbounded, krona-one, dela-gothic-one) with smaller sizes. AVOID the faces and fields listed under SEEN (this customer has seen them).`;
 
 const SCENES_PART = `5. SCENES — the narration is final; its words are given numbered (index:word). You decide every scene — nothing is a template.
-- A scene starts on a word ("at": the index of its first word) and lasts until the next scene. Scenes follow the narration in order and cover it all; the first starts at 0. A scene is at least ~1.4 s of speech; usually one sentence or one clause. 15 s → 4–6 scenes, 30 s → 7–10, 60 s → 12–18.
-- "text": the scene's HIGHLIGHT shown on screen as kinetic type — never the whole sentence the voice says: { from, to } word indexes of the 2–6 words inside the scene that carry it (its key phrase, its number, the thing named), "size" s|m|l|xl (xl for short punchy lines), "key": 1–2 words of it to light up (exact words). null for a scene that is pictured only (rare).
+- A scene starts on a word ("at": the index of its first word) and lasts until the next scene. Scenes follow the narration in order and cover it all; the first starts at 0. EVERY scene is at least 3 seconds of speech (about 8 words or more) so the viewer can see it: a short sentence or question ("Why should you?") joins the sentence before or after it. 15 s → 3–5 scenes, 30 s → 6–8, 60 s → 10–14. Follow the Story Analyst's scene split when one is given.
+- "text": the words shown on screen as kinetic type: { from, to } word indexes inside the scene — the scene's whole sentence or clause when it is ${SHOWN} words or fewer, else its key clause (a complete phrase that ends where the voice pauses, never cut mid-phrase like "Install in two minutes and get"); "size" s|m|l|xl (xl for short punchy lines); "key": 1–2 words of it to light up (exact words). null for a scene that is pictured only (rare).
 - "kicker": optional 1–3 word eyebrow above the text ("Step 1", the product's name, "Before") or null.
 - "options": exactly ONE — the best way to picture the scene: { layout, arrange, items }, picturing THAT scene's words literally.
 LAYOUTS: center (text above things), top (text band on top, big things below), bottom, split-left (text left, things right), split-right, corner, type (only big kinetic text; no things except a badge), visual (things fill the frame, text as a caption), over (text on a glass plate over a big thing).
@@ -71,11 +77,16 @@ ITEMS. Every item: { kind, at (word index it appears on, inside the scene), hit 
 - logo: the brand's mark and name (the product reveal). button: the call to action (title: the CTA text, sub: the website); hit: the click.
 - avatars: people as initials only. quote: a short testimonial (title) by sub (a name). shape: decoration (ring, orb, arrow, spark, grid, line, plus, wave, star, burst, hex).
 Icons: Lucide names that picture the thing LITERALLY. Never people, faces, hands or animals.
-- 1–3 items per scene (a badge may be added). Fewer, bigger things read better. A phone/browser/laptop for "the app does X" moments; chips/flow/steps for spoken lists; stat/chart only for spoken numbers; compare for "no more …"; logo when the product is named first; button on the closing line.
+- 1–2 main items per scene (a badge may be added): ONE focal point, big (size l for the main thing). Fewer, bigger things read better; never a small thing lost in a big frame.
+- Every icon item names a Lucide icon (never null) and its title is 1–2 words that NAME the thing (never a feeling like "Restless").
+- UI rows and titles are specific to THIS product and its customers (the customer's own features, real-sounding items for this business) — never placeholders ("Jane Doe", "John Doe", "Product X", "Order #12345", "Lorem", "Acme").
+- The old way (what customers used before) appears ONLY in the problem scenes before the turn — never beside the product's features after it. A phone/browser/laptop for "the app does X" moments; chips/flow/steps for spoken lists; stat/chart only for spoken numbers; compare for "no more …"; logo when the product is named first; button on the closing line.
 - Never write on screen a number or claim the narration does not make (UI rows may carry realistic sample data).
 - Build every scene inside your concept and staging: the motif in 2–3 scenes, before the turn the problem and from it the product, the hero scene the strongest.`;
 
 export const MOTION_INSTRUCTIONS = `You are the motion director of a studio known for premium explainer videos for software products (the style of premium SaaS launch videos: kinetic type, the product's UI drawn as clean cards, calm fields, a smooth camera). You alone direct the whole video and write its complete plan in five parts, all consistent with each other.
+
+Work like a senior director, deeply: first analyse the material — who watches, the pain they feel, what the product promises, the proof, the one feeling the video leaves — then design every scene from that analysis. Premium means: one focal point per scene, generous space, a clear hierarchy (the words, then the thing), every scene held long enough to be seen, nothing generic, nothing crowded, every detail specific to THIS brand. Before you answer, check each scene against the narration and these rules; fix it if it fails.
 
 ${BRAND_PART}
 
@@ -136,7 +147,7 @@ type Answer = z.infer<typeof MotionModel>;
 
 // What the Composer builds from: the brand's profile, the creative plan, the scenes.
 export type MotionPlan = { profile: BrandProfile; creative: CreativePlan; ideas: Ideas | null; source: "ai" | "rule" };
-export type MotionResult = { plan: MotionPlan; problems: string[]; ms: number };
+export type MotionResult = { plan: MotionPlan; problems: string[]; ms: number; analysis?: Analysis | null };
 export type MotionInput = {
   name: string;
   color: string;
@@ -154,6 +165,8 @@ export type MotionInput = {
   never?: string | null;
   // what the customer told us in the form (facts, not guesses)
   customer?: Customer | null;
+  // the Story Analyst's breakdown (made first; the Director plans on it)
+  analysis?: Analysis | null;
   seed: number;
 };
 export type Customer = { audience: string; features: string[]; before: string[]; mood: Mood; use: Use };
@@ -258,6 +271,9 @@ export function scenesOf(script: ScriptT): Ideas {
   };
 }
 
+// sample data that reads as a template, never as this product
+const PLACEHOLDER = /\b(jane doe|john doe|lorem|ipsum|product x|acme|foo|bar baz|#12345|user ?\d+|customer name)\b/i;
+
 // What a reviewer should look at: our layout check on the plan as it would be
 // built (in its own staging), and the plan's own repetition.
 export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; color: string; cta: string; url?: string }, creative?: CreativePlan | null): string[] {
@@ -277,9 +293,60 @@ export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; 
     const next = sc[i + 1]?.at ?? words.length;
     const secs = (words[Math.min(words.length - 1, next - 1)]?.end ?? 0) - (words[x.at]?.start ?? 0);
     if (!items.length && secs > 2.5) notes.push(`scene ${i + 1} (${secs.toFixed(1)} s) shows only words`);
-    if (items.filter((it) => it.kind !== "badge" && it.kind !== "shape").length > 3) notes.push(`scene ${i + 1} is crowded (${items.length} things)`);
+    if (i < sc.length - 1 && secs < MIN_SCENE / FPS) notes.push(`scene ${i + 1} lasts ${secs.toFixed(1)} s — too short to be seen: join it with its neighbour (every scene at least 3 s)`);
+    const main = items.filter((it) => it.kind !== "badge" && it.kind !== "shape" && it.kind !== "cursor");
+    if (main.length > 2) notes.push(`scene ${i + 1} is crowded (${main.length} things) — one focal point, at most 2 things`);
+    if (items.some((it) => it.kind === "icon" && !String(it.icon ?? "").trim())) notes.push(`scene ${i + 1} has an icon with no icon name`);
+    const said = JSON.stringify(items);
+    if (PLACEHOLDER.test(said)) notes.push(`scene ${i + 1} shows placeholder data (${said.match(PLACEHOLDER)?.[0]}) — write rows specific to this product`);
+    if (x.text && x.text.to - x.text.from + 1 > SHOWN) notes.push(`scene ${i + 1}'s on-screen words are ${x.text.to - x.text.from + 1} — choose its key clause (at most ${SHOWN})`);
   });
-  return [...new Set(notes)].slice(0, 16);
+  return [...new Set(notes)].slice(0, 20);
+}
+
+// ── the Story Analyst ──────────────────────────────────────────────────────
+// It reads the script before anything is designed: who it speaks to, the
+// pain, the promise, the proof, the feeling it leaves — and splits the
+// narration into scenes long enough to be seen, each with what it means,
+// what to picture (concretely, for THIS product) and the words to show.
+export const ANALYST_INSTRUCTIONS = `You are the story analyst of a studio known for premium explainer videos for software products. Before any design, you read the script DEEPLY and write the breakdown the motion director will build on.
+1. The audience (who watches, in a few words), their pain (what hurts today, concretely), the promise (what the product changes), the proof (what makes it believable: a number, a feature, a result), the arc (the story in one line: from … to …), the look (the visual feeling that suits this brand, a few words).
+2. Scenes: split the narration (its words are numbered index:word) into scenes, in order, covering every word: { from, to } word indexes. Every scene is at least 3 seconds of speech (about 8 words or more): a short sentence or question joins its neighbour. 15 s → 3–5 scenes, 30 s → 6–8, 60 s → 10–14. For each scene:
+- beat: ${BEATS.join("|")}.
+- message: what the scene must make the viewer understand, one line.
+- show: the ONE concrete thing to picture, specific to THIS product and the words (e.g. "the store's order list with a new order arriving and a confirmation sent", not "an icon"); the product's own screens when the words say what it does; the old way only before the product arrives.
+- words: the words to show on screen, copied exactly from the scene's narration — the whole sentence when it is ${SHOWN} words or fewer, else its key clause, never cut mid-phrase.
+- why: why this picture is the strongest choice, one line.
+Be specific to THIS brand and these words; never generic; never invent features, numbers or claims the material does not make.`;
+
+const AnalysisM = z.object({
+  audience: z.string(),
+  pain: z.string(),
+  promise: z.string(),
+  proof: z.string(),
+  arc: z.string(),
+  look: z.string(),
+  scenes: z.array(z.object({ from: z.number(), to: z.number(), beat: z.string(), message: z.string(), show: z.string(), words: z.string(), why: z.string() })),
+});
+export type Analysis = z.infer<typeof AnalysisM>;
+const mendAnalysis = (raw: unknown) => {
+  const o = obj(raw);
+  return {
+    audience: str(o.audience) ?? "", pain: str(o.pain) ?? "", promise: str(o.promise) ?? "", proof: str(o.proof) ?? "", arc: str(o.arc) ?? "", look: str(o.look) ?? "",
+    scenes: list(o.scenes).map((x) => obj(x)).map((x) => ({ from: num(x.from), to: num(x.to), beat: str(x.beat) ?? "", message: str(x.message) ?? "", show: str(x.show) ?? "", words: str(x.words) ?? "", why: str(x.why) ?? "" })),
+  };
+};
+const BASE_ANALYSIS = zodTextFormat(AnalysisM, "story_analysis");
+const ANALYSIS_FORMAT = { format: { ...BASE_ANALYSIS, $parseRaw: (text: string) => AnalysisM.parse(mendAnalysis(JSON.parse(text))) } as typeof BASE_ANALYSIS };
+
+// The breakdown as the Director reads it.
+function analysisText(a: Analysis, words: Word[]): string {
+  const said = (from: number, to: number) => words.slice(Math.max(0, from), Math.min(words.length, to + 1)).map((w) => w.text).join(" ");
+  return [
+    `THE STORY ANALYST'S BREAKDOWN (build on it: its scene split, its pictures, its words):`,
+    `Audience: ${a.audience}. Pain: ${a.pain}. Promise: ${a.promise}. Proof: ${a.proof}. Arc: ${a.arc}. Look: ${a.look}.`,
+    ...a.scenes.map((x, i) => `Scene ${i + 1} (words ${x.from}–${x.to}: "${said(x.from, x.to)}") — ${x.beat}. Message: ${x.message}. Show: ${x.show}. On screen: "${x.words}". Why: ${x.why}`),
+  ].join("\n");
 }
 
 // ── the calls ──────────────────────────────────────────────────────────────
@@ -290,7 +357,69 @@ async function modelOf(client?: Client) {
   const quick = (picked ? picked.quick : /(^|\/)(gpt-5|o\d)/.test(model)) ? { reasoning: { effort: "low" as const } } : {};
   return { ai: client ?? picked?.client ?? null, model, quick };
 }
-const FORMAT = { format: zodTextFormat(MotionModel, "motion_plan") };
+// An answer mended before it is checked: a value outside the choices (a size
+// "xl" for a thing, an unknown layout) becomes the nearest allowed one, and a
+// thing of an unknown kind is left out — a whole plan is never lost to one slip.
+const pick = <T extends string>(xs: readonly T[], v: unknown, d: T, near: Record<string, T> = {}): T => (typeof v === "string" && (xs as readonly string[]).includes(v) ? (v as T) : typeof v === "string" && near[v.toLowerCase()] ? near[v.toLowerCase()] : d);
+const orNull = <T extends string>(xs: readonly T[], v: unknown, near: Record<string, T> = {}): T | null => (v == null ? null : typeof v === "string" && (xs as readonly string[]).includes(v) ? (v as T) : typeof v === "string" && near[v.toLowerCase()] ? near[v.toLowerCase()] : null);
+const str = (v: unknown): string | null => (v == null ? null : typeof v === "string" ? v : String(v));
+const num = (v: unknown, d = 0) => (typeof v === "number" && Number.isFinite(v) ? v : Number.isFinite(Number(v)) && v !== null && v !== "" ? Number(v) : d);
+const numOrNull = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : v == null ? [] : [v]);
+const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+const SIZE3 = ["s", "m", "l"] as const;
+const SIZE4 = ["s", "m", "l", "xl"] as const;
+const NEAR3 = { xs: "s", small: "s", medium: "m", large: "l", xl: "l", xxl: "l" } as const;
+const NEAR4 = { xs: "s", small: "s", medium: "m", large: "l", xxl: "xl" } as const;
+
+export function mendAnswer(raw: unknown): unknown {
+  const o = obj(raw);
+  const b = obj(o.brand), c = obj(o.concept), st = obj(o.staging);
+  const item = (x: unknown) => {
+    const it = obj(x);
+    if (!(ITEM_KINDS as readonly string[]).includes(String(it.kind))) return null;
+    return {
+      kind: it.kind, at: num(it.at), hit: numOrNull(it.hit), id: str(it.id), variant: str(it.variant), title: str(it.title), sub: str(it.sub), icon: str(it.icon), value: str(it.value),
+      values: it.values == null ? null : list(it.values).map((v) => num(v)),
+      rows: it.rows == null ? null : list(it.rows).map((r) => obj(r)).map((r) => ({ title: str(r.title) ?? "", meta: str(r.meta), tag: str(r.tag), icon: str(r.icon) })),
+      screen: str(it.screen), size: orNull(SIZE3, it.size, NEAR3), tilt: numOrNull(it.tilt), enter: str(it.enter),
+    };
+  };
+  return {
+    brand: {
+      category: pick(BRAND_CATEGORIES, b.category, "other"), personality: list(b.personality).map(String), mood: pick(MOODS, b.mood, "professional"), audience: str(b.audience) ?? "", promise: str(b.promise) ?? "",
+      features: list(b.features).map(String), before: list(b.before).map(String), keywords: list(b.keywords).map(String), numbers: list(b.numbers).map(String),
+      look: { face: pick(["geometric", "humanist", "serif", "condensed", "rounded", "wide"] as const, obj(b.look).face, "geometric"), energy: num(obj(b.look).energy, 0.5) },
+    },
+    concept: {
+      idea: str(c.idea) ?? "", motif: { icon: str(obj(c.motif).icon) ?? "", label: str(obj(c.motif).label) ?? "" }, turn: num(c.turn), hero: num(c.hero),
+      beats: list(c.beats).map((x) => obj(x)).filter((x) => (BEATS as readonly string[]).includes(String(x.beat))).map((x) => ({ at: num(x.at), beat: x.beat })),
+    },
+    staging: {
+      language: st.language === "whip" ? "line" : pick(LANGUAGES, st.language, "cuts"), journey: orNull(["right", "zigzag", "down", "diagonal", "snake"] as const, st.journey), guide: orNull(["plane", "cursor", "orb"] as const, st.guide),
+      recap: st.recap === true, scheme: st.scheme === "light" ? "light" : "dark",
+    },
+    arts: list(o.arts).map((x) => obj(x)).map((a) => ({
+      name: str(a.name) ?? "", hue: num(a.hue, 220), harmony: str(a.harmony) ?? "mono", field: str(a.field) ?? "aurora", overlay: str(a.overlay) ?? "none", surface: str(a.surface) ?? "glass", radius: num(a.radius, 16),
+      display: str(a.display) ?? "", text: str(a.text) ?? "", weight: num(a.weight, 700), case: str(a.case) ?? "sentence", tracking: num(a.tracking), key: str(a.key) ?? "color", motion: str(a.motion) ?? "soft", pace: num(a.pace, 1),
+      camera: str(a.camera) ?? "drift", icons: str(a.icons) ?? "tile", energy: num(a.energy, 0.5),
+    })),
+    scenes: list(o.scenes).map((x) => obj(x)).map((sc) => {
+      const t = sc.text == null ? null : obj(sc.text);
+      return {
+        at: num(sc.at),
+        text: t ? { from: num(t.from), to: num(t.to), size: pick(SIZE4, t.size, "m", NEAR4), key: list(t.key).map(String) } : null,
+        kicker: str(sc.kicker),
+        options: list(sc.options).map((y) => obj(y)).map((op) => ({
+          layout: pick(LAYOUTS, op.layout, "center"), arrange: orNull(ARRANGES, op.arrange),
+          items: list(op.items).map(item).filter((it): it is NonNullable<ReturnType<typeof item>> => !!it),
+        })),
+      };
+    }),
+  };
+}
+const BASE_FORMAT = zodTextFormat(MotionModel, "motion_plan");
+const FORMAT = { format: { ...BASE_FORMAT, $parseRaw: (text: string) => MotionModel.parse(mendAnswer(JSON.parse(text))) } as typeof BASE_FORMAT };
 
 function requestOf(input: MotionInput): string {
   const w = input.website, k = input.known;
@@ -314,11 +443,64 @@ function requestOf(input: MotionInput): string {
     `SEEN faces: ${input.seen?.display.join(", ") || "(none)"}; SEEN fields: ${input.seen?.field.join(", ") || "(none)"}`,
     `Length: about ${Math.round(seconds)} s, ${input.words.length} words`,
     `NARRATION (index:word), one sentence per line:\n${sentences.join("\n")}`,
+    input.analysis ? `\n${analysisText(input.analysis, input.words)}` : "",
   ].filter(Boolean).join("\n");
 }
 
+// A call with one more try: an answer that cannot be read is asked for again,
+// with what was wrong (when the time allows).
+async function ask<T>(ai: Client, body: Record<string, unknown>, deadline: number, onUsage: (u: unknown) => void): Promise<T | null> {
+  let input = body.input as string;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const left = deadline - Date.now();
+    if (left < 15_000) throw new Error("no time left");
+    try {
+      const r = await ai.responses.parse({ ...body, input } as Parameters<Client["responses"]["parse"]>[0], { timeout: left });
+      onUsage(r.usage);
+      return (r.output_parsed as T | null) ?? null;
+    } catch (e) {
+      const why = e instanceof Error ? e.message : String(e);
+      // (a timeout or a refused call is not asked again)
+      if (attempt || !/JSON|Zod|invalid|expected|Unexpected|parse/i.test(why)) throw e;
+      input = `${input}\n\nYOUR PREVIOUS ANSWER COULD NOT BE READ: ${why.slice(0, 600)}\nAnswer again: ONE JSON object in exactly the format asked, every value one of its choices.`;
+    }
+  }
+  return null;
+}
+
+// The Story Analyst's breakdown (null when there is no model or it fails: the Director plans alone).
+export async function analyseStory(input: Pick<MotionInput, "name" | "product" | "customer" | "category" | "website" | "words" | "cta">, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 45_000): Promise<Analysis | null> {
+  const { ai, model, quick } = await modelOf(client);
+  if (!ai || !input.words.length) return null;
+  const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
+  const w = input.website;
+  const sentences = sentencesOf(input.words).map((x) => input.words.slice(x.from, x.to + 1).map((y, j) => `${x.from + j}:${y.text}`).join(" "));
+  const request = [
+    `Brand: ${input.name}${input.product ? ` — ${input.product}` : ""}`,
+    `Call to action: ${input.cta}`,
+    input.category ? `Business: ${input.category}` : "",
+    input.customer ? `THE CUSTOMER'S ANSWERS (facts): for ${input.customer.audience}; features: ${input.customer.features.join("; ")}; before it they used: ${input.customer.before.join(", ")}; mood: ${input.customer.mood}; the video is ${USE_NOTE[input.customer.use]}.` : "",
+    w?.title ? `Website title: ${w.title}` : "",
+    w?.description ? `Website description: ${w.description}` : "",
+    w?.text ? `Website text:\n${w.text.slice(0, 3000)}` : "",
+    `NARRATION (index:word), one sentence per line:\n${sentences.join("\n")}`,
+  ].filter(Boolean).join("\n");
+  try {
+    const o = await ask<Analysis>(ai, { model, instructions: ANALYST_INSTRUCTIONS, input: request, text: ANALYSIS_FORMAT, ...quick }, Date.now() + budgetMs, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+    onUsage?.(usage);
+    if (!o?.scenes.length) return null;
+    // in order, inside the narration
+    const n = input.words.length;
+    return { ...o, scenes: o.scenes.filter((x) => x.from >= 0 && x.from < n).sort((a, b) => a.from - b.from).map((x) => ({ ...x, to: Math.max(x.from, Math.min(n - 1, x.to)) })) };
+  } catch (e) {
+    onUsage?.(usage);
+    console.warn("story analyst failed:", e instanceof Error ? e.message.slice(0, 200) : e);
+    return null;
+  }
+}
+
 // The Motion Director's plan: one call, from the script (alongside the voice).
-export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 100_000): Promise<MotionResult> {
+export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 130_000): Promise<MotionResult> {
   const t0 = Date.now();
   const fallback = rulePlan(input);
   const { ai, model, quick } = await modelOf(client);
@@ -328,12 +510,15 @@ export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage)
     return { plan, problems, ms: Date.now() - t0 };
   };
   if (!ai || !input.words.length) return done(fallback, ["no model (turned off on /admin/models, or no key) — plan by rule"]);
+  const deadline = t0 + budgetMs;
   try {
-    const r = await ai.responses.parse({ model, instructions: `${MOTION_INSTRUCTIONS}\n\n${HOUSE_RULES}${extraRules(input.never)}`, input: requestOf(input), text: FORMAT, ...quick }, { timeout: budgetMs });
-    countUsage(usage, r.usage);
-    const o = r.output_parsed;
+    // the Story Analyst first (its breakdown is what the Director builds on)
+    const analysis = input.analysis ?? (await analyseStory(input, (u) => countUsage(usage, { input_tokens: u.inputTokens, output_tokens: u.outputTokens, ...(u.reportedUsd !== undefined ? { cost: u.reportedUsd } : {}) } as Parameters<typeof countUsage>[1]), client, Math.min(45_000, budgetMs * 0.4)));
+    const o = await ask<Answer>(ai, { model, instructions: `${MOTION_INSTRUCTIONS}\n\n${HOUSE_RULES}${extraRules(input.never)}`, input: requestOf({ ...input, analysis }), text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
     if (!o) return done(fallback, ["no answer — plan by rule"]);
-    return done(planOf(o, input, fallback), ideaProblems(o, input.words.length));
+    const result = done(planOf(o, input, fallback), ideaProblems(o, input.words.length));
+    result.analysis = analysis;
+    return result;
   } catch (e) {
     return done(fallback, [`model call failed: ${e instanceof Error ? e.message : String(e)} — plan by rule`]);
   }
@@ -350,7 +535,7 @@ function planOf(o: Answer, input: Pick<MotionInput, "words" | "category" | "know
 
 // Its review once the voice is timed: the plan, with what our layout check
 // found on the real timings; the improved plan is kept unless it is worse.
-export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 75_000): Promise<MotionResult> {
+export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 100_000): Promise<MotionResult> {
   const t0 = Date.now();
   const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative) : [];
   const { ai, model, quick } = await modelOf(client);
@@ -360,23 +545,44 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
     return { plan: p, problems, ms: Date.now() - t0 };
   };
   if (!ai || !plan.ideas || plan.source !== "ai") return done(plan, asked);
-  const request = `${requestOf(input)}\n\nYOUR PLAN:\n${JSON.stringify(answerOf(plan))}\n\nProblems found by our checks on the recorded voice:\n${asked.length ? asked.map((a) => `- ${a}`).join("\n") : "- (none; judge the design yourself)"}`;
-  try {
-    const r = await ai.responses.parse({ model, instructions: `${MOTION_INSTRUCTIONS}\n\n${HOUSE_RULES}${extraRules(input.never)}\n\n${REVIEW}`, input: request, text: FORMAT, ...quick }, { timeout: budgetMs });
-    countUsage(usage, r.usage);
-    const o = r.output_parsed;
-    if (!o) return done(plan, ["review: no answer — the plan is kept", ...asked]);
-    const revised = planOf(o, input, plan, plan.profile);
-    if (!revised.ideas) return done(plan, ["review: no scenes — the plan is kept", ...asked]);
-    const again = [...ideaProblems(o, input.words.length), ...reviewNotes(revised.ideas, input.words, input, revised.creative)];
-    return again.length <= asked.length ? done(revised, again) : done(plan, ["the review made it worse — the plan is kept", ...asked]);
-  } catch (e) {
-    return done(plan, [`review failed: ${e instanceof Error ? e.message : String(e)}`, ...asked]);
+  const deadline = t0 + budgetMs;
+  // up to two rounds: the plan is checked again after each, and a round
+  // that makes it worse is not kept
+  let best = plan, notes = asked;
+  const log: string[] = [];
+  for (let round = 1; round <= 2; round++) {
+    if (round > 1 && (!notes.length || deadline - Date.now() < 40_000)) break;
+    const request = `${requestOf(input)}\n\nYOUR PLAN:\n${JSON.stringify(answerOf(best))}\n\nProblems found by our checks on the recorded voice (fix every one):\n${notes.length ? notes.map((a) => `- ${a}`).join("\n") : "- (none; judge the design yourself)"}`;
+    try {
+      const o = await ask<Answer>(ai, { model, instructions: `${MOTION_INSTRUCTIONS}\n\n${HOUSE_RULES}${extraRules(input.never)}\n\n${REVIEW}`, input: request, text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+      if (!o) {
+        log.push(`review ${round}: no answer — the plan is kept`);
+        break;
+      }
+      const revised = planOf(o, input, best, best.profile);
+      if (!revised.ideas) {
+        log.push(`review ${round}: no scenes — the plan is kept`);
+        break;
+      }
+      const again = [...ideaProblems(o, input.words.length), ...reviewNotes(revised.ideas, input.words, input, revised.creative)];
+      if (again.length > notes.length) {
+        log.push(`review ${round} made it worse — the plan is kept`);
+        break;
+      }
+      best = revised;
+      notes = again;
+    } catch (e) {
+      log.push(`review ${round} failed: ${e instanceof Error ? e.message : String(e)}`);
+      break;
+    }
   }
+  return done(best, [...log, ...notes]);
 }
 
-const REVIEW = `Now review YOUR PLAN as a senior motion designer before it is built, and return the WHOLE improved plan (same format). Check:
-- Does every scene picture what ITS words say, literally? Is it one strong idea, not a crowd? Is the product's UI shown where the words describe what the app does?
+const REVIEW = `Now review YOUR PLAN as a senior motion designer before it is built, and return the WHOLE improved plan (same format). Check, scene by scene:
+- Is every scene at least 3 s, held long enough to be seen? Is its one focal point big, with nothing small lost in the frame?
+- Are the on-screen words a whole sentence or a complete clause (never cut mid-phrase)?
+- Does every scene picture what ITS words say, literally? Is it one strong idea, not a crowd? Is the product's UI shown where the words describe what the app does? Is every detail specific to THIS product (no placeholder data, every icon named)?
 - Do neighbouring scenes vary (layout, kind of thing, size) — words, cards and icons composed together in some scenes — and does it build to the reveal and the call to action?
 - Is every scene's text a 2–6 word highlight? Every UI row realistic for THIS product, every icon literal, every number spoken?
 - Do the concept and staging hold: the motif in 2–3 scenes, the turn where the product arrives, the hero scene the strongest, the scheme and camera language right for this brand?

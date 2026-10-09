@@ -1,4 +1,4 @@
-import { isAccent } from "./layout";
+import { MIN_SCENE, isAccent } from "./layout";
 import type { Staging } from "./staging";
 import { stagingName } from "./staging";
 import type { ComposerPlan, ScriptT } from "./types";
@@ -27,6 +27,10 @@ export function scorePlan(plan: ComposerPlan, script: ScriptT, ctx: Ctx = {}): S
     if (things.length > 3) minus(0.5, `scene ${i + 1} is crowded`);
     const words = s.text?.words.length ?? 0;
     if (secs > 0 && words / secs > 4.5) minus(0.3, `scene ${i + 1} has more words than can be read`);
+    // too short to be seen, or its picture too small to read
+    if (i < sc.length - 1 && s.to - s.from < MIN_SCENE - 8) minus(0.8, `scene ${i + 1} lasts only ${secs.toFixed(1)} s`);
+    const biggest = Math.max(0, ...things.map((it) => (it.box.w * it.box.h) / (W * H)));
+    if (things.length && biggest < 0.05) minus(0.5, `scene ${i + 1}'s picture is small`);
   });
   for (let i = 2; i < sc.length; i++) if (sc[i].layout === sc[i - 1].layout && sc[i].layout === sc[i - 2].layout) minus(0.4, `scenes ${i - 1}–${i + 1} share a layout`);
   const flips = sc.slice(1).filter((s, i) => s.dark !== sc[i].dark).length;

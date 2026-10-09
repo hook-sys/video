@@ -407,7 +407,7 @@ async function motionDirection(
     seed: seedFrom(projectId),
   };
   const result = await directMotion(input, (u) => usage.push(u));
-  console.info("motion director:", { projectId, source: result.plan.source, ms: result.ms, category: result.plan.profile.category, mood: result.plan.profile.mood, idea: result.plan.creative.idea, language: result.plan.creative.language, scheme: result.plan.creative.scheme, scenes: result.plan.ideas?.scenes.length ?? 0, problems: result.problems.slice(0, 6) });
+  console.info("motion director:", { projectId, source: result.plan.source, ms: result.ms, analyst: result.analysis ? result.analysis.scenes.length : null, category: result.plan.profile.category, mood: result.plan.profile.mood, idea: result.plan.creative.idea, language: result.plan.creative.language, scheme: result.plan.creative.scheme, scenes: result.plan.ideas?.scenes.length ?? 0, problems: result.problems.slice(0, 6) });
   return { input, result, past, usage };
 }
 
@@ -431,7 +431,8 @@ async function composerSet(
   const brand = brandOf(project, brief);
   const dir = (await direction?.catch(() => null)) ?? (await motionDirection(admin, projectId, userId, project, narration, brief));
   dir.usage.forEach(addUsage);
-  const input: MotionInput = { ...dir.input, words, name: brand.name, cta: brand.cta, url: brand.url, product: brief?.product_summary ?? dir.input.product };
+  // (the Story Analyst's breakdown goes on to the review)
+  const input: MotionInput = { ...dir.input, words, name: brand.name, cta: brand.cta, url: brand.url, product: brief?.product_summary ?? dir.input.product, analysis: dir.result.analysis ?? null };
   const reviewed = await reviewMotion(dir.result.plan, input, addUsage);
   const plan = reviewed.plan;
   const { count: screens } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);

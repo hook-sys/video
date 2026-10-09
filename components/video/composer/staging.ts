@@ -12,6 +12,8 @@ import { STILL_BACKGROUND, type ComposerPlan, type GuideKind, type JourneyKind, 
 
 export const LANGUAGES = ["cuts", "line", "carry", "words", "guide", "timeline", "map", "tiles", "scroll", "depth", "flip", "whip", "turn"] as const;
 export type Language = (typeof LANGUAGES)[number];
+// the languages a video is made in now: no whip (a fast pan takes a scene away before it is seen)
+export const IN_USE: readonly Language[] = LANGUAGES.filter((l) => l !== "whip");
 // what each language is, for the Directors
 export const LANGUAGE_NOTES: Record<Language, string> = {
   cuts: "scene after scene, each with its own soft way in — quiet and classic",
@@ -79,9 +81,9 @@ export function stageOf(plan: ComposerPlan, seed: number, recent: (Staging | nul
   const sc = plan.scenes;
   const n = sc.length;
   // the language: the Motion Director's, else drawn (what this customer had lately counts against it)
-  let language = direction?.language;
+  let language: Language | undefined = direction?.language === "whip" ? "line" : direction?.language;
   if (!language) {
-    const list = LANGUAGES.filter((l) => (l === "map" ? n >= 5 : ["timeline", "tiles"].includes(l) ? n >= 4 : true)).map((l) => [l, recent.reduce((w, s, i) => (s && stagingName(s) === l ? w * (0.15 + 0.5 * (i / Math.max(1, recent.length))) : w), 1)] as const);
+    const list = IN_USE.filter((l) => (l === "map" ? n >= 5 : ["timeline", "tiles"].includes(l) ? n >= 4 : true)).map((l) => [l, recent.reduce((w, s, i) => (s && stagingName(s) === l ? w * (0.15 + 0.5 * (i / Math.max(1, recent.length))) : w), 1)] as const);
     const sum = list.reduce((a, [, w]) => a + w, 0);
     let x = R.next() * sum;
     language = list[list.length - 1][0];
@@ -126,6 +128,8 @@ export const withRecap = (plan: ComposerPlan): ComposerPlan => (plan.recap ? pla
 // The plan as staged (and its recap's seconds added).
 export function staged(plan: ComposerPlan, s: Staging | null | undefined): ComposerPlan {
   if (!s || s.family === "cuts" || STILL_BACKGROUND) return plan;
+  // (a video staged in whip pans before they were left out: the line instead)
+  if (s.language === "whip") s = { ...s, language: "line", family: "path", link: "line", links: null, journey: s.journey ?? "right" };
   const out: ComposerPlan = { ...plan, journey: s.journey, link: s.link, links: s.links, guide: s.guide };
   return s.recap && s.journey && s.journey !== "scroll" ? withRecap(out) : out;
 }

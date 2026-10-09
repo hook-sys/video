@@ -1,19 +1,25 @@
 import type { Word } from "./types";
 
-// The words a scene shows: its highlight, never the whole sentence the voice
-// says. Up to SHOWN words of the scene's own, in order (so each still comes
-// in as it is said) — the phrase that carries the scene: its key words, a
-// spoken number, the most things named, a phrase that ends where the voice
-// pauses; never one that starts or ends on a little word ("and", "the", "in").
+// The words a scene shows: the words the scene asks for when they are few
+// (a whole short sentence reads as one), else its highlight — up to SHOWN
+// words of the scene's own, in order (so each still comes in as it is said):
+// the phrase that carries the scene (its key words, a spoken number, the most
+// things named), a whole clause or sentence when one fits, ending where the
+// voice pauses; never one cut mid-phrase or starting or ending on a little
+// word ("and", "the", "in").
 
-export const SHOWN = 6;
+export const SHOWN = 10;
+// a pause: a clause or sentence ends on the word (the Bengali দাঁড়ি too)
+const PAUSE = /[.,;:!?—–।]["”’)]*$/;
+const STOP = /[.!?।]["”’)]*$/;
 const LITTLE = new Set("a an and as at be but by for from in into is it its of on or so than that the then this to was we with you your our are will can just now also even still very really every each all some more most not".split(" "));
 const bare = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}%$€£৳]/gu, "");
 const NUMBER = /\d|^(one|two|three|four|five|six|seven|eight|nine|ten|twice|half|hundred|thousand)$/;
 
 // [first, last] word index of the highlight inside [from, to].
 export function highlightOf(words: Word[], from: number, to: number, keys: Set<string>): [number, number] {
-  if (to - from + 1 <= SHOWN) return [from, to];
+  // (a few words in one sentence are shown as they are)
+  if (to - from + 1 <= SHOWN && !words.slice(from, to).some((w) => STOP.test(w.text))) return [from, to];
   let best: [number, number] = [from, from + SHOWN - 1];
   let bestScore = -Infinity;
   for (let a = from; a <= to; a++) {
@@ -30,14 +36,20 @@ export function highlightOf(words: Word[], from: number, to: number, keys: Set<s
       if (LITTLE.has(plain[0])) score -= 1.6;
       if (LITTLE.has(plain[len - 1])) score -= 2;
       // a phrase that ends where the voice stops or pauses reads as one
-      if (b === to || /[.,;:!?—–]$/.test(ws[len - 1])) score += 1.2;
-      else if (LITTLE.has(bare(words[b + 1]?.text ?? ""))) score += 0.8;
+      if (b === to || PAUSE.test(ws[len - 1])) score += 1.2;
+      // (before a little word it may still be mid-phrase: "gets | a confirmation")
+      else if (LITTLE.has(bare(words[b + 1]?.text ?? ""))) score -= 1;
       // (never cut in the middle of a phrase: "one live | dashboard")
-      else score -= 2.5;
-      if (a === from || /[.,;:!?—–]$/.test(words[a - 1]?.text ?? "")) score += 0.8;
+      else score -= 4;
+      const starts = a === from || PAUSE.test(words[a - 1]?.text ?? "");
+      if (starts) score += 0.8;
+      // a whole sentence reads best of all
+      if ((a === from || STOP.test(words[a - 1]?.text ?? "")) && (b === to || STOP.test(ws[len - 1]))) score += 2.5;
       // never across a sentence end
-      if (ws.slice(0, -1).some((w) => /[.!?]$/.test(w))) score -= 4;
-      score -= Math.abs(len - 4) * 0.35;
+      // never across a sentence end (each one crossed counts)
+      // (two very short sentences read as one: "No credit card. No time limit.")
+      score -= ws.slice(0, -1).filter((w) => STOP.test(w)).length * (len <= 6 ? 1 : 6);
+      score -= Math.abs(len - 6) * 0.2;
       if (score > bestScore) {
         bestScore = score;
         best = [a, b];

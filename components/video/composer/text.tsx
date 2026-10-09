@@ -86,7 +86,8 @@ function Word({ c, text, k, reveal, keyed, at }: { c: Ctx; text: string; k: numb
     case "rise": style = { display: "inline-block", transform: `translateY(${r * 0.45}em)`, opacity: clamp01(k * 1.6), filter: r > 0.02 ? `blur(${r * 8}px)` : undefined }; break;
     case "scale": style = { display: "inline-block", transform: `scale(${mix(1.5, 1, k)})`, opacity: clamp01(k * 1.6), filter: r > 0.02 ? `blur(${r * 10}px)` : undefined }; break;
     case "blur": style = { display: "inline-block", opacity: clamp01(k * 1.3), filter: r > 0.02 ? `blur(${r * 22}px)` : undefined }; break;
-    case "slide": style = { display: "inline-block", transform: `translateX(${-r * 0.6}em)`, opacity: clamp01(k * 1.6) }; break;
+    // (from the right: a word sliding in from the left runs into the one before it)
+    case "slide": style = { display: "inline-block", transform: `translateX(${r * 0.45}em)`, opacity: clamp01(k * 1.6) }; break;
     case "type": style = { display: "inline-block", clipPath: `inset(-10% ${(1 - k) * 100}% -20% 0)` }; break;
     case "line": style = { display: "inline-block", transform: `translateY(${r * 0.35}em)`, opacity: clamp01(k * 1.5), filter: r > 0.02 ? `blur(${r * 10}px)` : undefined }; break;
     default: style = { display: "inline-block", transform: `translateY(${r * 0.18}em)`, opacity: clamp01(k * 1.4), filter: r > 0.02 ? `blur(${r * 12}px)` : undefined };

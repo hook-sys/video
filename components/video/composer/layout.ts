@@ -1,5 +1,7 @@
 import { emWidth, faceOf, rng } from "./art";
-import { highlightOf, shownWord } from "./highlight";
+import { SHOWN, highlightOf, shownWord } from "./highlight";
+// a word that ends a sentence (the Bengali দাঁড়ি too)
+const STOP_END = /[.!?।]["”’)]*$/;
 import { TRANSITION_FRAMES, baseSize } from "./sizes";
 import type { ArrangeKind, ArtT, Box, Brand, ComposerPlan, ItemT, LayoutKind, PlacedItem, PlacedScene, SceneT, ScriptT, TextBlock, Word } from "./types";
 import { FPS } from "./types";
@@ -21,6 +23,10 @@ const ACCENTS = new Set(["badge", "shape", "cursor"]);
 export const isAccent = (it: Pick<ItemT, "kind">) => ACCENTS.has(it.kind);
 const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "");
 const LEAD = 6;
+// a scene is held at least this long (frames): long enough to see what it shows
+export const MIN_SCENE = 84;
+// a thing comes in early enough to be seen this long before its scene ends
+const SEEN = 66;
 const TEXT_CAP = { xl: 176, l: 132, m: 100, s: 76 } as const;
 const MIN_TEXT = 46;
 
@@ -89,12 +95,12 @@ function regions(layout: LayoutKind, ratio: number, hasText: boolean, hasVis: bo
   }
 }
 
-const SIZE_MAX = { s: 1.15, m: 1.7, l: 2.1 } as const;
+const SIZE_MAX = { s: 1.35, m: 2, l: 2.5 } as const;
 function fit(it: ItemT, cell: Rect, k = 1): { box: Box; scale: number } {
   const [bw, bh] = baseSize(it as PlacedItem);
   const cw = cell.r - cell.l, ch = cell.b - cell.t;
   // a call to action, a logo or a number reads best at a set size, never blown up
-  const kindMax = it.kind === "button" ? 1.2 : it.kind === "logo" ? 1.3 : it.kind === "badge" ? 1.2 : it.kind === "stat" ? 1.5 : 9;
+  const kindMax = it.kind === "button" ? 1.65 : it.kind === "logo" ? 1.7 : it.kind === "badge" ? 1.2 : it.kind === "stat" ? 1.9 : 9;
   const s = Math.min(cw / bw, ch / bh, SIZE_MAX[it.size ?? "m"], kindMax) * k;
   return { box: { x: (cell.l + cell.r) / 2, y: (cell.t + cell.b) / 2, w: bw * s, h: bh * s }, scale: s };
 }
@@ -258,7 +264,8 @@ function composeScene(layout: LayoutKind, things: ItemT[], textIn: TextIn, cap: 
     const total = tb0.box.h + gap + f.box.h;
     const top = Math.max(t, (zone.t + zone.b) / 2 - total / 2);
     const box = { ...f.box, y: top + tb0.box.h + gap + f.box.h / 2 };
-    const left = Math.max(l, box.x - box.w / 2);
+    // (the label starts with its thing, but never runs off the frame)
+    const left = Math.max(l, Math.min(box.x - box.w / 2, Math.min(zone.r, r) - tb0.box.w));
     const tb = startAt(tb0, left, top + tb0.box.h / 2, Math.min(zone.r, r) - left);
     const spots: Spot[] = [{ box, scale: f.scale, z: 1 }];
     if (others.length) spots.push(...arrange(others, tall() ? "row" : others.length > 1 ? "column" : "single", tall() ? rect(l, b - side, r, b) : flip ? rect(l, t + 120, l + side, b - 120) : rect(r - side, t + 120, r, b - 120), seed).map((sp) => ({ ...sp, z: 2 })));
@@ -306,13 +313,22 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   const { scene: s, art, from, to, words } = p;
   const problems: string[] = [];
   const frame = (i: number) => Math.round((words[Math.max(0, Math.min(words.length - 1, i))]?.start ?? 0) * FPS);
-  const items = s.items.filter((it) => it.kind !== "screenshot" || p.screens > 0);
+  // (an icon with no picture would show a stand-in: left out)
+  const items = s.items.filter((it) => (it.kind !== "screenshot" || p.screens > 0) && (it.kind !== "icon" || !!it.icon?.trim()));
   const vis = items.filter((it) => !isAccent(it));
   const acc = items.filter(isAccent);
   // the words: the scene's highlight (highlight.ts), in order
   let tfrom = s.text ? Math.max(p.wordFrom, Math.min(s.text.from, s.text.to)) : 0;
   let tto = s.text ? Math.min(p.wordTo, Math.max(s.text.from, s.text.to)) : -1;
   const keys = new Set((s.text?.key ?? []).map(norm).filter(Boolean));
+  // words that start or end inside a short sentence show the whole sentence
+  // ("Is 50% off." → "This week only, AutoFlow Pro is 50% off.")
+  if (s.text && tto >= tfrom) {
+    let a = tfrom, b = tto;
+    while (a > p.wordFrom && !STOP_END.test(words[a - 1]?.text ?? "")) a--;
+    while (b < p.wordTo && !STOP_END.test(words[b]?.text ?? "")) b++;
+    if (b - a + 1 <= SHOWN) [tfrom, tto] = [a, b];
+  }
   if (s.text && tto >= tfrom) [tfrom, tto] = highlightOf(words, tfrom, tto, keys);
   // (a stop the voice's timing gives as a word of its own is not shown)
   const ws = s.text ? words.slice(tfrom, tto + 1).filter((w) => /[\p{L}\p{N}]/u.test(w.text)) : [];
@@ -344,7 +360,8 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
     };
   };
   const timeOf = (it: ItemT) => {
-    const at = Math.min(to - 16, Math.max(from, frame(it.at) - 4));
+    // as its word is said, but early enough to be seen before the scene goes
+    const at = Math.min(Math.max(from, to - SEEN), Math.max(from, frame(it.at) - 4));
     const hit = it.hit != null ? Math.min(to - 6, Math.max(at + 8, frame(it.hit) - 2)) : null;
     return { at, hit };
   };
@@ -448,6 +465,37 @@ const fillOf = (p: PlacedScene) => {
 // The layouts tried, in order, when a scene's own has problems.
 const RETRY: LayoutKind[] = ["top", "split-left", "split-right", "bottom", "center", "visual"];
 
+// How much a scene's picture weighs (when two scenes become one, the
+// stronger picture is kept): the call to action above all, then the product.
+const WEIGHT: Partial<Record<ItemT["kind"], number>> = { button: 9, logo: 5, device: 4, card: 4, chart: 4, compare: 4, flow: 3.5, steps: 3.5, stat: 3.5, screenshot: 4, chips: 2.5, quote: 2.5, avatars: 2, icon: 1 };
+const weightOf = (s: SceneT) => s.items.filter((it) => !isAccent(it)).reduce((a, it) => a + (WEIGHT[it.kind] ?? 1), 0);
+
+// Scenes held at least MIN_SCENE: a scene too short to be seen becomes one
+// with its neighbour — the stronger picture is kept, with the words of both
+// (the highlight is chosen from them), the things of the other dropped.
+export function paced(scenes: SceneT[], frame: (word: number) => number, duration: number): SceneT[] {
+  const out: SceneT[] = scenes.map((s) => ({ ...s, items: [...s.items] }));
+  const join = (a: SceneT, b: SceneT): SceneT => {
+    const keep = weightOf(b) > weightOf(a) ? b : a;
+    const texts = [a.text, b.text].filter((t): t is NonNullable<SceneT["text"]> => !!t);
+    const text = texts.length ? { ...(keep.text ?? texts[0]), from: Math.min(...texts.map((t) => t.from)), to: Math.max(...texts.map((t) => t.to)), key: [...new Set(texts.flatMap((t) => t.key ?? []))].slice(0, 3) } : null;
+    return { ...keep, at: a.at, text, kicker: keep.kicker ?? a.kicker ?? b.kicker ?? null };
+  };
+  const len = (i: number) => (i < out.length - 1 ? frame(out[i + 1].at) : duration) - frame(out[i].at);
+  for (let guard = 0; guard < 200 && out.length > 1; guard++) {
+    // the shortest scene first
+    let i = -1;
+    for (let k = 0; k < out.length; k++) if (len(k) < MIN_SCENE && (i < 0 || len(k) < len(i))) i = k;
+    if (i < 0) break;
+    // with the shorter of its neighbours (the last scene with the one before)
+    const j = i === 0 ? 1 : i === out.length - 1 ? i - 1 : len(i - 1) <= len(i + 1) ? i - 1 : i + 1;
+    const [a, b] = j < i ? [j, i] : [i, j];
+    out.splice(a, 2, join(out[a], out[b]));
+  }
+  if (out.length) out[0] = { ...out[0], at: 0 };
+  return out;
+}
+
 // A script on the voice's words → the film's plan (never throws).
 // `size`: the frame (frame.ts — 16:9 unless given).
 export function placeAll(script: ScriptT, words: Word[], duration: number, brand: Brand, seed: number, screens = 0, source: ComposerPlan["source"] = "director", size: [number, number] = [1920, 1080]): { plan: ComposerPlan; problems: Problem[] } {
@@ -455,21 +503,12 @@ export function placeAll(script: ScriptT, words: Word[], duration: number, brand
   const problems: Problem[] = [];
   const nW = words.length;
   const frame = (i: number) => Math.round((words[Math.max(0, Math.min(nW - 1, i))]?.start ?? 0) * FPS);
-  // scenes in spoken order, at least ~1.1 s apart
+  // scenes in spoken order, each held long enough to be seen (paced)
   const scenes = [...script.scenes].map((s) => ({ ...s, at: Math.max(0, Math.min(nW - 1, s.at)) })).sort((a, b) => a.at - b.at);
-  const kept: SceneT[] = [];
-  for (const s of scenes) {
-    if (kept.length && frame(s.at) - frame(kept[kept.length - 1].at) < 34) {
-      // too short to be seen: its things join the scene before
-      const last = kept[kept.length - 1];
-      last.items = [...last.items, ...s.items].slice(0, 6);
-      continue;
-    }
-    kept.push({ ...s, items: [...s.items] });
-  }
-  if (kept.length) kept[0].at = 0;
+  const kept = paced(scenes, frame, duration);
   const placed: PlacedScene[] = [];
-  const mixed = script.art.scheme === "mixed";
+  // one background for the whole video (never turning dark ↔ light)
+  const dark = script.art.scheme !== "light";
   kept.forEach((s, i) => {
     const from = i === 0 ? 0 : Math.max(placed[i - 1].from + 30, frame(s.at) - LEAD);
     const to = i < kept.length - 1 ? Math.max(from + 30, frame(kept[i + 1].at) - LEAD) : duration;
@@ -501,7 +540,7 @@ export function placeAll(script: ScriptT, words: Word[], duration: number, brand
     // (a composed layout is meant as it is)
     if (!best.problems.length && !COMPOSED.has(best.placed.layout) && best.placed.items.some((q) => !isAccent(q))) {
       const own = fillOf(best.placed);
-      if (own < 0.26) {
+      if (own < 0.32) {
         let pick = best, score = own;
         for (const layout of ["top", "bottom", "split-left", "split-right", "center"] as LayoutKind[]) {
           for (const arrangeK of [s.arrange ?? null, "row", "grid", "column"] as (ArrangeKind | null)[]) {
@@ -518,7 +557,7 @@ export function placeAll(script: ScriptT, words: Word[], duration: number, brand
         best = pick;
       }
     }
-    best.placed.dark = mixed ? (s.dark ?? i % 2 === 0) : (s.dark ?? script.art.scheme === "dark");
+    best.placed.dark = dark;
     // the ask's button shows the customer's own address, or none (never one made up)
     for (const q of best.placed.items) if (q.kind === "button") q.sub = brand.url?.trim() || null;
     // a whip is too sudden for bright things on a dark field: a push instead

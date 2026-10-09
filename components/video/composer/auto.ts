@@ -15,7 +15,8 @@ const STOP = new Set("the a an and or but to of in on at for with your you our w
 
 // ── reading the narration ─────────────────────────────────────────────────
 export type Clause = { from: number; to: number; text: string; end: "." | "?" | "!" | "," | "" };
-const endOf = (t: string): Clause["end"] => (/[?]$/.test(t) ? "?" : /[!]$/.test(t) ? "!" : /[.]$/.test(t) && !/\d\.$/.test(t) ? "." : /[,;:—–]$/.test(t) ? "," : "");
+// (the Bengali দাঁড়ি "।" ends a sentence as a full stop does)
+const endOf = (t: string): Clause["end"] => (/[?]["”’)]*$/.test(t) ? "?" : /[!]["”’)]*$/.test(t) ? "!" : /[।॥]["”’)]*$/.test(t) || (/[.]$/.test(t) && !/\d\.$/.test(t)) ? "." : /[,;:—–]$/.test(t) ? "," : "");
 // Sentences; a long one (not a list) is cut at its commas or pauses.
 export function clauses(words: Word[]): Clause[] {
   const sentences: Clause[] = [];

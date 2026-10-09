@@ -1,5 +1,5 @@
 import { rng } from "@/components/video/composer/art";
-import { LANGUAGES, type Language } from "@/components/video/composer/staging";
+import { IN_USE, type Language } from "@/components/video/composer/staging";
 import type { GuideKind, JourneyKind, Word } from "@/components/video/composer/types";
 
 // The studio's shared vocabulary: the brand profile and the creative plan the
@@ -81,7 +81,7 @@ export function ruleProfile(input: { name: string; script: string; category?: st
   const words = input.script.match(/[A-Za-z][A-Za-z'-]+/g) ?? [];
   const keywords = [...new Set(words.filter((w) => w.length > 5 && !STOP.has(w.toLowerCase()) && w.toLowerCase() !== input.name.toLowerCase()))].sort((a, b) => b.length - a.length).slice(0, 6);
   const numbers = [...new Set(input.script.match(/\b(\d[\d,.]*\s?(%|x|×|hours?|minutes?|days?|k)?|twice|double|half|ten times)\b/gi) ?? [])].slice(0, 4);
-  const sentences = input.script.split(/(?<=[.!?])\s+/);
+  const sentences = input.script.split(/(?<=[.!?।॥])\s+/);
   return {
     category,
     personality: PERSONALITY[mood],
@@ -133,19 +133,22 @@ const stir = (x: number) => {
 export function pickLanguage(mood: Mood, seed: number, recent: (Language | null | undefined)[] = []): Language {
   const R = rng(stir(seed ^ 0x2545f491) || 1);
   const weights = LANGUAGE_WEIGHTS[mood];
-  const list = LANGUAGES.map((l) => [l, (weights[l] ?? 0.5) * recent.reduce((w, r, i) => (r === l ? w * (0.15 + 0.5 * (i / Math.max(1, recent.length))) : w), 1)] as const);
+  const list = IN_USE.map((l) => [l, (weights[l] ?? 0.5) * recent.reduce((w, r, i) => (r === l ? w * (0.15 + 0.5 * (i / Math.max(1, recent.length))) : w), 1)] as const);
   const sum = list.reduce((a, [, w]) => a + w, 0);
   let x = R.next() * sum;
   for (const [l, w] of list) if ((x -= w) <= 0) return l;
   return list[list.length - 1][0];
 }
 
+// A word that ends a sentence (the Bengali দাঁড়ি "।" too).
+export const SENTENCE_END = /[.!?।॥]["”’)]*$/;
+
 // The sentences of the narration (word index ranges).
 export function sentencesOf(words: Word[]): { from: number; to: number }[] {
   const out: { from: number; to: number }[] = [];
   let from = 0;
   words.forEach((w, i) => {
-    if (/[.!?]["”’)]*$/.test(w.text) || i === words.length - 1) {
+    if (SENTENCE_END.test(w.text) || i === words.length - 1) {
       out.push({ from, to: i });
       from = i + 1;
     }
@@ -170,7 +173,7 @@ export function ruleCreative(profile: BrandProfile, words: Word[], brandName: st
   const journey = ["line", "carry", "words", "guide"].includes(language) ? PATHS[Math.floor(R.next() * PATHS.length) % PATHS.length] : null;
   const old = profile.before[0];
   return {
-    idea: (old ? `From ${old} to ${brandName}` : profile.promise ? profile.promise.replace(/[.!?]+$/, "") : `${brandName}: one calm place for the whole job`).slice(0, 120),
+    idea: (old ? `From ${old} to ${brandName}` : profile.promise ? profile.promise.replace(/[.!?।]+$/, "") : `${brandName}: one calm place for the whole job`).slice(0, 120),
     motif: MOTIF_OF[profile.category],
     hero: sentences[heroS]?.from ?? 0,
     turn: sentences[turnI]?.from ?? 0,
