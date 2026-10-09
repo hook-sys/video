@@ -33,7 +33,9 @@ import { ProductBrief } from "@/lib/ai/product-brief";
 import http from "node:http";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import { countUsage, defaultConfig, normalizeConfig, parseVoiceChoices, textClient, textCost, usageCost } from "@/lib/ai/models";
+import { countUsage, defaultConfig, effectiveConfig, normalizeConfig, parseVoiceChoices, textClient, textCost, usageCost } from "@/lib/ai/models";
+import { ruleBrief } from "@/lib/rule-brief";
+import { RECAP, stageOf, staged, stagingName } from "@/components/video/composer/staging";
 import { retimeScript } from "@/lib/voice-timing";
 import { directionFor, lockedVoiceScript, voiceChoiceOf, withVoiceChoice } from "@/lib/projects";
 import { composeVariants, fitScript, scriptFromIdeas, type Ideas } from "@/components/video/composer/variants";
@@ -468,6 +470,31 @@ export async function runChecks(): Promise<Check[]> {
     const css = readdirSync(dir).filter((n) => /\.tsx?$/.test(n) && n !== "radial.tsx").flatMap((n) => (readFileSync(`${dir}/${n}`, "utf8").match(/radial-gradient\(|conic-gradient\(|backdropFilter/g) ?? []).map((m) => `${n}: ${m}`));
     add("download-safe drawing (no CSS radial gradients / backdrop blur)", css.length === 0, css.slice(0, 3).join(" · ") || "SVG gradients");
     add("engine switch defaults off", normalizeConfig(null).engine.composer === "off" && normalizeConfig({ engine: { composer: "admins" } }).engine.composer === "admins" && normalizeConfig({ engine: { composer: "x" } }).engine.composer === "off", "off · admins · bad → off");
+  }
+
+  section = "AI only for the voice";
+  {
+    const on = effectiveConfig(normalizeConfig({ engine: { voiceOnly: true, composer: "off" }, tasks: { composer: { on: true } }, image: { on: true }, voice: { on: false } }));
+    const offJobs = Object.entries(on.tasks).filter(([, t]) => t.on).map(([k]) => k);
+    add("every AI job but the voice is off (the brief too)", !offJobs.length && !on.image.on && on.voice.on, offJobs.join(", ") || `${Object.keys(on.tasks).length} text jobs off · images off · voice on`);
+    add("the Composer composes every video, by rule", on.engine.composer === "all" && !on.tasks.composer.on, "engine: all · Composer Director off");
+    add("off by default; the saved settings are kept", !normalizeConfig(null).engine.voiceOnly && effectiveConfig(normalizeConfig({ tasks: { composer: { on: true } } })).tasks.composer.on, "voiceOnly false → as saved");
+    const script = "Most clinics still run their day on phone calls. Bookwell puts your whole clinic in one simple app! Try it free?";
+    const b = ruleBrief({ script, productName: "Bookwell", cta: "Book a demo" });
+    add("rule brief: the script word for word, a scene per sentence", b.script === script && b.scenes.length === 3 && b.scenes.map((x) => x.narration).join(" ") === script && b.product_name === "Bookwell" && !b.supported_claims.length, `${b.scenes.length} scenes · ${b.scenes.map((x) => x.duration_seconds).join("/")} s`);
+    // staging: never fixed — across seeds, every family and many ways
+    const bw = bookwellPlan();
+    const dur = Math.round((bw.words[bw.words.length - 1].end + 1.2) * FPS);
+    const base = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 11, count: 1 }).plans[0];
+    const st = Array.from({ length: 60 }, (_, k) => stageOf({ ...base, journey: null, link: null, links: null }, 1000 + k * 7919));
+    const fams = new Set(st.map((x) => x.family)), names = new Set(st.map(stagingName)), hops = new Set(st.flatMap((x) => x.links ?? []).filter(Boolean));
+    add("staging: every family and many ways over 60 videos", fams.size === 6 && names.size >= 14 && hops.size >= 6, `${fams.size} families · ${names.size} stagings · ways in: ${[...hops].join(", ")}`);
+    const fits = st.every((x) => !x.links || (x.links.length === base.scenes.length && x.links.every((l, i) => l !== "carry" || (base.scenes[i - 1].items.some((it) => !["badge", "shape", "cursor"].includes(it.kind))))));
+    add("staging: a way per move, only where its two scenes allow it", fits, "carry only from a scene with a thing");
+    const again = Array.from({ length: 40 }, (_, k) => stageOf(base, 5000 + k * 104729, [st[0], st[0], st[0]])).filter((x) => stagingName(x) === stagingName(st[0])).length;
+    add("staging: what the customer had lately is rarer", again <= 6, `${again}/40 the same as the last three`);
+    const recap = staged(base, { family: "path", journey: "snake", link: "line", links: null, guide: null, recap: true });
+    add("staged recap adds its seconds; cuts change nothing", recap.duration === base.duration + RECAP && staged(base, { family: "cuts", journey: null, link: null, links: null, guide: null, recap: true }) === base, `+${recap.duration - base.duration} frames`);
   }
 
   section = "composer words";

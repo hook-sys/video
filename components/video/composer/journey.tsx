@@ -6,6 +6,7 @@ import { hsl } from "./art";
 import { clamp01, mix, ramp } from "./motion";
 import { Radial, Tiles } from "./radial";
 import type { ComposerPlan, JourneyKind } from "./types";
+import { RECAP } from "./staging";
 
 // Journey: the whole film is one big canvas. Every scene has its own place on
 // it; between scenes the camera travels there (along a line it draws as it
@@ -211,15 +212,16 @@ export function turnCam(f: number, g: Turn, mv: { start: number; dur: number }[]
 // canvas is in view (every scene where it was, the way between them drawn),
 // straightening as it goes, and holds there while the brand comes up over it.
 // It adds its own seconds to the film.
-export const RECAP = 130;
-export const withRecap = (plan: ComposerPlan): ComposerPlan => (plan.recap ? plan : { ...plan, recap: true, duration: plan.duration + RECAP });
 // (on a sine: the zoom goes a long way, so its fastest moment must stay calm)
-export const recapAt = (f: number, duration: number) => (1 - Math.cos(ramp(f, duration - RECAP, 66) * Math.PI)) / 2;
+export const recapAt = (f: number, duration: number) => (1 - Math.cos(ramp(f, duration - RECAP, 78) * Math.PI)) / 2;
 export function recapped(cam: Cam, f: number, duration: number, st: P[]): Cam {
   const k = recapAt(f, duration);
   if (k <= 0) return cam;
   const o = overviewOf(st);
-  return { ...cam, x: mix(cam.x, o.c.x, k), y: mix(cam.y, o.c.y, k), z: Math.exp(mix(Math.log(cam.z), Math.log(o.z), k)), rot: mix(cam.rot, 0, k), speed: 0 };
+  // (it pulls back first and travels to the middle as it does: far from the
+  // middle, moving while still close in would sweep the whole frame)
+  const kp = Math.pow(k, 1.7);
+  return { ...cam, x: mix(cam.x, o.c.x, kp), y: mix(cam.y, o.c.y, kp), z: Math.exp(mix(Math.log(cam.z), Math.log(o.z), k)), rot: mix(cam.rot, 0, k), speed: 0 };
 }
 
 // canvas → screen

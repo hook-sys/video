@@ -74,6 +74,12 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
                 <option value="admins">Admins only — Composer videos on admins&apos; projects (compare)</option>
                 <option value="all">Everyone — Composer videos for every new project</option>
               </select>
+              <label className="mt-2 flex items-start gap-2">
+                <input type="checkbox" name="engine_voice_only" defaultChecked={c.engine.voiceOnly} className="mt-1" />
+                <span>
+                  <b className="text-zinc-300">AI only for the voice.</b> <span className="text-zinc-500">The voice is spoken (and its words timed) by AI; nothing else is. The customer&apos;s own script is the narration (a project without one asks for it), screenshots are shown but not read, no images are generated, and every video is the Composer&apos;s, composed by its own rules (the settings below are kept but not used). &quot;Change it&quot; gives a new version instead of following a written direction.</span>
+                </span>
+              </label>
             </div>
           </Card>
 

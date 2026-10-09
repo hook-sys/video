@@ -57,6 +57,7 @@ import { canUseDevTools } from "@/lib/dev-tools";
 import {
   flowBudgetMs,
   NEEDS_SCREENSHOTS_MESSAGE,
+  OWN_SCRIPT_MESSAGE,
   PIPELINE_BUDGET_MS,
   RENDER_WORKER_MESSAGE,
   type PipelineStep,
@@ -75,6 +76,7 @@ import { flowEngineEnabled, needsLegacyImages, storyEngineEnabled, usableFlow, u
 import { generateFlowScript } from "@/lib/ai/flow-director";
 import { generateStories } from "@/lib/ai/story-director";
 import { generateComposerIdeas, ideasOf, reviseComposerPlan } from "@/lib/ai/composer-director";
+import { ruleBrief } from "@/lib/rule-brief";
 import { CHANGE_WORDS, COMPOSER_CHANGES } from "@/components/video/composer/types";
 import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { scriptWords } from "@/components/video/composer/words";
@@ -318,6 +320,30 @@ export async function generateBrief(projectId: string) {
     return;
   }
 
+  // "AI only for the voice": the brief is written by rule from the
+  // customer's own script (lib/rule-brief.ts); no AI call.
+  if (!(await getAiConfig()).tasks.brief.on) {
+    const script = lockedScriptOf(project) || lockedVoiceScript(project.direction);
+    if (!script) {
+      await fail(OWN_SCRIPT_MESSAGE);
+      revalidatePath(`/projects/${projectId}`);
+      return;
+    }
+    const { data: fresh } = await admin.from("projects").select("brief, voice_status, duration_seconds").eq("id", projectId).single();
+    const kept = Object.fromEntries(Object.entries((fresh?.brief as Record<string, unknown> | null) ?? {}).filter(([k]) => ["scene", "flow", "story", "shots", "variants", "diagnostics", "taste", "clean", "composer"].includes(k)));
+    let next = ruleBrief({ script, productName: project.brand_name, summary: capture?.meta_description, cta: project.call_to_action });
+    if (fresh?.voice_status === "completed" && fresh.duration_seconds) {
+      try {
+        next = { ...next, scenes: fitDurations(next, fresh.duration_seconds).scenes };
+      } catch {
+        // (keeps the even pace)
+      }
+    }
+    await briefUpdate({ brief: { ...next, ...kept }, brief_status: "completed", brief_error: null });
+    revalidatePath(`/projects/${projectId}`);
+    return;
+  }
+
   // Claim the job so double submits don't trigger two paid AI calls.
   const staleBefore = new Date(Date.now() - STALE_GENERATION_MS).toISOString();
   const { data: claimed } = await briefUpdate({ brief_status: "generating", brief_error: null })
@@ -534,11 +560,13 @@ async function composerSet(
   const brand = { name: project.brand_name?.trim() || brief?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief?.cta || "Get started", url: host, icon: null };
   const { data: past } = await admin.from("projects").select("composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(12);
   const seenArts = (past ?? []).flatMap((p) => ((p.composer as { videos?: { script?: { art?: { display?: string; field?: string } } }[] } | null)?.videos ?? []).map((v) => v.script?.art ?? {}));
+  // how this customer's last videos were staged (the next is staged otherwise)
+  const seenStaging = (past ?? []).flatMap((p) => ((p.composer as { videos?: StoredComposition[] } | null)?.videos ?? []).map((v) => v.staging ?? null)).slice(0, 8).reverse();
   const seen = { display: [...new Set(seenArts.map((a) => a.display).filter((x): x is string => !!x))].slice(0, 12), field: [...new Set(seenArts.map((a) => a.field).filter((x): x is string => !!x))].slice(0, 6) };
   const result = await generateComposerIdeas({ words, brand, product: brief?.product_summary ?? null, seen }, addUsage);
   const { count: screens } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
   // one video, the Director's best (its versions follow from "Change it")
-  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: result.ideas, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, count: 1 });
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: result.ideas, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, count: 1, avoidStaging: seenStaging });
   console.info("composer director:", { projectId, source: result.source, ms: result.ms, scenes: result.ideas?.scenes.length ?? 0, problems: [...result.problems, ...set.problems].slice(0, 8) });
   return { videos: set.videos, ideas: result.ideas, indexing: "script" as const, source: result.source, changes: [] as { direction: string; at: string; ok: boolean }[], problems: [...result.problems, ...set.problems].slice(0, 20), at: new Date().toISOString() };
 }
@@ -1338,6 +1366,10 @@ async function runPipeline(projectId: string, userId: string) {
     if (!captured && !shots && !own?.direction?.trim()) {
       return void (await fail(NEEDS_SCREENSHOTS_MESSAGE, "needs_input"));
     }
+    // ("AI only for the voice": nothing writes a script, so the customer's own is needed)
+    if (!(await getAiConfig()).tasks.brief.on && !lockedVoiceScript(own?.direction)) {
+      return void (await fail(OWN_SCRIPT_MESSAGE, "needs_input"));
+    }
 
     // 2. Product brief + script. A locked script (the customer's own words)
     // needs no brief for the voice or the Shot Director, so the brief is
@@ -1500,7 +1532,10 @@ export async function changeComposerVideo(projectId: string, direction: string):
   if (!user) redirect("/login");
   const text = String(direction ?? "").trim();
   const count = text.split(/\s+/).filter(Boolean).length;
-  if (!text) return { ok: false, message: "Write what you want changed." };
+  const ai = await getAiConfig();
+  // ("AI only for the voice": nothing reads a written direction — a change is a new version, composed by rule)
+  const byRule = ai.engine.voiceOnly;
+  if (!text && !byRule) return { ok: false, message: "Write what you want changed." };
   if (count > CHANGE_WORDS) return { ok: false, message: `Keep it to ${CHANGE_WORDS} words (now ${count}).` };
   const admin = createAdminClient();
   if (!(await composerOn(admin, user.id))) return { ok: false, message: "Changes are not available yet." };
@@ -1517,12 +1552,11 @@ export async function changeComposerVideo(projectId: string, direction: string):
   const current = composer.videos[composer.videos.length - 1];
   const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
   const brand = { name: project.brand_name?.trim() || raw?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || raw?.cta || "Get started", url: host, icon: null };
-  const ai = await getAiConfig();
   let usage: BriefUsage | null = null;
-  const result = await reviseComposerPlan({ words, brand, product: raw?.product_summary ?? null, plan: ideasOf(current.script), direction: text }, (u) => (usage = u));
+  const result = byRule ? { ideas: null, ms: 0, problems: [] as string[] } : await reviseComposerPlan({ words, brand, product: raw?.product_summary ?? null, plan: ideasOf(current.script), direction: text }, (u) => (usage = u));
   const seed = (current.seed + 7919) >>> 0;
-  const set = result.ideas ? composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed, ideas: result.ideas, count: 1 }) : null;
-  const video = set?.videos[0]?.source === "director" ? set.videos[0] : null;
+  const set = result.ideas || byRule ? composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed, ideas: result.ideas ?? undefined, count: 1, avoidStaging: composer.videos.map((v) => v.staging ?? null) }) : null;
+  const video = set?.videos[0] && (byRule || set.videos[0].source === "director") ? set.videos[0] : null;
   const changes = [...(composer.changes ?? []), { direction: text.slice(0, 9000), at: new Date().toISOString(), ok: !!video }];
   await admin
     .from("projects")

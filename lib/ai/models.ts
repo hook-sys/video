@@ -38,7 +38,11 @@ export type AiConfig = {
   prices: Record<string, ModelPrice>;
   // the Composer engine (every scene composed by its Director): off, for
   // admins' projects only (to compare with the studio), or for everyone
-  engine: { composer: ComposerMode };
+  // voiceOnly: AI speaks the voice (and times its words) and does nothing
+  // else — the customer's own script, no screenshot reading, no generated
+  // images, the Composer for everyone with its rule-based director (see
+  // effectiveConfig)
+  engine: { composer: ComposerMode; voiceOnly: boolean };
 };
 export type ComposerMode = "off" | "admins" | "all";
 
@@ -68,7 +72,21 @@ export function defaultConfig(): AiConfig {
     voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     image: { on: true, model: "", template: "" },
     prices: {},
-    engine: { composer: "off" },
+    engine: { composer: "off", voiceOnly: false },
+  };
+}
+
+// What the pipeline runs with: with "AI only for the voice" every other AI
+// job is off (the brief too: it is written by rule from the customer's own
+// script) and the Composer composes every video by its own rules.
+export function effectiveConfig(c: AiConfig): AiConfig {
+  if (!c.engine.voiceOnly) return c;
+  return {
+    ...c,
+    tasks: Object.fromEntries(Object.entries(c.tasks).map(([k, t]) => [k, { ...t, on: false }])) as AiConfig["tasks"],
+    image: { ...c.image, on: false },
+    voice: { ...c.voice, on: true },
+    engine: { composer: "all", voiceOnly: true },
   };
 }
 
@@ -95,7 +113,7 @@ export function normalizeConfig(raw: unknown): AiConfig {
         .filter(([k]) => k.trim())
         .map(([k, p]) => [k.trim().slice(0, 200), { in: price(p?.in), out: price(p?.out), unit: price(p?.unit) }]),
     ),
-    engine: { composer: (["off", "admins", "all"] as const).find((m) => m === r.engine?.composer) ?? "off" },
+    engine: { composer: (["off", "admins", "all"] as const).find((m) => m === r.engine?.composer) ?? "off", voiceOnly: bool(r.engine?.voiceOnly, false) },
   };
 }
 
@@ -103,6 +121,10 @@ export function normalizeConfig(raw: unknown): AiConfig {
 // the offline checks) means the defaults.
 let cached: { at: number; config: AiConfig } | null = null;
 export async function getAiConfig(): Promise<AiConfig> {
+  return effectiveConfig(await getStoredAiConfig());
+}
+// (as saved on /admin/models, before "AI only for the voice" turns jobs off)
+export async function getStoredAiConfig(): Promise<AiConfig> {
   if (cached && Date.now() - cached.at < 15_000) return cached.config;
   let config = defaultConfig();
   try {

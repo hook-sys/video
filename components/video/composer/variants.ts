@@ -2,6 +2,7 @@ import { resolveIcon } from "../icons";
 import { DISPLAY_FACES, TEXT_FACES, rng } from "./art";
 import { LENSES, autoScript, drawArt } from "./auto";
 import { placeAll, type Problem } from "./layout";
+import { type Staging, stageOf, staged } from "./staging";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
 import type { ArtT, Brand, ComposerPlan, ItemT, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
 
@@ -125,12 +126,13 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
   return { art, scenes };
 }
 
-export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number };
+export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[] };
 
-// A video as stored: its script and seed (laid out again on the voice's words when shown).
-export type StoredComposition = { script: ScriptT; seed: number; source: ComposerPlan["source"] };
+// A video as stored: its script and seed (laid out again on the voice's words
+// when shown) and how it is staged (staging.ts; older videos: cuts).
+export type StoredComposition = { script: ScriptT; seed: number; source: ComposerPlan["source"]; staging?: Staging | null };
 
-export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4 }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
+export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [] }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
   const problems: string[] = [];
   const plans: ComposerPlan[] = [];
   const videos: StoredComposition[] = [];
@@ -149,8 +151,10 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
     }
     placed.problems.forEach((p) => problems.push(`video ${v + 1}, scene ${p.scene + 1}: ${p.what}`));
     for (const k of ["display", "field", "key", "surface", "hue"] as const) (used[k] ??= []).push(placed.plan.art[k]);
-    plans.push(placed.plan);
-    videos.push({ script, seed: s, source: placed.plan.source });
+    // how it is staged: chosen by rule for what its scenes hold, unlike the ones before it
+    const staging = stageOf(placed.plan, s, [...avoidStaging, ...videos.map((x) => x.staging ?? null)]);
+    plans.push(staged(placed.plan, staging));
+    videos.push({ script, seed: s, source: placed.plan.source, staging });
   }
   return { plans, videos, problems };
 }

@@ -46,7 +46,7 @@ export async function saveAiModels(formData: FormData) {
     voice: { on: formData.get("voice_on") === "on", model: text(formData, "voice_model"), template: text(formData, "voice_template", 2000), female: text(formData, "voice_female", 80), male: text(formData, "voice_male", 80), choices: text(formData, "voice_choices", 4000), fallback: formData.get("voice_fallback") === "on" },
     image: { on: formData.get("image_on") === "on", model: text(formData, "image_model"), template: text(formData, "image_template", 2000) },
     prices,
-    engine: { composer: text(formData, "engine_composer") },
+    engine: { composer: text(formData, "engine_composer"), voiceOnly: formData.get("engine_voice_only") === "on" },
   });
   if (!validTemplate(next.voice.template) || !validTemplate(next.image.template)) redirect("/admin/models?error=" + encodeURIComponent("An input template is not a valid JSON object."));
   const { data: before } = await s.db.from("app_settings").select("value").eq("key", SETTING_KEY).maybeSingle();

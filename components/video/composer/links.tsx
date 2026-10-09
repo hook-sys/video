@@ -102,9 +102,11 @@ export function linksOf(plan: ComposerPlan, st: P[], mv: Move[], texts: (TextBlo
   for (let i = 1; i < n; i++) {
     const A = plan.scenes[i - 1], B = plan.scenes[i];
     const m = mv[i], lift = liftOf(m), land = landOf(m);
-    if (link === "lead") {
+    // (each move its own way when the plan says so; a guide goes the whole way)
+    const here = link === "lead" ? "lead" : plan.links?.[i] ?? link;
+    if (here === "lead") {
       hops[i] = { kind: "lead", a: rests[i - 1], b: rests[i], loop: guide === "plane" && i % 2 === 1 };
-    } else if (link === "carry") {
+    } else if (here === "carry") {
       const there = (it: PlacedItem) => !isAccent(it) && it.at <= lift;
       const src = A.items.map((it, j) => ({ it, j })).filter(({ it }) => there(it)).sort((x, y) => area(y.it.box) - area(x.it.box));
       const dst = B.items.map((it, j) => ({ it, j })).filter(({ it }) => !isAccent(it) && it.at <= B.from + 24).sort((x, y) => area(y.it.box) - area(x.it.box));
@@ -115,7 +117,7 @@ export function linksOf(plan: ComposerPlan, st: P[], mv: Move[], texts: (TextBlo
       hide.set(`${i}:${dest.j}`, [-Infinity, land]);
       // it lands whole (its own way in already over)
       scenes[i].items[dest.j] = { ...dest.it, at: Math.min(dest.it.at, land - 30) };
-    } else if (link === "word") {
+    } else if (here === "word") {
       const ta = texts[i - 1], tb = texts[i];
       if (!ta || !tb || !tb.words.length) continue;
       const said = ta.words.map((w, wi) => ({ w, wi })).filter(({ w }) => w.at <= lift - 4);

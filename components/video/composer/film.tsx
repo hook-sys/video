@@ -11,7 +11,8 @@ import { Headline } from "./text";
 import { CameraMotionBlur, Trail } from "@remotion/motion-blur";
 import { noise2D } from "@remotion/noise";
 import { Present, presentationOf } from "./present";
-import { type Cam, JourneyField, RECAP, Roads, arriving, cameraAt, moves, recapped, stations, styleOf, toScreen, turnCam, turnGeometry, worldTransform } from "./journey";
+import { RECAP } from "./staging";
+import { type Cam, JourneyField, Roads, arriving, cameraAt, moves, recapped, stations, styleOf, toScreen, turnCam, turnGeometry, worldTransform } from "./journey";
 import { PAGE, Structure, scrollAt } from "./structure";
 import { type Links, Travellers, linksOf } from "./links";
 import { depthHops, hopAt, innerTransform, isDepth, outerTransform, tunnelAt, zoomAt } from "./depth";
@@ -228,7 +229,7 @@ function Journey(props: JourneyProps) {
 function RecapCard(props: JourneyProps) {
   const f = useCurrentFrame();
   const { plan } = props;
-  const at = plan.duration - RECAP + 58;
+  const at = plan.duration - RECAP + 66;
   const veil = clamp01((f - at + 6) / 22);
   if (veil <= 0) return null;
   const last = plan.scenes[plan.scenes.length - 1];
@@ -332,7 +333,9 @@ function Depth(props: DepthProps) {
     const front = Math.abs(ang) < 90;
     return (
       <>
-        {props.field(plan.scenes[front ? seg - 1 : seg].dark)}
+        {/* (behind the card the canvas turns from one scene's to the next's over the whole flip — never at once) */}
+        {props.field(plan.scenes[seg].dark)}
+        <AbsoluteFill style={{ opacity: 1 - u }}>{props.field(plan.scenes[seg - 1].dark)}</AbsoluteFill>
         <AbsoluteFill style={{ background: `rgba(0,0,0,${(0.3 * edge).toFixed(2)})` }} />
         {front ? face(seg - 1, ang) : face(seg, ang - 180 * sign)}
       </>

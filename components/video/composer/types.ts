@@ -160,9 +160,11 @@ export type ComposerPlan = {
   // one canvas, the camera travelling from scene to scene (see journey.tsx)
   journey?: JourneyKind | null;
   link?: LinkKind | null;
+  // the way into each scene, when the moves differ (index = the scene arrived at; else `link`)
+  links?: (LinkKind | null)[] | null;
   guide?: GuideKind | null;
   // a journey's last seconds: the camera pulls back to show the whole way the
-  // film came, and the brand comes up over it (see journey.tsx withRecap)
+  // film came, and the brand comes up over it (see staging.ts withRecap)
   recap?: boolean | null;
 };
 export type ComposerProps = { plan: ComposerPlan; audioUrl?: string | null; webAudio?: boolean; bare?: boolean };

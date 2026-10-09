@@ -18,6 +18,11 @@ export type PipelineStep = (typeof PIPELINE_STEPS)[number]["key"];
 export const NEEDS_SCREENSHOTS_MESSAGE =
   "We couldn't read enough about your product from the website. To avoid inventing features, please create a new project and upload product screenshots.";
 
+// Shown when the brief is written by rule ("AI only for the voice"): nothing
+// writes a script then, so the voice needs the customer's own.
+export const OWN_SCRIPT_MESSAGE =
+  "Please write the script for the voice — the words your video should say. Create a new project and type it in the script box.";
+
 export const RENDER_WORKER_MESSAGE = "Video rendering requires the production render worker.";
 
 // The whole pipeline runs within one request (maxDuration 300 s).

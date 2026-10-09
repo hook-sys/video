@@ -52,7 +52,9 @@ const QUICK = [
 ] as const;
 const wordsIn = (t: string) => t.split(/\s+/).filter(Boolean).length;
 
-export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, name, className, secondaryClassName }: { projectId: string; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string }) {
+// byRule ("AI only for the voice"): nothing reads a written direction, so a
+// change is a new version, staged and composed anew by rule.
+export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, name, className, secondaryClassName, byRule = false }: { projectId: string; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; secondaryClassName: string; byRule?: boolean }) {
   // the newest version unless the customer picks an earlier one
   const [picked, setPicked] = useState<number | null>(null);
   const selected = Math.min(picked ?? plans.length - 1, plans.length - 1);
@@ -148,26 +150,37 @@ export function ComposerStudio({ projectId, plans, changes, screens, audioUrl, n
           </div>
           <div className="flex flex-col gap-3 rounded-3xl border border-foreground/10 bg-foreground/[0.02] p-5">
             <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold">Change it</h2>
+              <h2 className="text-sm font-semibold">{byRule ? "Another version" : "Change it"}</h2>
               <span className="text-xs text-foreground/50">{left} of {COMPOSER_CHANGES} left</span>
             </div>
-            <p className="text-xs text-foreground/55">Tell the Director what to change — colours, mood, pace, any scene, what to show. Your script and voice stay the same.</p>
-            <div className="flex flex-wrap gap-1.5">
-              {QUICK.map(([label, line]) => (
-                <button key={label} type="button" disabled={!left || pending} onClick={() => setDirection((d) => (d.trim() ? `${d.trim()}\n${line}` : line))} className="rounded-full border border-foreground/10 px-2.5 py-1 text-xs hover:bg-foreground/5 disabled:opacity-40">
-                  {label}
+            {byRule ? (
+              <>
+                <p className="text-xs text-foreground/55">A new version of this video: another look and another way of telling it. Your script and voice stay the same.</p>
+                <button type="button" disabled={!left || pending || busy} onClick={change} className={secondaryClassName}>
+                  {pending ? "Making a new version…" : left ? "↻ New version" : "No versions left"}
                 </button>
-              ))}
-            </div>
-            <textarea value={direction} onChange={(e) => setDirection(e.target.value)} disabled={!left || pending} rows={6} placeholder={'e.g. "Make the opening darker and more dramatic. In the scene about reminders show a phone with the notification. Use blue instead of purple."'} className="w-full resize-y rounded-xl border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-violet-500 disabled:opacity-50" />
-            <div className="flex items-center justify-between text-xs">
-              <span className={count > CHANGE_WORDS ? "text-rose-600 dark:text-rose-400" : "text-foreground/50"}>
-                {count} / {CHANGE_WORDS} words
-              </span>
-            </div>
-            <button type="button" disabled={!left || pending || !count || count > CHANGE_WORDS || busy} onClick={change} className={secondaryClassName}>
-              {pending ? "Changing your video…" : left ? "✎ Change it" : "No changes left"}
-            </button>
+              </>
+            ) : (
+              <>
+            <p className="text-xs text-foreground/55">Tell the Director what to change — colours, mood, pace, any scene, what to show. Your script and voice stay the same.</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK.map(([label, line]) => (
+                    <button key={label} type="button" disabled={!left || pending} onClick={() => setDirection((d) => (d.trim() ? `${d.trim()}\n${line}` : line))} className="rounded-full border border-foreground/10 px-2.5 py-1 text-xs hover:bg-foreground/5 disabled:opacity-40">
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <textarea value={direction} onChange={(e) => setDirection(e.target.value)} disabled={!left || pending} rows={6} placeholder={'e.g. "Make the opening darker and more dramatic. In the scene about reminders show a phone with the notification. Use blue instead of purple."'} className="w-full resize-y rounded-xl border border-foreground/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-violet-500 disabled:opacity-50" />
+                <div className="flex items-center justify-between text-xs">
+                  <span className={count > CHANGE_WORDS ? "text-rose-600 dark:text-rose-400" : "text-foreground/50"}>
+                    {count} / {CHANGE_WORDS} words
+                  </span>
+                </div>
+                <button type="button" disabled={!left || pending || !count || count > CHANGE_WORDS || busy} onClick={change} className={secondaryClassName}>
+                  {pending ? "Changing your video…" : left ? "✎ Change it" : "No changes left"}
+                </button>
+              </>
+            )}
             {note && <p className={`text-xs ${note.ok ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>{note.message}</p>}
           </div>
         </aside>

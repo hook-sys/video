@@ -26,18 +26,23 @@ export const isDepth = (k: string | null | undefined): k is DepthKind => !!k && 
 export type DepthHop = { kind: DepthKind; c: P; s: number; item: number };
 
 const area = (b: Box) => b.w * b.h;
+const MAX_ZOOM = 0.018;
 // the inner scene fits inside its window (a little in from its edges)
 const fit = (b: Box) => Math.min((b.w * 0.86) / 1920, (b.h * 0.8) / 1080);
 
 export function depthHops(plan: ComposerPlan, mv: Move[]): { plan: ComposerPlan; hops: (DepthHop | null)[] } {
-  const want = plan.link as DepthKind;
   const scenes = plan.scenes.map((s) => ({ ...s, items: [...s.items] }));
   const hops = plan.scenes.map((B, i): DepthHop | null => {
     if (!i) return null;
     const A = plan.scenes[i - 1];
     const lift = mv[i].start;
+    // (each move its own way when the plan says so)
+    const want = (plan.links?.[i] ?? plan.link) as DepthKind;
     // a window is a thing with room in it (never the ask's button)
-    const big = (it: PlacedItem) => it.box.w >= 220 && it.box.h >= 150 && it.kind !== "button";
+    // (a window it can go into or out of in the time it has: the zoom grows
+    // evenly, ×e at most every 55 frames, or the frame changes too much at once)
+    const calm = (it: PlacedItem) => Math.log(1 / fit(it.box)) / mv[i].dur <= MAX_ZOOM;
+    const big = (it: PlacedItem) => it.box.w >= 220 && it.box.h >= 150 && it.kind !== "button" && calm(it);
     // something of the next scene to see in the window from the start
     const shows = B.items.some((it) => !isAccent(it) && it.at <= B.from + 24);
     if (want === "flip") return { kind: "flip", c: { x: 960, y: 540 }, s: 1, item: -1 };

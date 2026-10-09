@@ -23,6 +23,7 @@ import { getProjectCostSummary } from "@/lib/costs/benchmark";
 import { canUseDevTools } from "@/lib/dev-tools";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
+import { getStoredAiConfig } from "@/lib/ai/models";
 import { SubmitButton } from "@/components/submit-button";
 import { Logo } from "@/components/brand/logo";
 import { buildRenderInput } from "@/lib/render-input";
@@ -56,6 +57,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   } = await supabase.auth.getUser();
   const dev = !!user && (await canUseDevTools(supabase, user.id));
   // 4K can be switched off from /admin/settings (admins still see it).
+  // ("AI only for the voice": a change is a new version, composed by rule)
+  const byRule = (await getStoredAiConfig()).engine.voiceOnly;
   const fourKOn = (await getSettings()).feature_4k !== false || (!!user && (await userAccess(supabase, user.id)).admin);
 
   const { data: screenshots } = await supabase
@@ -213,7 +216,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {/* The Composer (new engine): four videos composed scene by scene. */}
       {ready && composer && (
-        <ComposerStudio projectId={id} plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={preview?.audioUrl ?? null} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} />
+        <ComposerStudio projectId={id} plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={preview?.audioUrl ?? null} name={title} className={primaryBtn} secondaryClassName={secondaryBtn} byRule={byRule} />
       )}
 
       {/* The clean film templates: four different videos of the same script. */}
