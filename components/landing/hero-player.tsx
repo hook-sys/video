@@ -2,16 +2,15 @@
 
 import { Player, type PlayerRef } from "@remotion/player";
 import { useEffect, useRef, useState } from "react";
-import { FlowScene, type FlowSceneProps } from "@/components/video/flow/flow-scene";
-import type { FlowPlan } from "@/components/video/flow/types";
-import { FPS } from "@/components/video/types";
+import { ComposerFilm } from "@/components/video/composer/film";
+import { FPS, type ComposerPlan, type ComposerProps } from "@/components/video/composer/types";
 import type { HeroCaption } from "./hero-plan";
 import { useSound } from "./sound";
 
-// MotionBrief's own promo, looping, made with its scene engine. Muted unless
+// MotionBrief's own promo, looping, made with its Composer. Muted unless
 // the page's sound is on; the caption line changes on the frame its words
 // start.
-export function HeroPlayer({ plan, captions }: { plan: FlowPlan; captions: HeroCaption[] }) {
+export function HeroPlayer({ plan, captions }: { plan: ComposerPlan; captions: HeroCaption[] }) {
   const ref = useRef<PlayerRef>(null);
   const [line, setLine] = useState(0);
   const { on } = useSound();
@@ -48,8 +47,8 @@ export function HeroPlayer({ plan, captions }: { plan: FlowPlan; captions: HeroC
       <div className="relative w-full overflow-hidden rounded-2xl shadow-2xl shadow-indigo-900/50 ring-1 ring-white/25">
         <Player
           ref={ref}
-          component={FlowScene}
-          inputProps={{ plan } satisfies FlowSceneProps}
+          component={ComposerFilm}
+          inputProps={{ plan } satisfies ComposerProps}
           durationInFrames={plan.duration}
           fps={FPS}
           compositionWidth={1920}

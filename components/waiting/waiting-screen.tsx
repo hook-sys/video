@@ -6,14 +6,14 @@ import { HeroPlayer } from "@/components/landing/hero-player";
 import type { HeroCaption } from "@/components/landing/hero-plan";
 import { Sphere } from "@/components/landing/primitives";
 import { SoundProvider, SoundToggle } from "@/components/landing/sound";
-import type { FlowPlan } from "@/components/video/flow/types";
+import type { ComposerPlan } from "@/components/video/composer/types";
 import "@/components/landing/landing.css";
 
 // Shown while a video is being made: the landing page's stage (glow, floor,
 // spheres), the looping logo as the loading sign, and MotionBrief's own promo
 // right below it to watch meanwhile. It covers the page. `step` is the running
 // pipeline step (not shown; kept for callers).
-export function WaitingScreen({ plan, captions }: { step?: string | null; plan: FlowPlan; captions: HeroCaption[] }) {
+export function WaitingScreen({ plan, captions }: { step?: string | null; plan: ComposerPlan; captions: HeroCaption[] }) {
   return (
     <SoundProvider>
       <div className="lp fixed inset-0 z-50 overflow-y-auto">

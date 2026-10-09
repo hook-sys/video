@@ -67,17 +67,12 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
           <Card title="Video engine">
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">
-                <b className="text-zinc-300">Composer</b> (new): every scene is composed by its Director from parts — layout, things, motion, background and transition chosen for its words; no fixed scenes. The studio videos keep running beside it until it is switched on for everyone.
+                Every video is the <b className="text-zinc-300">Composer</b>&apos;s: every scene composed by its Directors from parts — layout, things, motion, background and transition chosen for its words; no fixed scenes. 16:9, 9:16 and 1:1.
               </p>
-              <select name="engine_composer" defaultValue={c.engine.composer} className={`${input} md:w-80`}>
-                <option value="off">Off — studio videos only</option>
-                <option value="admins">Admins only — Composer videos on admins&apos; projects (compare)</option>
-                <option value="all">Everyone — Composer videos for every new project</option>
-              </select>
               <label className="mt-2 flex items-start gap-2">
                 <input type="checkbox" name="engine_voice_only" defaultChecked={c.engine.voiceOnly} className="mt-1" />
                 <span>
-                  <b className="text-zinc-300">AI only for the voice.</b> <span className="text-zinc-500">The voice is spoken (and its words timed) by AI; nothing else is. The customer&apos;s own script is the narration (a project without one asks for it), screenshots are shown but not read, no images are generated, and every video is the Composer&apos;s, composed by its own rules (the settings below are kept but not used). &quot;Change it&quot; gives a new version instead of following a written direction.</span>
+                  <b className="text-zinc-300">AI only for the voice.</b> <span className="text-zinc-500">The voice is spoken (and its words timed) by AI; nothing else is. The customer&apos;s own script is the narration (a project without one asks for it), screenshots are shown but not read, and every video is composed by the Composer&apos;s own rules (the settings below are kept but not used). &quot;Change it&quot; gives a new version instead of following a written direction.</span>
                 </span>
               </label>
             </div>

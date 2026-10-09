@@ -39,7 +39,6 @@ export function DashboardView({
           </Link>
           <nav className="ml-6 hidden items-center gap-1 text-sm md:flex">
             <Link href="/dashboard" className="rounded-lg bg-foreground/[0.06] px-3 py-1.5 font-medium">Videos</Link>
-            <Link href="/crm" className="rounded-lg px-3 py-1.5 text-foreground/60 transition hover:bg-foreground/[0.04] hover:text-foreground">CRM</Link>
             {admin && (
               <Link href="/admin" className="rounded-lg px-3 py-1.5 text-violet-600 transition hover:bg-violet-500/10 dark:text-violet-300">Admin</Link>
             )}
@@ -54,7 +53,6 @@ export function DashboardView({
               </summary>
               <div className="absolute right-0 mt-2 w-60 rounded-2xl border border-foreground/10 bg-background p-2 shadow-2xl shadow-black/20">
                 <p className="truncate px-3 py-2 text-xs text-foreground/50">{email}</p>
-                <Link href="/crm" className="block rounded-lg px-3 py-2 text-sm hover:bg-foreground/[0.05] md:hidden">CRM</Link>
                 {admin && <Link href="/admin" className="block rounded-lg px-3 py-2 text-sm text-violet-600 hover:bg-violet-500/10 md:hidden dark:text-violet-300">Admin panel</Link>}
                 <form action={logout}>
                   <button className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-foreground/[0.05]">Log out</button>

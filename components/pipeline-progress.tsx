@@ -1,4 +1,4 @@
-import { PIPELINE_STEPS, RENDER_WORKER_MESSAGE } from "@/lib/pipeline";
+import { PIPELINE_STEPS } from "@/lib/pipeline";
 
 type Props = {
   status: string;
@@ -60,12 +60,6 @@ export function PipelineProgress({ status, step, error }: Props) {
           <p className="text-red-600">{failedStep.error}</p>
           {error && <p className="text-xs text-foreground/60">Details: {error}</p>}
         </div>
-      )}
-      {status === "preview_ready" && (
-        <p className="text-amber-600">
-          Your video preview is ready. {error === RENDER_WORKER_MESSAGE ? `${error} ` : ""}
-          The final MP4 isn&apos;t available in this environment yet.
-        </p>
       )}
     </section>
   );

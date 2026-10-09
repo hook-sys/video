@@ -8,14 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "check:story": "node scripts/story-check/run.mjs",
     "icons:build": "node scripts/icons/build.mjs",
     "lottie:build": "node scripts/lottie/build.mjs",
     "check:parity": "node scripts/parity/run.mjs",
-    "hero3d:build": "node scripts/hero3d/build.mjs",
-    "check:hero3d": "node scripts/hero3d/check.mjs",
-    "check:assets": "node scripts/asset-selection/run.mjs",
-    "check:recipe": "node scripts/recipe-check/run.mjs",
     "check:clean": "node scripts/clean-check/run.mjs"
   },
   "dependencies": {

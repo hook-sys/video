@@ -163,3 +163,6 @@ export function validateScreenshots(
       return `${file.name}: must be 5 MB or smaller.`;
   }
 }
+
+// A project's own seed (the same every time): its videos are drawn from it.
+export const seedFrom = (text: string) => [...text].reduce((h, ch) => (Math.imul(h, 31) + ch.charCodeAt(0)) >>> 0, 7) % 1_000_003;

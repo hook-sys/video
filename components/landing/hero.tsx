@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef } from "react";
-import type { FlowPlan } from "@/components/video/flow/types";
+import type { ComposerPlan } from "@/components/video/composer/types";
 import type { HeroCaption } from "./hero-plan";
 import { HeroPlayer } from "./hero-player";
 import { Sphere, UiWindow } from "./primitives";
@@ -11,7 +11,7 @@ import { Words } from "./reveal";
 // Hero: a deep blue stage with a perspective floor, drifting glow, floating
 // spheres and glass UI windows that follow the pointer (parallax), the
 // headline, and MotionBrief's own promo playing below it.
-export function Hero({ signedIn, plan, captions }: { signedIn: boolean; plan: FlowPlan; captions: HeroCaption[] }) {
+export function Hero({ signedIn, plan, captions }: { signedIn: boolean; plan: ComposerPlan; captions: HeroCaption[] }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const el = ref.current;

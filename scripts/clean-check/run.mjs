@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The clean explainer rulebook (components/video/clean/rules.ts): checks
-// for the rules that can be checked without a render.
+// The Composer's checks: its layouts, house rules, staging, Directors and
+// AI settings — everything that can be checked without a render.
 //
 //   npm run check:clean
 //
@@ -21,7 +21,7 @@ await build({
   platform: "node",
   format: "esm",
   outfile,
-  alias: { "@": root, "server-only": path.join(root, "scripts/story-check/server-only.mjs") },
+  alias: { "@": root, "server-only": path.join(root, "scripts/clean-check/server-only.mjs") },
   jsx: "automatic",
   external: ["remotion", "react", "react-dom", "zod", "openai"],
   logLevel: "warning",

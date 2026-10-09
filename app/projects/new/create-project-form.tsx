@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { createProject } from "@/app/projects/actions";
 import type { HeroCaption } from "@/components/landing/hero-plan";
-import type { FlowPlan } from "@/components/video/flow/types";
+import type { ComposerPlan } from "@/components/video/composer/types";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import {
   BRAND_NAME_MAX,
@@ -38,7 +38,7 @@ const AUTO_BG = "linear-gradient(135deg, #e0e7ff, #f5d0fe 50%, #0f172a 50.5%, #3
 export type Prefill = { script: string; brandName: string; websiteUrl: string; cta: string; voice?: string };
 type VoiceOption = { name: string; gender: "female" | "male"; label: string };
 
-export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = [] }: { maxTotalBytes?: number; waiting: { plan: FlowPlan; captions: HeroCaption[] }; prefill?: Prefill; voices?: VoiceOption[] }) {
+export function CreateProjectForm({ maxTotalBytes, waiting, prefill, voices = [] }: { maxTotalBytes?: number; waiting: { plan: ComposerPlan; captions: HeroCaption[] }; prefill?: Prefill; voices?: VoiceOption[] }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState(prefill?.script ?? "");
   const [format, setFormat] = useState<string>(FORMATS[0]);

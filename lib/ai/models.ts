@@ -18,12 +18,7 @@ export const TEXT_TASKS = [
   { id: "analyst", label: "Brand Analyst", help: "Reads the website, brand and script and writes the brand's profile (kind of business, character, mood, look) that every other Director works from. Off: the profile by rule.", canOff: true },
   { id: "creative", label: "Creative Director", help: "Writes the video's one idea, its hero moment and its one camera language from the brand profile, unlike the brand's earlier videos. Off: by rule from the brand's mood.", canOff: true },
   { id: "judge", label: "Judge", help: "Scores the candidate videos against the house rules and keeps the best. Off: the best by the rule score.", canOff: true },
-  { id: "composer", label: "Composer Director", help: "Composes the Composer engine's videos scene by scene (only when the Composer engine is on). Off: the Composer's own rule-based director composes them.", canOff: true },
-  { id: "clean", label: "Studio Director", help: "Splits the narration into the studio's parts (new engine, 16:9). Off: a rule-based split is used instead.", canOff: true },
-  { id: "shot", label: "Shot Director (old engine)", help: "Plans the old engine's shots. Off: skipped; the Scene Director is tried next.", canOff: true },
-  { id: "scene", label: "Scene Director (old engine)", help: "Old engine, used when the Shot Director gave nothing. Off: skipped.", canOff: true },
-  { id: "flow", label: "Flow Director (old engine)", help: "Old engine's last fallback. Off: skipped.", canOff: true },
-  { id: "story", label: "Visual Story (preview engine)", help: "Only used when VISUAL_ENGINE=story. Off: skipped.", canOff: true },
+  { id: "composer", label: "Composer Director", help: "Composes every video scene by scene. Off: the Composer's own rule-based director composes them.", canOff: true },
 ] as const;
 export type TextTask = (typeof TEXT_TASKS)[number]["id"];
 export type Provider = "fal" | "openai";
@@ -39,15 +34,11 @@ export type AiConfig = {
   image: { on: boolean; model: string; template: string };
   // USD: per 1M input / output tokens (text), per character (voice), per image
   prices: Record<string, ModelPrice>;
-  // the Composer engine (every scene composed by its Director): off, for
-  // admins' projects only (to compare with the studio), or for everyone
   // voiceOnly: AI speaks the voice (and times its words) and does nothing
-  // else — the customer's own script, no screenshot reading, no generated
-  // images, the Composer for everyone with its rule-based director (see
-  // effectiveConfig)
-  engine: { composer: ComposerMode; voiceOnly: boolean };
+  // else — the customer's own script, no screenshot reading, the Composer's
+  // rule-based director (see effectiveConfig)
+  engine: { voiceOnly: boolean };
 };
-export type ComposerMode = "off" | "admins" | "all";
 
 // A voice customers can pick on the form (a name of the voice model's).
 export type VoiceChoice = { name: string; gender: "female" | "male"; label: string };
@@ -75,7 +66,7 @@ export function defaultConfig(): AiConfig {
     voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     image: { on: true, model: "", template: "" },
     prices: {},
-    engine: { composer: "off", voiceOnly: false },
+    engine: { voiceOnly: false },
   };
 }
 
@@ -89,7 +80,7 @@ export function effectiveConfig(c: AiConfig): AiConfig {
     tasks: Object.fromEntries(Object.entries(c.tasks).map(([k, t]) => [k, { ...t, on: false }])) as AiConfig["tasks"],
     image: { ...c.image, on: false },
     voice: { ...c.voice, on: true },
-    engine: { composer: "all", voiceOnly: true },
+    engine: { voiceOnly: true },
   };
 }
 
@@ -116,7 +107,7 @@ export function normalizeConfig(raw: unknown): AiConfig {
         .filter(([k]) => k.trim())
         .map(([k, p]) => [k.trim().slice(0, 200), { in: price(p?.in), out: price(p?.out), unit: price(p?.unit) }]),
     ),
-    engine: { composer: (["off", "admins", "all"] as const).find((m) => m === r.engine?.composer) ?? "off", voiceOnly: bool(r.engine?.voiceOnly, false) },
+    engine: { voiceOnly: bool(r.engine?.voiceOnly, false) },
   };
 }
 

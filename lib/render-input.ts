@@ -1,21 +1,13 @@
 import "server-only";
-import { sceneScriptBlockers } from "@/lib/scene-script";
-import { validateFlowPlan } from "@/components/video/flow/validate";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ProductBrief } from "@/lib/ai/product-brief";
-import { type AssetManifest, sceneId } from "@/lib/asset-manifest";
-import { LOGO_FILE_PREFIX, SCREENSHOTS_BUCKET } from "@/lib/projects";
+import { LOGO_FILE_PREFIX, SCREENSHOTS_BUCKET, lockedVoiceScript, seedFrom } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
-import type { RenderScene } from "@/components/video/types";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { storyAssetsEnabled, usableFlow, usableScene, usableStory } from "@/lib/story-engine";
-import { compileFlowScript, type CompileBrand } from "@/components/video/flow/compile";
-import { compileSceneScript } from "@/components/video/flow/compile-scene";
-import { buildPlan, buildStory, type SevenPart, type Story } from "@/components/video/clean/plan";
-import type { CleanPlan } from "@/components/video/clean/types";
-import { type StudioRecipe, toRecipe } from "@/lib/studio-variants";
+import { frameOf } from "@/components/video/composer/frame";
 import { placeAll } from "@/components/video/composer/layout";
 import { type Staging, staged } from "@/components/video/composer/staging";
+import { composeVariants } from "@/components/video/composer/variants";
 import { pieceToWord, remapScript, scriptWords } from "@/components/video/composer/words";
 import { Script as ComposerScript, type ComposerPlan } from "@/components/video/composer/types";
 
@@ -28,100 +20,44 @@ export type RenderProject = {
   format: string;
   duration_seconds: number;
   brief: unknown;
-  assets_manifest: unknown;
   voice_status: string;
   voice_result: { storagePath?: string; timing?: { words?: WordTiming[] } | null } | null;
-  screenshot_evidence?: unknown;
   direction?: string;
   website_url?: string | null;
 };
 
-export const RENDER_PROJECT_COLUMNS =
-  "id, user_id, format, duration_seconds, brand_name, brand_color, call_to_action, brief, assets_manifest, voice_status, voice_result, screenshot_evidence, direction, website_url";
+export const RENDER_PROJECT_COLUMNS = "id, user_id, format, duration_seconds, brand_name, brand_color, call_to_action, brief, voice_status, voice_result, direction, website_url";
 
-// Resolves storyboard scenes, assets and narration into composition props with signed URLs.
-// `problems` lists anything missing that a final render must not proceed without.
-export async function buildRenderInput(
-  supabase: SupabaseClient,
-  project: RenderProject,
-  expiresIn = 3600,
-) {
+// What the studio shows beside the video: what its Directors decided.
+export type ComposerAbout = { idea: string | null; mood: string | null; language: string | null; score: number | null; judge: string | null };
+export type ComposerView = { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[]; about?: ComposerAbout };
+type StoredComposer = { videos?: { script: unknown; seed: number; source: ComposerPlan["source"]; staging?: Staging | null }[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] };
+
+// The project's Composer videos laid out on its voice, with the customer's
+// brand inputs and signed URLs (the voice, the logo, the screenshots).
+// A project made before the Composer (or whose stored videos no longer
+// parse) is composed now by the Composer's own director, from its seed — the
+// same video every time it is opened. `problems`: what is missing.
+export async function buildRenderInput(supabase: SupabaseClient, project: RenderProject, expiresIn = 3600): Promise<{ problems: string[]; composer: ComposerView | null; audioUrl: string | null }> {
   const problems: string[] = [];
   const brief = ProductBrief.safeParse(project.brief);
-  if (!brief.success) return { problems: ["Generate a valid brief first."] };
-
-  // Map each scene to its manifest asset (project screenshot or completed generated asset).
-  const assets = (project.assets_manifest as AssetManifest | null)?.assets ?? [];
-  if (!project.assets_manifest) problems.push("Prepare visual assets first.");
-  // Preview-only engines: the validated story or flow, else null (→ Storyboard).
-  const story = usableStory(brief.data.story, brief.data.script, project.format);
-  const wordTimings = project.voice_status === "completed" ? parseWordTimings(project.voice_result?.timing?.words) : null;
-  const scene = story ? null : usableScene(brief.data.scene, brief.data.script, project.format, wordTimings, project.duration_seconds);
-  const flow = story || scene ? null : usableFlow(brief.data.flow, brief.data.script, project.format, wordTimings, project.duration_seconds);
-  const flowing = !!(flow || scene);
-  // Per scene: a full-frame background and/or a main visual.
-  const bgByScene = new Map<string, string>();
-  const fgByScene = new Map<string, { path: string; kind: "screenshot" | "icon" | "image" }>();
-  for (const a of assets) {
-    if (a.source === "generated" && a.status !== "completed") {
-      // Not needed (and not generated) when StoryWorld renders the story.
-      if (!story && !flowing) problems.push(`Asset ${a.id} is not generated.`);
-      continue;
-    }
-    if (!a.storage_path) continue;
-    // Older manifests have no role: abstract images were used as backgrounds.
-    const isBackground = a.role ? a.role === "background" : a.type === "abstract";
-    for (const s of a.scene_ids) {
-      if (isBackground) bgByScene.set(s, a.storage_path);
-      else fgByScene.set(s, { path: a.storage_path, kind: a.type === "abstract" ? "image" : a.type });
-    }
-  }
-  const pathByScene = new Map<string, string>([
-    ...bgByScene,
-    ...[...fgByScene].map(([k, v]) => [`fg:${k}`, v.path] as [string, string]),
-  ]);
-  const paths = [...new Set(pathByScene.values())];
-  const { data: signed } = paths.length
-    ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(paths, expiresIn)
-    : { data: [] };
-  const urlByPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
-  if (paths.some((p) => !urlByPath.get(p))) problems.push("Some visual assets could not be loaded.");
+  const script = brief.success ? brief.data.script : lockedVoiceScript(project.direction);
+  if (!script) problems.push("Write the script first.");
 
   // Stored narration only; never regenerated here.
-  const voicePath =
-    project.voice_status === "completed" ? project.voice_result?.storagePath : undefined;
-  const { data: voice } = voicePath
-    ? await supabase.storage.from(AUDIO_BUCKET).createSignedUrl(voicePath, expiresIn)
-    : { data: null };
+  const voicePath = project.voice_status === "completed" ? project.voice_result?.storagePath : undefined;
+  const { data: voice } = voicePath ? await supabase.storage.from(AUDIO_BUCKET).createSignedUrl(voicePath, expiresIn) : { data: null };
   if (!voice?.signedUrl) problems.push("Generate the voice first.");
+  const wordTimings = project.voice_status === "completed" ? parseWordTimings(project.voice_result?.timing?.words) : null;
+  if (!wordTimings?.length) problems.push("The voice has no word timings.");
+  const audioUrl = voice?.signedUrl ?? null;
+  if (!script || !wordTimings?.length) return { problems, composer: null, audioUrl };
 
-  const url = (path?: string) => (path && urlByPath.get(path)) || undefined;
-  const scenes: RenderScene[] = brief.data.scenes.map((scene, i) => {
-    const fg = fgByScene.get(sceneId(i));
-    return {
-      ...scene,
-      id: sceneId(i),
-      assetUrl: url(fg?.path),
-      assetKind: fg?.kind,
-      backgroundUrl: url(bgByScene.get(sceneId(i))),
-    };
-  });
-
-  // Its generated visuals as signed private URLs (continuity_id → url); any
-  // missing one simply keeps the procedural visual for that moment.
-  const storyAssetPaths = story && storyAssetsEnabled() ? (brief.data.story_assets ?? []).filter((a) => a.status === "completed" && a.storage_path) : [];
-  const { data: storySigned } = storyAssetPaths.length
-    ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(storyAssetPaths.map((a) => a.storage_path!), expiresIn)
-    : { data: [] };
-  const storyAssets = Object.fromEntries(
-    storyAssetPaths.flatMap((a, i) => (storySigned?.[i]?.signedUrl ? [[a.continuity_id, storySigned[i].signedUrl]] : [])),
-  );
-
-  // Flow only: the customer's logo (closing lockup) and product screenshots
-  // (shown on the UI planes). Missing files simply leave them out.
+  // The customer's logo (the brand's mark) and product screenshots (shown on
+  // screens in the film). Missing files simply leave them out.
   let logoUrl: string | undefined;
   let screenshotUrls: string[] = [];
-  if ((flowing || brief.data.clean || (project.brief as { composer?: unknown } | null)?.composer) && project.id && project.user_id) {
+  if (project.id && project.user_id) {
     const folder = `${project.user_id}/${project.id}`;
     const [{ data: files }, { data: shots }] = await Promise.all([
       supabase.storage.from(SCREENSHOTS_BUCKET).list(folder, { search: LOGO_FILE_PREFIX }),
@@ -129,100 +65,45 @@ export async function buildRenderInput(
     ]);
     const logoFile = files?.find((f) => f.name.startsWith(LOGO_FILE_PREFIX));
     const paths = [...(logoFile ? [`${folder}/${logoFile.name}`] : []), ...(shots ?? []).map((x) => x.storage_path as string)];
-    const { data: signedFlow } = paths.length ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(paths, expiresIn) : { data: [] };
-    const urls = (signedFlow ?? []).map((x) => x.signedUrl || undefined);
+    const { data: signed } = paths.length ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(paths, expiresIn) : { data: [] };
+    const urls = (signed ?? []).map((x) => x.signedUrl || undefined);
     if (logoFile) logoUrl = urls.shift();
     screenshotUrls = urls.filter((u): u is string => !!u);
   }
 
-  // Compiled on the voice's real word timestamps (no model call here). The
-  // customer's own brand inputs win over what the brief inferred.
-  const compilePlan = () => {
-    const brand: CompileBrand = {
-      name: project.brand_name?.trim() || brief.data.product_name,
-      logo: logoUrl,
-      cta: project.call_to_action?.trim() || brief.data.cta,
-      color: project.brand_color,
-    };
-    const opts = { narration: brief.data.script, words: wordTimings, durationSeconds: project.duration_seconds, brand, screenshots: screenshotUrls };
-    return scene ? compileSceneScript(scene, opts) : compileFlowScript(flow!, opts);
-  };
+  const size = frameOf(project.format);
+  const duration = Math.round(project.duration_seconds * 30);
+  // the script's own words on the voice's times
+  const shown = scriptWords(script, wordTimings);
+  const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
+  const name = project.brand_name?.trim() || (brief.success ? brief.data.product_name : "") || "Your product";
+  const brand = { name, color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || (brief.success ? brief.data.cta : "") || "Get started", url: host, icon: logoUrl ?? null };
 
-  // The other videos to choose from (same voice and brand, other looks).
-  const variants = scene && (brief.data.variants?.length ?? 0) > 1
-    ? brief.data.variants!.flatMap((v) => {
-        const usable = { ...v.scene, theme: scene.theme, pace: scene.pace };
-        if (sceneScriptBlockers(usable, brief.data.script, wordTimings, project.duration_seconds).length) return [];
-        try {
-          const brand: CompileBrand = { name: project.brand_name?.trim() || brief.data.product_name, logo: logoUrl, cta: project.call_to_action?.trim() || brief.data.cta, color: project.brand_color };
-          const plan = compileSceneScript(usable, { narration: brief.data.script, words: wordTimings, durationSeconds: project.duration_seconds, brand, screenshots: screenshotUrls });
-          return validateFlowPlan(plan).length ? [] : [{ seed: v.seed, look: usable.look ?? null, plan }];
-        } catch {
-          return [];
-        }
-      })
-    : [];
-
-  // The clean film templates: the stored story shapes (or, older, the seven
-  // parts) on the voice's words, with the customer's brand inputs; the four
-  // videos offered, each telling one of the shapes (recipe.story).
-  let clean: { plans: CleanPlan[]; variants: StudioRecipe[] } | null = null;
-  const stored = brief.data.clean;
-  if (stored && project.format === "16:9" && wordTimings?.length) {
+  const stored = (project.brief as { composer?: StoredComposer } | null)?.composer;
+  // videos written on the voice's pieces of words (before Oct 8) are moved onto the script's words
+  const toWord = stored?.indexing === "script" ? null : pieceToWord(wordTimings, shown);
+  const plans = (stored?.videos ?? []).flatMap((v) => {
+    const sc = ComposerScript.safeParse(v.script);
+    if (!sc.success) return [];
     try {
-      const rebrand = (b: SevenPart["brand"]) => ({ ...b, name: project.brand_name?.trim() || b.name, color: project.brand_color || b.color, cta: project.call_to_action?.trim() || b.cta, icon: logoUrl ?? null });
-      const scripts = (stored.stories?.length ? stored.stories : [stored.script]) as unknown as (Story | SevenPart)[];
-      const plans = scripts.map((sc) => ("parts" in sc ? buildStory({ ...sc, brand: rebrand(sc.brand) }, wordTimings).plan : buildPlan({ ...sc, brand: rebrand(sc.brand) }, wordTimings).plan));
-      const first = plans.find((pl): pl is CleanPlan => !!pl);
-      if (first && stored.variants.length) clean = { plans: plans.map((pl) => pl ?? first), variants: stored.variants.map(toRecipe) };
+      const { plan } = placeAll(toWord ? remapScript(sc.data, toWord) : sc.data, shown, duration, brand, v.seed, screenshotUrls.length, v.source, size);
+      // (staged as it was chosen: a journey, depth, a recap…)
+      return [staged(plan, v.staging)];
     } catch {
-      clean = null;
+      return [];
     }
+  });
+  if (!plans.length) {
+    // (made before the Composer: composed now, the same every time)
+    const seed = seedFrom(project.id ?? script);
+    plans.push(...composeVariants({ words: shown, brand, duration, seed, count: 1, screens: screenshotUrls.length, size }).plans);
   }
 
-  // The Composer's videos: each stored script laid out on the voice's words
-  // with the customer's brand inputs (a script that no longer parses is left out).
-  // (about: what the studio's Directors decided — the idea, the camera language, the Judge's score — shown beside the video)
-  let composer: { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[]; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null; judge: string | null } } | null = null;
-  const storedComposer = (project.brief as { composer?: { videos?: { script: unknown; seed: number; source: ComposerPlan["source"]; staging?: Staging | null }[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] } } | null)?.composer;
-  if (storedComposer?.videos?.length && project.format === "16:9" && wordTimings?.length) {
-    // the script's own words on the voice's times; videos written on the
-    // voice's pieces of words (before Oct 8) are moved onto them
-    const shown = scriptWords(brief.data.script, wordTimings);
-    const toWord = storedComposer.indexing === "script" ? null : pieceToWord(wordTimings, shown);
-    const brand = { name: project.brand_name?.trim() || brief.data.product_name, color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief.data.cta, url: (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, ""), icon: logoUrl ?? null };
-    const plans = storedComposer.videos.flatMap((v) => {
-      const sc = ComposerScript.safeParse(v.script);
-      if (!sc.success) return [];
-      try {
-        const { plan } = placeAll(toWord ? remapScript(sc.data, toWord) : sc.data, shown, Math.round(project.duration_seconds * 30), brand, v.seed, screenshotUrls.length, v.source);
-        // (staged as it was chosen: a journey, depth, a recap…)
-        return [staged(plan, v.staging)];
-      } catch {
-        return [];
-      }
-    });
-    // the versions in order (the first is the Director's; each change adds one)
-    const sc = storedComposer as { creative?: { idea?: string; language?: string }; profile?: { mood?: string; category?: string }; judge?: { source?: string; best?: number; scores?: { candidate: number; total: number }[]; rule?: { total: number }[] } };
-    const best = sc.judge?.best ?? 0;
-    const score = sc.judge?.scores?.find((x) => x.candidate === best)?.total ?? sc.judge?.rule?.[best]?.total ?? null;
-    const about = sc.creative ? { idea: sc.creative.idea ?? null, mood: [sc.profile?.category, sc.profile?.mood].filter(Boolean).join(" · ") || null, language: storedComposer.videos.at(-1)?.staging?.language ?? sc.creative.language ?? null, score, judge: sc.judge?.source ?? null } : undefined;
-    if (plans.length) composer = { plans, screens: screenshotUrls, changes: (storedComposer.changes ?? []).filter((c) => c.ok).map((c) => ({ direction: c.direction, at: c.at })), about };
-  }
-
-  return {
-    problems,
-    variants,
-    clean,
-    composer,
-    props: {
-      story: story ? { story, narration: brief.data.script, assets: storyAssets } : null,
-      flow: flowing ? { plan: compilePlan() } : null,
-      scenes,
-      format: project.format,
-      durationSeconds: project.duration_seconds,
-      audioUrl: voice?.signedUrl,
-      words: voicePath ? (parseWordTimings(project.voice_result?.timing?.words) ?? undefined) : undefined,
-    },
-  };
+  // what the studio's Directors decided (the idea, the camera language, the Judge's score)
+  const sc = stored as { creative?: { idea?: string; language?: string }; profile?: { mood?: string; category?: string }; judge?: { source?: string; best?: number; scores?: { candidate: number; total: number }[]; rule?: { total: number }[] } } | undefined;
+  const best = sc?.judge?.best ?? 0;
+  const score = sc?.judge?.scores?.find((x) => x.candidate === best)?.total ?? sc?.judge?.rule?.[best]?.total ?? null;
+  const about = sc?.creative ? { idea: sc.creative.idea ?? null, mood: [sc.profile?.category, sc.profile?.mood].filter(Boolean).join(" · ") || null, language: stored?.videos?.at(-1)?.staging?.language ?? sc.creative.language ?? null, score, judge: sc.judge?.source ?? null } : undefined;
+  const changes = (stored?.changes ?? []).filter((c) => c.ok).map((c) => ({ direction: c.direction, at: c.at }));
+  return { problems, composer: { plans, screens: screenshotUrls, changes, about }, audioUrl };
 }

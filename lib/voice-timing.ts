@@ -154,3 +154,10 @@ export function retimeScript(script: string, heard: WordTiming[]): WordTiming[] 
   });
   return out.every((w, i) => i === 0 || w.start >= out[i - 1].start) ? out : null;
 }
+
+// Words timed at an even pace over `durationSeconds` (no voice to time them).
+export function estimateWords(narration: string, durationSeconds: number): WordTiming[] {
+  const words = narration.split(/\s+/).filter(Boolean);
+  const per = (durationSeconds * 0.92) / Math.max(1, words.length);
+  return words.map((text, i) => ({ text, start: 0.25 + i * per, end: 0.25 + (i + 1) * per }));
+}
