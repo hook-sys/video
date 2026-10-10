@@ -67,3 +67,7 @@ export const daysAgo = (days: number) => new Date(Date.now() - days * 86400000).
 
 // Is this moment already past? (a coupon's expiry)
 export const isPast = (iso: string | null | undefined) => !!iso && new Date(iso).getTime() < Date.now();
+
+// An account's status (profiles.status): pending = waiting for approval.
+export const STATUS_LABEL: Record<string, string> = { active: "Active", suspended: "Suspended", pending: "Waiting" };
+export const STATUS_TONE: Record<string, BadgeTone> = { active: "green", suspended: "red", pending: "amber" };

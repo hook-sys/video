@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
-import { adjustCredits, saveUser, setUserStatus } from "../../actions";
+import { adjustCredits, approveUser, saveUser, setUserStatus } from "../../actions";
 import { ConfirmSubmit } from "../../_components/confirm-submit";
 import { Badge, Card, Notice, PageHeader, Stat, Table, btn, btnDanger, btnPrimary, input, td } from "../../_components/ui";
-import { PROJECT_COLUMNS, ROLE_LABEL, ROLE_TONE, STATE_LABEL, ago, projectTitle, usd, videoState, type ProjectRow } from "../../_components/format";
+import { PROJECT_COLUMNS, ROLE_LABEL, ROLE_TONE, STATE_LABEL, STATUS_LABEL, STATUS_TONE, ago, projectTitle, usd, videoState, type ProjectRow } from "../../_components/format";
 
 // what each kind of credit change is called in the history
 const KIND: Record<string, string> = { signup: "Welcome", purchase: "Purchase", bonus: "Bonus", coupon: "Coupon", video: "Video", refund: "Refund", adjust: "Length adjust", admin: "Team" };
@@ -35,7 +35,7 @@ export default async function UserPage({ params, searchParams }: PageProps<"/adm
       <PageHeader title={u.email ?? "User"} sub={`${u.full_name ? `${u.full_name} · ` : ""}joined ${ago(u.created_at)} · last sign-in ${ago(lastSignIn)}`}>
         <div className="flex gap-2">
           <Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role] ?? u.role}</Badge>
-          <Badge tone={u.status === "active" ? "green" : "red"}>{u.status}</Badge>
+          <Badge tone={STATUS_TONE[u.status] ?? "gray"}>{STATUS_LABEL[u.status] ?? u.status}</Badge>
         </div>
       </PageHeader>
       {typeof error === "string" && <Notice tone="warn">{error}</Notice>}
@@ -53,6 +53,15 @@ export default async function UserPage({ params, searchParams }: PageProps<"/adm
               <p className="mb-2 text-xs text-zinc-500">Access</p>
               {self ? (
                 <p className="text-zinc-500">This is your account.</p>
+              ) : u.status === "pending" ? (
+                <div className="flex flex-wrap gap-2">
+                  <form action={approveUser.bind(null, id)}>
+                    <button className={btn}>Approve account</button>
+                  </form>
+                  <form action={setUserStatus.bind(null, id, "suspended")}>
+                    <ConfirmSubmit message={`Turn ${u.email} away? The account is suspended; it can be re-activated later.`} className={btnDanger}>Don&apos;t approve</ConfirmSubmit>
+                  </form>
+                </div>
               ) : u.status === "active" ? (
                 <form action={setUserStatus.bind(null, id, "suspended")}>
                   <ConfirmSubmit message={`Suspend ${u.email}? They'll be signed out at next login and can't create videos.`} className={btnDanger}>Suspend account</ConfirmSubmit>

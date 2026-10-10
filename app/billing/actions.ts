@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { userAccess } from "@/lib/admin";
 import { redeemCode, startPurchase } from "@/lib/purchase";
 import { stripeReady } from "@/lib/stripe";
 
@@ -15,6 +16,8 @@ async function signedIn() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+  // (an account still waiting for approval can't buy or redeem yet)
+  if ((await userAccess(supabase, user.id)).pending) redirect("/pending");
   return user;
 }
 

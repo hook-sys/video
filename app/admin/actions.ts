@@ -6,7 +6,7 @@ import { ADMIN_ROLES, type AdminRole, audit, isAdminRole, requireAdmin, requireS
 import { SETTINGS } from "@/lib/app-settings";
 import { VIDEOS_BUCKET } from "@/lib/projects";
 import { checkProjectFrames } from "@/lib/frame-check";
-import { BILLING_KEY, TIER_IDS, changeCredits, getBilling, normalizeBilling, refundVideo } from "@/lib/billing";
+import { BILLING_KEY, TIER_IDS, changeCredits, getBilling, grantSignupCredits, normalizeBilling, refundVideo } from "@/lib/billing";
 
 // Admin actions. Each re-checks the caller's role (and that the role may
 // use the section) on the server, runs with the service role, and is
@@ -29,6 +29,29 @@ export async function setUserStatus(userId: string, status: "active" | "suspende
   await s.db.from("profiles").update({ status }).eq("id", userId);
   await audit(s, status === "suspended" ? "user.suspend" : "user.activate", { type: "user", id: userId }, { email: user.email });
   revalidatePath("/admin/users", "layout");
+}
+
+// A new account waiting for approval (app_settings "require_approval") let
+// in: active, with its welcome credits. (Not approved: suspended.)
+export async function approveUser(userId: string) {
+  const { s, user } = await target(userId);
+  if (user.status !== "pending") return;
+  await s.db.from("profiles").update({ status: "active" }).eq("id", userId);
+  await grantSignupCredits(userId, true).catch(() => {});
+  await audit(s, "user.approve", { type: "user", id: userId }, { email: user.email });
+  revalidatePath("/admin", "layout");
+}
+
+export async function approveAllPending() {
+  const s = await requireAdmin("users");
+  const { data } = await s.db.from("profiles").select("id, email").eq("status", "pending").limit(1000);
+  for (const u of data ?? []) {
+    await s.db.from("profiles").update({ status: "active" }).eq("id", u.id).eq("status", "pending");
+    await grantSignupCredits(u.id, true).catch(() => {});
+  }
+  await audit(s, "user.approve_all", { type: "users", id: "pending" }, { count: data?.length ?? 0 });
+  revalidatePath("/admin", "layout");
+  redirect(`/admin/users?ok=${encodeURIComponent(`${data?.length ?? 0} accounts approved.`)}`);
 }
 
 // The customer's own details (name, email) edited by the team.

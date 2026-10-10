@@ -51,12 +51,15 @@ export async function balanceOf(userId: string) {
   return data?.credits ?? 0;
 }
 
-// The sign-up credits, once per account, after the email is confirmed.
+// The sign-up credits, once per account, after the email is confirmed (and
+// the account approved, when the team approves new accounts).
 export async function grantSignupCredits(userId: string, emailConfirmed: boolean) {
   if (!emailConfirmed) return;
   const billing = await getBilling();
   if (billing.signupCredits <= 0) return;
   const admin = createAdminClient();
+  const { data: profile } = await admin.from("profiles").select("status").eq("id", userId).maybeSingle();
+  if (profile?.status !== "active") return;
   const { count } = await admin.from("credit_ledger").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("kind", "signup");
   if (count) return;
   // (a second call at the same moment meets the unique index and is ignored)

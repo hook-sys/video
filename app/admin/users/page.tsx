@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { ADMIN_ROLES, ROLE_INFO } from "@/lib/admin";
-import { createUser } from "../actions";
+import { approveAllPending, approveUser, createUser } from "../actions";
 import { Badge, Card, Filters, Notice, PageHeader, Table, btnPrimary, input, td } from "../_components/ui";
-import { ROLE_LABEL, ROLE_TONE, ago, cleanSearch, usd } from "../_components/format";
+import { ROLE_LABEL, ROLE_TONE, STATUS_LABEL, STATUS_TONE, ago, cleanSearch, usd } from "../_components/format";
 
 export const metadata = { title: "Users" };
 
 export default async function UsersPage({ searchParams }: PageProps<"/admin/users">) {
-  const { q, status, error } = await searchParams;
+  const { q, status, error, ok } = await searchParams;
   const search = cleanSearch(q);
   const filter = typeof status === "string" ? status : "";
   const { db, role, can } = await requireAdmin("users");
@@ -17,10 +17,11 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
   if (search) query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`);
   if (filter === "admins") query = query.neq("role", "user");
   else if (filter) query = query.eq("status", filter);
-  const [{ data: users }, { data: projects }, { data: costs }] = await Promise.all([
+  const [{ data: users }, { data: projects }, { data: costs }, { count: waiting }] = await Promise.all([
     query,
     db.from("projects").select("user_id, created_at, render_status").limit(20000),
     db.from("cost_events").select("user_id, estimated_cost_usd").limit(50000),
+    db.from("profiles").select("id", { count: "exact", head: true }).eq("status", "pending"),
   ]);
   const videos = new Map<string, { n: number; done: number; last: string }>();
   for (const p of projects ?? []) {
@@ -41,6 +42,16 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
         </form>
       </PageHeader>
       {typeof error === "string" && <Notice tone="warn">{error}</Notice>}
+      {typeof ok === "string" && !error && <Notice tone="good">{ok}</Notice>}
+      {(waiting ?? 0) > 0 && (
+        <Notice tone="warn">
+          <span className="flex flex-wrap items-center gap-3">
+            <span>{waiting} new {waiting === 1 ? "account is" : "accounts are"} waiting for approval.</span>
+            <Link href="/admin/users?status=pending" className="underline">Show them</Link>
+            <form action={approveAllPending}><button className="underline">Approve all</button></form>
+          </span>
+        </Notice>
+      )}
       <details className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
         <summary className="cursor-pointer text-sm font-semibold text-zinc-200">+ Add a user</summary>
         <form action={createUser} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -61,7 +72,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
         </form>
         <p className="mt-3 text-xs text-zinc-500">The account is ready at once (email confirmed): they sign in with this email and password. A new password can be set on their page.</p>
       </details>
-      <Filters base="/admin/users" current={filter} items={[{ value: "", label: "All" }, { value: "active", label: "Active" }, { value: "suspended", label: "Suspended" }, { value: "admins", label: "Team" }]} />
+      <Filters base="/admin/users" current={filter} items={[{ value: "", label: "All" }, { value: "pending", label: "Waiting" }, { value: "active", label: "Active" }, { value: "suspended", label: "Suspended" }, { value: "admins", label: "Team" }]} />
       <Card>
         <Table head={["User", "Role", "Status", "Credits", "Videos", "Cost", "Last video", "Joined"]} empty="No users match.">
           {(users ?? []).map((u) => {
@@ -73,7 +84,12 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
                   {u.full_name && <p className="text-xs text-zinc-500">{u.full_name}</p>}
                 </td>
                 <td className={td}><Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role] ?? u.role}</Badge></td>
-                <td className={td}><Badge tone={u.status === "active" ? "green" : "red"}>{u.status}</Badge></td>
+                <td className={td}>
+                  <span className="flex items-center gap-2">
+                    <Badge tone={STATUS_TONE[u.status] ?? "gray"}>{STATUS_LABEL[u.status] ?? u.status}</Badge>
+                    {u.status === "pending" && <form action={approveUser.bind(null, u.id)}><button className="text-xs text-emerald-400 hover:underline">Approve</button></form>}
+                  </span>
+                </td>
                 <td className={`${td} tabular-nums text-zinc-300`}>{(u.credits ?? 0).toLocaleString("en-US")}</td>
                 <td className={`${td} tabular-nums`}>{v ? `${v.done}/${v.n}` : 0}</td>
                 <td className={`${td} tabular-nums text-zinc-400`}>{usd(spend.get(u.id) ?? 0)}</td>

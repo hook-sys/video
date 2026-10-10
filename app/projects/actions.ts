@@ -125,6 +125,7 @@ export async function createProject(
   // Controls from /admin: suspension, maintenance mode, daily limit (admins exempt).
   const access = await userAccess(supabase, user.id);
   if (access.suspended) return { error: "This account is suspended. Contact support." };
+  if (access.pending) return { error: "Your account is waiting for approval." };
   if (!access.admin) {
     const settings = await getSettings();
     if (settings.maintenance_mode === true) return { error: String(settings.maintenance_message) };

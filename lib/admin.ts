@@ -82,5 +82,6 @@ export async function audit(
 export async function userAccess(supabase: SupabaseClient, userId: string) {
   const { data } = await supabase.from("profiles").select("role, status, admin_active").eq("id", userId).maybeSingle();
   const admin = data?.role === "super_admin" || (data?.role === "admin" && data?.admin_active !== false);
-  return { admin, suspended: data?.status === "suspended" };
+  // (pending: waiting for the team to approve it — app_settings "require_approval")
+  return { admin, suspended: data?.status === "suspended", pending: data?.status === "pending" };
 }
