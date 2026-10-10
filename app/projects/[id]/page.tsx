@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { SCREENSHOTS_BUCKET, VIDEOS_BUCKET } from "@/lib/projects";
+import { SCREENSHOTS_BUCKET, VIDEOS_BUCKET, voiceChoiceOf } from "@/lib/projects";
 import { getSettings } from "@/lib/app-settings";
+import { MOOD_CHOICES, USE_LABEL } from "@/lib/project-details";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { generateBrief, generateVoice, retryPipeline } from "@/app/projects/actions";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -105,8 +106,6 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const rendering = serverRender && project.pipeline_status === "completed" && (project.render_status === "processing" || project.render_status === "idle");
   const direction = String(project.direction ?? "");
   const voiceScript = direction.split(/\n\nVisual style:/)[0].trim();
-  const visualStyle = direction.match(/Visual style:\s*(.+)\s*$/m)?.[1] ?? null;
-  const look = direction.match(/^Look:\s*(.+)$/m)?.[1]?.trim() ?? "Auto";
   const title = project.brand_name || "Your video";
   const status =
     project.pipeline_status === "completed" ? { label: "Ready", cls: "bg-[#e3f4e8] text-[#1e7a3c]" }
@@ -138,12 +137,12 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${status.cls}`}>{status.label}</span>
           </div>
           <div className="flex flex-wrap gap-1.5 text-xs">
+            {/* what the customer chose (no style is chosen: the Director decides it) */}
             {[
               `${project.duration_seconds} s`,
               project.format,
-              `${project.voice_language} · ${project.voice_gender === "female" ? "Female" : "Male"}`,
-              look !== "Auto" ? look : null,
-              visualStyle,
+              `${voiceChoiceOf(direction) ?? (project.voice_gender === "female" ? "Female voice" : "Male voice")}`,
+              project.quality ? `${String(project.quality).charAt(0).toUpperCase()}${String(project.quality).slice(1)}` : null,
             ]
               .filter(Boolean)
               .map((c) => (
@@ -203,8 +202,8 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/75">{project.advanced_direction || "Chosen automatically from your script."}</p>
             <dl className="mt-2 grid grid-cols-2 gap-3 border-t border-foreground/[0.07] pt-3 text-xs">
               {[
-                ["Look", look],
-                ["Style", visualStyle ?? "—"],
+                ["Mood", MOOD_CHOICES.find((m) => m.mood === project.details?.mood)?.label ?? "—"],
+                ["Where it's used", project.details?.use ? (USE_LABEL[project.details.use as keyof typeof USE_LABEL] ?? "—") : "—"],
                 ["Call to action", project.call_to_action || "—"],
               ].map(([k, v]) => (
                 <div key={k}>

@@ -95,14 +95,8 @@ export const CREATIVE_DEFAULTS = {
   visual_density: "Balanced",
 } as const;
 export const FORMATS = ["16:9", "9:16", "1:1"] as const;
-export const VOICE_LANGUAGES = [
-  "English (US)",
-  "English (UK)",
-  "Bengali",
-  "Hindi",
-  "Spanish",
-  "Arabic",
-] as const;
+// English only (the voices that sound best; older videos keep theirs)
+export const VOICE_LANGUAGES = ["English (US)"] as const;
 export const VOICE_GENDERS = ["male", "female"] as const;
 export const VOICE_STYLES = [
   "Professional",

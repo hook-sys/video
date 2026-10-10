@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
+import { VOICE_LIBRARY, voiceInfo, voiceSample } from "@/lib/voices";
 import type { TierId } from "@/lib/billing-config";
 import { createProject } from "@/app/projects/actions";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import { BRAND_CATEGORIES } from "@/lib/studio";
 import { CATEGORY_LABEL, MOOD_CHOICES, OLD_WAYS, USES, USE_LABEL } from "@/lib/project-details";
-import { AUDIENCE_MAX, BRAND_NAME_MAX, CTA_MAX, directionFor, VOICE_SCRIPT_MAX, FORMATS, LOGO_MAX_BYTES, STYLE_PRESETS, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_STYLES, estimateVideoSeconds, validateLogo, type StylePreset } from "@/lib/projects";
+import { AUDIENCE_MAX, BRAND_NAME_MAX, CTA_MAX, directionFor, VOICE_SCRIPT_MAX, FORMATS, LOGO_MAX_BYTES, STYLE_PRESETS, VOICE_LANGUAGES, VOICE_STYLES, estimateVideoSeconds, validateLogo, type StylePreset } from "@/lib/projects";
 
 const label = "text-sm font-medium";
 const hint = "text-xs text-foreground/50";
@@ -243,37 +244,8 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
             <Chips name="use" options={USES} format={(u) => USE_LABEL[u]} />
           </Step>
 
-          <Step n={7} title="Voice">
-            <div className="grid gap-5 sm:grid-cols-2">
-              <Field title="Language">
-                <select name="voice_language" required className={input}>
-                  {VOICE_LANGUAGES.map((o) => (
-                    <option key={o}>{o}</option>
-                  ))}
-                </select>
-              </Field>
-              <fieldset className="flex flex-col gap-2">
-                <legend className={`${label} mb-2`}>Voice</legend>
-                <Chips name="voice_gender" options={VOICE_GENDERS} defaultValue={VOICE_GENDERS[0]} format={(g) => (g === "male" ? "Male" : "Female")} />
-              </fieldset>
-              {voices.length > 0 && (
-                <Field title="Voice character">
-                  <select name="voice_name" defaultValue={voices.some((v) => v.name === prefill?.voice) ? prefill?.voice : ""} className={input}>
-                    <option value="">Default for the voice above</option>
-                    {(["female", "male"] as const).filter((g) => voices.some((v) => v.gender === g)).map((g) => (
-                      <optgroup key={g} label={g === "female" ? "Female" : "Male"}>
-                        {voices.filter((v) => v.gender === g).map((v) => (
-                          <option key={v.name} value={v.name}>
-                            {v.name}
-                            {v.label ? ` — ${v.label}` : ""}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </Field>
-              )}
-            </div>
+          <Step n={7} title="Voice" sub="English voice-over. Press play to hear each voice.">
+            <VoicePicker voices={voices} initial={prefill?.voice} />
           </Step>
 
           <Step n={8} title="Format">
@@ -417,6 +389,61 @@ function Chips<T extends string>({ name, options, defaultValue, format = String 
           <span className="block rounded-full border border-foreground/12 bg-white/70 px-3.5 py-1.5 text-sm hover:border-foreground/30 peer-checked:border-[#0a66d6] peer-checked:bg-[#0a66d6]/10 peer-checked:font-medium peer-checked:text-[#0a66d6] peer-focus-visible:ring-4 peer-focus-visible:ring-[#0a66d6]/25">{format(o)}</span>
         </label>
       ))}
+    </div>
+  );
+}
+
+// The voice: English only; five women's and five men's voices (the ones
+// offered on /admin/models, with what each suits), each with a sample.
+function VoicePicker({ voices, initial }: { voices: VoiceOption[]; initial?: string }) {
+  const list = (voices.length ? voices : VOICE_LIBRARY.map((v) => ({ name: v.name, gender: v.gender, label: "" }))).map((v) => ({ ...v, info: voiceInfo(v.name) }));
+  const first = list.find((v) => v.name === initial) ?? list.find((v) => v.gender === "female") ?? list[0];
+  const [gender, setGender] = useState<"female" | "male">(first?.gender ?? "female");
+  const [picked, setPicked] = useState<string>(first?.name ?? "");
+  const [playing, setPlaying] = useState<string | null>(null);
+  const audio = useRef<HTMLAudioElement | null>(null);
+  const shown = list.filter((v) => v.gender === gender);
+  const play = (name: string) => {
+    audio.current?.pause();
+    if (playing === name) return setPlaying(null);
+    const a = new Audio(voiceSample(name));
+    audio.current = a;
+    a.onended = () => setPlaying(null);
+    a.play().then(() => setPlaying(name)).catch(() => setPlaying(null));
+  };
+  const choose = (g: "female" | "male") => {
+    setGender(g);
+    const keep = list.find((v) => v.gender === g && v.name === picked);
+    if (!keep) setPicked(list.find((v) => v.gender === g)?.name ?? "");
+  };
+  return (
+    <div className="flex flex-col gap-4">
+      <input type="hidden" name="voice_language" value={VOICE_LANGUAGES[0]} />
+      <input type="hidden" name="voice_gender" value={gender} />
+      <input type="hidden" name="voice_name" value={picked} />
+      <div className="flex gap-2">
+        {(["female", "male"] as const).filter((g) => list.some((v) => v.gender === g)).map((g) => (
+          <button key={g} type="button" onClick={() => choose(g)} className={`rounded-full border px-3.5 py-1.5 text-sm ${gender === g ? "border-[#0a66d6] bg-[#0a66d6]/10 font-medium text-[#0a66d6]" : "border-foreground/12 bg-white/70 hover:border-foreground/30"}`}>
+            {g === "female" ? "Female" : "Male"}
+          </button>
+        ))}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {shown.map((v) => (
+          <div key={v.name} role="radio" aria-checked={picked === v.name} tabIndex={0} onClick={() => setPicked(v.name)} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setPicked(v.name))} className={`flex cursor-pointer items-start gap-3 rounded-2xl border bg-white/70 p-3.5 text-left ${picked === v.name ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/10 hover:bg-white"}`}>
+            <button type="button" aria-label={`Play ${v.name}`} onClick={(e) => (e.stopPropagation(), play(v.name))} className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#0a66d6] text-sm text-white hover:bg-[#0859bd]">
+              {playing === v.name ? "■" : "▶"}
+            </button>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-sm font-semibold">
+                {v.name}
+                {v.info && <span className="ml-1.5 text-xs font-normal text-foreground/50">{v.info.accent} · {v.info.tone}</span>}
+              </span>
+              <span className="text-xs text-foreground/60">{v.info ? `Best for: ${v.info.bestFor}` : v.label}</span>
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
