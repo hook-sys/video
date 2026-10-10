@@ -25,7 +25,10 @@ const LEAD = 6;
 // a scene is held at least this long (frames): long enough to see what it shows
 export const MIN_SCENE = 84;
 // a thing comes in early enough to be seen this long before its scene ends
-const SEEN = 66;
+// (else on its word: never long before it is said); words and small accents
+// need only be read
+const SEEN = 45;
+const READ = 36;
 const TEXT_CAP = { xl: 176, l: 132, m: 100, s: 76 } as const;
 const MIN_TEXT = 46;
 
@@ -335,7 +338,8 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   if (layout === "type" && vis.length) layout = "center";
   if (COMPOSED.has(layout) && !layoutFits(layout, items, hasText)) layout = vis.length ? "center" : "type";
   // the words in a place: sized to fill it, each coming in as it is said —
-  // and a highlight said late in the scene comes in with the scene
+  // only as much earlier as they need to be read before the scene goes (and
+  // words alone on screen come in with the scene)
   const textIn: TextIn = (region, cap, maxLines, align, anchor) => {
     const fitR = fitText(shown, region, cap, maxLines, art, !!s.kicker);
     if (fitR.size < MIN_TEXT) problems.push(`the words are too small (${fitR.size}px)`);
@@ -343,7 +347,7 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
     const cy = anchor === "top" ? region.t + bh / 2 : anchor === "bottom" ? region.b - bh / 2 : (region.t + region.b) / 2;
     const cx = align === "left" ? region.l + bw / 2 : align === "right" ? region.r - bw / 2 : (region.l + region.r) / 2;
     const said = ws.map((w) => Math.max(from, Math.round(w.start * FPS) - 2));
-    const late = Math.max(0, (said[0] ?? from) - (from + 12));
+    const late = Math.max(0, vis.length ? (said[said.length - 1] ?? from) - (to - READ) : (said[0] ?? from) - (from + 12));
     return {
       words: ws.map((w, i) => ({ t: shown[i], at: Math.max(from, said[i] - late), key: keys.has(norm(w.text)) })),
       box: { x: cx, y: cy, w: bw, h: bh },
@@ -358,7 +362,7 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   };
   const timeOf = (it: ItemT) => {
     // as its word is said, but early enough to be seen before the scene goes
-    const at = Math.min(Math.max(from, to - SEEN), Math.max(from, frame(it.at) - 4));
+    const at = Math.min(Math.max(from, to - (isAccent(it) ? READ : SEEN)), Math.max(from, frame(it.at) - 4));
     const hit = it.hit != null ? Math.min(to - 6, Math.max(at + 8, frame(it.hit) - 2)) : null;
     return { at, hit };
   };
@@ -442,7 +446,7 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   const firstAt = Math.min(tb?.words[0]?.at ?? Infinity, ...placed.filter((q) => !isAccent(q)).map((q) => q.at));
   // (the film's first scene is already arriving on its first frame)
   const start = from === 0 ? -8 : from;
-  if (firstAt > from + 3 || from === 0) {
+  if (firstAt > from + 6 || from === 0) {
     const lead = placed.filter((q) => !isAccent(q)).sort((x, y) => x.at - y.at)[0];
     if (lead) lead.at = Math.min(lead.at, start);
     else if (tb) tb.words[0].at = Math.min(tb.words[0].at, start);

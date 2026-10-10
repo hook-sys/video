@@ -5,7 +5,7 @@ import type { Pal } from "./art";
 import { hsl } from "./art";
 import { clamp01, mix, ramp } from "./motion";
 import { Radial, Tiles } from "./radial";
-import type { ComposerPlan, JourneyKind } from "./types";
+import { FPS, type ComposerPlan, type JourneyKind } from "./types";
 import { RECAP } from "./staging";
 
 // Journey: the whole film is one big canvas. Every scene has its own place on
@@ -78,8 +78,14 @@ export function stations(n: number, kind: JourneyKind, seed: number): P[] {
 }
 
 // When the camera travels into each scene (frames): it leaves a little before
-// the scene's words start and arrives just after.
+// the scene's words start and arrives just after — but never while the last
+// scene's sentence is still being said (it waits for its last word, then
+// travels quicker into the next).
 export const MOVE = 60;
+// (frames: how much of the last word's tail it may leave on; how soon after
+// the scene's first word it arrives when it had to wait)
+const TAIL = 8;
+const LAND = 18;
 export const WHIP = 26;
 export function moves(plan: ComposerPlan): { start: number; dur: number }[] {
   const sc = plan.scenes;
@@ -94,7 +100,13 @@ export function moves(plan: ComposerPlan): { start: number; dur: number }[] {
     if (!i) return { start: -1, dur: 1 };
     const room = s.from - sc[i - 1].from - 16;
     const dur = whip ? Math.max(14, Math.min(Math.round((WHIP * span(i)) / 1.22), room)) : Math.max(24, Math.min(long && i === sc.length - 1 ? 110 : MOVE, room));
-    return { start: Math.round(s.from - dur * 0.72), dur };
+    const start = Math.round(s.from - dur * 0.72);
+    // the last scene's words end at…
+    const said = plan.words.filter((w) => w.start * FPS < s.from && w.start * FPS >= sc[i - 1].from).reduce((a, w) => Math.max(a, Math.round(w.end * FPS)), -Infinity);
+    const wait = Math.min(said - TAIL, s.from + LAND - (whip ? 14 : 24));
+    // (the long last move that shows the whole canvas keeps its time)
+    if (!(wait > start) || (long && i === sc.length - 1)) return { start, dur };
+    return { start: wait, dur: Math.max(start + dur, s.from + LAND) - wait };
   });
 }
 

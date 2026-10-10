@@ -53,6 +53,8 @@ async function makeSnapshot(hash: string, signal: AbortSignal): Promise<string> 
   // a browser, the renderer, the film and the script — then kept
   const sandbox = await createSandbox({ resources: { vcpus: VCPUS }, timeoutInMilliseconds: 10 * 60_000 });
   try {
+    // (addBundleToSandbox makes the bundle's folders but not the bundle's own)
+    await sandbox.mkDir("remotion-bundle", { signal }).catch(() => {});
     await addBundleToSandbox({ sandbox, bundleDir: BUNDLE_DIR });
     await sandbox.writeFiles([{ path: SCRIPT, content: Buffer.from(FRAME_SCRIPT) }], { signal });
     const snap = await sandbox.snapshot({ expiration: 0, signal });

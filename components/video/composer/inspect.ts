@@ -11,8 +11,12 @@ import type { Box, ComposerPlan, PlacedItem, PlacedScene, TransitionKind } from 
 
 export type Finding = { scene: number; frame: number; what: string };
 const STEP = 3;
-// a thing (or the words) is on screen at least this long (frames)
+// a thing is on screen at least this long (frames), the words all shown at
+// least READ_MIN — no longer, so neither comes in long before it is said
 export const SEEN_MIN = 45;
+export const READ_MIN = 30;
+// (a badge is a word on a chip: read, like the words)
+const seenMin = (it: PlacedItem) => (it.kind === "badge" ? READ_MIN + 6 : SEEN_MIN);
 // gaps (px) between the words and a thing, and between two things
 const TEXT_GAP = 24, THING_GAP = 8, EDGE = 8;
 // the ways in that move the old scene out with the new one (never on top of it)
@@ -49,8 +53,8 @@ export function inspect(plan: ComposerPlan): Finding[] {
     for (const bx of [...things.map((it) => it.box), ...(tb ? [tb] : [])]) if (bx.x - bx.w / 2 < -EDGE || bx.x + bx.w / 2 > W + EDGE || bx.y - bx.h / 2 < -EDGE || bx.y + bx.h / 2 > H + EDGE) found.push({ scene: i, frame: held, what: "something is off the frame" });
     // long enough on screen
     const last = i === plan.scenes.length - 1;
-    for (const it of things) if (!last && s.to - Math.max(s.from, it.at) < SEEN_MIN) found.push({ scene: i, frame: it.at, what: `${it.kind} is on screen only ${((s.to - it.at) / 30).toFixed(1)} s` });
-    if (s.text && !last && s.to - lastWord(s) < SEEN_MIN) found.push({ scene: i, frame: lastWord(s), what: `the words finish ${((s.to - lastWord(s)) / 30).toFixed(1)} s before the scene goes` });
+    for (const it of things) if (!last && s.to - Math.max(s.from, it.at) < seenMin(it)) found.push({ scene: i, frame: it.at, what: `${it.kind} is on screen only ${((s.to - it.at) / 30).toFixed(1)} s` });
+    if (s.text && !last && s.to - lastWord(s) < READ_MIN) found.push({ scene: i, frame: lastWord(s), what: `the words finish ${((s.to - lastWord(s)) / 30).toFixed(1)} s before the scene goes` });
     // never an empty screen at the start of a scene
     const first = Math.min(...things.map((it) => it.at), s.text?.words[0]?.at ?? Infinity);
     if (first > s.from + 15) found.push({ scene: i, frame: s.from, what: `the screen is empty for ${((first - s.from) / 30).toFixed(1)} s` });
@@ -112,12 +116,12 @@ export function inspected(plan: ComposerPlan): { plan: ComposerPlan; fixed: stri
       fixed.push(`scene ${f.scene + 1}: brought inside the frame`);
     } else if (/is on screen only/.test(f.what)) {
       // earlier, so it is seen (the scene's own start at the earliest)
-      for (const it of solid(s)) if (s.to - Math.max(s.from, it.at) < SEEN_MIN) it.at = Math.max(s.from, s.to - SEEN_MIN - 15);
+      for (const it of solid(s)) if (s.to - Math.max(s.from, it.at) < seenMin(it)) it.at = Math.max(s.from, s.to - seenMin(it) - 3);
       fixed.push(`scene ${f.scene + 1}: things come in earlier`);
     } else if (f.what.startsWith("the words finish") && s.text) {
       // the words said closer together, all on screen in time
       const ws = s.text.words;
-      const a = ws[0].at, b = Math.max(a, s.to - SEEN_MIN - 15);
+      const a = ws[0].at, b = Math.max(a, s.to - READ_MIN - 6);
       const z = Math.max(...ws.map((w) => w.at));
       if (z > b) ws.forEach((w) => (w.at = Math.round(a + ((w.at - a) * (b - a)) / Math.max(1, z - a))));
       fixed.push(`scene ${f.scene + 1}: the words come in sooner`);

@@ -110,7 +110,19 @@ export async function generateVoice({
   let used = model;
   let result: Awaited<ReturnType<typeof falRun>>;
   try {
-    result = await speak(model, voice.template || process.env.FAL_VOICE_INPUT_TEMPLATE || "", voice);
+    try {
+      result = await speak(model, voice.template || process.env.FAL_VOICE_INPUT_TEMPLATE || "", voice);
+    } catch (e) {
+      // A voice name the model doesn't have (an old name left on /admin/models,
+      // a pick from an older list) never stops a video: the first voice of that
+      // gender on /admin/models speaks instead, else ElevenLabs' preset.
+      const said = (picked || voiceForGender(gender, voice)).toLowerCase();
+      const g = gender === "female" ? "female" : "male";
+      const other = [voice.choices.find((c) => c.gender === g)?.name, g === "female" ? "Sarah" : "Brian"].find((n) => n && n.toLowerCase() !== said);
+      if (override || !other || !/voice not found/i.test(e instanceof Error ? e.message : String(e))) throw e;
+      console.warn("voice name not found; another voice instead:", { model, voice: said, instead: other });
+      result = await speak(model, voice.template || process.env.FAL_VOICE_INPUT_TEMPLATE || "", { ...voice, [g]: other });
+    }
   } catch (e) {
     // A model chosen on /admin/models that fails never stops a video: the
     // environment's voice speaks instead. (The admin page's test has no fallback.)
