@@ -25,12 +25,11 @@ export async function login(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent(message)}`);
   }
   // Suspended from /admin/users.
-  const access = await userAccess(supabase, data.user.id);
-  if (access.suspended) {
+  if ((await userAccess(supabase, data.user.id)).suspended) {
     await supabase.auth.signOut();
     redirect(`/login?error=${encodeURIComponent("This account is suspended. Contact support.")}`);
   }
-  redirect(access.pending ? "/pending" : "/dashboard");
+  redirect("/dashboard");
 }
 
 export async function signup(formData: FormData) {
@@ -63,7 +62,7 @@ export async function signup(formData: FormData) {
   if (verify) redirect(`/login?message=${encodeURIComponent("Check your email to confirm your account.")}`);
   const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
   if (error) redirect(`/login?message=${encodeURIComponent("Your account is ready. Log in to continue.")}`);
-  redirect(approve ? "/pending" : "/dashboard");
+  redirect("/dashboard");
 }
 
 export async function logout() {

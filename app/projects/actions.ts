@@ -125,7 +125,8 @@ export async function createProject(
   // Controls from /admin: suspension, maintenance mode, daily limit (admins exempt).
   const access = await userAccess(supabase, user.id);
   if (access.suspended) return { error: "This account is suspended. Contact support." };
-  if (access.pending) return { error: "Your account is waiting for approval." };
+  // (waiting for approval: no welcome credits yet)
+  if (access.pending) return { error: "Not enough credits yet — your account is waiting for approval. Your welcome credits arrive as soon as it's approved." };
   if (!access.admin) {
     const settings = await getSettings();
     if (settings.maintenance_mode === true) return { error: String(settings.maintenance_message) };
@@ -150,6 +151,9 @@ export async function createProject(
   const picked = pickable(billing, asked, paid);
   if (!picked && asked !== "standard") return { error: billing.tiers[asked as TierId]?.paidOnly && !paid ? `${billing.tiers[asked as TierId].name} is for customers who have bought credits. Buy credits to use it, or choose ${billing.tiers.standard.name}.` : "That quality level isn't available." };
   const quality = picked ?? "standard";
+  // (welcome credits only: a script short enough for them)
+  if (!paid && voiceScript.length > billing.trialScriptMax)
+    return { error: `With welcome credits the script can be up to ${billing.trialScriptMax} characters. Shorten it, or buy credits for a longer video.` };
   const cost = creditsFor(billing, quality, duration);
   if (!access.admin) {
     const have = await balanceOf(user.id);

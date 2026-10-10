@@ -13,7 +13,9 @@ export type TierStatus = "on" | "soon" | "off";
 // paidOnly: only for customers who have bought credits (or were given them by the team)
 export type Tier = { name: string; blurb: string; badge: string; perSecond: number; model: string; status: TierStatus; paidOnly: boolean };
 export type Pack = { usd: number; credits: number };
-export type Billing = { tiers: Record<TierId, Tier>; packs: Pack[]; signupCredits: number; minSeconds: number };
+// trialScriptMax: the longest script (characters) a customer who hasn't bought
+// credits may write — enough for a video their welcome credits pay for
+export type Billing = { tiers: Record<TierId, Tier>; packs: Pack[]; signupCredits: number; minSeconds: number; trialScriptMax: number };
 
 export const DEFAULT_BILLING: Billing = {
   tiers: {
@@ -31,6 +33,8 @@ export const DEFAULT_BILLING: Billing = {
   signupCredits: 50,
   // a video is charged at least this many seconds
   minSeconds: 15,
+  // ~33 words ≈ a 16 s video ≈ 48 Standard credits
+  trialScriptMax: 200,
 };
 
 const num = (v: unknown, d: number, min = 0, max = 1e6) => {
@@ -57,7 +61,7 @@ export function normalizeBilling(raw: unknown): Billing {
     .filter((p) => p.usd >= 1 && p.credits > 0)
     .sort((a, b) => a.usd - b.usd)
     .slice(0, 8);
-  return { tiers, packs: packs.length ? packs : DEFAULT_BILLING.packs, signupCredits: Math.round(num(r.signupCredits, DEFAULT_BILLING.signupCredits, 0, 100000)), minSeconds: Math.round(num(r.minSeconds, DEFAULT_BILLING.minSeconds, 0, 120)) };
+  return { tiers, packs: packs.length ? packs : DEFAULT_BILLING.packs, signupCredits: Math.round(num(r.signupCredits, DEFAULT_BILLING.signupCredits, 0, 100000)), minSeconds: Math.round(num(r.minSeconds, DEFAULT_BILLING.minSeconds, 0, 120)), trialScriptMax: Math.round(num(r.trialScriptMax, DEFAULT_BILLING.trialScriptMax, 50, 1000)) };
 }
 
 // The credits a video of this length costs at this level.

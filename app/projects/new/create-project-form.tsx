@@ -53,7 +53,8 @@ async function colourOf(url: string): Promise<string> {
 // A quality level as the form shows it (lib/billing-config: no model names).
 export type Level = { id: TierId; name: string; blurb: string; badge: string; perSecond: number; soon: boolean; locked: boolean };
 
-export function CreateProjectForm({ prefill, voices = [], levels = [], minSeconds = 0, credits = null }: { prefill?: Prefill; voices?: VoiceOption[]; levels?: Level[]; minSeconds?: number; credits?: number | null }) {
+// scriptMax: shorter for a customer on welcome credits only (/admin/billing)
+export function CreateProjectForm({ prefill, voices = [], levels = [], minSeconds = 0, credits = null, scriptMax = VOICE_SCRIPT_MAX }: { prefill?: Prefill; voices?: VoiceOption[]; levels?: Level[]; minSeconds?: number; credits?: number | null; scriptMax?: number }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState(prefill?.script ?? "");
   const [format, setFormat] = useState<string>(FORMATS[0]);
@@ -112,7 +113,7 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
             <textarea
               required
               rows={7}
-              maxLength={VOICE_SCRIPT_MAX}
+              maxLength={scriptMax}
               value={script}
               onChange={(e) => setScript(e.target.value)}
               placeholder="Paste your short script… e.g. Running an online store means juggling orders, stock and couriers. SeloraX brings it all into one dashboard…"
@@ -120,10 +121,16 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
             />
             <div className="flex items-center justify-between">
               <span className={hint}>{seconds ? `≈ ${seconds} s video` : "About 15 s per 250 characters"}</span>
-              <span className={`${hint} tabular-nums`}>
-                {script.length}/{VOICE_SCRIPT_MAX}
+              <span className={`${hint} tabular-nums ${script.length > scriptMax ? "font-semibold text-red-600" : ""}`}>
+                {script.length}/{scriptMax}
               </span>
             </div>
+            {scriptMax < VOICE_SCRIPT_MAX && (
+              <p className={hint}>
+                Welcome credits: a script up to {scriptMax} characters (about 15 s).{" "}
+                <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">Buy credits</Link> for longer scripts.
+              </p>
+            )}
           </Step>
 
           <Step n={2} title="Your brand" sub="Your icon and name reveal the product and close the video.">

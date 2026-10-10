@@ -30,7 +30,7 @@ export default async function DashboardPage() {
   if (!user) redirect("/login");
 
   // RLS: only this user's projects and profile.
-  const [{ admin }, { data: rows }, { data: profile }] = await Promise.all([
+  const [{ admin, pending }, { data: rows }, { data: profile }] = await Promise.all([
     userAccess(supabase, user.id),
     supabase
       .from("projects")
@@ -52,5 +52,5 @@ export default async function DashboardPage() {
     : [];
   const previews = Object.fromEntries(signed.filter((s) => s.signedUrl && s.path).map((s) => [s.path!, s.signedUrl as string]));
 
-  return <DashboardView email={user.email ?? ""} name={name} admin={admin} credits={credits} projects={projects} previews={previews} />;
+  return <DashboardView email={user.email ?? ""} name={name} admin={admin} pending={pending} credits={credits} projects={projects} previews={previews} />;
 }

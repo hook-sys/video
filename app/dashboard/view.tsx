@@ -17,7 +17,8 @@ const PATH: Record<DashWindow, string> = { videos: "/dashboard", account: "/dash
 const TITLE: Record<DashWindow, string> = { videos: "Videos", account: "Account" };
 const windowAt = (l: Location): DashWindow => (l.hash === "#account" ? "account" : "videos");
 
-export function DashboardView({ email, name, admin, credits, projects, previews }: { email: string; name: string; admin: boolean; credits: number; projects: DashboardRow[]; previews: Record<string, string> }) {
+// (pending: the account is waiting for the team's approval — no welcome credits yet)
+export function DashboardView({ email, name, admin, pending = false, credits, projects, previews }: { email: string; name: string; admin: boolean; pending?: boolean; credits: number; projects: DashboardRow[]; previews: Record<string, string> }) {
   const { current, open, win, iconRef } = useWindows<DashWindow>("videos", PATH, windowAt, TITLE);
   const withState = projects.map((p) => ({ ...p, state: videoState(p) }));
   const ready = withState.filter((p) => p.state === "completed");
@@ -55,6 +56,8 @@ export function DashboardView({ email, name, admin, credits, projects, previews 
                 Create a video
               </Link>
             </div>
+
+            {pending && <p className="gs-note info">Your account is waiting for approval. Look around and get your video ready — your welcome credits arrive as soon as it&apos;s approved.</p>}
 
             <div className="gs-facts four">
               {[

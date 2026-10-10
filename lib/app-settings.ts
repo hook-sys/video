@@ -14,7 +14,7 @@ export type SettingDef = {
 export const SETTINGS: SettingDef[] = [
   { key: "signups_enabled", label: "New sign-ups", help: "When off, the sign-up form refuses new accounts.", type: "bool", fallback: true },
   { key: "email_verification", label: "Email verification", help: "When on, a new account must confirm its email (a link is sent) before it can sign in. When off, it is ready at once.", type: "bool", fallback: false },
-  { key: "require_approval", label: "Approve new accounts", help: "When on, a new account waits (it sees a waiting page) until the team approves it on Users. Welcome credits are given on approval. Accounts the team adds are approved already.", type: "bool", fallback: true },
+  { key: "require_approval", label: "Approve new accounts", help: "When on, a new account can look around and fill in a video but has no credits until the team approves it on Users (its welcome credits come then), and can't buy credits before. Accounts the team adds are approved already.", type: "bool", fallback: true },
   { key: "maintenance_mode", label: "Maintenance mode", help: "When on, customers can't start new videos (admins still can).", type: "bool", fallback: false },
   { key: "maintenance_message", label: "Maintenance message", help: "Shown to customers who try to create a video during maintenance.", type: "text", fallback: "MotionBrief is getting an upgrade. Back soon." },
   { key: "feature_sfx", label: "Sound effects", help: "Soft sound effects in every video — a whoosh between scenes, a pop as an icon comes in, a click on the button. No music.", type: "bool", fallback: true },

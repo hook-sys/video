@@ -17,7 +17,7 @@ async function signedIn() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   // (an account still waiting for approval can't buy or redeem yet)
-  if ((await userAccess(supabase, user.id)).pending) redirect("/pending");
+  if ((await userAccess(supabase, user.id)).pending) back("Your account is waiting for approval. You can buy credits as soon as it's approved.");
   return user;
 }
 

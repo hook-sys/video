@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { voiceChoiceOf } from "@/lib/projects";
+import { VOICE_SCRIPT_MAX, voiceChoiceOf } from "@/lib/projects";
 import { AppShell } from "@/components/site/app-shell";
 import { userAccess } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -20,7 +20,8 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const admin = user ? (await userAccess(supabase, user.id)).admin : false;
+  const access = user ? await userAccess(supabase, user.id) : null;
+  const admin = access?.admin ?? false;
   let prefill: Prefill | undefined;
   if (from && /^[0-9a-f-]{36}$/i.test(from)) {
     const { data } = await supabase.from("projects").select("direction, brand_name, website_url, call_to_action").eq("id", from).maybeSingle();
@@ -44,7 +45,11 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{prefill ? "A new video of the same script" : "Create your video"}</h1>
         <p className="max-w-xl text-foreground/60">{prefill ? "Your script and brand are filled in. Change anything, add your icon, and create." : "Your words, your brand, your answers. MotionBrief records the voice and directs every scene."}</p>
       </div>
-      <CreateProjectForm prefill={prefill} voices={voices} levels={levels} minSeconds={billing.minSeconds} credits={credits} />
+      {access?.pending && (
+        <p className="mb-6 rounded-2xl border border-amber-500/25 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">Your account is waiting for approval. You can look around and fill in your video now — your welcome credits arrive as soon as it&apos;s approved.</p>
+      )}
+      {/* (only welcome credits so far: a script short enough for them) */}
+      <CreateProjectForm prefill={prefill} voices={voices} levels={levels} minSeconds={billing.minSeconds} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} />
     </AppShell>
   );
 }

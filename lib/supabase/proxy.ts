@@ -1,9 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED_PATHS = ["/dashboard", "/projects", "/admin", "/billing", "/pending"];
-// (an account waiting for the team's approval sees only /pending)
-const CUSTOMER_PATHS = ["/dashboard", "/projects", "/billing"];
+const PROTECTED_PATHS = ["/dashboard", "/projects", "/admin", "/billing"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -40,16 +38,6 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/login";
     url.search = "";
     return NextResponse.redirect(url);
-  }
-
-  if (user && CUSTOMER_PATHS.some((p) => pathname.startsWith(p))) {
-    const { data } = await supabase.from("profiles").select("status").eq("id", user.id).maybeSingle();
-    if (data?.status === "pending") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/pending";
-      url.search = "";
-      return NextResponse.redirect(url);
-    }
   }
 
   return response;

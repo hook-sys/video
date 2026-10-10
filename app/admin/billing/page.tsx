@@ -82,9 +82,10 @@ export default async function BillingPage({ searchParams }: PageProps<"/admin/bi
               );
             })}
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:max-w-4xl">
             <label className={label}><span className={small}>Welcome credits (once, after email is confirmed; 15 s Standard = {creditsFor(billing, "standard", 15)})</span><input name="signup_credits" type="number" min={0} defaultValue={billing.signupCredits} className={input} /></label>
             <label className={label}><span className={small}>Shortest charge (seconds)</span><input name="min_seconds" type="number" min={0} max={120} defaultValue={billing.minSeconds} className={input} /></label>
+            <label className={label}><span className={small}>Script limit before buying (characters; welcome credits only — about 6 characters a second of video)</span><input name="trial_script_max" type="number" min={50} max={1000} defaultValue={billing.trialScriptMax} className={input} /></label>
           </div>
         </Card>
         <Card title="Credit packs" action={<span className={small}>Leave a row empty to remove it</span>}>

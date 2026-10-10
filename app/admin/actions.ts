@@ -228,6 +228,7 @@ export async function saveBilling(formData: FormData) {
     packs,
     signupCredits: f("signup_credits"),
     minSeconds: f("min_seconds"),
+    trialScriptMax: f("trial_script_max"),
   });
   const { error } = await s.db.from("app_settings").upsert({ key: BILLING_KEY, value: next, updated_at: new Date().toISOString(), updated_by: s.userId });
   if (error) back("/admin/billing", error.message);
