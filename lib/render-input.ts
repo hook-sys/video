@@ -4,6 +4,9 @@ import { ProductBrief } from "@/lib/ai/product-brief";
 import { LOGO_FILE_PREFIX, SCREENSHOTS_BUCKET, lockedVoiceScript, seedFrom } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
+import { getSettings } from "@/lib/app-settings";
+import { iconFor } from "@/lib/ai/motion-director";
+import { inspected } from "@/components/video/composer/inspect";
 import { frameOf } from "@/components/video/composer/frame";
 import { placeAll } from "@/components/video/composer/layout";
 import { type Staging, staged } from "@/components/video/composer/staging";
@@ -85,19 +88,25 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
   const plans = (stored?.videos ?? []).flatMap((v) => {
     const sc = ComposerScript.safeParse(v.script);
     if (!sc.success) return [];
+    // (an icon name the library lacks: the nearest one it has)
+    for (const scene of sc.data.scenes) for (const it of scene.items) if (it.icon || it.kind === "icon") it.icon = iconFor(it.icon, it.title);
     try {
       const { plan } = placeAll(toWord ? remapScript(sc.data, toWord) : sc.data, shown, duration, brand, v.seed, screenshotUrls.length, v.source, size);
       // (staged as it was chosen: a journey, depth, a recap…)
-      return [staged(plan, v.staging)];
+      // (the Frame Inspector's mends, as when it was made)
+      return [inspected(staged(plan, v.staging)).plan];
     } catch {
       return [];
     }
   });
+  // sound effects, unless the team turned them off (admin → Settings)
+  const sfx = (await getSettings()).feature_sfx !== false;
   if (!plans.length) {
     // (made before the Composer: composed now, the same every time)
     const seed = seedFrom(project.id ?? script);
     plans.push(...composeVariants({ words: shown, brand, duration, seed, count: 1, screens: screenshotUrls.length, size }).plans);
   }
+  for (const p of plans) p.sfx = sfx;
 
   // what the Motion Director decided (the idea, the camera language) and the code's score
   const sc = stored as { creative?: { idea?: string; language?: string }; profile?: { mood?: string; category?: string }; score?: { total?: number }; judge?: { best?: number; scores?: { candidate: number; total: number }[]; rule?: { total: number }[] } } | undefined;

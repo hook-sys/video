@@ -21,12 +21,15 @@ export const show = (k: number, dy = 18): CSSProperties => ({ opacity: clamp01(k
 // An icon in the art's icon style.
 export function Glyph({ c, name, size, tone = "accent", k = 1 }: { c: Ctx; name: string | null | undefined; size: number; tone?: "accent" | "panel" | "fill2"; k?: number }) {
   const icon = iconName(name);
-  const { pal, art } = c;
+  const { pal } = c;
+  // one premium look for every icon: a tile (square or round) or glass — the
+  // thin outline, duotone and bare styles read as unfinished
+  const art = { ...c.art, icons: c.art.icons === "round" || c.art.icons === "glass" ? c.art.icons : "tile" };
   const fill = tone === "fill2" ? pal.fill2 : pal.fill;
   const r = Math.min(size * 0.32, art.radius * 0.7 + 6);
   const box = (bg: string, color: string, extra?: CSSProperties) => (
     <div style={{ width: size, height: size, flexShrink: 0, borderRadius: art.icons === "round" ? 9999 : r, background: bg, display: "flex", alignItems: "center", justifyContent: "center", ...extra }}>
-      <Icon name={icon} size={size * 0.5} color={color} strokeWidth={2.1} draw={k} />
+      <Icon name={icon} size={size * 0.52} color={color} strokeWidth={2.3} draw={k} />
     </div>
   );
   const onPanel = tone === "panel";

@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { createProject } from "@/app/projects/actions";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import { BRAND_CATEGORIES } from "@/lib/studio";
-import { CATEGORY_LABEL, FEATURE_MAX, MOOD_CHOICES, OLD_WAYS, USES, USE_LABEL } from "@/lib/project-details";
+import { CATEGORY_LABEL, MOOD_CHOICES, OLD_WAYS, USES, USE_LABEL } from "@/lib/project-details";
 import { AUDIENCE_MAX, BRAND_NAME_MAX, CTA_MAX, directionFor, VOICE_SCRIPT_MAX, FORMATS, LOGO_MAX_BYTES, STYLE_PRESETS, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_STYLES, estimateVideoSeconds, validateLogo, type StylePreset } from "@/lib/projects";
 
 const label = "text-sm font-medium";
@@ -157,7 +157,7 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
 
           <div className="mt-4 flex flex-col gap-1.5 px-1">
             <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Now, make it unmistakably yours.</h2>
-            <p className="text-foreground/60">Six quick answers. Your director uses every one.</p>
+            <p className="text-foreground/60">Five quick answers. Your director uses every one.</p>
           </div>
 
           <Step n={3} title="Your business">
@@ -180,15 +180,7 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
             </div>
           </Step>
 
-          <Step n={4} title="Your three main features" sub="A few words each. Each one gets its own moment in the video.">
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <input key={i} name="feature" required maxLength={FEATURE_MAX} placeholder={["e.g. Online booking", "e.g. SMS reminders", "e.g. Live schedule"][i - 1]} aria-label={`Feature ${i}`} className={input} />
-              ))}
-            </div>
-          </Step>
-
-          <Step n={5} title="What your customers used before" sub="The old way the video starts from. Choose all that apply.">
+          <Step n={4} title="What your customers used before" sub="The old way the video starts from. Choose all that apply.">
             <div id="before" className="flex flex-wrap gap-2">
               {OLD_WAYS.map((o) => (
                 <label key={o} className="cursor-pointer">
@@ -206,7 +198,7 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
             </div>
           </Step>
 
-          <Step n={6} title="Mood">
+          <Step n={5} title="Mood">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               {MOOD_CHOICES.map((m) => (
                 <label key={m.mood} className="cursor-pointer">
@@ -220,11 +212,11 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
             </div>
           </Step>
 
-          <Step n={7} title="Where the video will be used">
+          <Step n={6} title="Where the video will be used">
             <Chips name="use" options={USES} format={(u) => USE_LABEL[u]} />
           </Step>
 
-          <Step n={8} title="Voice">
+          <Step n={7} title="Voice">
             <div className="grid gap-5 sm:grid-cols-2">
               <Field title="Language">
                 <select name="voice_language" required className={input}>
@@ -257,7 +249,7 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
             </div>
           </Step>
 
-          <Step n={9} title="Format">
+          <Step n={8} title="Format">
             <fieldset className="flex flex-col gap-2">
               <legend className="sr-only">Format</legend>
               <div className="grid grid-cols-3 gap-3">
@@ -283,7 +275,7 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
             </fieldset>
           </Step>
 
-          <Step n={10} title="The ending" sub="Shown on the last scene, under your icon.">
+          <Step n={9} title="The ending" sub="Shown on the last scene, under your icon.">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field title="Call to action">
                 <input name="call_to_action" required defaultValue={prefill?.cta} maxLength={CTA_MAX} placeholder="e.g. Start your free trial" className={input} />

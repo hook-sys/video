@@ -1,4 +1,5 @@
 import { resolveIcon } from "../icons";
+import { inspected } from "./inspect";
 import { DISPLAY_FACES, TEXT_FACES, rng } from "./art";
 import { LENSES, autoScript, drawArt } from "./auto";
 import { placeAll, type Problem } from "./layout";
@@ -182,7 +183,10 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
     const heroWord = creative?.hero != null ? words[Math.max(0, Math.min(words.length - 1, creative.hero))] : null;
     const direction = creative ? { language: creative.language, journey: creative.journey, guide: creative.guide, recap: creative.recap, hero: heroWord ? sceneAt(placed.plan, Math.round(heroWord.start * 30)) : null } : null;
     const staging = stageOf(placed.plan, s, [...avoidStaging, ...videos.map((x) => x.staging ?? null)], direction);
-    plans.push(staged(placed.plan, staging));
+    // the Frame Inspector: what a viewer would see wrong, mended; the rest reported (for the review and the score)
+    const qa = inspected(staged(placed.plan, staging));
+    qa.left.forEach((f) => problems.push(`video ${v + 1}, scene ${f.scene + 1}: ${f.what}`));
+    plans.push(qa.plan);
     videos.push({ script, seed: s, source: placed.plan.source, staging });
   }
   return { plans, videos, problems };

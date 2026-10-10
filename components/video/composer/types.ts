@@ -174,5 +174,7 @@ export type ComposerPlan = {
   // a journey's last seconds: the camera pulls back to show the whole way the
   // film came, and the brand comes up over it (see staging.ts withRecap)
   recap?: boolean | null;
+  // sound effects on what happens (off only when the team turns them off)
+  sfx?: boolean;
 };
 export type ComposerProps = { plan: ComposerPlan; audioUrl?: string | null; webAudio?: boolean; bare?: boolean };

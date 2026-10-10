@@ -24,10 +24,10 @@ export const MOOD_CHOICES: { mood: Mood; label: string; hint: string }[] = [
 ];
 
 export const OLD_WAYS = ["Spreadsheets", "Paper", "Phone calls", "WhatsApp", "Email", "Another app"] as const;
-export const FEATURE_MAX = 40;
 
 export const CATEGORY_LABEL = (c: BrandCategory) => (c === "hr & teams" ? "HR & teams" : c.charAt(0).toUpperCase() + c.slice(1));
 
+// (features: asked for until Oct 2026; older projects keep theirs, new ones have none)
 export type ProjectDetails = { category: BrandCategory; use: Use; mood: Mood; features: string[]; before: string[] };
 
 const isOne = <T extends string>(xs: readonly T[], v: unknown): v is T => typeof v === "string" && (xs as readonly string[]).includes(v);
@@ -37,15 +37,12 @@ export function detailsFrom(formData: FormData): { details?: ProjectDetails; err
   const category = formData.get("category");
   const use = formData.get("use");
   const mood = formData.get("mood");
-  const features = formData.getAll("feature").map((f) => String(f).trim()).filter(Boolean);
   const before = formData.getAll("before").map(String).filter((b) => isOne(OLD_WAYS, b));
   if (!isOne(BRAND_CATEGORIES, category)) return { error: "Choose your type of business." };
-  if (features.length < 3) return { error: "Name your three main features." };
-  if (features.some((f) => f.length > FEATURE_MAX)) return { error: `Keep each feature to ${FEATURE_MAX} characters.` };
   if (!before.length) return { error: "Choose what your customers used before." };
   if (!isOne(MOODS, mood)) return { error: "Choose a mood." };
   if (!isOne(USES, use)) return { error: "Choose where the video will be used." };
-  return { details: { category, use, mood, features: features.slice(0, 3), before } };
+  return { details: { category, use, mood, features: [], before } };
 }
 
 // A stored value (older projects have none).

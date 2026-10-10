@@ -19,6 +19,7 @@ import { depthHops, hopAt, innerTransform, isDepth, outerTransform, tunnelAt, zo
 import { measureText } from "@remotion/layout-utils";
 import { STILL_BACKGROUND, type ComposerProps, type EnterKind, type ItemKind, type PlacedItem, type PlacedScene, type TextBlock } from "./types";
 import { H, W, setFrame } from "./frame";
+import { SoundEffects } from "./sfx";
 
 // A Composer film: the Director's scenes on the voice's words. Every scene
 // is its own composition; one field of light runs under all of them and
@@ -151,12 +152,19 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
   const clip = flip ? `circle(${Math.round(Math.sqrt(tk) * reach)}px at ${Math.round(origin.x)}px ${Math.round(origin.y)}px)` : undefined;
   // a scene's own background (each scene on its own: a tile, a window, a page section)
   const sceneField = (i: number) => <Field f={f} kind={art.field} pal={scenes[i].dark ? pals.dark : pals.light} hue={art.hue} anchor={anchors[i]} energy={art.energy} overlay={art.overlay} />;
+  // the voice, and the sound effects under it
+  const sound = (
+    <>
+      {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+      {!bare && <SoundEffects plan={plan} webAudio={webAudio} />}
+    </>
+  );
   if (plan.journey === "scroll") {
     const props = { plan, pals, m, display: familyOf(display), textFamily: familyOf(textFace), screens, texts, D, field: fieldOf };
     return (
       <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
         <ScrollPage {...props} bare={bare} sceneField={sceneField} />
-        {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+        {sound}
       </AbsoluteFill>
     );
   }
@@ -165,7 +173,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
     return (
       <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
         <Depth {...props} bare={bare} sceneField={sceneField} />
-        {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+        {sound}
       </AbsoluteFill>
     );
   }
@@ -174,7 +182,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
     return (
       <AbsoluteFill style={{ background: "#000", overflow: "hidden", fontFamily: familyOf(textFace) }}>
         <Journey {...props} bare={bare} />
-        {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+        {sound}
       </AbsoluteFill>
     );
   }
@@ -183,7 +191,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
       {flip && fieldOf(scenes[cur - 1].dark)}
       <AbsoluteFill style={clip ? { clipPath: clip, WebkitClipPath: clip } : undefined}>{fieldOf(s.dark)}</AbsoluteFill>
       {!bare && scenes.map((sc, i) => <SceneLayer key={i} i={i} plan={plan} pals={pals} m={m} display={familyOf(display)} textFamily={familyOf(textFace)} screens={screens} texts={texts} D={D} field={fieldOf} />)}
-      {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
+      {sound}
     </AbsoluteFill>
   );
 }

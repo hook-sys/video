@@ -1,14 +1,12 @@
 import type { Word } from "./types";
 
-// The words a scene shows: the words the scene asks for when they are few
-// (a whole short sentence reads as one), else its highlight — up to SHOWN
-// words of the scene's own, in order (so each still comes in as it is said):
-// the phrase that carries the scene (its key words, a spoken number, the most
-// things named), a whole clause or sentence when one fits, ending where the
-// voice pauses; never one cut mid-phrase or starting or ending on a little
-// word ("and", "the", "in").
+// The words a scene shows: its hook, never the sentence the voice says — up
+// to SHOWN words of the scene's own, in order (so each still comes in as it
+// is said): the phrase that carries the scene (its key words, a spoken
+// number, the thing named), never one starting or ending on a little word
+// ("and", "the", "in").
 
-export const SHOWN = 10;
+export const SHOWN = 4;
 // a pause: a clause or sentence ends on the word (the Bengali দাঁড়ি too)
 const PAUSE = /[.,;:!?—–।]["”’)]*$/;
 const STOP = /[.!?।]["”’)]*$/;
@@ -29,7 +27,7 @@ export function highlightOf(words: Word[], from: number, to: number, keys: Set<s
       const plain = ws.map(bare);
       let score = 0;
       plain.forEach((w) => {
-        if (keys.has(w)) score += 2;
+        if (keys.has(w)) score += 3.5;
         if (NUMBER.test(w)) score += 2.5;
         if (w.length > 2 && !LITTLE.has(w)) score += 1;
       });
@@ -43,13 +41,12 @@ export function highlightOf(words: Word[], from: number, to: number, keys: Set<s
       else score -= 4;
       const starts = a === from || PAUSE.test(words[a - 1]?.text ?? "");
       if (starts) score += 0.8;
-      // a whole sentence reads best of all
-      if ((a === from || STOP.test(words[a - 1]?.text ?? "")) && (b === to || STOP.test(ws[len - 1]))) score += 2.5;
       // never across a sentence end
       // never across a sentence end (each one crossed counts)
       // (two very short sentences read as one: "No credit card. No time limit.")
       score -= ws.slice(0, -1).filter((w) => STOP.test(w)).length * (len <= 6 ? 1 : 6);
-      score -= Math.abs(len - 6) * 0.2;
+      // (the hook: two or three words read at a glance)
+      score -= Math.abs(len - 2.5) * 0.6;
       if (score > bestScore) {
         bestScore = score;
         best = [a, b];

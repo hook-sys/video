@@ -1,7 +1,5 @@
 import { emWidth, faceOf, rng } from "./art";
-import { SHOWN, highlightOf, shownWord } from "./highlight";
-// a word that ends a sentence (the Bengali দাঁড়ি too)
-const STOP_END = /[.!?।]["”’)]*$/;
+import { highlightOf, shownWord } from "./highlight";
 import { TRANSITION_FRAMES, baseSize } from "./sizes";
 import type { ArrangeKind, ArtT, Box, Brand, ComposerPlan, ItemT, LayoutKind, PlacedItem, PlacedScene, SceneT, ScriptT, TextBlock, Word } from "./types";
 import { FPS } from "./types";
@@ -21,7 +19,8 @@ type Rect = { l: number; t: number; r: number; b: number };
 const rect = (l: number, t: number, r: number, b: number): Rect => ({ l, t, r, b });
 const ACCENTS = new Set(["badge", "shape", "cursor"]);
 export const isAccent = (it: Pick<ItemT, "kind">) => ACCENTS.has(it.kind);
-const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "");
+// (letters of any script: Bengali keys match too)
+const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}%$€£৳]+/gu, "");
 const LEAD = 6;
 // a scene is held at least this long (frames): long enough to see what it shows
 export const MIN_SCENE = 84;
@@ -166,6 +165,8 @@ function arrange(items: ItemT[], kind: ArrangeKind, vis: Rect, seed: number): { 
   });
 }
 
+// two boxes closer than `pad` (px): they touch
+const touches = (a: Box, b: Box, pad: number) => Math.min(a.x + a.w / 2, b.x + b.w / 2) - Math.max(a.x - a.w / 2, b.x - b.w / 2) > -pad && Math.min(a.y + a.h / 2, b.y + b.h / 2) - Math.max(a.y - a.h / 2, b.y - b.h / 2) > -pad;
 const overlap = (a: Box, b: Box) => {
   const w = Math.min(a.x + a.w / 2, b.x + b.w / 2) - Math.max(a.x - a.w / 2, b.x - b.w / 2);
   const h = Math.min(a.y + a.h / 2, b.y + b.h / 2) - Math.max(a.y - a.h / 2, b.y - b.h / 2);
@@ -320,18 +321,14 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   // the words: the scene's highlight (highlight.ts), in order
   let tfrom = s.text ? Math.max(p.wordFrom, Math.min(s.text.from, s.text.to)) : 0;
   let tto = s.text ? Math.min(p.wordTo, Math.max(s.text.from, s.text.to)) : -1;
-  const keys = new Set((s.text?.key ?? []).map(norm).filter(Boolean));
-  // words that start or end inside a short sentence show the whole sentence
-  // ("Is 50% off." → "This week only, AutoFlow Pro is 50% off.")
-  if (s.text && tto >= tfrom) {
-    let a = tfrom, b = tto;
-    while (a > p.wordFrom && !STOP_END.test(words[a - 1]?.text ?? "")) a--;
-    while (b < p.wordTo && !STOP_END.test(words[b]?.text ?? "")) b++;
-    if (b - a + 1 <= SHOWN) [tfrom, tto] = [a, b];
-  }
+  // (a key may be a phrase: "empty slots" lights both words)
+  const keys = new Set((s.text?.key ?? []).flatMap((k) => k.split(/\s+/)).map(norm).filter(Boolean));
   if (s.text && tto >= tfrom) [tfrom, tto] = highlightOf(words, tfrom, tto, keys);
   // (a stop the voice's timing gives as a word of its own is not shown)
-  const ws = s.text ? words.slice(tfrom, tto + 1).filter((w) => /[\p{L}\p{N}]/u.test(w.text)) : [];
+  // a scene of icons, each with its word: the icons' words are the words
+  // (no headline beside them saying it again)
+  const named = vis.length > 0 && vis.length <= 3 && vis.every((it) => it.kind === "icon" && !!it.title?.trim());
+  const ws = s.text && !named ? words.slice(tfrom, tto + 1).filter((w) => /[\p{L}\p{N}]/u.test(w.text)) : [];
   const hasText = ws.length > 0;
   const shown = ws.map((w, i) => shownWord(w.text, i === 0, i === ws.length - 1));
   let layout = s.layout;
@@ -435,10 +432,11 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   for (const it of placed) {
     if (isAccent(it)) continue;
     if (it.scale < 0.42) problems.push(`${it.kind} is too small to read (scale ${it.scale.toFixed(2)})`);
-    if (tb && !plated && overlap(tb.box, it.box) > 0.04) problems.push(`${it.kind} covers the words`);
+    // (words and things never touch: a clear gap between them)
+    if (tb && !plated && touches(tb.box, it.box, 28)) problems.push(`${it.kind} touches the words`);
   }
   const solid = placed.filter((q) => !isAccent(q));
-  for (let a = 0; a < solid.length; a++) for (let b = a + 1; b < solid.length; b++) if (kind !== "cascade" && kind !== "orbit" && overlap(solid[a].box, solid[b].box) > 0.06) problems.push(`${solid[a].kind} and ${solid[b].kind} overlap`);
+  for (let a = 0; a < solid.length; a++) for (let b = a + 1; b < solid.length; b++) if (kind !== "cascade" && kind !== "orbit" && touches(solid[a].box, solid[b].box, 12)) problems.push(`${solid[a].kind} and ${solid[b].kind} touch`);
   if (!tb && !placed.length) problems.push("the scene is empty");
   // something is on screen from the scene's first frames (never an empty field)
   const firstAt = Math.min(tb?.words[0]?.at ?? Infinity, ...placed.filter((q) => !isAccent(q)).map((q) => q.at));

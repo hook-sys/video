@@ -22,9 +22,12 @@ import { placeAll } from "@/components/video/composer/layout";
 import { Script as ComposerScript } from "@/components/video/composer/types";
 import { clauses } from "@/components/video/composer/auto";
 import { detailsFrom, parseDetails } from "@/lib/project-details";
-import { MotionModel, answerOf, directMotion, ideaProblems, mendAnswer, reviewMotion, reviewNotes, rulePlan, scenesOf } from "@/lib/ai/motion-director";
+import { MotionModel, iconFor, answerOf, directMotion, ideaProblems, mendAnswer, reviewMotion, reviewNotes, rulePlan, scenesOf } from "@/lib/ai/motion-director";
 import { livingStandIn } from "@/components/video/icons/living";
 import { pieceToWord, scriptWords } from "@/components/video/composer/words";
+import { sfxOf } from "@/components/video/composer/sfx";
+import { inspect, inspected } from "@/components/video/composer/inspect";
+import { resolveIcon } from "@/components/video/icons";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -224,15 +227,13 @@ export async function runChecks(): Promise<Check[]> {
       scenes,
     });
     const sent: { instructions: string; input: string }[] = [];
-    // (the Story Analyst is asked first: it gets its own breakdown back)
-    const analysis = { audience: "clinic owners", pain: "missed calls", promise: "a full calendar", proof: "online booking", arc: "from phone calls to a calendar that fills itself", look: "calm and clinical", scenes: [{ from: 0, to: 8, beat: "hook", message: "the clinic's day", show: "a busy front desk", words: "Bookwell", why: "the pain first" }] };
-    const client = (out: unknown) => ({ responses: { parse: async (r: { instructions: string; input: string; text?: { format?: { name?: string } } }) => (sent.push(r), { id: "m", usage: { input_tokens: 1000, output_tokens: 2000 }, output_parsed: r.text?.format?.name === "story_analysis" ? analysis : out }) } });
+    const client = (out: unknown) => ({ responses: { parse: async (r: { instructions: string; input: string }) => (sent.push(r), { id: "m", usage: { input_tokens: 1000, output_tokens: 2000 }, output_parsed: out }) } });
     const input = { name: "Bookwell", color: "#4f46e5", cta: "Book a demo", words: bw.words, earlier: [{ idea: "old idea", language: "line" as const }], never: "- never use red", seed: 7 };
     let billed = 0;
     const md = await directMotion(input, (u) => (billed = u.inputTokens + u.outputTokens), client(answer({})) as never);
     const pl = md.plan;
-    add("Story Analyst first, then one Director call writes the brand, the concept, the staging, the art and every scene", sent.length === 2 && sent[0].instructions.includes("story analyst") && sent[1].input.includes("STORY ANALYST'S BREAKDOWN") && md.analysis?.pain === "missed calls" && billed === 6000 && pl.source === "ai" && !!pl.ideas && pl.ideas.scenes.length === sceneIdeas.scenes.length && pl.creative.idea === "a calendar that fills itself" && pl.creative.language === "carry", `analyst + 1 call · ${pl.ideas?.scenes.length} scenes · ${pl.creative.language}`);
-    add("Motion Director: gets the rulebook, the team's never list and this brand's earlier videos", sent[1].instructions.includes("HOUSE RULES") && sent[1].instructions.includes("never use red") && sent[1].instructions.includes("STAGING") && sent[1].input.includes("old idea") && sent[1].input.includes("EARLIER"), "rules · never list · earlier ideas");
+    add("Motion Director: one call writes the brand, the concept, the staging, the art and every scene", sent.length === 1 && billed === 3000 && pl.source === "ai" && !!pl.ideas && pl.ideas.scenes.length === sceneIdeas.scenes.length && pl.creative.idea === "a calendar that fills itself" && pl.creative.language === "carry", `1 call · ${pl.ideas?.scenes.length} scenes · ${pl.creative.language}`);
+    add("Motion Director: gets the rulebook, the team's never list and this brand's earlier videos", sent[0].instructions.includes("HOUSE RULES") && sent[0].instructions.includes("never use red") && sent[0].instructions.includes("STAGING") && sent[0].input.includes("old idea") && sent[0].input.includes("EARLIER"), "rules · never list · earlier ideas");
     add("Motion Director: unsaid words and numbers dropped, a bad hero mended", pl.profile.keywords.includes("clinic") && !pl.profile.keywords.includes("rocket") && !pl.profile.numbers.length && pl.profile.look.energy <= 0.85 && pl.creative.hero < n && pl.creative.journey === "right", `${pl.profile.keywords.join(", ")} · hero word ${pl.creative.hero}`);
     add("Motion Director: dark or light is decided once (the staging), everywhere the same", pl.creative.scheme === "mixed" && pl.profile.look.scheme === "mixed" && (pl.ideas!.arts[0] as { scheme?: string }).scheme === "mixed", "staging · brand look · art: mixed");
     const built = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 11, ideas: pl.ideas, count: 1, creative: pl.creative });
@@ -257,9 +258,10 @@ export async function runChecks(): Promise<Check[]> {
       pairs.forEach(([k, v]) => f.append(k, v));
       return f;
     };
-    const full = detailsFrom(form([["category", "online shop"], ["use", "social"], ["mood", "energetic"], ["feature", "Orders"], ["feature", "Stock"], ["feature", "Couriers"], ["before", "Spreadsheets"]]));
-    const missing = detailsFrom(form([["category", "online shop"], ["use", "social"], ["mood", "energetic"], ["feature", "Orders"], ["feature", "Stock"], ["before", "Spreadsheets"]]));
-    add("form: every answer is required", !!full.details && full.details.features.length === 3 && !missing.details && !!missing.error && parseDetails(full.details)?.use === "social" && parseDetails({ category: "nope" }) === null, missing.error ?? "");
+    // (no features asked any more; the other answers are all required)
+    const full = detailsFrom(form([["category", "online shop"], ["use", "social"], ["mood", "energetic"], ["before", "Spreadsheets"]]));
+    const missing = detailsFrom(form([["category", "online shop"], ["use", "social"], ["mood", "energetic"]]));
+    add("form: every answer is required (no features asked)", !!full.details && full.details.features.length === 0 && !missing.details && !!missing.error && parseDetails(full.details)?.use === "social" && parseDetails({ category: "nope" }) === null, missing.error ?? "");
     const back = answerOf(pl, ruleVideo);
     add("a stored video goes back to the director in its own format", (back.staging as { scheme: string }).scheme === "mixed" && !("scheme" in (back.arts as Record<string, unknown>[])[0]) && (back.scenes as unknown[]).length === ruleVideo.scenes.length, "brand · concept · staging · art · scenes");
     // one camera language per video, its signature at the hero
@@ -360,7 +362,30 @@ export async function runChecks(): Promise<Check[]> {
     // a whole short sentence is shown as it is; a long one never cut mid-phrase
     const ws = "Install in two minutes and get your evenings back.".split(" ").map((text, i) => ({ text, start: i * 0.3, end: i * 0.3 + 0.25 }));
     const [a, b] = highlightOf(ws, 0, ws.length - 1, new Set());
-    add("a short sentence is shown whole (never \"… and get\")", a === 0 && b === ws.length - 1, ws.slice(a, b + 1).map((w) => w.text).join(" "));
+    const hook = ws.slice(a, b + 1).map((w) => w.text);
+    add("only the hook on screen (a few words, never the sentence)", hook.length <= SHOWN && hook.length >= 2 && !/^(and|get|the|in|a)$/i.test(hook.at(-1)!), hook.join(" "));
+    // a sound on each moment, never two at once; none when turned off
+    const film = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 4, count: 1 }).plans[0];
+    const fx = sfxOf(film);
+    add("sound effects: on each moment, never two at once, a chime at the end, none when off", fx.length >= film.scenes.length && fx.every((e, i) => !i || e.at - fx[i - 1].at >= 9) && fx.at(-1)!.name === "success_chime" && sfxOf({ ...film, sfx: false }).length === 0, `${fx.length} sounds · ${[...new Set(fx.map((e) => e.name))].join(", ")}`);
+    // the Frame Inspector: wrongs put in on purpose are found and mended
+    const base2 = composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 6, count: 1 }).plans[0];
+    const broken = { ...base2, journey: null, scenes: base2.scenes.map((sc) => ({ ...sc, items: sc.items.map((it) => ({ ...it })) })) };
+    const s1 = broken.scenes[1];
+    const main = s1.items.find((it) => !["badge", "shape", "cursor"].includes(it.kind))!;
+    main.at = s1.to - 10;
+    if (s1.text) {
+      main.from = { x: s1.text.box.x - 600, y: s1.text.box.y, w: 100, h: 100 };
+      main.box = { ...main.box, x: s1.text.box.x + 600, y: s1.text.box.y };
+    }
+    const off = broken.scenes[2].items[0];
+    if (off) off.box = { ...off.box, x: -400 };
+    const qa = inspected(broken);
+    const leftWhat = qa.left.map((f) => f.what).join(" | ");
+    add("Frame Inspector: finds what a viewer would see wrong and mends it", inspect(broken).length >= 3 && qa.fixed.length >= 2 && !/on screen only|flies across|off the frame/.test(leftWhat), `${inspect(broken).length} found · ${qa.fixed.length} mended · left: ${qa.left.length}`);
+    // an icon name the library lacks becomes the nearest real one
+    const icons = [iconFor("notebook-pen-paper-xyz", "Paper diary"), iconFor(null, "Ringing phone"), iconFor("calendar", "x")];
+    add("icons: a name the library lacks becomes a real icon", icons.every((x) => !!x && !!resolveIcon(x)) && icons[2] === "calendar", icons.join(" · "));
     // the Director's slips are mended, never the whole plan lost
     const raw = JSON.parse(JSON.stringify(answerOf(rulePlan({ name: "Bookwell", words: bw.words, seed: 3 }), composeVariants({ words: bw.words, brand: bw.brand, duration: dur, seed: 3, count: 1 }).videos[0].script)));
     raw.staging.language = "whip";

@@ -65,7 +65,8 @@ function IconThing({ c, it, w }: P) {
           <Glyph c={c} name={it.icon} size={s} k={kIn(c, it.at, 30)} />
         )}
       </div>
-      {it.title && <div style={{ ...label(c, 34), textAlign: "center", whiteSpace: "nowrap" }}>{it.title}</div>}
+      {/* its word, coming in with it */}
+      {it.title && <div style={{ ...label(c, 46), fontWeight: 700, textAlign: "center", whiteSpace: "nowrap", ...show(kIn(c, it.at + 6), 14) }}>{it.title}</div>}
     </div>
   );
 }
