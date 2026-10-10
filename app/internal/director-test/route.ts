@@ -52,7 +52,9 @@ export async function GET(request: Request) {
     const t0 = Date.now();
     try {
       const run = await direct(id, name, prompt, before);
-      await createAdminClient().storage.from(VIDEOS_BUCKET).upload(`${DIR}/${name}.json`, JSON.stringify({ ...run, ms: Date.now() - t0 }), { contentType: "application/json", upsert: true });
+      // (the bucket takes only video/mp4: the run is kept under that type; it is read back as text)
+      const { error } = await createAdminClient().storage.from(VIDEOS_BUCKET).upload(`${DIR}/${name}.json`, JSON.stringify({ ...run, ms: Date.now() - t0 }), { contentType: "video/mp4", upsert: true });
+      if (error) throw new Error(`store: ${error.message}`);
       console.info("director-test:", name, prompt, run.source, Math.round((Date.now() - t0) / 1000), "s");
     } catch (e) {
       console.warn("director-test failed:", name, e instanceof Error ? e.message : e);
