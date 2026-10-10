@@ -38,6 +38,14 @@ function snapshotFor(hash: string, signal: AbortSignal): Promise<string> {
   return making.get(hash)!;
 }
 
+// The snapshot for the film this server was built with (the server render,
+// lib/render-server.ts, starts from it too).
+export async function filmSnapshot(signal: AbortSignal): Promise<string> {
+  const hash = await bundleHash();
+  if (!hash) throw new Error("the film was not bundled");
+  return snapshotFor(hash, signal);
+}
+
 // Gets the sandbox ready while the video is still being made (the first
 // check after a new film takes a few minutes otherwise).
 export async function prepareFrameCheck(budgetMs: number) {

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { SCREENSHOTS_BUCKET } from "@/lib/projects";
+import { SCREENSHOTS_BUCKET, VIDEOS_BUCKET } from "@/lib/projects";
+import { getSettings } from "@/lib/app-settings";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { generateBrief, generateVoice, retryPipeline } from "@/app/projects/actions";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -91,6 +92,17 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       composer = null;
     }
   }
+  // the MP4 made on the server (lib/render-server.ts): downloaded as it is;
+  // until it is there (or if it can't be made) the browser renders it
+  const serverRender = (await getSettings()).feature_server_render !== false;
+  const made = (project.brief as { composer?: { render?: { plan?: number } } } | null)?.composer?.render;
+  let file: { url: string; plan: number } | null = null;
+  if (ready && project.render_status === "completed" && project.video_path && made) {
+    const name = `${(project.brand_name ?? "").replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "video"}.mp4`;
+    const { data: signedVideo } = await supabase.storage.from(VIDEOS_BUCKET).createSignedUrl(project.video_path, 3600, { download: name });
+    if (signedVideo?.signedUrl) file = { url: signedVideo.signedUrl, plan: made.plan ?? 0 };
+  }
+  const rendering = serverRender && project.pipeline_status === "completed" && (project.render_status === "processing" || project.render_status === "idle");
   const direction = String(project.direction ?? "");
   const voiceScript = direction.split(/\n\nVisual style:/)[0].trim();
   const visualStyle = direction.match(/Visual style:\s*(.+)\s*$/m)?.[1] ?? null;
@@ -117,7 +129,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   return (
     <AppShell title={title} admin={admin} active={null} initial={(user?.email ?? "?")[0]} wide>
     <div className="flex flex-col gap-6">
-      <AutoRefresh active={project.pipeline_status === "running"} />
+      <AutoRefresh active={project.pipeline_status === "running" || rendering} intervalMs={rendering ? 6000 : 4000} />
       <BackToDashboard />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">
@@ -143,7 +155,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {/* The Composer's video: watch it, change it, download it. */}
       {ready && composer && (
-        <ComposerStudio plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={audioUrl} name={title} className={primaryBtn} about={composer.about} />
+        <ComposerStudio projectId={id} file={file} rendering={rendering} autoStart={rendering && project.render_status === "idle"} plans={composer.plans} changes={composer.changes} screens={composer.screens} audioUrl={audioUrl} name={title} className={primaryBtn} about={composer.about} />
       )}
       {ready && !composer && (
         <section className="rounded-2xl bg-white/70 p-6 text-sm text-foreground/65 ring-1 ring-black/[0.06]">This video can&apos;t be shown: its voice is missing. Try again from a new video.</section>

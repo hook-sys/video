@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { startRender } from "@/app/projects/actions";
 import { Player } from "@remotion/player";
 import { ComposerFilm } from "@/components/video/composer/film";
 import type { ComposerPlan, ComposerProps } from "@/components/video/composer/types";
@@ -42,7 +43,15 @@ async function renderToFile({ props, file, signal, onProgress }: { props: Props;
 }
 
 
-export function ComposerStudio({ plans, changes, screens, audioUrl, name, className, about }: { plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null } }) {
+// file: the MP4 made on the server (lib/render-server.ts) and the version it
+// is; rendering: it is being made (autoStart: ask for it now)
+export function ComposerStudio({ projectId, file, rendering = false, autoStart = false, plans, changes, screens, audioUrl, name, className, about }: { projectId?: string; file?: { url: string; plan: number } | null; rendering?: boolean; autoStart?: boolean; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null } }) {
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!autoStart || !projectId || asked.current) return;
+    asked.current = true;
+    startRender(projectId).catch(() => {});
+  }, [autoStart, projectId]);
   // the newest version unless the customer picks an earlier one
   const [picked, setPicked] = useState<number | null>(null);
   const selected = Math.min(picked ?? plans.length - 1, plans.length - 1);
@@ -109,9 +118,31 @@ export function ComposerStudio({ plans, changes, screens, audioUrl, name, classN
         <aside className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
             <h2 className="text-sm font-semibold">Download</h2>
-            <button type="button" disabled={busy} onClick={download} className={className}>
-              {busy ? `Rendering · ${Math.round(progress * 100)}%…` : plans.length > 1 ? `Download version ${selected + 1}` : "Download video"}
-            </button>
+            {file && file.plan === selected && !busy ? (
+              <>
+                <a href={file.url} className={className}>
+                  {plans.length > 1 ? `Download version ${selected + 1}` : "Download video"}
+                </a>
+                <p className="text-xs text-foreground/50">1080p · high-quality MP4, ready now.</p>
+              </>
+            ) : rendering && selected === plans.length - 1 && !busy ? (
+              <>
+                <button type="button" disabled className={className}>
+                  <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
+                  Preparing your HD video…
+                </button>
+                <p className="text-xs text-foreground/50">
+                  About a minute. You can leave this page; it will be ready here.{" "}
+                  <button type="button" onClick={download} className="font-medium text-[#0a66d6] hover:underline">
+                    Or render it in this browser now
+                  </button>
+                </p>
+              </>
+            ) : (
+              <button type="button" disabled={busy} onClick={download} className={className}>
+                {busy ? `Rendering · ${Math.round(progress * 100)}%…` : plans.length > 1 ? `Download version ${selected + 1}` : "Download video"}
+              </button>
+            )}
             {busy && (
               <>
                 <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
@@ -123,7 +154,7 @@ export function ComposerStudio({ plans, changes, screens, audioUrl, name, classN
               </>
             )}
             {error && <p className="text-xs text-[#a1281b]">{error}</p>}
-            <p className="text-xs text-foreground/50">Rendered in this browser (1080p). Keep this tab open until it finishes.</p>
+            {busy && <p className="text-xs text-foreground/50">Rendered in this browser (1080p). Keep this tab open until it finishes.</p>}
           </div>
         </aside>
       </div>
