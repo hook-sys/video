@@ -67,6 +67,7 @@ export default async function UserPage({ params, searchParams }: PageProps<"/adm
               <p className="text-xs text-zinc-500">Details</p>
               <input name="full_name" defaultValue={u.full_name ?? ""} placeholder="Name" disabled={!editable} className={input} />
               <input name="email" type="email" defaultValue={u.email ?? ""} placeholder="Email" disabled={!editable} className={input} />
+              <input name="password" type="text" minLength={8} autoComplete="off" placeholder="New password (leave empty to keep)" disabled={!editable} className={input} />
               <button disabled={!editable} className={btn}>Save details</button>
             </form>
             <p className="text-xs text-zinc-500">

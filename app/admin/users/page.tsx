@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
-import { Badge, Card, Filters, PageHeader, Table, input, td } from "../_components/ui";
+import { ADMIN_ROLES, ROLE_INFO } from "@/lib/admin";
+import { createUser } from "../actions";
+import { Badge, Card, Filters, Notice, PageHeader, Table, btnPrimary, input, td } from "../_components/ui";
 import { ROLE_LABEL, ROLE_TONE, ago, cleanSearch, usd } from "../_components/format";
 
 export const metadata = { title: "Users" };
 
 export default async function UsersPage({ searchParams }: PageProps<"/admin/users">) {
-  const { q, status } = await searchParams;
+  const { q, status, error } = await searchParams;
   const search = cleanSearch(q);
   const filter = typeof status === "string" ? status : "";
-  const { db } = await requireAdmin("users");
+  const { db, role, can } = await requireAdmin("users");
 
   let query = db.from("profiles").select("id, email, full_name, role, status, credits, created_at").order("created_at", { ascending: false }).limit(500);
   if (search) query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`);
@@ -38,6 +40,27 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
           <input name="q" defaultValue={search} placeholder="Search email or name…" className={input} />
         </form>
       </PageHeader>
+      {typeof error === "string" && <Notice tone="warn">{error}</Notice>}
+      <details className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+        <summary className="cursor-pointer text-sm font-semibold text-zinc-200">+ Add a user</summary>
+        <form action={createUser} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <label className="flex flex-col gap-1"><span className="text-xs text-zinc-500">Email</span><input name="email" type="email" required className={input} /></label>
+          <label className="flex flex-col gap-1"><span className="text-xs text-zinc-500">Password (8+ characters; give it to them)</span><input name="password" type="text" required minLength={8} autoComplete="off" className={input} /></label>
+          <label className="flex flex-col gap-1"><span className="text-xs text-zinc-500">Name (optional)</span><input name="full_name" className={input} /></label>
+          {can("credits") && <label className="flex flex-col gap-1"><span className="text-xs text-zinc-500">Starting credits</span><input name="credits" type="number" min={0} max={1000000} defaultValue={0} className={input} /></label>}
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-zinc-500">Role</span>
+            <select name="role" defaultValue="user" disabled={role !== "super_admin"} className={input}>
+              <option value="user">Customer</option>
+              {ADMIN_ROLES.filter((r) => r !== "super_admin").map((r) => (
+                <option key={r} value={r}>{ROLE_INFO[r].label}</option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-end"><button className={btnPrimary}>Create account</button></div>
+        </form>
+        <p className="mt-3 text-xs text-zinc-500">The account is ready at once (email confirmed): they sign in with this email and password. A new password can be set on their page.</p>
+      </details>
       <Filters base="/admin/users" current={filter} items={[{ value: "", label: "All" }, { value: "active", label: "Active" }, { value: "suspended", label: "Suspended" }, { value: "admins", label: "Team" }]} />
       <Card>
         <Table head={["User", "Role", "Status", "Credits", "Videos", "Cost", "Last video", "Joined"]} empty="No users match.">

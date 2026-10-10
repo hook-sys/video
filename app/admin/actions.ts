@@ -43,8 +43,14 @@ export async function saveUser(userId: string, formData: FormData) {
     const { error } = await s.db.auth.admin.updateUserById(userId, { email, email_confirm: true });
     if (error) back(path, error.message);
   }
+  const password = String(formData.get("password") ?? "");
+  if (password) {
+    if (password.length < 8) back(path, "The password needs at least 8 characters.");
+    const { error } = await s.db.auth.admin.updateUserById(userId, { password });
+    if (error) back(path, error.message);
+  }
   await s.db.from("profiles").update({ full_name: name, ...(email ? { email } : {}) }).eq("id", userId);
-  await audit(s, "user.edit", { type: "user", id: userId }, { from: { name: user.full_name, email: user.email }, to: { name, email: email || user.email } });
+  await audit(s, password ? "user.edit_password" : "user.edit", { type: "user", id: userId }, { from: { name: user.full_name, email: user.email }, to: { name, email: email || user.email } });
   revalidatePath("/admin/users", "layout");
   redirect(`${path}?saved=1`);
 }
@@ -66,6 +72,31 @@ export async function adjustCredits(userId: string, formData: FormData) {
   await audit(s, sign > 0 ? "credits.add" : "credits.remove", { type: "user", id: userId }, { email: user.email, amount, reason });
   revalidatePath("/admin/users", "layout");
   redirect(`${path}?saved=1`);
+}
+
+// A new account made by the team: email and password (they can sign in
+// at once), a name, starting credits, and — the super admin only — a team role.
+export async function createUser(formData: FormData) {
+  const s = await requireAdmin("users");
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const name = String(formData.get("full_name") ?? "").trim().slice(0, 80) || null;
+  const credits = Math.round(Number(formData.get("credits")) || 0);
+  const role = String(formData.get("role") ?? "user");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) back("/admin/users", "That email doesn't look right.");
+  if (password.length < 8) back("/admin/users", "The password needs at least 8 characters.");
+  if (credits < 0 || credits > 1_000_000) back("/admin/users", "Starting credits: 0 – 1,000,000.");
+  if (role !== "user" && (s.role !== "super_admin" || !isAdminRole(role) || role === "super_admin")) back("/admin/users", "Only the super admin can make a team member.");
+  if (credits > 0 && !s.can("credits")) back("/admin/users", "Your role can't give credits.");
+  const { data, error } = await s.db.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: name ? { full_name: name } : {} });
+  if (error || !data.user) back("/admin/users", error?.message.includes("already") ? `${email} already has an account.` : error?.message ?? "Couldn't create the account.");
+  const id = data.user!.id;
+  // (the profile row is made by the sign-up trigger)
+  await s.db.from("profiles").update({ full_name: name, ...(role !== "user" ? { role, admin_active: true } : {}) }).eq("id", id);
+  if (credits > 0) await changeCredits(id, credits, "admin", { note: "Starting credits", actor: s.userId });
+  await audit(s, "user.create", { type: "user", id }, { email, role, credits });
+  revalidatePath("/admin/users", "layout");
+  redirect(`/admin/users/${id}?saved=1`);
 }
 
 // ── the team (super admin only) ───────────────────────────────────────────
