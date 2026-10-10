@@ -3,28 +3,62 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 // Glass windows, one at a time (the site before login and the dashboard).
-// The one motion: a window grows smoothly straight out of the icon (or
-// button) that was clicked, the way a Mac window comes out of its Dock icon,
-// while the one it replaces shrinks back into its own icon. Switching changes
-// the address without loading a page; Back and Forward move between windows.
+// The one motion: a window comes out of the Dock icon (or button) that was
+// clicked the way a Mac window does (the genie): small and pinched into the
+// icon, it pours out of it — narrow at the icon, wide on the far side — and
+// opens to its full size; the one it replaces pours back into its own icon.
+// Switching changes the address without loading a page; Back and Forward
+// move between windows.
 
-const OPEN = { duration: 640, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
-const CLOSE = { duration: 360, easing: "cubic-bezier(0.55, 0, 0.75, 0.25)" };
+const OPEN = { duration: 620, easing: "cubic-bezier(0.22, 0.9, 0.3, 1)" };
+const CLOSE = { duration: 420, easing: "cubic-bezier(0.6, 0, 0.8, 0.4)" };
 const DELAY = 90;
 
-// a window shrunk, evenly, onto the centre of an icon
-function onto(win: HTMLElement, icon: Element) {
-  const w = win.getBoundingClientRect(), r = icon.getBoundingClientRect();
-  const dx = r.left + r.width / 2 - (w.left + w.width / 2), dy = r.top + r.height / 2 - (w.top + w.height / 2);
-  return `translate(${dx}px, ${dy}px) scale(${r.width / w.width})`;
+type Rect = { left: number; top: number; width: number; height: number };
+const FULL = "polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)";
+const pct = (v: number) => Math.max(4, Math.min(96, v));
+
+// The genie: the window's frames from the icon to its full size. Its shape
+// (a clip) pinches towards the side the icon is on (the Dock below on a
+// phone, beside it on a computer) while it grows out of the icon's centre.
+// An icon inside the window (a button in it) opens it evenly instead.
+function genie(win: HTMLElement, r: Rect): { frames: Keyframe[]; origin: string } {
+  const w = win.getBoundingClientRect();
+  const ix = r.left + r.width / 2, iy = r.top + r.height / 2;
+  const ox = ix - w.left, oy = iy - w.top;
+  const side = iy >= w.top + w.height - 4 ? "bottom" : ix <= w.left + 4 ? "left" : iy <= w.top + 4 ? "top" : ix >= w.left + w.width - 4 ? "right" : null;
+  const sx = Math.max(0.04, r.width / w.width), sy = Math.max(0.04, r.height / w.height);
+  const origin = `${ox}px ${oy}px`;
+  if (!side) return { origin, frames: [{ transform: `scale(${Math.max(sx, sy)})`, clipPath: FULL, opacity: 0 }, { opacity: 1, offset: 0.3 }, { transform: "none", clipPath: FULL, opacity: 1 }] };
+  const px = pct((ox / w.width) * 100), py = pct((oy / w.height) * 100);
+  // the shape: [pinched at the start, poured out half way]
+  const shape = (k: number, far: number) =>
+    side === "bottom" ? `polygon(${px - far}% 0%, ${px + far}% 0%, ${px + k}% 100%, ${px - k}% 100%)`
+    : side === "top" ? `polygon(${px - k}% 0%, ${px + k}% 0%, ${px + far}% 100%, ${px - far}% 100%)`
+    : side === "left" ? `polygon(0% ${py - k}%, 100% ${py - far}%, 100% ${py + far}%, 0% ${py + k}%)`
+    : `polygon(0% ${py - far}%, 100% ${py - k}%, 100% ${py + k}%, 0% ${py + far}%)`;
+  const across = side === "bottom" || side === "top";
+  return {
+    origin,
+    frames: [
+      { transform: across ? `scale(${sx * 2}, ${sy})` : `scale(${sx}, ${sy * 2})`, clipPath: shape(3, 22), opacity: 0 },
+      { opacity: 1, offset: 0.12 },
+      { transform: across ? "scale(0.9, 0.7)" : "scale(0.7, 0.9)", clipPath: shape(10, 100), offset: 0.5 },
+      { transform: "none", clipPath: FULL, opacity: 1 },
+    ],
+  };
 }
+const rectOf = (el: Element): Rect => el.getBoundingClientRect();
+// of a window's icons, the one on screen
+const shown = (els?: HTMLElement[]) => (els ?? []).find((el) => el.isConnected && el.getClientRects().length > 0) ?? null;
 
 export function useWindows<W extends string>(initial: W, path: Record<W, string>, windowAt: (l: Location) => W, title: Record<W, string>) {
   const [current, setCurrent] = useState<W>(initial);
   const [leaving, setLeaving] = useState<W | null>(null);
   const now = useRef<W>(initial);
   const wins = useRef<Partial<Record<W, HTMLElement | null>>>({});
-  const icons = useRef<Partial<Record<W, HTMLElement | null>>>({});
+  // (a window may have an icon in the bar and one in the dock: the one on screen is used)
+  const icons = useRef<Partial<Record<W, HTMLElement[]>>>({});
   const from = useRef<Element | null>(null);
   const moving = useRef(false);
 
@@ -55,8 +89,19 @@ export function useWindows<W extends string>(initial: W, path: Record<W, string>
     const prev = leaving ? wins.current[leaving] : null;
     if (prev && leaving) {
       prev.getAnimations().forEach((a) => a.cancel());
-      const back = icons.current[leaving];
-      const out = prev.animate([{ transform: "none", opacity: 1 }, { opacity: 0, offset: 0.4 }, { transform: back ? onto(prev, back) : "scale(0.9)", opacity: 0 }], CLOSE);
+      const back = shown(icons.current[leaving]);
+      // (the genie backwards: it pours into its own icon)
+      const g = back ? genie(prev, rectOf(back)) : null;
+      if (g) prev.style.transformOrigin = g.origin;
+      const backwards = (frames: Keyframe[]) =>
+        [...frames].reverse().map((f, i, all) => {
+          const k: Keyframe = { ...f };
+          if (typeof f.offset === "number") k.offset = 1 - f.offset;
+          else delete k.offset;
+          if (i === all.length - 1) k.opacity = 0;
+          return k;
+        });
+      const out = prev.animate(g ? backwards(g.frames) : [{ transform: "none", opacity: 1 }, { transform: "scale(0.9)", opacity: 0 }], CLOSE);
       out.finished
         .then(() => {
           prev.style.visibility = "hidden";
@@ -64,16 +109,17 @@ export function useWindows<W extends string>(initial: W, path: Record<W, string>
         })
         .catch(() => {});
     }
-    const icon = from.current?.isConnected ? from.current : icons.current[current];
+    const icon = from.current?.isConnected && from.current.getClientRects().length ? from.current : shown(icons.current[current]);
     if (icon) {
-      next.animate([{ transform: onto(next, icon) }, { transform: "none" }], { ...OPEN, delay: DELAY, fill: "backwards" });
-      next.animate([{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 1 }], { duration: OPEN.duration, delay: DELAY, easing: "linear", fill: "backwards" });
+      const g = genie(next, rectOf(icon));
+      next.style.transformOrigin = g.origin;
+      next.animate(g.frames, { ...OPEN, delay: DELAY, fill: "backwards" });
     }
   }, [current, leaving]);
 
   // Back and Forward move between windows; an address naming a window opens it
   useEffect(() => {
-    const go = () => show(windowAt(window.location), icons.current[windowAt(window.location)] ?? null, false);
+    const go = () => show(windowAt(window.location), shown(icons.current[windowAt(window.location)]), false);
     if (windowAt(window.location) !== now.current) go();
     window.addEventListener("popstate", go);
     return () => window.removeEventListener("popstate", go);
@@ -86,7 +132,8 @@ export function useWindows<W extends string>(initial: W, path: Record<W, string>
   };
   // where a window comes out of when nothing was clicked (Back, an address)
   const iconRef = (id: W) => (el: HTMLElement | null) => {
-    icons.current[id] = el;
+    const list = (icons.current[id] ?? []).filter((x) => x.isConnected);
+    icons.current[id] = el && !list.includes(el) ? [...list, el] : list;
   };
   const win = (id: W, body: React.ReactNode) =>
     id === current || id === leaving ? (
@@ -137,10 +184,9 @@ export function useArrival(ref: React.RefObject<HTMLElement | null>) {
     }
     const win = ref.current;
     if (!win || !from || Date.now() - from.at > 8000 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const w = win.getBoundingClientRect();
-    const dx = from.x + from.w / 2 - (w.left + w.width / 2), dy = from.y + from.h / 2 - (w.top + w.height / 2);
-    win.animate([{ transform: `translate(${dx}px, ${dy}px) scale(${from.w / w.width})` }, { transform: "none" }], OPEN);
-    win.animate([{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 1 }], { duration: OPEN.duration, easing: "linear" });
+    const g = genie(win, { left: from.x, top: from.y, width: from.w, height: from.h });
+    win.style.transformOrigin = g.origin;
+    win.animate(g.frames, OPEN);
   }, [ref]);
 }
 

@@ -43,6 +43,9 @@ export function AppShell({ title, admin, active, initial, wide, action, children
       </main>
       <footer className={`gs-footer${wide ? " wide" : ""}`}>© MotionBrief</footer>
       <nav className="gs-dock gs-glass" aria-label="Main">
+        <Link href="/dashboard" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionBrief">
+          <Mark />
+        </Link>
         <Link href="/dashboard" onClick={remember} aria-current={active === "videos" ? "page" : undefined}>
           <span className="gs-tile t1">
             <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" aria-hidden="true">

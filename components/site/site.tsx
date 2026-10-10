@@ -212,6 +212,10 @@ export function Site({ initial, signedIn, error, message }: Props) {
       <footer className="gs-footer">© MotionBrief</footer>
 
       <nav className="gs-dock gs-glass" aria-label="Main">
+        {/* (a computer: the brand on top of the dock, no bar) */}
+        <Link href="/" className="gs-dock-brand gs-only-wide" onClick={open("overview")} aria-label="MotionBrief">
+          <Mark />
+        </Link>
         {(
           [
             ["overview", "t1", <path key="p" d="M9 7v10l8-5z" fill="#fff" />],
@@ -241,6 +245,28 @@ export function Site({ initial, signedIn, error, message }: Props) {
           </Link>
         ))}
         <span className="gs-sep" aria-hidden="true" />
+        {signedIn ? (
+          <Link href="/dashboard" onClick={remember} className="gs-only-wide">
+            <span className="gs-tile t1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" aria-hidden="true">
+                <rect x="4" y="5" width="7" height="6" rx="1.5" />
+                <rect x="13" y="5" width="7" height="6" rx="1.5" />
+                <rect x="4" y="13" width="7" height="6" rx="1.5" />
+                <rect x="13" y="13" width="7" height="6" rx="1.5" />
+              </svg>
+            </span>
+            <small>Dashboard</small>
+          </Link>
+        ) : (
+          <Link href="/login" onClick={open("login")} className="gs-only-wide" aria-current={current === "login" ? "page" : undefined}>
+            <span ref={iconRef("login")} className="gs-tile t2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l4-4-4-4M14 12H4" />
+              </svg>
+            </span>
+            <small>Log in</small>
+          </Link>
+        )}
         {signedIn ? (
           <Link href="/projects/new" onClick={remember}>
             <span className="gs-tile t4">

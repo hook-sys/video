@@ -247,3 +247,37 @@
 .gs-wait-steps li.now { color: var(--gs-ink); background: #fff; box-shadow: 0 0 0 1.5px var(--gs-accent); }
 .gs-wait-steps li.now .dot { background: var(--gs-accent); color: #fff; }
 .gs-wait-steps li.now em { color: var(--gs-accent); font-weight: 600; }
+
+/* ── a computer: the dock stands on the left (every button in it), no bar on
+   top; on a phone the bar stays on top and the dock below ── */
+.gs-only-wide { display: none !important; }
+@media (min-width: 1024px) {
+  .gs-only-wide { display: flex !important; }
+  .gs-bar:not(.admin) { display: none; }
+  .gs-dock {
+    left: 20px; top: 50%; bottom: auto; transform: translateY(-50%);
+    flex-direction: column; align-items: center; gap: 12px; padding: 14px 10px; border-radius: 26px;
+    max-height: calc(100vh - 40px); overflow-y: auto; scrollbar-width: none;
+  }
+  .gs-dock small { font-size: 10.5px; }
+  .gs-dock [aria-current="page"]::after { bottom: auto; top: 24px; left: -8px; }
+  .gs-sep { width: 36px; height: 1px; margin: 2px 0; }
+  .gs-dock .gs-dock-brand .gs-mark { width: 30px; height: 30px; border-radius: 9px; }
+  .gs-dock .gs-dock-brand .gs-mark svg { width: 16px; height: 16px; }
+  .gs-stage { margin-top: 40px; width: min(1080px, calc(100% - 260px)); }
+  .gs-stage.wide, .gs-footer.wide { width: min(1200px, calc(100% - 260px)); }
+  .gs-footer { width: min(1080px, calc(100% - 260px)); margin-top: -96px; }
+  .gs-wait-win { margin-top: 12vh; }
+}
+
+/* while a video is made: how far along (still), and a way back */
+.gs-wait .gs-body { padding: clamp(22px, 5vw, 44px); }
+.gs-wait .gs-body h2 { font-size: clamp(26px, 6vw, 36px); }
+.gs-wait .gs-lead { font-size: clamp(15px, 2.4vw, 17px); margin-bottom: 20px; }
+.gs-wait-meter { height: 6px; border-radius: 99px; background: rgba(29, 29, 31, 0.08); overflow: hidden; margin: 0 0 18px; }
+.gs-wait-meter i { display: block; height: 100%; border-radius: 99px; background: var(--gs-accent); }
+.gs-wait-foot { margin-top: 20px; display: flex; justify-content: flex-end; }
+@media (max-width: 760px) {
+  .gs-wait-win { margin-top: 20px; }
+  .gs-wait-steps li { padding: 12px 14px; }
+}

@@ -105,6 +105,15 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
     : { label: "Draft", cls: "bg-foreground/10 text-foreground/60" };
   const primaryBtn = "inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#0a66d6] px-5 py-3.5 font-semibold text-white hover:bg-[#0859bd] disabled:opacity-60";
 
+  // while it is made: the waiting screen on its own (never inside the window)
+  if (project.pipeline_status === "running")
+    return (
+      <>
+        <AutoRefresh active />
+        <WaitingScreen step={project.pipeline_step} inline />
+      </>
+    );
+
   return (
     <AppShell title={title} admin={admin} active={null} initial={(user?.email ?? "?")[0]} wide>
     <div className="flex flex-col gap-6">
@@ -131,8 +140,6 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
           </div>
         </div>
       </div>
-
-      {project.pipeline_status === "running" && <WaitingScreen step={project.pipeline_step} />}
 
       {/* The Composer's video: watch it, change it, download it. */}
       {ready && composer && (
