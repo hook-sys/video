@@ -66,14 +66,15 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
   const seconds = script.trim() ? estimateVideoSeconds(script) : 0;
   const [quality, setQuality] = useState<TierId>("standard");
   const level = levels.find((l) => l.id === quality);
-  // (the team is not charged: credits null)
+  // (the team is not charged: credits null; the estimate is never shown — the
+  // real charge follows the voice's length — only used to say credits are short)
   const cost = level && credits !== null ? Math.ceil(Math.max(minSeconds, Math.ceil(seconds || minSeconds)) * level.perSecond) : 0;
   const short = credits !== null && cost > credits;
   const blocked = pending || !!logoError;
 
   const submit = (
     <button disabled={blocked} className="w-full rounded-full bg-[#0a66d6] px-6 py-4 text-base font-semibold text-white hover:bg-[#0859bd] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0a66d6]/30 disabled:opacity-60">
-      Create video{cost ? ` · ${cost.toLocaleString("en-US")} credits` : ""}
+      Create video
     </button>
   );
   const balance = credits !== null && (
@@ -353,7 +354,6 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
               <Summary k="Length" v={seconds ? `≈ ${seconds} s` : "—"} />
               <Summary k="Format" v={format} />
               {level && <Summary k="Quality" v={level.name} />}
-              {credits !== null && <Summary k="Credits" v={cost ? cost.toLocaleString("en-US") : "—"} />}
             </dl>
             {submit}
             {balance}
