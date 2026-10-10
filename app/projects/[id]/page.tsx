@@ -129,7 +129,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   return (
     <AppShell title={title} admin={admin} active={null} initial={(user?.email ?? "?")[0]} wide>
     <div className="flex flex-col gap-6">
-      <AutoRefresh active={project.pipeline_status === "running" || rendering} intervalMs={rendering ? 6000 : 4000} />
+      <AutoRefresh active={project.pipeline_status === "running"} />
       <BackToDashboard />
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">

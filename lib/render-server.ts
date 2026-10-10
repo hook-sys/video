@@ -1,6 +1,6 @@
 import "server-only";
 import { Sandbox } from "@vercel/sandbox";
-import { renderMediaOnVercel } from "@remotion/vercel";
+import { getRenderProgress } from "@remotion/vercel";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VIDEOS_BUCKET } from "@/lib/projects";
 import { RENDER_PROJECT_COLUMNS, type RenderProject, buildRenderInput } from "@/lib/render-input";
@@ -12,15 +12,27 @@ import { COMPOSER_ID } from "@/components/video/composer/types";
 // film) and encoded for quality — every frame as PNG (no banding in
 // gradients), x264 "slow" at CRF 16, bt709 colour, AAC 320k. Stored in
 // project-videos; the customer downloads the file (no rendering in their
-// browser). Never throws: a render that cannot run is marked failed and the
-// browser render remains.
+// browser).
+//
+// The render runs on its own in the sandbox (a 90 s video takes longer than
+// a function may run): startServerRender starts it and returns;
+// collectServerRender — asked by the project page while it waits, and by the
+// pipeline while it has time — reads its progress and, once it is done,
+// stores the file. Neither throws: a render that cannot be made is marked
+// failed and the browser render remains.
 
 // (the most this account's sandboxes get)
 const VCPUS = 4;
-// (a render left "processing" longer than this was cut off: it may start again)
-const STALE_MS = 10 * 60_000;
+// how long the sandbox may run: the longest video, with room
+const SANDBOX_MS = 25 * 60_000;
+// (a render "processing" longer than this was lost: it may start again)
+const STALE_MS = 30 * 60_000;
+const HOME = "/vercel/sandbox";
+const OUT = "/tmp/video.mp4";
 
 export type ServerRender = { at: string; ms: number; bytes: number; plan: number; seed: number; frames: number };
+type Job = { sandboxId: string; cmdId: string; at: string; plan: number; seed: number; frames: number };
+type Brief = { composer?: { renderJob?: Job | null; render?: ServerRender } & Record<string, unknown> } & Record<string, unknown>;
 
 // What went wrong, with the sandbox API's own answer when it gave one.
 export function sandboxError(e: unknown) {
@@ -41,68 +53,147 @@ async function claim(projectId: string) {
   return !!data?.length;
 }
 
-// The project's video (its newest version, as the studio shows it first)
-// rendered and stored, within the time given.
-export async function renderProjectVideo(projectId: string, budgetMs: number): Promise<ServerRender | { skipped: string }> {
+// brief.composer changed (only its render fields), the rest as it is now
+async function setComposer(projectId: string, fields: Record<string, unknown>, row: Record<string, unknown> = {}) {
   const admin = createAdminClient();
-  const t0 = Date.now();
-  if (budgetMs < 90_000) return { skipped: "no time left for the render" };
+  const { data } = await admin.from("projects").select("brief").eq("id", projectId).single();
+  const brief = (data?.brief as Brief | null) ?? {};
+  await admin
+    .from("projects")
+    .update({ ...row, ...(brief.composer ? { brief: { ...brief, composer: { ...brief.composer, ...fields } } } : {}) })
+    .eq("id", projectId);
+}
+
+async function fail(projectId: string, why: string) {
+  console.warn("server render:", projectId, why);
+  await setComposer(projectId, { renderJob: null }, { render_status: "failed", render_error: why.slice(0, 500) });
+  return { error: why };
+}
+
+// Starts the render of the project's video (its newest version, as the
+// studio shows it first) in a sandbox of its own.
+export async function startServerRender(projectId: string): Promise<{ started: true } | { error: string } | { skipped: string }> {
   if (!(await claim(projectId))) return { skipped: "already rendering or rendered" };
-  const failed = async (why: string) => {
-    console.warn("server render:", projectId, why);
-    await admin.from("projects").update({ render_status: "failed", render_error: why.slice(0, 500) }).eq("id", projectId);
-    return { skipped: why };
-  };
+  const admin = createAdminClient();
   try {
     const { data: project } = await admin.from("projects").select(RENDER_PROJECT_COLUMNS).eq("id", projectId).maybeSingle();
-    if (!project) return await failed("project not found");
+    if (!project) return await fail(projectId, "project not found");
+    // (the voice's link must last as long as the render may)
     const { composer, audioUrl, problems } = await buildRenderInput(admin, project as RenderProject, 2 * 3600);
     const index = (composer?.plans.length ?? 0) - 1;
     const plan = composer?.plans[index];
-    if (!plan || !audioUrl) return await failed(problems.join(" ") || "nothing to render");
+    if (!plan || !audioUrl) return await fail(projectId, problems.join(" ") || "nothing to render");
 
-    const signal = AbortSignal.timeout(budgetMs - 5_000);
+    const signal = AbortSignal.timeout(240_000);
     const snapshotId = await filmSnapshot(signal);
-    const sandbox = await Sandbox.create({ source: { type: "snapshot", snapshotId }, resources: { vcpus: VCPUS }, timeout: budgetMs - 10_000, signal });
-    let file: Buffer | null = null;
-    try {
-      const { sandboxFilePath } = await renderMediaOnVercel({
-        sandbox,
-        compositionId: COMPOSER_ID,
-        inputProps: { plan, audioUrl, screens: composer!.screens },
-        codec: "h264",
-        imageFormat: "png",
-        pixelFormat: "yuv420p",
-        crf: 16,
-        x264Preset: "slow",
-        colorSpace: "bt709",
-        audioCodec: "aac",
-        audioBitrate: "320k",
-        concurrency: VCPUS,
-        enforceAudioTrack: true,
-        timeoutInMilliseconds: 60_000,
-        logLevel: "error",
-      });
-      file = await sandbox.readFileToBuffer({ path: sandboxFilePath }, { signal });
-    } finally {
-      await sandbox.stop().catch(() => {});
-    }
-    if (!file?.length) return await failed("the render wrote no file");
-
-    const path = `${(project as RenderProject).user_id}/${projectId}/video.mp4`;
-    const { error } = await admin.storage.from(VIDEOS_BUCKET).upload(path, file, { contentType: "video/mp4", upsert: true });
-    if (error) return await failed(`upload: ${error.message}`);
-    const done: ServerRender = { at: new Date().toISOString(), ms: Date.now() - t0, bytes: file.length, plan: index, seed: plan.seed, frames: plan.duration };
-    // (which version the file is, kept with the video: the studio offers it for that one)
-    const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
-    const brief = (fresh?.brief as { composer?: object } | null) ?? {};
-    await admin
-      .from("projects")
-      .update({ render_status: "completed", render_error: null, video_path: path, ...(brief.composer ? { brief: { ...brief, composer: { ...brief.composer, render: done } } } : {}) })
-      .eq("id", projectId);
-    console.info("server render:", { projectId, ms: done.ms, mb: +(done.bytes / 1e6).toFixed(1), frames: done.frames });
-    return done;
+    const sandbox = await Sandbox.create({ source: { type: "snapshot", snapshotId }, resources: { vcpus: VCPUS }, timeout: SANDBOX_MS, signal });
+    // what @remotion/vercel's render script takes (renderMediaOnVercel's
+    // options), run detached: it writes progress.json as it goes
+    const config = {
+      serveUrl: `${HOME}/remotion-bundle`,
+      compositionId: COMPOSER_ID,
+      inputProps: { plan, audioUrl, screens: composer!.screens },
+      outputLocation: OUT,
+      codec: "h264",
+      crf: 16,
+      imageFormat: "png",
+      pixelFormat: "yuv420p",
+      envVariables: {},
+      frameRange: null,
+      everyNthFrame: 1,
+      proResProfile: null,
+      chromiumOptions: {},
+      scale: 1,
+      preferLossless: false,
+      enforceAudioTrack: true,
+      disallowParallelEncoding: false,
+      concurrency: VCPUS,
+      metadata: null,
+      licenseKey: null,
+      videoBitrate: null,
+      audioBitrate: "320k",
+      encodingMaxRate: null,
+      encodingBufferSize: null,
+      muted: false,
+      numberOfGifLoops: null,
+      x264Preset: "slow",
+      gopSize: null,
+      colorSpace: "bt709",
+      jpegQuality: 80,
+      audioCodec: "aac",
+      logLevel: "error",
+      timeoutInMilliseconds: 60_000,
+      forSeamlessAacConcatenation: false,
+      separateAudioTo: null,
+      hardwareAcceleration: "disable",
+      offthreadVideoCacheSizeInBytes: null,
+      mediaCacheSizeInBytes: null,
+      offthreadVideoThreads: null,
+      chromeMode: "headless-shell",
+      browserExecutable: null,
+      binariesDirectory: null,
+      repro: false,
+      sampleRate: 48000,
+      vercelBlob: null,
+    };
+    const cmd = await sandbox.runCommand({ cmd: "node", args: ["render-video.mjs", JSON.stringify(config)], cwd: HOME, detached: true, signal });
+    const job: Job = { sandboxId: sandbox.sandboxId, cmdId: cmd.cmdId, at: new Date().toISOString(), plan: index, seed: plan.seed, frames: plan.duration };
+    await setComposer(projectId, { renderJob: job });
+    console.info("server render: started", { projectId, frames: plan.duration });
+    return { started: true };
   } catch (e) {
-    return await failed(sandboxError(e));
+    return await fail(projectId, sandboxError(e));
   }
+}
+
+// Where the render is (0–1), and once it is done the file stored.
+export async function collectServerRender(projectId: string): Promise<{ status: "processing"; progress: number } | { status: "completed" | "failed" | "idle" }> {
+  const admin = createAdminClient();
+  const { data } = await admin.from("projects").select("user_id, render_status, render_error, updated_at, brief").eq("id", projectId).maybeSingle();
+  if (!data) return { status: "failed" };
+  if (data.render_status !== "processing") return { status: data.render_status as "completed" | "failed" | "idle" };
+  // (storing was cut off: stored by the next ask)
+  if (data.render_error === "storing" && Date.now() - Date.parse(data.updated_at) > 120_000) await admin.from("projects").update({ render_error: null }).eq("id", projectId).eq("render_error", "storing");
+  const job = (data.brief as Brief | null)?.composer?.renderJob;
+  // (starting: the job is written in a moment)
+  if (!job) return { status: "processing", progress: 0 };
+  try {
+    const p = await getRenderProgress({ sandboxId: job.sandboxId, cmdId: job.cmdId });
+    if (p.stage === "expired") return (await fail(projectId, "the render's sandbox stopped before it finished"), { status: "failed" });
+    if (p.stage === "error") return (await fail(projectId, `render: ${p.message}`.slice(0, 500)), { status: "failed" });
+    if (p.stage !== "done") return { status: "processing", progress: Math.max(0, Math.min(0.99, p.overallProgress ?? 0)) };
+
+    // done: the file stored once (a second ask meanwhile finds it taken)
+    const { data: mine } = await admin.from("projects").update({ render_error: "storing" }).eq("id", projectId).eq("render_status", "processing").is("render_error", null).select("id");
+    if (!mine?.length) return { status: "processing", progress: 0.99 };
+    const sandbox = await Sandbox.get({ sandboxId: job.sandboxId });
+    const file = await sandbox.readFileToBuffer({ path: OUT });
+    await sandbox.stop().catch(() => {});
+    if (!file?.length) return (await fail(projectId, "the render wrote no file"), { status: "failed" });
+    const path = `${data.user_id}/${projectId}/video.mp4`;
+    const { error } = await admin.storage.from(VIDEOS_BUCKET).upload(path, file, { contentType: "video/mp4", upsert: true });
+    if (error) return (await fail(projectId, `upload: ${error.message}`), { status: "failed" });
+    const done: ServerRender = { at: new Date().toISOString(), ms: Date.now() - Date.parse(job.at), bytes: file.length, plan: job.plan, seed: job.seed, frames: job.frames };
+    // (which version the file is, kept with the video: the studio offers it for that one)
+    await setComposer(projectId, { renderJob: null, render: done }, { render_status: "completed", render_error: null, video_path: path });
+    console.info("server render: done", { projectId, s: Math.round(done.ms / 1000), mb: +(done.bytes / 1e6).toFixed(1), frames: done.frames });
+    return { status: "completed" };
+  } catch (e) {
+    // (a passing hiccup: asked again in a moment)
+    console.warn("server render: progress", projectId, sandboxError(e));
+    return { status: "processing", progress: 0 };
+  }
+}
+
+// Started, then followed while there is time (the pipeline's last step).
+export async function renderWithin(projectId: string, budgetMs: number) {
+  const t0 = Date.now();
+  const started = await startServerRender(projectId);
+  if (!("started" in started)) return started;
+  while (Date.now() - t0 < budgetMs - 15_000) {
+    await new Promise((r) => setTimeout(r, 5_000));
+    const s = await collectServerRender(projectId);
+    if (s.status !== "processing") return s;
+  }
+  return { status: "processing" as const };
 }

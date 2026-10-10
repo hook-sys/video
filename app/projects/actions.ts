@@ -56,7 +56,7 @@ import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
 import { checkProjectFrames, prepareFrameCheck } from "@/lib/frame-check";
-import { renderProjectVideo } from "@/lib/render-server";
+import { collectServerRender, renderWithin, startServerRender } from "@/lib/render-server";
 import { TIER_IDS, type TierId, balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, pickable, refundVideo, settleVideo } from "@/lib/billing";
 
 export type CreateProjectState = { error?: string };
@@ -806,9 +806,9 @@ async function runPipeline(projectId: string, userId: string) {
     const { data: made } = await admin.from("projects").select("duration_seconds, quality").eq("id", projectId).single();
     if (made) await settleVideo(projectId, userId, (TIER_IDS as readonly string[]).includes(made.quality) ? (made.quality as TierId) : "standard", Number(made.duration_seconds) || 0).catch((e) => console.error("settle failed:", projectId, e instanceof Error ? e.message : e));
     await setPipeline({ pipeline_status: "completed", pipeline_step: null, pipeline_error: null, status: "completed" });
-    // 6. The MP4, made on the server (lib/render-server.ts) when there is time
-    // left; else the project page starts it (startRender) in a run of its own.
-    if ((await getSettings()).feature_server_render !== false && left() > 150_000) await renderProjectVideo(projectId, left()).catch((e) => console.warn("server render failed:", e instanceof Error ? e.message : e));
+    // 6. The MP4, made on the server (lib/render-server.ts): started, and
+    // followed while there is time; the project page follows it after.
+    if ((await getSettings()).feature_server_render !== false && left() > 45_000) await renderWithin(projectId, left()).catch((e) => console.warn("server render failed:", e instanceof Error ? e.message : e));
   } catch (e) {
     await fail(e instanceof Error ? e.message : "Generation failed.");
   }
@@ -828,7 +828,17 @@ export async function startRender(projectId: string) {
   // (once: a render that failed leaves the download in the browser)
   if (!project || project.pipeline_status !== "completed" || project.render_status !== "idle") return;
   if ((await getSettings()).feature_server_render === false) return;
-  after(() => renderProjectVideo(projectId, 285_000).then(() => {}));
+  after(() => startServerRender(projectId).then(() => {}));
+}
+
+// Where the server's render of this video is (the project page asks while it
+// waits; the file is stored when it is done).
+export async function renderProgress(projectId: string) {
+  const supabase = await createClient();
+  // RLS: only the owner's project
+  const { data } = await supabase.from("projects").select("id").eq("id", projectId).maybeSingle();
+  if (!data) return { status: "failed" as const };
+  return collectServerRender(projectId);
 }
 
 // Retries the pipeline from the failed step (the steps already done are kept).

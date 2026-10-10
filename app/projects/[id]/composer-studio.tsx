@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { startRender } from "@/app/projects/actions";
+import { useRouter } from "next/navigation";
+import { renderProgress, startRender } from "@/app/projects/actions";
 import { Player } from "@remotion/player";
 import { ComposerFilm } from "@/components/video/composer/film";
 import type { ComposerPlan, ComposerProps } from "@/components/video/composer/types";
@@ -46,12 +47,31 @@ async function renderToFile({ props, file, signal, onProgress }: { props: Props;
 // file: the MP4 made on the server (lib/render-server.ts) and the version it
 // is; rendering: it is being made (autoStart: ask for it now)
 export function ComposerStudio({ projectId, file, rendering = false, autoStart = false, plans, changes, screens, audioUrl, name, className, about }: { projectId?: string; file?: { url: string; plan: number } | null; rendering?: boolean; autoStart?: boolean; plans: ComposerPlan[]; changes: { direction: string; at: string }[]; screens: string[]; audioUrl: string | null; name: string; className: string; about?: { idea: string | null; mood: string | null; language: string | null; score: number | null } }) {
+  const router = useRouter();
   const asked = useRef(false);
+  const [made, setMade] = useState(0);
   useEffect(() => {
     if (!autoStart || !projectId || asked.current) return;
     asked.current = true;
     startRender(projectId).catch(() => {});
   }, [autoStart, projectId]);
+  // while the server makes the file: how far it is, then the page again (with the file)
+  useEffect(() => {
+    if (!rendering || !projectId) return;
+    let stop = false;
+    const tick = async () => {
+      const s = await renderProgress(projectId).catch(() => null);
+      if (stop) return;
+      if (s?.status === "processing") setMade(s.progress);
+      else if (s && s.status !== "idle") return router.refresh();
+      setTimeout(tick, 5000);
+    };
+    const first = setTimeout(tick, 3000);
+    return () => {
+      stop = true;
+      clearTimeout(first);
+    };
+  }, [rendering, projectId, router]);
   // the newest version unless the customer picks an earlier one
   const [picked, setPicked] = useState<number | null>(null);
   const selected = Math.min(picked ?? plans.length - 1, plans.length - 1);
@@ -129,10 +149,13 @@ export function ComposerStudio({ projectId, file, rendering = false, autoStart =
               <>
                 <button type="button" disabled className={className}>
                   <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
-                  Preparing your HD video…
+                  Preparing your HD video{made > 0.02 ? ` · ${Math.round(made * 100)}%` : "…"}
                 </button>
+                <div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+                  <div className="h-full rounded-full bg-[#0a66d6] transition-all" style={{ width: `${Math.max(3, Math.round(made * 100))}%` }} />
+                </div>
                 <p className="text-xs text-foreground/50">
-                  About a minute. You can leave this page; it will be ready here.{" "}
+                  A few minutes. You can leave this page; it will be ready here.{" "}
                   <button type="button" onClick={download} className="font-medium text-[#0a66d6] hover:underline">
                     Or render it in this browser now
                   </button>
