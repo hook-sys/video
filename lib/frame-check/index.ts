@@ -104,7 +104,8 @@ export async function frameCheck(plan: ComposerPlan, budgetMs: number): Promise<
     if (!samples.length) return { at, ms: Date.now() - t0, skipped: "the check saw no frames" };
     return { ...checkFrames(plan, samples), at, ms: Date.now() - t0 };
   } catch (e) {
-    const why = e instanceof Error ? e.message : String(e);
+    const json = (e as { json?: unknown } | null)?.json;
+    const why = `${e instanceof Error ? e.message : String(e)}${json ? `: ${JSON.stringify(json).slice(0, 300)}` : ""}`;
     console.warn("frame check:", why);
     return { at, ms: Date.now() - t0, skipped: why.slice(0, 300) };
   }

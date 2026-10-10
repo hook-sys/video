@@ -21,6 +21,13 @@ const STALE_MS = 10 * 60_000;
 
 export type ServerRender = { at: string; ms: number; bytes: number; plan: number; seed: number; frames: number };
 
+// What went wrong, with the sandbox API's own answer when it gave one.
+export function sandboxError(e: unknown) {
+  const json = (e as { json?: unknown } | null)?.json;
+  const msg = e instanceof Error ? e.message : String(e);
+  return json ? `${msg}: ${JSON.stringify(json).slice(0, 300)}` : msg;
+}
+
 // Takes the render for this run; false when another is already making it.
 async function claim(projectId: string) {
   const stale = new Date(Date.now() - STALE_MS).toISOString();
@@ -55,7 +62,9 @@ export async function renderProjectVideo(projectId: string, budgetMs: number): P
 
     const signal = AbortSignal.timeout(budgetMs - 5_000);
     const snapshotId = await filmSnapshot(signal);
-    const sandbox = await Sandbox.create({ source: { type: "snapshot", snapshotId }, resources: { vcpus: VCPUS }, timeout: budgetMs, signal });
+    // (more CPUs render faster; an account that can't have them gets the frame check's)
+    const start = (vcpus: number) => Sandbox.create({ source: { type: "snapshot", snapshotId }, resources: { vcpus }, timeout: budgetMs - 10_000, signal });
+    const sandbox = await start(VCPUS).catch(() => start(4));
     let file: Buffer | null = null;
     try {
       const { sandboxFilePath } = await renderMediaOnVercel({
@@ -95,6 +104,6 @@ export async function renderProjectVideo(projectId: string, budgetMs: number): P
     console.info("server render:", { projectId, ms: done.ms, mb: +(done.bytes / 1e6).toFixed(1), frames: done.frames });
     return done;
   } catch (e) {
-    return await failed(e instanceof Error ? e.message : String(e));
+    return await failed(sandboxError(e));
   }
 }
