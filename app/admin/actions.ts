@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { audit, requireAdmin } from "@/lib/admin";
 import { SETTINGS } from "@/lib/app-settings";
 import { VIDEOS_BUCKET } from "@/lib/projects";
+import { checkProjectFrames } from "@/lib/frame-check";
 
 // Admin actions. Each re-checks the caller's role on the server, runs with
 // the service role, and is written to admin_audit_log.
@@ -56,6 +57,14 @@ export async function markFailed(projectId: string, what: keyof typeof FAIL_FIEL
   await s.db.from("projects").update(FAIL_FIELDS[what]).eq("id", projectId);
   await audit(s, `video.stop_${what}`, { type: "project", id: projectId });
   revalidatePath("/admin", "layout");
+}
+
+// The frame check run again on a video (its result replaces the last one).
+export async function recheckFrames(projectId: string) {
+  const s = await requireAdmin();
+  await checkProjectFrames(projectId, 270_000);
+  await audit(s, "video.frame_check", { type: "project", id: projectId });
+  revalidatePath(`/admin/videos/${projectId}`);
 }
 
 export async function deleteProject(projectId: string) {

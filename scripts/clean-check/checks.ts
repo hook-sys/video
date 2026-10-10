@@ -27,6 +27,8 @@ import { livingStandIn } from "@/components/video/icons/living";
 import { pieceToWord, scriptWords } from "@/components/video/composer/words";
 import { sfxOf } from "@/components/video/composer/sfx";
 import { inspect, inspected } from "@/components/video/composer/inspect";
+import { type ProbeSample, checkFrames, framesToCheck } from "@/components/video/composer/frame-check";
+import type { ComposerPlan } from "@/components/video/composer/types";
 import { resolveIcon } from "@/components/video/icons";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
@@ -383,6 +385,22 @@ export async function runChecks(): Promise<Check[]> {
     const qa = inspected(broken);
     const leftWhat = qa.left.map((f) => f.what).join(" | ");
     add("Frame Inspector: finds what a viewer would see wrong and mends it", inspect(broken).length >= 3 && qa.fixed.length >= 2 && !/on screen only|flies across|off the frame/.test(leftWhat), `${inspect(broken).length} found · ${qa.fixed.length} mended · left: ${qa.left.length}`);
+    // the frame check: what the probe saw on each frame, read for what a viewer would see wrong
+    const fcPlan = { w: 1920, h: 1080, duration: 300, scenes: [{ from: 0, to: 150, layout: "split-left", arrange: "column" }, { from: 150, to: 300, layout: "center", arrange: "single" }] } as unknown as ComposerPlan;
+    const sample = (f: number, wrong: boolean): ProbeSample => {
+      const sc = f < 150 ? 0 : 1;
+      const w: ProbeSample["w"] = [[`${sc}:w0`, 200, 400, 500, 120, 1]];
+      const t: ProbeSample["t"] = [[`${sc}:card:A:1300:540`, 1100, 300, 500, 400, 1, "card", "A", 0]];
+      if (wrong && f >= 30 && f < 48) t.push(["0:icon:Fly:900:460", 300, 380, 200, 200, 1, "icon", "Fly", 1]);
+      if (wrong && f >= 60 && f < 70) t.push(["0:stat:Late:1500:900", 1400, 850, 200, 150, 1, "stat", "Late", 0]);
+      if (wrong && sc === 1) t.push(["1:device:Cut:1900:500", 1700, 300, 500, 400, 1, "device", "Cut", 0]);
+      return wrong && f >= 90 && f < 135 ? { f, w: [], t: [] } : { f, w, t };
+    };
+    const fcFrames = framesToCheck(300);
+    const fcClean = checkFrames(fcPlan, fcFrames.map((f) => sample(f, false)));
+    const fcWrong = checkFrames(fcPlan, fcFrames.map((f) => sample(f, true)));
+    const fcWhat = fcWrong.findings.map((x) => x.what).join(" | ");
+    add("frame check: a clean video passes; covered words, a cut-off thing, an empty screen, a thing gone too soon are found", fcClean.ok && /flies over the words/.test(fcWhat) && /cut off by the edge/.test(fcWhat) && /screen is empty/.test(fcWhat) && /"Late" is on screen only/.test(fcWhat), fcClean.ok ? `${fcWrong.findings.length} found: ${fcWhat.slice(0, 160)}` : fcClean.findings.map((x) => x.what).join(" | "));
     // an icon name the library lacks becomes the nearest real one
     const icons = [iconFor("notebook-pen-paper-xyz", "Paper diary"), iconFor(null, "Ringing phone"), iconFor("calendar", "x")];
     add("icons: a name the library lacks becomes a real icon", icons.every((x) => !!x && !!resolveIcon(x)) && icons[2] === "calendar", icons.join(" · "));

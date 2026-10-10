@@ -20,6 +20,7 @@ import { measureText } from "@remotion/layout-utils";
 import { STILL_BACKGROUND, type ComposerProps, type EnterKind, type ItemKind, type PlacedItem, type PlacedScene, type TextBlock } from "./types";
 import { H, W, setFrame } from "./frame";
 import { SoundEffects } from "./sfx";
+import { QaProbe, qaMark } from "./probe";
 
 // A Composer film: the Director's scenes on the voice's words. Every scene
 // is its own composition; one field of light runs under all of them and
@@ -112,7 +113,7 @@ function fitWords(tb: TextBlock, family: string, weight: number, upper: boolean,
   return out;
 }
 
-export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: ComposerProps & { screens?: string[] }) {
+export function ComposerFilm({ plan, audioUrl, webAudio, bare, qa, screens = [] }: ComposerProps & { screens?: string[] }) {
   // (the frame every part reads — frame.ts)
   setFrame(plan.w ?? 1920, plan.h ?? 1080);
   const f = useCurrentFrame();
@@ -157,6 +158,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, screens = [] }: C
     <>
       {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
       {!bare && <SoundEffects plan={plan} webAudio={webAudio} />}
+      {qa && <QaProbe W={plan.w ?? 1920} />}
     </>
   );
   if (plan.journey === "scroll") {
@@ -534,9 +536,9 @@ function SceneBody(props: SceneProps) {
       <AbsoluteFill style={J ? undefined : { perspective: 1800, perspectiveOrigin: "50% 45%" }}>
         <AbsoluteFill style={{ transform: cam, transformStyle: J ? undefined : "preserve-3d" }}>
           <CtxC.Provider value={c}>
-            {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} />)}
-            {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over" || sc.layout === "caption"} hide={J?.hiddenWord} out={J?.dim} />}
-            {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} />)}
+            {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} si={i} />)}
+            {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over" || sc.layout === "caption"} hide={J?.hiddenWord} out={J?.dim} si={i} />}
+            {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} si={i} />)}
           </CtxC.Provider>
         </AbsoluteFill>
       </AbsoluteFill>
@@ -561,13 +563,13 @@ function SceneBody(props: SceneProps) {
     <AbsoluteFill style={outStyle}>
       {body}
       <CtxC.Provider value={c}>
-        {moving.filter((it) => !travels(it)).map((it, j) => <Thing key={`m${j}`} c={c} it={it} idx={j + 20} travel={{ from: it.from!, start, dur: 22 }} />)}
+        {moving.filter((it) => !travels(it)).map((it, j) => <Thing key={`m${j}`} c={c} it={it} idx={j + 20} si={i} travel={{ from: it.from!, start, dur: 22 }} />)}
       </CtxC.Provider>
     </AbsoluteFill>
   );
 }
 
-function Thing({ c, it, idx, travel }: { c: Ctx; it: PlacedItem; idx: number; travel?: { from: { x: number; y: number; w: number; h: number }; start: number; dur: number } }) {
+function Thing({ c, it, idx, si, travel }: { c: Ctx; it: PlacedItem; idx: number; si: number; travel?: { from: { x: number; y: number; w: number; h: number }; start: number; dur: number } }) {
   const [bw, bh] = baseSize(it);
   let box = it.box;
   let k = 1;
@@ -587,7 +589,7 @@ function Thing({ c, it, idx, travel }: { c: Ctx; it: PlacedItem; idx: number; tr
   // a thing set at an angle: slanted in the plane (the download draws a turn in depth flat, or not at all inside a moving canvas)
   const tilt = it.tilt ? ` skewY(${(-it.tilt * 0.22).toFixed(2)}deg) scaleX(${Math.cos((it.tilt * Math.PI) / 180).toFixed(4)})` : "";
   return (
-    <div style={{ position: "absolute", left: box.x - bw / 2, top: box.y - bh / 2, width: bw, height: bh, transform: `scale(${scale.toFixed(4)})${tilt}${bob}`, zIndex: it.z }}>
+    <div {...qaMark(it, si)} style={{ position: "absolute", left: box.x - bw / 2, top: box.y - bh / 2, width: bw, height: bh, transform: `scale(${scale.toFixed(4)})${tilt}${bob}`, zIndex: it.z }}>
       <div style={{ width: bw, height: bh, ...enter, transform: `${(enter as CSSProperties).transform ?? ""}` }}>
         <ItemBody c={c} it={it} w={bw} h={bh} />
       </div>

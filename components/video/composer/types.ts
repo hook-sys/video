@@ -177,4 +177,5 @@ export type ComposerPlan = {
   // sound effects on what happens (off only when the team turns them off)
   sfx?: boolean;
 };
-export type ComposerProps = { plan: ComposerPlan; audioUrl?: string | null; webAudio?: boolean; bare?: boolean };
+// (`qa`: the frame check's probe on — probe.tsx; never in a video a customer sees)
+export type ComposerProps = { plan: ComposerPlan; audioUrl?: string | null; webAudio?: boolean; bare?: boolean; qa?: boolean };

@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { noise2D } from "@remotion/noise";
 import { ItemBody, baseSize } from "./items";
+import { qaMark } from "./probe";
 import type { Ctx } from "./kit";
 import { CtxC } from "./kit";
 import { isAccent } from "./layout";
@@ -185,11 +186,11 @@ function Carried({ f, L, st, mv, ctxOf, i, h }: DrawProps & { i: number; h: Carr
   const t = turn * turn * (3 - 2 * turn);
   const p2 = bez(r, Math.min(1, k + 0.02));
   const lean = Math.max(-8, Math.min(8, (p2.x - p.x) * 0.04)) * lift;
-  const body = (it: PlacedItem, c: Ctx, o: number) => {
+  const body = (it: PlacedItem, c: Ctx, o: number, si: number) => {
     const [bw, bh] = baseSize(it);
     const s = Math.min(w / bw, hh / bh);
     return (
-      <div style={{ position: "absolute", left: -bw / 2, top: -bh / 2, width: bw, height: bh, transform: `scale(${s.toFixed(4)})`, opacity: o }}>
+      <div {...qaMark(it, si, true)} style={{ position: "absolute", left: -bw / 2, top: -bh / 2, width: bw, height: bh, transform: `scale(${s.toFixed(4)})`, opacity: o }}>
         <CtxC.Provider value={c}>
           <ItemBody c={c} it={it} w={bw} h={bh} />
         </CtxC.Provider>
@@ -207,7 +208,7 @@ function Carried({ f, L, st, mv, ctxOf, i, h }: DrawProps & { i: number; h: Carr
     const o = 1 - clamp01((ke - 0.7) / 0.3);
     if (o <= 0) return null;
     return (
-      <div key={j} style={{ position: "absolute", left: q.x - bw / 2, top: q.y - bh / 2, width: bw, height: bh, transform: `scale(${s.toFixed(4)})`, opacity: o, zIndex: 40 }}>
+      <div key={j} {...qaMark(it, i - 1, true)} style={{ position: "absolute", left: q.x - bw / 2, top: q.y - bh / 2, width: bw, height: bh, transform: `scale(${s.toFixed(4)})`, opacity: o, zIndex: 40 }}>
         <CtxC.Provider value={ctxOf(i - 1)}>
           <ItemBody c={ctxOf(i - 1)} it={it} w={bw} h={bh} />
         </CtxC.Provider>
@@ -218,8 +219,8 @@ function Carried({ f, L, st, mv, ctxOf, i, h }: DrawProps & { i: number; h: Carr
     <>
       {extras}
       <div style={{ position: "absolute", left: p.x, top: p.y, width: 0, height: 0, transform: `scale(${(1 + lift * 0.06).toFixed(4)}) rotate(${lean.toFixed(2)}deg)`, zIndex: 41, filter: lift > 0.05 ? `drop-shadow(0 ${Math.round(40 * lift)}px ${Math.round(60 * lift)}px rgba(0,0,0,${(0.35 * lift).toFixed(2)}))` : undefined }}>
-        {t < 1 && body(src, ctxOf(i - 1), 1 - t)}
-        {t > 0 && body(dst, ctxOf(i), t)}
+        {t < 1 && body(src, ctxOf(i - 1), 1 - t, i - 1)}
+        {t > 0 && body(dst, ctxOf(i), t, i)}
       </div>
     </>
   );

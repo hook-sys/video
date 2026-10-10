@@ -2,10 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { VIDEOS_BUCKET } from "@/lib/projects";
-import { deleteProject, markFailed } from "../../actions";
+import type { FrameCheckResult } from "@/lib/frame-check";
+import { deleteProject, markFailed, recheckFrames } from "../../actions";
 import { ConfirmSubmit } from "../../_components/confirm-submit";
 import { Badge, Card, PageHeader, Table, btn, btnDanger, td } from "../../_components/ui";
 import { STATE_LABEL, ago, projectTitle, usd, videoState } from "../../_components/format";
+
+// (the frame check, run from here, takes up to a few minutes)
+export const maxDuration = 300;
 
 export default async function VideoPage({ params }: PageProps<"/admin/videos/[id]">) {
   const { id } = await params;
@@ -18,6 +22,8 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
     p.video_path ? db.storage.from(VIDEOS_BUCKET).createSignedUrl(p.video_path, 3600) : null,
   ]);
   const [label, tone] = STATE_LABEL[videoState(p)];
+  // what the frame check saw before the video was shown (lib/frame-check)
+  const frames = (p.brief as { composer?: { frames?: FrameCheckResult } } | null)?.composer?.frames ?? null;
   const total = (costs ?? []).reduce((a, c) => a + Number(c.estimated_cost_usd), 0);
   const errors = [
     ["Pipeline", p.pipeline_error],
@@ -97,6 +103,33 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
               <p key={k} className="rounded-lg bg-rose-500/[0.07] px-3 py-2 text-sm text-rose-200"><b className="mr-2 text-rose-300">{k}</b>{e}</p>
             ))}
           </div>
+        </Card>
+      )}
+      {!!(p.brief as { composer?: unknown } | null)?.composer && (
+        <Card title="Frame check">
+          <form action={recheckFrames.bind(null, id)} className="mb-3">
+            <ConfirmSubmit message="Check this video frame by frame now? It takes about a minute (longer the first time after a deploy)." className={btn}>{frames ? "Check again" : "Check now"}</ConfirmSubmit>
+          </form>
+          {!frames ? (
+            <p className="text-sm text-zinc-400">Not checked yet.</p>
+          ) : "skipped" in frames ? (
+            <p className="text-sm text-zinc-400">Not checked: {frames.skipped}</p>
+          ) : (
+            <>
+              <p className="text-sm text-zinc-400">
+                <Badge tone={frames.ok ? "green" : "red"}>{frames.ok ? "clean" : `${frames.findings.length} found`}</Badge> {frames.frames} frames looked at in {(frames.ms / 1000).toFixed(0)} s · {ago(frames.at)}
+              </p>
+              {frames.findings.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-1.5 text-sm text-zinc-300">
+                  {frames.findings.map((f, i) => (
+                    <li key={i}>
+                      <span className="tabular-nums text-zinc-500">{(f.from / 30).toFixed(1)}{f.to > f.from ? `–${(f.to / 30).toFixed(1)}` : ""} s · scene {f.scene + 1}</span> — {f.what}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </Card>
       )}
       <Card title="Script & direction">

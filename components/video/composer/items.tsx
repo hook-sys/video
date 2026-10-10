@@ -66,7 +66,7 @@ function IconThing({ c, it, w }: P) {
         )}
       </div>
       {/* its word, coming in with it */}
-      {it.title && <div style={{ ...label(c, 46), fontWeight: 700, textAlign: "center", whiteSpace: "nowrap", ...show(kIn(c, it.at + 6), 14) }}>{it.title}</div>}
+      {it.title && <div data-qa-part="" style={{ ...label(c, 46), fontWeight: 700, textAlign: "center", whiteSpace: "nowrap", ...show(kIn(c, it.at + 6), 14) }}>{it.title}</div>}
     </div>
   );
 }

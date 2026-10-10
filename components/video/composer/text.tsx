@@ -8,7 +8,8 @@ import type { TextBlock } from "./types";
 // The spoken words on screen: each word comes in as it is said, in the art
 // direction's face, case and tracking; the key words in its key style.
 
-export function Headline({ c, tb, out = 0, plate, hide }: { c: Ctx; tb: TextBlock; out?: number; plate?: boolean; hide?: (wi: number) => boolean }) {
+// (`si`: the scene it belongs to — marked for the frame check, probe.tsx)
+export function Headline({ c, tb, out = 0, plate, hide, si }: { c: Ctx; tb: TextBlock; out?: number; plate?: boolean; hide?: (wi: number) => boolean; si?: number }) {
   const { art, pal, f, m } = c;
   const upper = art.case === "upper";
   const lower = art.case === "lower";
@@ -18,7 +19,7 @@ export function Headline({ c, tb, out = 0, plate, hide }: { c: Ctx; tb: TextBloc
   const lines = tb.lines;
   const kickerK = tb.kicker ? enterK(m, f, (tb.words[0]?.at ?? 0) - 8) : 0;
   return (
-    <div style={{ position: "absolute", left: box.x - box.w / 2, top: box.y - box.h / 2, width: box.w, height: box.h, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: tb.align === "center" ? "center" : tb.align === "right" ? "flex-end" : "flex-start", opacity: 1 - out, zIndex: 3 }}>
+    <div data-scene={si} style={{ position: "absolute", left: box.x - box.w / 2, top: box.y - box.h / 2, width: box.w, height: box.h, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: tb.align === "center" ? "center" : tb.align === "right" ? "flex-end" : "flex-start", opacity: 1 - out, zIndex: 3 }}>
       {tb.kicker && (
         <div style={{ fontFamily: c.text, fontSize: Math.max(24, Math.round(size * 0.26)), fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: pal.accent, marginBottom: Math.round(size * 0.22), opacity: clamp01(kickerK * 1.5), transform: `translateY(${(1 - kickerK) * 14}px)`, display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{ width: 36 * kickerK, height: 3, background: pal.accent, borderRadius: 2 }} />
@@ -36,7 +37,7 @@ export function Headline({ c, tb, out = 0, plate, hide }: { c: Ctx; tb: TextBloc
               const k = enterK(m, f, at - 2, tb.reveal === "type" ? Math.max(6, w.t.length * 1.6) : m.dur);
               const text = upper ? w.t.toUpperCase() : lower ? w.t.toLowerCase() : w.t;
               return (
-                <span key={wi} style={{ position: "relative", display: "inline-block", marginRight: `${upper ? 0.24 : 0.26}em`, fontFamily: c.display, fontSize: size, fontWeight: art.weight, letterSpacing: `${art.tracking}em`, color: pal.ink, visibility: hide?.(wi) ? "hidden" : undefined, ...(tb.reveal === "mask" || tb.reveal === "rise" ? { overflow: tb.reveal === "mask" ? "hidden" : undefined, paddingBottom: "0.08em", marginBottom: "-0.08em" } : {}) }}>
+                <span key={wi} data-qa="word" data-key={`${si ?? 0}:w${wi}`} style={{ position: "relative", display: "inline-block", marginRight: `${upper ? 0.24 : 0.26}em`, fontFamily: c.display, fontSize: size, fontWeight: art.weight, letterSpacing: `${art.tracking}em`, color: pal.ink, visibility: hide?.(wi) ? "hidden" : undefined, ...(tb.reveal === "mask" || tb.reveal === "rise" ? { overflow: tb.reveal === "mask" ? "hidden" : undefined, paddingBottom: "0.08em", marginBottom: "-0.08em" } : {}) }}>
                   <Word c={c} text={text} k={k} reveal={tb.reveal} keyed={w.key} at={at} />
                 </span>
               );

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // the film bundled for the frame check (scripts/frame-check/bundle.mjs)
+    ".remotion-bundle/**",
   ]),
 ]);
 

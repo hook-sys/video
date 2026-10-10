@@ -55,6 +55,7 @@ import { neverList } from "@/lib/video-rules";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
+import { checkProjectFrames, prepareFrameCheck } from "@/lib/frame-check";
 
 export type CreateProjectState = { error?: string };
 
@@ -663,13 +664,20 @@ async function claimPipeline(projectId: string, userId: string) {
 
 /**
  * Runs every generation step in order, reusing the individual step actions:
- * the website, the brief, the voice, the Composer's video. Completed steps
+ * the website, the brief, the voice, the Composer's video, the frame check
+ * (lib/frame-check). Completed steps
  * are skipped, so a retry resumes where the last run stopped. Never throws;
  * the outcome is stored on the project. The video is played and downloaded
  * in the browser (composer-studio.tsx): there is no server render.
  */
 async function runPipeline(projectId: string, userId: string) {
+  // (the function this runs in stops at 300 s: the frame check gets what is left)
+  const started = Date.now();
+  const left = () => 285_000 - (Date.now() - started);
   const admin = createAdminClient();
+  // the frame check's sandbox, got ready while the video is made
+  const checking = (await getSettings()).feature_frame_check !== false;
+  const ready = checking ? prepareFrameCheck(240_000) : null;
   const setPipeline = (fields: Record<string, unknown>) => admin.from("projects").update(fields).eq("id", projectId).eq("user_id", userId);
   const state = async () => (await admin.from("projects").select("brief_status, brief_error, voice_status, voice_error").eq("id", projectId).single()).data!;
   // Step actions finish with revalidatePath, which may not be allowed here;
@@ -744,6 +752,13 @@ async function runPipeline(projectId: string, userId: string) {
       return void (await fail(p.brief_error ?? "Brief failed."));
     }
     if (!(await composed.catch(() => false))) return void (await fail(COMPOSE_MESSAGE));
+    // 5. The frame check: the video opened and checked frame by frame
+    // before it is shown (what it finds is kept for the team; it never stops the video).
+    if (checking) {
+      await enter("validating");
+      await ready;
+      await checkProjectFrames(projectId, left()).catch((e) => console.warn("frame check failed:", e instanceof Error ? e.message : e));
+    }
     await setPipeline({ pipeline_status: "completed", pipeline_step: null, pipeline_error: null, status: "completed" });
   } catch (e) {
     await fail(e instanceof Error ? e.message : "Generation failed.");

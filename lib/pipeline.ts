@@ -4,6 +4,7 @@ export const PIPELINE_STEPS = [
   { key: "writing", label: "Writing script", error: "We couldn't write the script." },
   { key: "voice", label: "Creating voice", error: "We couldn't create the voiceover." },
   { key: "visuals", label: "Composing the video", error: "We couldn't compose the video." },
+  { key: "validating", label: "Checking every frame", error: "We couldn't check the video." },
 ] as const;
 
 export type PipelineStep = (typeof PIPELINE_STEPS)[number]["key"];
