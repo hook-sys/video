@@ -201,7 +201,7 @@ export async function saveBilling(formData: FormData) {
   const f = (k: string) => formData.get(k);
   const packs = Array.from({ length: 8 }, (_, i) => ({ usd: Number(f(`pack_usd_${i}`)), credits: Number(f(`pack_credits_${i}`)) })).filter((p) => p.usd > 0 && p.credits > 0);
   const next = normalizeBilling({
-    tiers: Object.fromEntries(TIER_IDS.map((id) => [id, { name: f(`${id}_name`), blurb: f(`${id}_blurb`), badge: f(`${id}_badge`), perSecond: f(`${id}_rate`), model: f(`${id}_model`), status: f(`${id}_status`) }])),
+    tiers: Object.fromEntries(TIER_IDS.map((id) => [id, { name: f(`${id}_name`), blurb: f(`${id}_blurb`), badge: f(`${id}_badge`), perSecond: f(`${id}_rate`), model: f(`${id}_model`), status: f(`${id}_status`), paidOnly: f(`${id}_paid`) === "on" }])),
     packs,
     signupCredits: f("signup_credits"),
     minSeconds: f("min_seconds"),

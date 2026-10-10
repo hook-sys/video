@@ -71,6 +71,11 @@ export default async function BillingPage({ searchParams }: PageProps<"/admin/bi
                       </select>
                     </label>
                   </div>
+                  {id !== "standard" && (
+                    <label className="flex items-center gap-2 text-zinc-300">
+                      <input type="checkbox" name={`${id}_paid`} defaultChecked={t.paidOnly} className="accent-[#4f8ff0]" /> Only for customers who have bought credits
+                    </label>
+                  )}
                   <label className={label}><span className={small}>Director model (empty = the one on AI models)</span><input name={`${id}_model`} defaultValue={t.model} placeholder="e.g. anthropic/claude-opus-5.5" className={input} /></label>
                   <p className={small}>30 s video = {creditsFor(billing, id, 30)} credits (${(creditsFor(billing, id, 30) / 100).toFixed(2)})</p>
                 </div>
@@ -78,7 +83,7 @@ export default async function BillingPage({ searchParams }: PageProps<"/admin/bi
             })}
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
-            <label className={label}><span className={small}>Welcome credits (once, after email is confirmed)</span><input name="signup_credits" type="number" min={0} defaultValue={billing.signupCredits} className={input} /></label>
+            <label className={label}><span className={small}>Welcome credits (once, after email is confirmed; 15 s Standard = {creditsFor(billing, "standard", 15)})</span><input name="signup_credits" type="number" min={0} defaultValue={billing.signupCredits} className={input} /></label>
             <label className={label}><span className={small}>Shortest charge (seconds)</span><input name="min_seconds" type="number" min={0} max={120} defaultValue={billing.minSeconds} className={input} /></label>
           </div>
         </Card>

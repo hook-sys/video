@@ -56,7 +56,7 @@ import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
 import { checkProjectFrames, prepareFrameCheck } from "@/lib/frame-check";
-import { TIER_IDS, type TierId, balanceOf, chargeVideo, creditsFor, getBilling, pickable, refundVideo, settleVideo } from "@/lib/billing";
+import { TIER_IDS, type TierId, balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, pickable, refundVideo, settleVideo } from "@/lib/billing";
 
 export type CreateProjectState = { error?: string };
 
@@ -143,7 +143,12 @@ export async function createProject(
   // this video takes: its estimated length now, settled to the voice's real
   // length when it is made, given back if it fails. The team is not charged.
   const billing = await getBilling();
-  const quality = pickable(billing, formData.get("quality")) ?? "standard";
+  // (a paid-only level — Pro — needs a purchase, or credits the team added)
+  const asked = String(formData.get("quality") ?? "standard");
+  const paid = access.admin || (await hasPaid(user.id));
+  const picked = pickable(billing, asked, paid);
+  if (!picked && asked !== "standard") return { error: billing.tiers[asked as TierId]?.paidOnly && !paid ? `${billing.tiers[asked as TierId].name} is for customers who have bought credits. Buy credits to use it, or choose ${billing.tiers.standard.name}.` : "That quality level isn't available." };
+  const quality = picked ?? "standard";
   const cost = creditsFor(billing, quality, duration);
   if (!access.admin) {
     const have = await balanceOf(user.id);

@@ -51,7 +51,7 @@ async function colourOf(url: string): Promise<string> {
 }
 
 // A quality level as the form shows it (lib/billing-config: no model names).
-export type Level = { id: TierId; name: string; blurb: string; badge: string; perSecond: number; soon: boolean };
+export type Level = { id: TierId; name: string; blurb: string; badge: string; perSecond: number; soon: boolean; locked: boolean };
 
 export function CreateProjectForm({ prefill, voices = [], levels = [], minSeconds = 0, credits = null }: { prefill?: Prefill; voices?: VoiceOption[]; levels?: Level[]; minSeconds?: number; credits?: number | null }) {
   const [state, action, pending] = useActionState(createProject, {});
@@ -312,7 +312,7 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
                   <button
                     key={l.id}
                     type="button"
-                    disabled={l.soon}
+                    disabled={l.soon || l.locked}
                     onClick={() => setQuality(l.id)}
                     aria-pressed={quality === l.id}
                     className={`relative flex flex-col items-start gap-1 rounded-2xl border bg-white/70 p-4 text-left disabled:cursor-not-allowed disabled:opacity-60 ${quality === l.id ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/12 hover:border-foreground/30"}`}
@@ -326,6 +326,7 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
                       )}
                     </span>
                     <span className="text-xs text-foreground/60">{l.blurb}</span>
+                    {l.locked && !l.soon && <span className="mt-1 text-[11px] font-medium text-[#0a66d6]">Buy credits to unlock</span>}
                   </button>
                 ))}
               </div>

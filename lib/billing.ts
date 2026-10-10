@@ -36,6 +36,16 @@ export async function changeCredits(userId: string, delta: number, kind: "signup
   return data as number;
 }
 
+// Has this customer paid (a purchase, or credits the team added)? Paid-only levels need it.
+export async function hasPaid(userId: string) {
+  const db = createAdminClient();
+  const [{ count: bought }, { count: given }] = await Promise.all([
+    db.from("payments").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "paid").gt("usd", 0),
+    db.from("credit_ledger").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("kind", "admin").gt("delta", 0),
+  ]);
+  return (bought ?? 0) + (given ?? 0) > 0;
+}
+
 export async function balanceOf(userId: string) {
   const { data } = await createAdminClient().from("profiles").select("credits").eq("id", userId).maybeSingle();
   return data?.credits ?? 0;

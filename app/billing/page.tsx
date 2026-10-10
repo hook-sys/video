@@ -68,7 +68,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
             <span className="text-foreground/60">Have a coupon? Enter it, then pick a pack.</span>
             <input name="code" placeholder="CODE" autoCapitalize="characters" className={`${input} uppercase`} />
           </label>
-          <p className="text-xs text-foreground/45">Secure payment by Stripe. Credits never expire. 1 credit = $0.01.</p>
+          <p className="text-xs text-foreground/45">Secure payment by Stripe.</p>
         </form>
 
         <form action={redeem} className="flex max-w-sm flex-col gap-2">
