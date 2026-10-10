@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 // Glass windows, one at a time (the site before login and the dashboard).
 // The one motion: a window comes out of the Dock icon (or button) that was
@@ -201,11 +201,24 @@ export function Desk() {
   );
 }
 
+// The MotionBrief mark: a play (blue → violet) with the three lines of a
+// brief in it — short, long, short (public/brand/motionbrief-mark.svg).
 export function Mark() {
+  // (its own gradient: a mark hidden elsewhere on the page must not take it along)
+  const fill = `gs-mark-${useId().replace(/[^\w-]/g, "")}`;
   return (
     <span className="gs-mark">
-      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-        <path d="M3.2 1.6v8.8L10 6z" fill="#fff" />
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id={fill} x1="0.1" y1="0" x2="0.75" y2="1">
+            <stop offset="0" stopColor="#0a66d6" />
+            <stop offset="1" stopColor="#7c3aed" />
+          </linearGradient>
+        </defs>
+        <polygon points="16,10.5 16,53.5 53.5,32" fill={`url(#${fill})`} stroke={`url(#${fill})`} strokeWidth="10" strokeLinejoin="round" />
+        <rect x="20.5" y="22.5" width="10" height="5" rx="2.5" fill="#fff" />
+        <rect x="20.5" y="29.5" width="19" height="5" rx="2.5" fill="#fff" />
+        <rect x="20.5" y="36.5" width="10" height="5" rx="2.5" fill="#fff" />
       </svg>
     </span>
   );

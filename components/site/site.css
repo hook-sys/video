@@ -47,7 +47,8 @@
   padding: 8px 8px 8px 16px; border-radius: 999px;
 }
 .gs-brand { display: flex; align-items: center; gap: 9px; font-weight: 600; letter-spacing: -0.01em; font-size: 15px; color: var(--gs-ink); margin-right: auto; background: none; border: 0; cursor: pointer; padding: 0; font-family: inherit; }
-.gs-mark { width: 24px; height: 24px; border-radius: 7px; background: var(--gs-ink); display: grid; place-items: center; }
+.gs-mark { width: 26px; height: 26px; display: grid; place-items: center; flex: none; }
+.gs-mark svg { width: 100%; height: 100%; display: block; }
 .gs-plain { font: inherit; font-size: 14px; color: var(--gs-ink); background: none; border: 0; cursor: pointer; padding: 7px 14px; border-radius: 999px; white-space: nowrap; text-decoration: none; }
 .gs-plain:hover { background: rgba(29, 29, 31, 0.06); }
 .gs-btn {
@@ -177,8 +178,7 @@
 .gs-card:hover { box-shadow: 0 0 0 1px rgba(29, 29, 31, 0.16), 0 16px 34px -20px rgba(29, 29, 31, 0.45); }
 .gs-thumb { position: relative; aspect-ratio: 16 / 9; display: grid; place-items: center; }
 .gs-thumb video { width: 100%; height: 100%; object-fit: cover; }
-.gs-thumb .gs-mark { width: 40px; height: 40px; border-radius: 11px; background: rgba(255, 255, 255, 0.92); }
-.gs-thumb .gs-mark path { fill: #1d1d1f; }
+.gs-thumb .gs-mark { width: 48px; height: 48px; }
 .gs-thumb .len { position: absolute; right: 8px; bottom: 8px; font-size: 11px; font-weight: 500; color: #fff; background: rgba(0, 0, 0, 0.6); padding: 2px 6px; border-radius: 6px; }
 .gs-card-body { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 12px 14px; }
 .gs-card-body b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -222,8 +222,6 @@
 .gs-dark .gs-desk .d2 { background: #3b2619; }
 .gs-dark .gs-desk .d3 { background: #1d3326; }
 .gs-dark .gs-glass { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -1px 0 rgba(0, 0, 0, 0.5), var(--gs-shadow); }
-.gs-dark .gs-mark { background: #f5f5f7; }
-.gs-dark .gs-mark path { fill: #111214; }
 .gs-dark .gs-plain:hover { background: rgba(255, 255, 255, 0.08); }
 .gs-dark .gs-btn.ghost { color: var(--gs-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.1); }
 .gs-dark .gs-btn.ghost:hover { background: rgba(255, 255, 255, 0.16); }
@@ -262,8 +260,7 @@
   .gs-dock small { font-size: 10.5px; }
   .gs-dock [aria-current="page"]::after { bottom: auto; top: 24px; left: -8px; }
   .gs-sep { width: 36px; height: 1px; margin: 2px 0; }
-  .gs-dock .gs-dock-brand .gs-mark { width: 30px; height: 30px; border-radius: 9px; }
-  .gs-dock .gs-dock-brand .gs-mark svg { width: 16px; height: 16px; }
+  .gs-dock .gs-dock-brand .gs-mark { width: 32px; height: 32px; }
   .gs-stage { margin-top: 40px; width: min(1080px, calc(100% - 260px)); }
   .gs-stage.wide, .gs-footer.wide { width: min(1200px, calc(100% - 260px)); }
   .gs-footer { width: min(1080px, calc(100% - 260px)); margin-top: -96px; }
