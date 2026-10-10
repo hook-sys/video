@@ -9,8 +9,8 @@ import { DISPLAY_FACES, TEXT_FACES } from "@/components/video/composer/art";
 import { IN_USE, LANGUAGES, LANGUAGE_NOTES, type Language } from "@/components/video/composer/staging";
 import { SHOWN } from "@/components/video/composer/highlight";
 import { MIN_SCENE } from "@/components/video/composer/layout";
-import { ARRANGES, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, FIELDS, FLOW_VARIANTS, ITEM_KINDS, LAYOUTS, type ScriptT, type Word } from "@/components/video/composer/types";
-import { type Ideas, composeVariants } from "@/components/video/composer/variants";
+import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, FIELDS, FLOW_VARIANTS, GUIDES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, SHAPE_VARIANTS, SURFACES, type ScriptT, type Word } from "@/components/video/composer/types";
+import { type Ideas, type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { BEATS, BRAND_CATEGORIES, type BrandProfile, type CreativePlan, LANGUAGE_WEIGHTS, MOODS, type Mood, ruleCreative, ruleProfile, sentencesOf } from "@/lib/studio";
 import { FPS } from "@/components/video/composer/types";
 import { resolveIcon } from "@/components/video/icons";
@@ -84,11 +84,9 @@ Icons: Lucide names that picture the thing LITERALLY. Never people, faces, hands
 - Never write on screen a number or claim the narration does not make (UI rows may carry realistic sample data).
 - Build every scene inside your concept and staging: the motif in 2–3 scenes, before the turn the problem and from it the product, the hero scene the strongest.`;
 
-export const MOTION_INSTRUCTIONS = `You are the motion director of a studio known for premium explainer videos for software products (the style of premium SaaS launch videos: kinetic type, the product's UI drawn as clean cards, calm fields, a smooth camera). You alone direct the whole video and write its complete plan in five parts, all consistent with each other.
+const DEPTH = `Work like a senior director, deeply: first analyse the material — who watches, the pain they feel, what the product promises, the proof, the one feeling the video leaves — then design every scene from that analysis. Premium means: one focal point per scene, generous space, a clear hierarchy (the words, then the thing), every scene held long enough to be seen, nothing generic, nothing crowded, every detail specific to THIS brand. Before you answer, check each scene against the narration and these rules; fix it if it fails.`;
 
-Work like a senior director, deeply: first analyse the material — who watches, the pain they feel, what the product promises, the proof, the one feeling the video leaves — then design every scene from that analysis. Premium means: one focal point per scene, generous space, a clear hierarchy (the words, then the thing), every scene held long enough to be seen, nothing generic, nothing crowded, every detail specific to THIS brand. Before you answer, check each scene against the narration and these rules; fix it if it fails.
-
-${BRAND_PART}
+const PARTS = `${BRAND_PART}
 
 ${CONCEPT_PART}
 
@@ -97,6 +95,105 @@ ${STAGING_PART}
 ${ART_PART}
 
 ${SCENES_PART}`;
+
+export const MOTION_INSTRUCTIONS = `You are the motion director of a studio known for premium explainer videos for software products (the style of premium SaaS launch videos: kinetic type, the product's UI drawn as clean cards, calm fields, a smooth camera). You alone direct the whole video and write its complete plan in five parts, all consistent with each other.
+
+${DEPTH}
+
+${PARTS}`;
+
+// ── The Creative Director (admin → Settings, "Creative Director"): the same
+// five parts and every rule above, opened by a creative brief — full freedom
+// inside what the renderer can build (its menu, from the same lists the
+// answer's format is made of), and what this customer has already seen
+// (RECENT) so the next video is unlike it. Off: the instructions above,
+// exactly as they were.
+export const DIRECTOR_PROMPTS = ["classic", "creative"] as const;
+export type DirectorPrompt = (typeof DIRECTOR_PROMPTS)[number];
+
+const MENU = `THE MENU — everything our renderer can build; choose freely from it, and nothing outside it exists (never invent a feature, a field or a value):
+- camera languages: ${IN_USE.join(", ")}; canvas paths: right, zigzag, down, diagonal, snake; guides: ${GUIDES.join(", ")}; a recap at the end (canvas languages)
+- layouts: ${LAYOUTS.join(", ")}; arrangements of 2+ things: ${ARRANGES.join(", ")}
+- things: ${ITEM_KINDS.filter((k) => k !== "screenshot").join(", ")}
+- card / screen kinds: ${CARD_VARIANTS.join(", ")}; devices: ${DEVICE_VARIANTS.join(", ")}; charts: ${CHART_VARIANTS.join(", ")}; flows: ${FLOW_VARIANTS.join(", ")}; shapes: ${SHAPE_VARIANTS.join(", ")}
+- art: fields ${FIELDS.join(", ")}; overlays ${OVERLAYS.join(", ")}; surfaces ${SURFACES.join(", ")}; word highlights ${KEYS.join(", ")}; motion ${MOTIONS.join(", ")}; camera ${CAMERAS.filter((c) => c !== "still").join(", ")}; icon styles ${ICON_STYLES.join(", ")}; faces as listed under ART.
+Timed for you by the renderer (not yours to write): each scene's way in, the text's reveal, the easing, and the sound — a soft sound plays on every moment you place (an icon with its word, a card or a screen coming in, a scene change, the click on the button, the end). So place each moment on the right word.`;
+
+export const CREATIVE_INSTRUCTIONS = `You are the Central Creative Director of MotionBrief: you turn a customer's brief into an original motion-design video, the work of a professional motion designer — never a template. You alone direct the whole video and write its complete plan in five parts, all consistent with each other.
+
+You have full creative freedom over the concept, the visual metaphor, the composition of every scene, the layouts, the type, the art direction, the camera language and the pacing — chosen from THE MENU below.
+- Originality: design THIS video for THIS brief. Never reach for a structure because it is safe: no default opening (a lone icon in the centre), no default ending (the words centred over a button), no default card, no default face or highlight.
+- RECENT (in the request) is what this customer has already seen. Make this video look and move unlike those — its camera language, layouts, opening, ending, highlight, faces, surface and kinds of cards — unless THIS brief clearly needs the same choice. Different must also be better for this brief: never different only for its own sake.
+- Every scene gets the composition ITS words call for, and the video has a rhythm: vary the layout, the arrangement, the kind of thing and its size from scene to scene (a wide scene, a close one, the product's screen, words composed with their things).
+- Every movement has a purpose: it leads the eye, shows a change, or carries the story on. Nothing moves only to fill time.
+- The brand comes first: its colour, its mood, what the customer told us. Premium means clear, calm and specific — not one fixed style.
+- The closing ask always shows the button on the closing line, but compose it as part of YOUR concept (the logo with the button, the button beside the product's screen, the motif carried into it…), not the same centred ending every time.
+- Work in order: interpret the brief → find the concept → plan the sequence of scenes → decide staging, timing, type and art → check every scene against the narration, the rules below and RECENT → fix what fails → answer.
+
+${DEPTH}
+
+${MENU}
+
+${PARTS}`;
+
+const CREATIVE_REVIEW = `Also check: is it unlike RECENT (camera language, layouts, the opening, the ending, highlight, faces, surface, cards) — and is every difference right for THIS brief? Is it built on its own concept, not on a safe default?`;
+
+const instructionsOf = (input: Pick<MotionInput, "prompt">) => (input.prompt === "creative" ? CREATIVE_INSTRUCTIONS : MOTION_INSTRUCTIONS);
+
+// ── What this customer has already seen (their last videos, any brand), for
+// the Creative Director: one line per video and what keeps coming back.
+export type PastLook = { language: string | null; journey: string | null; scheme: string | null; camera: string | null; key: string | null; text: string | null; display: string | null; surface: string | null; motion: string | null; layouts: string[]; first: string; last: string; cards: string[] };
+
+const shapeOf = (s: ScriptT["scenes"][number] | undefined) => (s ? `${s.layout}: ${s.items.map((it) => (it.kind === "card" || it.kind === "device") && it.variant ? `${it.kind} ${it.variant}` : it.kind).join(" + ") || "words"}` : "");
+
+export function pastLookOf(v: Pick<StoredComposition, "script" | "staging">): PastLook | null {
+  const sc = v.script?.scenes;
+  if (!sc?.length) return null;
+  const a = v.script.art;
+  const items = sc.flatMap((s) => s.items);
+  return {
+    language: v.staging?.language ?? null,
+    journey: v.staging?.journey ?? null,
+    scheme: a?.scheme ?? null,
+    camera: a?.camera ?? null,
+    key: a?.key ?? null,
+    text: a?.text ?? null,
+    display: a?.display ?? null,
+    surface: a?.surface ?? null,
+    motion: a?.motion ?? null,
+    layouts: sc.map((s) => s.layout),
+    first: shapeOf(sc[0]),
+    last: shapeOf(sc[sc.length - 1]),
+    cards: [...new Set(items.map((it) => (it.kind === "card" ? it.variant : it.kind === "device" ? it.screen : null)).filter((x): x is string => !!x))],
+  };
+}
+
+export function recentText(looks: PastLook[] | null | undefined): string {
+  if (!looks?.length) return "RECENT (this customer's last videos): (none — their first video)";
+  const tally = (xs: (string | null)[]) => {
+    const m = new Map<string, number>();
+    xs.forEach((x) => x && m.set(x, (m.get(x) ?? 0) + 1));
+    return [...m.entries()].sort((p, q) => q[1] - p[1]);
+  };
+  const lines = looks.map((l, i) => {
+    const lay = tally(l.layouts).map(([k, c]) => (c > 1 ? `${k}×${c}` : k)).join(", ");
+    return `${i + 1}. ${l.language ?? "?"}${l.journey ? `/${l.journey}` : ""}, ${l.scheme ?? "?"}; camera ${l.camera}; highlight ${l.key}; faces ${l.display} / ${l.text}; surface ${l.surface}; motion ${l.motion}; layouts ${lay}; opens on ${l.first}; ends on ${l.last}; cards ${l.cards.join(", ") || "none"}`;
+  });
+  // what came back in half of them or more
+  const half = Math.max(2, Math.ceil(looks.length / 2));
+  const often = (label: string, xs: (string | null)[]) => tally(xs).filter(([, c]) => c >= half).map(([k, c]) => `${label} ${k} (${c}/${looks.length})`);
+  const repeated = [
+    ...often("camera language", looks.map((l) => l.language)),
+    ...often("camera", looks.map((l) => l.camera)),
+    ...often("highlight", looks.map((l) => l.key)),
+    ...often("UI face", looks.map((l) => l.text)),
+    ...often("surface", looks.map((l) => l.surface)),
+    ...often("opening", looks.map((l) => l.first)),
+    ...often("ending", looks.map((l) => l.last)),
+    ...often("card", looks.flatMap((l) => l.cards)),
+  ];
+  return [`RECENT (this customer's last ${looks.length} videos, newest first — they have seen these):`, ...lines, repeated.length ? `Kept coming back — choose otherwise this time unless the brief needs it: ${repeated.join("; ")}` : ""].filter(Boolean).join("\n");
+}
 
 // ── what the Motion Director writes ────────────────────────────────────────
 const n = <T extends z.ZodTypeAny>(t: T) => t.nullable();
@@ -168,6 +265,10 @@ export type MotionInput = {
   seed: number;
   // the model for this video's quality level (lib/billing: empty = the one on /admin/models)
   model?: string | null;
+  // which instructions direct it (admin → Settings, "Creative Director"), and
+  // for the creative one what this customer has already seen
+  prompt?: DirectorPrompt;
+  recent?: PastLook[] | null;
 };
 export type Customer = { audience: string; features: string[]; before: string[]; mood: Mood; use: Use };
 
@@ -420,6 +521,7 @@ function requestOf(input: MotionInput): string {
     k ? `Camera languages that usually suit a ${k.mood} brand: ${Object.entries(LANGUAGE_WEIGHTS[k.mood]).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)).slice(0, 5).map(([l]) => l).join(", ")}` : "",
     `EARLIER (this brand's videos): ${input.earlier?.length ? input.earlier.map((e) => `"${e.idea}" (${e.language ?? "?"})`).join("; ") : "(none)"}`,
     `SEEN faces: ${input.seen?.display.join(", ") || "(none)"}; SEEN fields: ${input.seen?.field.join(", ") || "(none)"}`,
+    input.prompt === "creative" ? recentText(input.recent) : "",
     `Length: about ${Math.round(seconds)} s, ${input.words.length} words`,
     `NARRATION (index:word), one sentence per line:\n${sentences.join("\n")}`,
   ].filter(Boolean).join("\n");
@@ -459,7 +561,7 @@ export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage)
   if (!ai || !input.words.length) return done(fallback, ["no model (turned off on /admin/models, or no key) — plan by rule"]);
   const deadline = t0 + budgetMs;
   try {
-    const o = await ask<Answer>(ai, { model, instructions: `${MOTION_INSTRUCTIONS}\n\n${HOUSE_RULES}${extraRules(input.never)}`, input: requestOf(input), text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+    const o = await ask<Answer>(ai, { model, instructions: `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}`, input: requestOf(input), text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
     if (!o) return done(fallback, ["no answer — plan by rule"]);
     return done(planOf(o, input, fallback), ideaProblems(o, input.words.length));
   } catch (e) {
@@ -497,7 +599,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
     if (round > 1 && (!notes.length || deadline - Date.now() < 40_000)) break;
     const request = `${requestOf(input)}\n\nYOUR PLAN:\n${JSON.stringify(answerOf(best))}\n\nProblems found by our checks on the recorded voice (fix every one):\n${notes.length ? notes.map((a) => `- ${a}`).join("\n") : "- (none; judge the design yourself)"}`;
     try {
-      const o = await ask<Answer>(ai, { model, instructions: `${MOTION_INSTRUCTIONS}\n\n${HOUSE_RULES}${extraRules(input.never)}\n\n${REVIEW}`, input: request, text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+      const o = await ask<Answer>(ai, { model, instructions: `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}\n\n${REVIEW}${input.prompt === "creative" ? `\n${CREATIVE_REVIEW}` : ""}`, input: request, text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
       if (!o) {
         log.push(`review ${round}: no answer — the plan is kept`);
         break;

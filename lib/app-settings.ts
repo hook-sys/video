@@ -20,6 +20,7 @@ export const SETTINGS: SettingDef[] = [
   { key: "feature_sfx", label: "Sound effects", help: "Soft sound effects in every video — a whoosh between scenes, a pop as an icon comes in, a click on the button. No music.", type: "bool", fallback: true },
   { key: "feature_frame_check", label: "Frame check", help: "Before a video is shown, it is opened in a browser (a Vercel Sandbox) and checked frame by frame: nothing on the words, nothing on each other, nothing cut off, no empty screen, nothing gone before it can be seen. What it finds is shown on the video's admin page. Adds about a minute.", type: "bool", fallback: true },
   { key: "feature_server_render", label: "Server render", help: "Each finished video is rendered on the server (a Vercel Sandbox, real Chrome) as a high-quality 1080p MP4 the customer downloads at once. When off (or if it fails), the video is rendered in the customer's browser when they download it.", type: "bool", fallback: true },
+  { key: "feature_creative_director", label: "Creative Director", help: "The Motion Director works from the new creative brief: full freedom inside what the renderer can build, and it is shown how this customer's last videos looked so the next one is unlike them. Off: the classic instructions, exactly as before.", type: "bool", fallback: false },
   { key: "max_videos_per_day", label: "Videos per customer per day", help: "New videos a customer can start in 24 hours. 0 = no limit. Admins are exempt.", type: "number", fallback: 20 },
 ];
 

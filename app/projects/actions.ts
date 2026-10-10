@@ -43,7 +43,7 @@ import { getAiConfig, unitCost, usageCost } from "@/lib/ai/models";
 import { COMPOSE_MESSAGE, NEEDS_SCREENSHOTS_MESSAGE, OWN_SCRIPT_MESSAGE, type PipelineStep } from "@/lib/pipeline";
 import { generateVoice as generateFalVoice, timeWords } from "@/lib/ai/fal";
 import { estimateWords, parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { type MotionInput, type MotionResult, directMotion, reviewMotion } from "@/lib/ai/motion-director";
+import { type MotionInput, type MotionResult, type PastLook, directMotion, pastLookOf, reviewMotion } from "@/lib/ai/motion-director";
 import { ruleBrief } from "@/lib/rule-brief";
 import { detailsFrom, parseDetails } from "@/lib/project-details";
 import { scorePlan } from "@/components/video/composer/score";
@@ -395,7 +395,9 @@ async function pastOf(admin: ReturnType<typeof createAdminClient>, projectId: st
   // how this customer's last videos were staged (the next is staged otherwise)
   const seenStaging = pastVideos.map((v) => v.staging ?? null).slice(0, 8).reverse();
   const recent = pastVideos.slice(0, 8).map((v) => ({ staging: v.staging ?? null, display: (v.script as { art?: { display?: string } } | undefined)?.art?.display ?? null }));
-  return { known, earlier, past: { seen, seenStaging, recent } };
+  // (for the Creative Director: how their last videos looked, any brand)
+  const looks = pastVideos.map((v) => pastLookOf(v)).filter((x): x is PastLook => !!x).slice(0, 6);
+  return { known, earlier, looks, past: { seen, seenStaging, recent } };
 }
 
 const brandOf = (project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null }, brief: { product_name?: string; cta?: string } | null) => {
@@ -416,12 +418,13 @@ async function motionDirection(
   const usage: BriefUsage[] = [];
   const details = parseDetails(project.details);
   const brand = brandOf(project, brief);
-  const [{ known, earlier, past }, { data: capture }, never, { data: level }, billing] = await Promise.all([
+  const [{ known, earlier, looks, past }, { data: capture }, never, { data: level }, billing, settings] = await Promise.all([
     pastOf(admin, projectId, userId, brand.name),
     admin.from("website_captures").select("url, title, meta_description, visible_text").eq("project_id", projectId).eq("status", "completed").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     loadNeverList(admin),
     admin.from("projects").select("quality").eq("id", projectId).maybeSingle(),
     getBilling(),
+    getSettings(),
   ]);
   // the video's quality level directs it on that level's model
   const tier = billing.tiers[(TIER_IDS as readonly string[]).includes(level?.quality ?? "") ? (level!.quality as TierId) : "standard"];
@@ -444,6 +447,8 @@ async function motionDirection(
     customer: details ? { audience: project.target_audience?.trim() ?? "", features: details.features, before: details.before, mood: details.mood, use: details.use } : null,
     seed: seedFrom(projectId),
     model: tier.model || null,
+    prompt: settings.feature_creative_director === true ? "creative" : "classic",
+    recent: looks,
   };
   const result = await directMotion(input, (u) => usage.push(u));
   console.info("motion director:", { projectId, source: result.plan.source, ms: result.ms, category: result.plan.profile.category, mood: result.plan.profile.mood, idea: result.plan.creative.idea, language: result.plan.creative.language, scheme: result.plan.creative.scheme, scenes: result.plan.ideas?.scenes.length ?? 0, problems: result.problems.slice(0, 6) });
