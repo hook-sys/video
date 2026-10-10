@@ -1,15 +1,17 @@
+import { internalAllowed } from "@/lib/internal-key";
 import { after } from "next/server";
 import { checkProjectFrames } from "@/lib/frame-check";
 import { renderWithin } from "@/lib/render-server";
 
-// Preview only: starts the server render (or, with &check=1, the frame check)
-// of one project, for the team to measure it. Answers at once; the work runs
-// after the response and its outcome is stored on the project.
+// Preview only, with the team's key (lib/internal-key.ts): starts the
+// server render (or, with &check=1, the frame check) of one project, for the
+// team to measure it. Answers at once; the work runs after the response and
+// its outcome is stored on the project.
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function GET(request: Request) {
-  if (process.env.VERCEL_ENV !== "preview") return new Response("Not found", { status: 404 });
+  if (!(await internalAllowed(request))) return new Response("Not found", { status: 404 });
   const url = new URL(request.url);
   const id = url.searchParams.get("project") ?? "";
   if (!/^[0-9a-f-]{36}$/i.test(id)) return Response.json({ error: "project=<id>" }, { status: 400 });

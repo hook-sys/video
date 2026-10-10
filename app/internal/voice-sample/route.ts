@@ -1,13 +1,16 @@
+import { internalAllowed } from "@/lib/internal-key";
 import { generateVoice } from "@/lib/ai/fal";
 
-// Preview only: one short sample of a voice name on the configured voice
-// model (no fallback to another voice), returned as base64 — for the team to
-// check a name exists and to keep a sample of it (public/voices).
+// Preview only, with the team's key (lib/internal-key.ts): one short sample
+// of a voice name on the configured voice model (no fallback to another
+// voice), returned as base64 — for the team to check a name exists and to
+// keep a sample of it (public/voices).
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 export async function GET(request: Request) {
-  if (process.env.VERCEL_ENV !== "preview") return new Response("Not found", { status: 404 });
+  if (!(await internalAllowed(request))) return new Response("Not found", { status: 404 });
   const url = new URL(request.url);
   const name = url.searchParams.get("name") ?? "";
   const gender = url.searchParams.get("gender") === "female" ? "female" : "male";
