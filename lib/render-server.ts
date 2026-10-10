@@ -15,7 +15,8 @@ import { COMPOSER_ID } from "@/components/video/composer/types";
 // browser). Never throws: a render that cannot run is marked failed and the
 // browser render remains.
 
-const VCPUS = 8;
+// (the most this account's sandboxes get)
+const VCPUS = 4;
 // (a render left "processing" longer than this was cut off: it may start again)
 const STALE_MS = 10 * 60_000;
 
@@ -62,9 +63,7 @@ export async function renderProjectVideo(projectId: string, budgetMs: number): P
 
     const signal = AbortSignal.timeout(budgetMs - 5_000);
     const snapshotId = await filmSnapshot(signal);
-    // (more CPUs render faster; an account that can't have them gets the frame check's)
-    const start = (vcpus: number) => Sandbox.create({ source: { type: "snapshot", snapshotId }, resources: { vcpus }, timeout: budgetMs - 10_000, signal });
-    const sandbox = await start(VCPUS).catch(() => start(4));
+    const sandbox = await Sandbox.create({ source: { type: "snapshot", snapshotId }, resources: { vcpus: VCPUS }, timeout: budgetMs - 10_000, signal });
     let file: Buffer | null = null;
     try {
       const { sandboxFilePath } = await renderMediaOnVercel({
