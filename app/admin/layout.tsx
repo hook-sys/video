@@ -3,10 +3,27 @@ import Link from "next/link";
 import { Desk, Mark } from "@/components/site/windows";
 import "@/components/site/site.css";
 import { logout } from "@/app/auth/actions";
-import { requireAdmin } from "@/lib/admin";
+import { type Section, requireAdmin } from "@/lib/admin";
 import { AdminNav } from "./_components/nav";
 import { Badge } from "./_components/ui";
 import { ROLE_LABEL, daysAgo } from "./_components/format";
+
+// Each page and the section it belongs to (lib/admin.ts: which roles see it).
+const PAGE_SECTION: Record<string, Section> = {
+  "/admin": "overview",
+  "/admin/queue": "queue",
+  "/admin/costs": "costs",
+  "/admin/quality": "quality",
+  "/admin/users": "users",
+  "/admin/videos": "videos",
+  "/admin/billing": "billing",
+  "/admin/coupons": "coupons",
+  "/admin/content": "content",
+  "/admin/settings": "settings",
+  "/admin/models": "models",
+  "/admin/team": "team",
+  "/admin/audit": "audit",
+};
 
 export const metadata: Metadata = { title: { default: "Admin", template: "%s · Admin · MotionBrief" }, robots: { index: false } };
 
@@ -39,7 +56,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
           </form>
         </div>
       </header>
-      <AdminNav badges={{ "/admin/queue": failed ?? 0 }} />
+      <AdminNav badges={{ "/admin/queue": failed ?? 0 }} allowed={Object.entries(PAGE_SECTION).filter(([, sec]) => s.can(sec)).map(([href]) => href)} />
       <main className="gs-admin-stage">
         <section className="gs-win gs-glass">
           <div className="gs-titlebar">

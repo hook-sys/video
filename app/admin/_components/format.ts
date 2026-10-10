@@ -49,8 +49,8 @@ export const STATE_LABEL: Record<VideoState, [string, BadgeTone]> = {
 };
 
 
-export const ROLE_TONE: Record<string, BadgeTone> = { super_admin: "violet", admin: "blue", user: "gray" };
-export const ROLE_LABEL: Record<string, string> = { super_admin: "Super admin", admin: "Admin", user: "Customer" };
+export const ROLE_TONE: Record<string, BadgeTone> = { super_admin: "violet", admin: "blue", support: "green", finance: "amber", content: "blue", user: "gray" };
+export const ROLE_LABEL: Record<string, string> = { super_admin: "Super admin", admin: "Admin", support: "Support", finance: "Finance", content: "Content", user: "Customer" };
 
 // Keeps PostgREST filter syntax out of free-text search.
 export const cleanSearch = (q: unknown) => (typeof q === "string" ? q.replace(/[,()%_*\\"]/g, " ").trim().slice(0, 80) : "");
@@ -64,3 +64,6 @@ export function lastDays(n: number) {
 
 // ISO timestamp `days` ago (0 = now), for date filters.
 export const daysAgo = (days: number) => new Date(Date.now() - days * 86400000).toISOString();
+
+// Is this moment already past? (a coupon's expiry)
+export const isPast = (iso: string | null | undefined) => !!iso && new Date(iso).getTime() < Date.now();

@@ -17,7 +17,7 @@ const PATH: Record<DashWindow, string> = { videos: "/dashboard", account: "/dash
 const TITLE: Record<DashWindow, string> = { videos: "Videos", account: "Account" };
 const windowAt = (l: Location): DashWindow => (l.hash === "#account" ? "account" : "videos");
 
-export function DashboardView({ email, name, admin, plan, projects, previews }: { email: string; name: string; admin: boolean; plan: string; projects: DashboardRow[]; previews: Record<string, string> }) {
+export function DashboardView({ email, name, admin, credits, projects, previews }: { email: string; name: string; admin: boolean; credits: number; projects: DashboardRow[]; previews: Record<string, string> }) {
   const { current, open, win, iconRef } = useWindows<DashWindow>("videos", PATH, windowAt, TITLE);
   const withState = projects.map((p) => ({ ...p, state: videoState(p) }));
   const ready = withState.filter((p) => p.state === "completed");
@@ -61,7 +61,7 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
                 { label: "Videos", value: projects.length, hint: `${thisMonth} this month` },
                 { label: "Ready", value: ready.length, hint: "To watch and download" },
                 { label: "In progress", value: active.length, hint: active.length ? "Updating live" : "Nothing running" },
-                { label: "Plan", value: plan, hint: `${minutes} min of video made` },
+                { label: "Credits", value: admin ? "∞" : credits.toLocaleString("en-US"), hint: `${minutes} min of video made` },
               ].map((s) => (
                 <div key={s.label}>
                   <small>{s.label}</small>
@@ -146,8 +146,8 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
                 <b>{email}</b>
               </div>
               <div>
-                <span>Plan</span>
-                <b>{plan}</b>
+                <span>Credits</span>
+                <b>{admin ? "Unlimited (team)" : credits.toLocaleString("en-US")}</b>
               </div>
               <div>
                 <span>Videos made</span>
@@ -157,6 +157,9 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
               </div>
             </div>
             <div className="gs-row" style={{ marginTop: 24 }}>
+              <Link href="/billing" onClick={remember} className="gs-btn">
+                Buy credits
+              </Link>
               {admin && (
                 <Link href="/admin" onClick={remember} className="gs-btn ghost">
                   Admin panel
@@ -192,6 +195,15 @@ export function DashboardView({ email, name, admin, plan, projects, previews }: 
             <span className="initial">{initial}</span>
           </span>
           <small>Account</small>
+        </Link>
+        <Link href="/billing" onClick={remember}>
+          <span className="gs-tile t6">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" />
+              <path d="M14.5 9.5c-.5-.9-1.5-1.3-2.5-1.3-1.5 0-2.6.8-2.6 1.9 0 2.6 5.3 1.3 5.3 4 0 1.1-1.2 1.9-2.7 1.9-1.1 0-2.1-.4-2.6-1.3M12 6.8v1.4M12 15.8v1.4" />
+            </svg>
+          </span>
+          <small>Credits</small>
         </Link>
         {admin && (
           <Link href="/admin" onClick={remember}>

@@ -13,7 +13,7 @@ export const maxDuration = 300;
 
 export default async function VideoPage({ params }: PageProps<"/admin/videos/[id]">) {
   const { id } = await params;
-  const { db } = await requireAdmin();
+  const { db } = await requireAdmin("videos");
   const { data: p } = await db.from("projects").select("*").eq("id", id).maybeSingle();
   if (!p) notFound();
   const [{ data: owner }, { data: costs }, video] = await Promise.all([

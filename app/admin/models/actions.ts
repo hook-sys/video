@@ -12,7 +12,7 @@ import { type AiConfig, SETTING_KEY, TEXT_TASKS, forgetAiConfig, normalizeConfig
 // is written to the audit log. Keys are never read back or shown.
 
 async function superAdmin() {
-  const s = await requireAdmin();
+  const s = await requireAdmin("models");
   if (s.role !== "super_admin") throw new Error("Only a super admin can change AI models.");
   return s;
 }

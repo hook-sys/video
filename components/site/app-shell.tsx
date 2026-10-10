@@ -6,10 +6,10 @@ import { Desk, Mark, remember, useArrival } from "./windows";
 import "./site.css";
 
 // The signed-in pages in the site's glass: the bar, one window, and the dock
-// (Videos, Account, Admin, New video). The window opens out of what was
+// (Videos, Account, Credits, Admin, New video). The window opens out of what was
 // clicked to come here (windows.tsx remember/useArrival).
 
-export type ShellPlace = "videos" | "account" | "admin" | "new" | null;
+export type ShellPlace = "videos" | "account" | "credits" | "admin" | "new" | null;
 
 export function AppShell({ title, admin, active, initial, wide, action, children }: { title: string; admin: boolean; active: ShellPlace; initial: string; wide?: boolean; action?: React.ReactNode; children: React.ReactNode }) {
   const win = useRef<HTMLElement>(null);
@@ -62,6 +62,15 @@ export function AppShell({ title, admin, active, initial, wide, action, children
             <span className="initial">{initial}</span>
           </span>
           <small>Account</small>
+        </Link>
+        <Link href="/billing" onClick={remember} aria-current={active === "credits" ? "page" : undefined}>
+          <span className="gs-tile t6">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="8" />
+              <path d="M14.5 9.5c-.5-.9-1.5-1.3-2.5-1.3-1.5 0-2.6.8-2.6 1.9 0 2.6 5.3 1.3 5.3 4 0 1.1-1.2 1.9-2.7 1.9-1.1 0-2.1-.4-2.6-1.3M12 6.8v1.4M12 15.8v1.4" />
+            </svg>
+          </span>
+          <small>Credits</small>
         </Link>
         {admin && (
           <Link href="/admin" onClick={remember} aria-current={active === "admin" ? "page" : undefined}>

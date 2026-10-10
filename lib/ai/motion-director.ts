@@ -3,7 +3,7 @@ import type OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
-import { countUsage, textAi } from "@/lib/ai/models";
+import { countUsage, textAi, textClient } from "@/lib/ai/models";
 import { HOUSE_RULES, extraRules } from "@/lib/ai/house-rules";
 import { DISPLAY_FACES, TEXT_FACES } from "@/components/video/composer/art";
 import { IN_USE, LANGUAGES, LANGUAGE_NOTES, type Language } from "@/components/video/composer/staging";
@@ -166,6 +166,8 @@ export type MotionInput = {
   // what the customer told us in the form (facts, not guesses)
   customer?: Customer | null;
   seed: number;
+  // the model for this video's quality level (lib/billing: empty = the one on /admin/models)
+  model?: string | null;
 };
 export type Customer = { audience: string; features: string[]; before: string[]; mood: Mood; use: Use };
 
@@ -326,8 +328,10 @@ export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; 
 
 // ── the calls ──────────────────────────────────────────────────────────────
 type Client = Pick<OpenAI, "responses">;
-async function modelOf(client?: Client) {
-  const picked = client ? null : await textAi("composer").catch(() => null);
+async function modelOf(client?: Client, level?: string | null) {
+  // (a quality level's own model runs through fal, like every text job)
+  const own = !client && level ? await textAi("composer").then((t) => (t ? textClient("fal", level, false) : null)).catch(() => null) : null;
+  const picked = client ? null : own ?? (await textAi("composer").catch(() => null));
   const model = picked?.model ?? (process.env.OPENAI_MODEL || "gpt-5-mini");
   const quick = (picked ? picked.quick : /(^|\/)(gpt-5|o\d)/.test(model)) ? { reasoning: { effort: "low" as const } } : {};
   return { ai: client ?? picked?.client ?? null, model, quick };
@@ -446,7 +450,7 @@ async function ask<T>(ai: Client, body: Record<string, unknown>, deadline: numbe
 export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 130_000): Promise<MotionResult> {
   const t0 = Date.now();
   const fallback = rulePlan(input);
-  const { ai, model, quick } = await modelOf(client);
+  const { ai, model, quick } = await modelOf(client, input.model);
   const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
   const done = (plan: MotionPlan, problems: string[]): MotionResult => {
     onUsage?.(usage);
@@ -477,7 +481,7 @@ function planOf(o: Answer, input: Pick<MotionInput, "words" | "category" | "know
 export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 100_000): Promise<MotionResult> {
   const t0 = Date.now();
   const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative) : [];
-  const { ai, model, quick } = await modelOf(client);
+  const { ai, model, quick } = await modelOf(client, input.model);
   const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
   const done = (p: MotionPlan, problems: string[]): MotionResult => {
     onUsage?.(usage);

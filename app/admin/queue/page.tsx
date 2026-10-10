@@ -12,7 +12,7 @@ export const metadata = { title: "Video queue" };
 const STUCK_MIN = 30;
 
 export default async function QueuePage() {
-  const { db } = await requireAdmin();
+  const { db } = await requireAdmin("queue");
   const since = daysAgo(1);
   const [{ data: running }, { data: failed }, { data: users }] = await Promise.all([
     db.from("projects").select(PROJECT_COLUMNS).eq("pipeline_status", "running").order("updated_at"),

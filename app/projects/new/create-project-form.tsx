@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
+import type { TierId } from "@/lib/billing-config";
 import { createProject } from "@/app/projects/actions";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import { BRAND_CATEGORIES } from "@/lib/studio";
@@ -48,7 +50,10 @@ async function colourOf(url: string): Promise<string> {
   return `#${hex(best.r)}${hex(best.g)}${hex(best.b)}`.toUpperCase();
 }
 
-export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill; voices?: VoiceOption[] }) {
+// A quality level as the form shows it (lib/billing-config: no model names).
+export type Level = { id: TierId; name: string; blurb: string; badge: string; perSecond: number; soon: boolean };
+
+export function CreateProjectForm({ prefill, voices = [], levels = [], minSeconds = 0, credits = null }: { prefill?: Prefill; voices?: VoiceOption[]; levels?: Level[]; minSeconds?: number; credits?: number | null }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState(prefill?.script ?? "");
   const [format, setFormat] = useState<string>(FORMATS[0]);
@@ -58,12 +63,25 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
   const [localError, setLocalError] = useState<string>();
   const error = logoError ?? localError ?? state.error;
   const seconds = script.trim() ? estimateVideoSeconds(script) : 0;
+  const [quality, setQuality] = useState<TierId>("standard");
+  const level = levels.find((l) => l.id === quality);
+  // (the team is not charged: credits null)
+  const cost = level && credits !== null ? Math.ceil(Math.max(minSeconds, Math.ceil(seconds || minSeconds)) * level.perSecond) : 0;
+  const short = credits !== null && cost > credits;
   const blocked = pending || !!logoError;
 
   const submit = (
     <button disabled={blocked} className="w-full rounded-full bg-[#0a66d6] px-6 py-4 text-base font-semibold text-white hover:bg-[#0859bd] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0a66d6]/30 disabled:opacity-60">
-      Create video
+      Create video{cost ? ` · ${cost.toLocaleString("en-US")} credits` : ""}
     </button>
+  );
+  const balance = credits !== null && (
+    <p className="text-center text-[11px] text-foreground/50">
+      You have {credits.toLocaleString("en-US")} credits ·{" "}
+      <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">
+        {short ? "add credits to create this video" : "add credits"}
+      </Link>
+    </p>
   );
 
   return (
@@ -84,6 +102,7 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
         <input type="hidden" name="direction" value={directionFor(script, STYLE)} />
         <input type="hidden" name="visual_style" value={STYLE_PRESETS[STYLE].visual_style} />
         <input type="hidden" name="format" value={format} />
+        <input type="hidden" name="quality" value={quality} />
         <input type="hidden" name="brand_color" value={logo?.colour ?? ""} />
         {/* Voice style isn't offered to customers; keep the existing default. */}
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
@@ -286,6 +305,33 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
             </div>
           </Step>
 
+          {levels.length > 1 && (
+            <Step n={10} title="Quality" sub="The same video, directed with more care.">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {levels.map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    disabled={l.soon}
+                    onClick={() => setQuality(l.id)}
+                    aria-pressed={quality === l.id}
+                    className={`relative flex flex-col items-start gap-1 rounded-2xl border bg-white/70 p-4 text-left disabled:cursor-not-allowed disabled:opacity-60 ${quality === l.id ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/12 hover:border-foreground/30"}`}
+                  >
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span className="text-base font-semibold">{l.name}</span>
+                      {l.soon ? (
+                        <span className="rounded-full bg-foreground/[0.07] px-2 py-0.5 text-[11px] font-medium text-foreground/60">Coming soon</span>
+                      ) : (
+                        l.badge && <span className="rounded-full bg-gradient-to-r from-[#0a66d6] to-[#7c3aed] px-2 py-0.5 text-[11px] font-semibold text-white">{l.badge}</span>
+                      )}
+                    </span>
+                    <span className="text-xs text-foreground/60">{l.blurb}</span>
+                  </button>
+                ))}
+              </div>
+            </Step>
+          )}
+
           {error && <p className="rounded-xl bg-[#fdecea] px-4 py-3 text-sm text-[#a1281b]">{error}</p>}
         </div>
 
@@ -298,12 +344,18 @@ export function CreateProjectForm({ prefill, voices = [] }: { prefill?: Prefill;
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <Summary k="Length" v={seconds ? `≈ ${seconds} s` : "—"} />
               <Summary k="Format" v={format} />
+              {level && <Summary k="Quality" v={level.name} />}
+              {credits !== null && <Summary k="Credits" v={cost ? cost.toLocaleString("en-US") : "—"} />}
             </dl>
             {submit}
+            {balance}
             <p className="text-center text-[11px] text-foreground/45">1080p · download as MP4</p>
           </div>
         </aside>
-        <div className="flex flex-col gap-2 lg:hidden">{submit}</div>
+        <div className="flex flex-col gap-2 lg:hidden">
+          {submit}
+          {balance}
+        </div>
       </form>
     </>
   );

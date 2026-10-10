@@ -8,7 +8,7 @@ export const metadata = { title: "Audit log" };
 const LINK: Record<string, string> = { user: "/admin/users/", project: "/admin/videos/" };
 
 export default async function AuditPage() {
-  const { db } = await requireAdmin();
+  const { db } = await requireAdmin("audit");
   const { data } = await db.from("admin_audit_log").select("*").order("created_at", { ascending: false }).limit(300);
   return (
     <>

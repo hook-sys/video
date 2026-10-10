@@ -17,6 +17,8 @@ const I = {
   settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1",
   models: "M12 2l8 4.5v9L12 20l-8-4.5v-9zM12 11l8-4.5M12 11v9M12 11L4 6.5",
   audit: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h8",
+  coupons: "M20 12V8a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v4a2 2 0 0 1 0 4v0a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4a2 2 0 0 1 0-4zM9 6v12",
+  team: "M12 2l3 6 6 .9-4.5 4.3 1 6.1L12 16.8 6.5 19.3l1-6.1L3 8.9 9 8z",
 };
 
 const GROUPS: { title: string; items: { href: string; label: string; icon: keyof typeof I }[] }[] = [
@@ -29,12 +31,14 @@ const GROUPS: { title: string; items: { href: string; label: string; icon: keyof
   { title: "Manage", items: [
     { href: "/admin/users", label: "Users", icon: "users" },
     { href: "/admin/videos", label: "Videos", icon: "videos" },
-    { href: "/admin/billing", label: "Plans & billing", icon: "billing" },
+    { href: "/admin/billing", label: "Pricing & payments", icon: "billing" },
+    { href: "/admin/coupons", label: "Coupons", icon: "coupons" },
     { href: "/admin/content", label: "Content", icon: "content" },
   ] },
   { title: "System", items: [
     { href: "/admin/settings", label: "Settings", icon: "settings" },
     { href: "/admin/models", label: "AI models", icon: "models" },
+    { href: "/admin/team", label: "Team", icon: "team" },
     { href: "/admin/audit", label: "Audit log", icon: "audit" },
   ] },
 ];
@@ -47,7 +51,8 @@ export function Icon({ d, className = "size-4" }: { d: string; className?: strin
   );
 }
 
-export function AdminNav({ badges }: { badges: Record<string, number> }) {
+// `allowed`: the pages the signed-in role may open (the rest are not shown).
+export function AdminNav({ badges, allowed }: { badges: Record<string, number>; allowed: string[] }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const active = (href: string) => (href === "/admin" ? path === href : path.startsWith(href));
@@ -57,7 +62,7 @@ export function AdminNav({ badges }: { badges: Record<string, number> }) {
         {open ? "Close" : "Menu"}
       </button>
       <nav className={`${open ? "flex" : "hidden"} gs-glass fixed bottom-6 left-4 top-[96px] z-40 w-60 flex-col gap-6 overflow-y-auto rounded-[22px] px-3 py-5 lg:flex`}>
-        {GROUPS.map((g) => (
+        {GROUPS.map((g) => ({ ...g, items: g.items.filter((it) => allowed.includes(it.href)) })).filter((g) => g.items.length).map((g) => (
           <div key={g.title}>
             <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-600">{g.title}</p>
             {g.items.map((it) => (

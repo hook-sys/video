@@ -4,7 +4,8 @@ import { AppShell } from "@/components/site/app-shell";
 import { userAccess } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getAiConfig } from "@/lib/ai/models";
-import { CreateProjectForm, type Prefill } from "./create-project-form";
+import { TIER_IDS, balanceOf, getBilling, grantSignupCredits } from "@/lib/billing";
+import { CreateProjectForm, type Level, type Prefill } from "./create-project-form";
 
 export const metadata: Metadata = { title: "New video" };
 
@@ -28,13 +29,21 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
   // The voices customers can pick (set on /admin/models; none = by gender only).
   const { voice } = await getAiConfig();
   const voices = voice.on ? voice.choices : [];
+  // the quality levels (no model names reach the browser) and the balance (the team: none)
+  const billing = await getBilling();
+  const levels: Level[] = TIER_IDS.filter((id) => billing.tiers[id].status !== "off").map((id) => {
+    const t = billing.tiers[id];
+    return { id, name: t.name, blurb: t.blurb, badge: t.badge, perSecond: t.perSecond, soon: t.status === "soon" };
+  });
+  if (user) await grantSignupCredits(user.id, !!user.email_confirmed_at).catch(() => {});
+  const credits = user && !admin ? await balanceOf(user.id) : null;
   return (
     <AppShell title="New video" admin={admin} active="new" initial={(user?.email ?? "?")[0]} wide action={<span />}>
       <div className="mb-6 flex flex-col gap-2">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{prefill ? "A new video of the same script" : "Create your video"}</h1>
         <p className="max-w-xl text-foreground/60">{prefill ? "Your script and brand are filled in. Change anything, add your icon, and create." : "Your words, your brand, your answers. MotionBrief records the voice and directs every scene."}</p>
       </div>
-      <CreateProjectForm prefill={prefill} voices={voices} />
+      <CreateProjectForm prefill={prefill} voices={voices} levels={levels} minSeconds={billing.minSeconds} credits={credits} />
     </AppShell>
   );
 }

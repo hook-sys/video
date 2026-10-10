@@ -6,7 +6,7 @@ import { Badge, Card, Notice, PageHeader, Table, td } from "../_components/ui";
 export const metadata = { title: "Content" };
 
 export default async function ContentPage() {
-  await requireAdmin();
+  await requireAdmin("content");
 
   return (
     <>

@@ -9,17 +9,16 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
   const { q, status } = await searchParams;
   const search = cleanSearch(q);
   const filter = typeof status === "string" ? status : "";
-  const { db } = await requireAdmin();
+  const { db } = await requireAdmin("users");
 
-  let query = db.from("profiles").select("id, email, full_name, role, status, plan_id, created_at").order("created_at", { ascending: false }).limit(500);
+  let query = db.from("profiles").select("id, email, full_name, role, status, credits, created_at").order("created_at", { ascending: false }).limit(500);
   if (search) query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`);
-  if (filter === "admins") query = query.in("role", ["admin", "super_admin"]);
+  if (filter === "admins") query = query.neq("role", "user");
   else if (filter) query = query.eq("status", filter);
-  const [{ data: users }, { data: projects }, { data: costs }, { data: plans }] = await Promise.all([
+  const [{ data: users }, { data: projects }, { data: costs }] = await Promise.all([
     query,
     db.from("projects").select("user_id, created_at, render_status").limit(20000),
     db.from("cost_events").select("user_id, estimated_cost_usd").limit(50000),
-    db.from("plans").select("id, name"),
   ]);
   const videos = new Map<string, { n: number; done: number; last: string }>();
   for (const p of projects ?? []) {
@@ -31,7 +30,6 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
   }
   const spend = new Map<string, number>();
   for (const c of costs ?? []) spend.set(c.user_id, (spend.get(c.user_id) ?? 0) + Number(c.estimated_cost_usd));
-  const planName = new Map((plans ?? []).map((p) => [p.id, p.name]));
 
   return (
     <>
@@ -40,9 +38,9 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
           <input name="q" defaultValue={search} placeholder="Search email or name…" className={input} />
         </form>
       </PageHeader>
-      <Filters base="/admin/users" current={filter} items={[{ value: "", label: "All" }, { value: "active", label: "Active" }, { value: "suspended", label: "Suspended" }, { value: "admins", label: "Admins" }]} />
+      <Filters base="/admin/users" current={filter} items={[{ value: "", label: "All" }, { value: "active", label: "Active" }, { value: "suspended", label: "Suspended" }, { value: "admins", label: "Team" }]} />
       <Card>
-        <Table head={["User", "Role", "Status", "Plan", "Videos", "Cost", "Last video", "Joined"]} empty="No users match.">
+        <Table head={["User", "Role", "Status", "Credits", "Videos", "Cost", "Last video", "Joined"]} empty="No users match.">
           {(users ?? []).map((u) => {
             const v = videos.get(u.id);
             return (
@@ -53,7 +51,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
                 </td>
                 <td className={td}><Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role] ?? u.role}</Badge></td>
                 <td className={td}><Badge tone={u.status === "active" ? "green" : "red"}>{u.status}</Badge></td>
-                <td className={`${td} text-zinc-400`}>{u.plan_id ? planName.get(u.plan_id) ?? u.plan_id : "Free"}</td>
+                <td className={`${td} tabular-nums text-zinc-300`}>{(u.credits ?? 0).toLocaleString("en-US")}</td>
                 <td className={`${td} tabular-nums`}>{v ? `${v.done}/${v.n}` : 0}</td>
                 <td className={`${td} tabular-nums text-zinc-400`}>{usd(spend.get(u.id) ?? 0)}</td>
                 <td className={`${td} text-zinc-500`}>{ago(v?.last)}</td>

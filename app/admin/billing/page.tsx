@@ -1,54 +1,115 @@
+import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
-import { addPlan, savePlan } from "../actions";
-import { Card, Notice, PageHeader, Stat, btn, btnPrimary, input } from "../_components/ui";
-import { usd } from "../_components/format";
+import { TIER_IDS, creditsFor, getBilling } from "@/lib/billing";
+import { stripeReady } from "@/lib/stripe";
+import { saveBilling } from "../actions";
+import { Badge, Card, Notice, PageHeader, Stat, Table, btnPrimary, input, td } from "../_components/ui";
+import { ago, daysAgo, usd } from "../_components/format";
 
-export const metadata = { title: "Plans & billing" };
+export const metadata = { title: "Pricing & payments" };
+
+const label = "flex flex-col gap-1";
+const small = "text-xs text-zinc-500";
 
 export default async function BillingPage({ searchParams }: PageProps<"/admin/billing">) {
-  const { error } = await searchParams;
-  const { db } = await requireAdmin();
-  const [{ data: plans }, { data: users }] = await Promise.all([
-    db.from("plans").select("*").order("sort"),
-    db.from("profiles").select("plan_id"),
+  const { error, saved } = await searchParams;
+  const { db } = await requireAdmin("billing");
+  const billing = await getBilling();
+  const since = daysAgo(30);
+  const [{ data: payments }, { data: recent }, { data: balances }] = await Promise.all([
+    db.from("payments").select("id, user_id, usd, list_usd, credits, bonus, status, created_at, paid_at, coupon_id").order("created_at", { ascending: false }).limit(50),
+    db.from("payments").select("usd, credits, bonus").eq("status", "paid").gte("paid_at", since),
+    db.from("profiles").select("credits").gt("credits", 0),
   ]);
-  const onPlan = (id: string | null) => (users ?? []).filter((u) => u.plan_id === id).length;
-  const mrr = (plans ?? []).reduce((a, p) => a + Number(p.price_usd_month) * onPlan(p.id), 0);
+  const ids = [...new Set((payments ?? []).map((p) => p.user_id))];
+  const { data: who } = ids.length ? await db.from("profiles").select("id, email").in("id", ids) : { data: [] };
+  const email = new Map((who ?? []).map((u) => [u.id, u.email]));
+  const revenue = (recent ?? []).reduce((a, p) => a + Number(p.usd), 0);
+  const sold = (recent ?? []).reduce((a, p) => a + p.credits + p.bonus, 0);
+  const outstanding = (balances ?? []).reduce((a, p) => a + p.credits, 0);
+  const packRows = [...billing.packs, ...Array.from({ length: Math.max(0, 6 - billing.packs.length) }, () => ({ usd: 0, credits: 0 }))];
 
   return (
     <>
-      <PageHeader title="Plans & billing" sub="Subscription plans and who is on them." />
-      <Notice tone="warn">
-        No payment provider is connected yet. Plans can be edited and assigned to users (Users → user → Plan), but nobody is charged and plan limits are not enforced until billing is wired up.
-      </Notice>
+      <PageHeader title="Pricing & payments" sub="What a video costs in credits, the credit packs customers buy, and the payments." />
+      {!stripeReady() && (
+        <Notice tone="warn">
+          Stripe isn&apos;t connected yet: customers can&apos;t buy credits. Add <code>STRIPE_SECRET_KEY</code> and <code>STRIPE_WEBHOOK_SECRET</code> in Vercel → Settings → Environment Variables (test keys first), then redeploy.
+        </Notice>
+      )}
       {typeof error === "string" && <Notice tone="warn">{error}</Notice>}
+      {saved && !error && <Notice tone="good">Pricing saved — it applies to the next video and the next purchase.</Notice>}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat label="Plans" value={plans?.length ?? 0} />
-        <Stat label="Paid users" value={(users ?? []).filter((u) => u.plan_id && u.plan_id !== "free").length} />
-        <Stat label="Free users" value={onPlan(null) + onPlan("free")} />
-        <Stat label="MRR if charged" value={usd(mrr)} hint="Price × users on the plan" />
+        <Stat label="Revenue · 30 days" value={usd(revenue)} />
+        <Stat label="Credits sold · 30 days" value={sold.toLocaleString("en-US")} />
+        <Stat label="Credits held by customers" value={outstanding.toLocaleString("en-US")} hint={`≈ ${usd(outstanding / 100)} of videos owed`} />
+        <Stat label="Payments" value={(payments ?? []).filter((p) => p.status === "paid").length} hint="Last 50 shown below" />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {(plans ?? []).map((p) => (
-          <Card key={p.id} title={p.name} action={<span className="text-xs text-zinc-500">{onPlan(p.id)} users</span>}>
-            <form action={savePlan.bind(null, p.id)} className="flex flex-col gap-3 text-sm">
-              <label className="flex flex-col gap-1"><span className="text-xs text-zinc-500">Name</span><input name="name" defaultValue={p.name} className={input} /></label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1"><span className="text-xs text-zinc-500">Price / month (USD)</span><input name="price" type="number" min={0} step="0.01" defaultValue={p.price_usd_month} className={input} /></label>
-                <label className="flex flex-col gap-1"><span className="text-xs text-zinc-500">Videos / month</span><input name="videos" type="number" min={0} defaultValue={p.videos_per_month} className={input} /></label>
-              </div>
-              <label className="flex items-center gap-2 text-zinc-300"><input type="checkbox" name="active" defaultChecked={p.active} className="accent-[#4f8ff0]" /> Available to customers</label>
-              <button className={btn}>Save {p.name}</button>
-            </form>
-          </Card>
-        ))}
-        <Card title="New plan">
-          <form action={addPlan} className="flex flex-col gap-3">
-            <input name="name" required placeholder="Plan name, e.g. Agency" className={input} />
-            <button className={btnPrimary}>Create plan</button>
-          </form>
+
+      <form action={saveBilling} className="flex flex-col gap-4">
+        <Card title="Quality levels" action={<span className={small}>1 credit = $0.01 · charged per second of video</span>}>
+          <div className="grid gap-4 lg:grid-cols-3">
+            {TIER_IDS.map((id) => {
+              const t = billing.tiers[id];
+              return (
+                <div key={id} className="flex flex-col gap-3 rounded-xl border border-white/[0.07] p-4 text-sm">
+                  <div className="flex items-center justify-between">
+                    <code className="text-xs text-[#9cc2ff]">{id}</code>
+                    <Badge tone={t.status === "on" ? "green" : t.status === "soon" ? "amber" : "gray"}>{t.status === "on" ? "On" : t.status === "soon" ? "Coming soon" : "Hidden"}</Badge>
+                  </div>
+                  <label className={label}><span className={small}>Name customers see</span><input name={`${id}_name`} defaultValue={t.name} className={input} /></label>
+                  <label className={label}><span className={small}>One line about it</span><input name={`${id}_blurb`} defaultValue={t.blurb} className={input} /></label>
+                  <label className={label}><span className={small}>Badge (optional, e.g. “Best result”)</span><input name={`${id}_badge`} defaultValue={t.badge} className={input} /></label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className={label}><span className={small}>Credits / second</span><input name={`${id}_rate`} type="number" min={0} step="0.1" defaultValue={t.perSecond} className={input} /></label>
+                    <label className={label}>
+                      <span className={small}>Status</span>
+                      <select name={`${id}_status`} defaultValue={t.status} disabled={id === "standard"} className={input}>
+                        <option value="on">On</option>
+                        <option value="soon">Coming soon</option>
+                        <option value="off">Hidden</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label className={label}><span className={small}>Director model (empty = the one on AI models)</span><input name={`${id}_model`} defaultValue={t.model} placeholder="e.g. anthropic/claude-opus-5.5" className={input} /></label>
+                  <p className={small}>30 s video = {creditsFor(billing, id, 30)} credits (${(creditsFor(billing, id, 30) / 100).toFixed(2)})</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-xl">
+            <label className={label}><span className={small}>Welcome credits (once, after email is confirmed)</span><input name="signup_credits" type="number" min={0} defaultValue={billing.signupCredits} className={input} /></label>
+            <label className={label}><span className={small}>Shortest charge (seconds)</span><input name="min_seconds" type="number" min={0} max={120} defaultValue={billing.minSeconds} className={input} /></label>
+          </div>
         </Card>
-      </div>
+        <Card title="Credit packs" action={<span className={small}>Leave a row empty to remove it</span>}>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {packRows.map((p, i) => (
+              <div key={i} className="grid grid-cols-2 gap-2">
+                <label className={label}><span className={small}>Price (USD)</span><input name={`pack_usd_${i}`} type="number" min={0} step="0.01" defaultValue={p.usd || ""} className={input} /></label>
+                <label className={label}><span className={small}>Credits</span><input name={`pack_credits_${i}`} type="number" min={0} defaultValue={p.credits || ""} className={input} /></label>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <div>
+          <button className={btnPrimary}>Save pricing</button>
+        </div>
+      </form>
+
+      <Card title="Payments">
+        <Table head={["When", "Customer", "Paid", "Credits", "Status"]} empty="No payments yet.">
+          {(payments ?? []).map((p) => (
+            <tr key={p.id}>
+              <td className={`${td} text-zinc-500`}>{ago(p.paid_at ?? p.created_at)}</td>
+              <td className={td}><Link href={`/admin/users/${p.user_id}`} className="hover:underline">{email.get(p.user_id) ?? p.user_id}</Link></td>
+              <td className={`${td} tabular-nums`}>{usd(Number(p.usd))}{Number(p.list_usd) > Number(p.usd) && <span className="ml-1 text-xs text-zinc-500 line-through">{usd(Number(p.list_usd))}</span>}</td>
+              <td className={`${td} tabular-nums`}>{p.credits.toLocaleString("en-US")}{p.bonus > 0 && <span className="text-emerald-400"> +{p.bonus.toLocaleString("en-US")}</span>}</td>
+              <td className={td}><Badge tone={p.status === "paid" ? "green" : p.status === "failed" ? "red" : "gray"}>{p.status}</Badge></td>
+            </tr>
+          ))}
+        </Table>
+      </Card>
     </>
   );
 }

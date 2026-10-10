@@ -4,7 +4,7 @@ import { Badge, Bars, Card, PageHeader, Stat, Table, td } from "./_components/ui
 import { PROJECT_COLUMNS, STATE_LABEL, ago, daysAgo, lastDays, projectTitle, usd, videoState, type ProjectRow } from "./_components/format";
 
 export default async function AdminOverview() {
-  const { db } = await requireAdmin();
+  const { db } = await requireAdmin("overview");
   const d30 = daysAgo(30);
   const [users, projects, costs] = await Promise.all([
     db.from("profiles").select("id, email, created_at, status"),

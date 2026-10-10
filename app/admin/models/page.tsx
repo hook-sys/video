@@ -23,7 +23,7 @@ const select = `${input} md:w-36`;
 
 export default async function ModelsPage({ searchParams }: PageProps<"/admin/models">) {
   const { saved, error } = await searchParams;
-  const s = await requireAdmin();
+  const s = await requireAdmin("models");
   const editable = s.role === "super_admin";
   const [{ data: row }, { data: events }] = await Promise.all([
     s.db.from("app_settings").select("value, updated_at").eq("key", SETTING_KEY).maybeSingle(),

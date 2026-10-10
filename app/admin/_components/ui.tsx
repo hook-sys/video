@@ -102,9 +102,10 @@ export function HBar({ label, value, max, prefix = "" }: { label: React.ReactNod
   );
 }
 
-export function Notice({ children, tone = "info" }: { children: React.ReactNode; tone?: "info" | "warn" }) {
+export function Notice({ children, tone = "info" }: { children: React.ReactNode; tone?: "info" | "warn" | "good" }) {
+  const look = { warn: "border-amber-400/20 bg-amber-400/[0.06] text-amber-200", good: "border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200", info: "border-[#4f8ff0]/25 bg-[#4f8ff0]/[0.08] text-[#c9ddff]" }[tone];
   return (
-    <div className={`rounded-xl border px-4 py-3 text-sm ${tone === "warn" ? "border-amber-400/20 bg-amber-400/[0.06] text-amber-200" : "border-[#4f8ff0]/25 bg-[#4f8ff0]/[0.08] text-[#c9ddff]"}`}>
+    <div className={`rounded-xl border px-4 py-3 text-sm ${look}`}>
       {children}
     </div>
   );

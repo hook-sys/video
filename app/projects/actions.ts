@@ -56,6 +56,7 @@ import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
 import { checkProjectFrames, prepareFrameCheck } from "@/lib/frame-check";
+import { TIER_IDS, type TierId, balanceOf, chargeVideo, creditsFor, getBilling, pickable, refundVideo, settleVideo } from "@/lib/billing";
 
 export type CreateProjectState = { error?: string };
 
@@ -138,6 +139,17 @@ export async function createProject(
     }
   }
 
+  // The quality level (its credits per second, /admin/billing) and the credits
+  // this video takes: its estimated length now, settled to the voice's real
+  // length when it is made, given back if it fails. The team is not charged.
+  const billing = await getBilling();
+  const quality = pickable(billing, formData.get("quality")) ?? "standard";
+  const cost = creditsFor(billing, quality, duration);
+  if (!access.admin) {
+    const have = await balanceOf(user.id);
+    if (have < cost) return { error: `This video needs about ${cost.toLocaleString("en-US")} credits and you have ${have.toLocaleString("en-US")}. Add credits on the Credits page.` };
+  }
+
   // A voice from the list on /admin/models (else the gender's default voice).
   const chosenVoice = (await getAiConfig()).voice.choices.find((c) => c.name === String(formData.get("voice_name") ?? ""));
   const { data, error } = await supabase
@@ -160,15 +172,25 @@ export async function createProject(
       call_to_action: callToAction,
       target_audience: targetAudience,
       details,
+      quality,
     })
     .select("id")
     .single();
 
   if (error) return { error: error.message };
+  if (!access.admin) {
+    try {
+      await chargeVideo(data.id, user.id, quality, duration);
+    } catch {
+      await supabase.from("projects").delete().eq("id", data.id);
+      return { error: "Not enough credits for this video. Add credits on the Credits page." };
+    }
+  }
 
   const logoAt = logoPath(user.id, data.id, SCREENSHOT_TYPES[logo!.type]);
   const logoUpload = await supabase.storage.from(SCREENSHOTS_BUCKET).upload(logoAt, logo!, { contentType: logo!.type });
   if (logoUpload.error) {
+    await refundVideo(data.id, user.id, "Upload failed — credits returned").catch(() => {});
     await supabase.from("projects").delete().eq("id", data.id);
     return { error: "Icon upload failed. Please try again." };
   }
@@ -383,11 +405,15 @@ async function motionDirection(
   const usage: BriefUsage[] = [];
   const details = parseDetails(project.details);
   const brand = brandOf(project, brief);
-  const [{ known, earlier, past }, { data: capture }, never] = await Promise.all([
+  const [{ known, earlier, past }, { data: capture }, never, { data: level }, billing] = await Promise.all([
     pastOf(admin, projectId, userId, brand.name),
     admin.from("website_captures").select("url, title, meta_description, visible_text").eq("project_id", projectId).eq("status", "completed").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     loadNeverList(admin),
+    admin.from("projects").select("quality").eq("id", projectId).maybeSingle(),
+    getBilling(),
   ]);
+  // the video's quality level directs it on that level's model
+  const tier = billing.tiers[(TIER_IDS as readonly string[]).includes(level?.quality ?? "") ? (level!.quality as TierId) : "standard"];
   // the script's own words (the same split the voice's words are put on), at a reading pace
   const words = narration.split(/\s+/).filter(Boolean).map((text, i) => ({ text, start: i * 0.4, end: i * 0.4 + 0.35 }));
   const input: MotionInput = {
@@ -406,6 +432,7 @@ async function motionDirection(
     category: details?.category ?? null,
     customer: details ? { audience: project.target_audience?.trim() ?? "", features: details.features, before: details.before, mood: details.mood, use: details.use } : null,
     seed: seedFrom(projectId),
+    model: tier.model || null,
   };
   const result = await directMotion(input, (u) => usage.push(u));
   console.info("motion director:", { projectId, source: result.plan.source, ms: result.ms, category: result.plan.profile.category, mood: result.plan.profile.mood, idea: result.plan.creative.idea, language: result.plan.creative.language, scheme: result.plan.creative.scheme, scenes: result.plan.ideas?.scenes.length ?? 0, problems: result.problems.slice(0, 6) });
@@ -694,7 +721,11 @@ async function runPipeline(projectId: string, userId: string) {
     step = next;
     return setPipeline({ pipeline_step: next });
   };
-  const fail = (message: string, status = "failed") => setPipeline({ pipeline_status: status, pipeline_step: step, pipeline_error: message.slice(0, 500) });
+  // (a video that isn't made gives its credits back)
+  const fail = async (message: string, status = "failed") => {
+    await setPipeline({ pipeline_status: status, pipeline_step: step, pipeline_error: message.slice(0, 500) });
+    await refundVideo(projectId, userId).catch((e) => console.error("refund failed:", projectId, e instanceof Error ? e.message : e));
+  };
 
   try {
     // 1. Website capture (pending captures only) and source check.
@@ -759,6 +790,9 @@ async function runPipeline(projectId: string, userId: string) {
       await ready;
       await checkProjectFrames(projectId, left()).catch((e) => console.warn("frame check failed:", e instanceof Error ? e.message : e));
     }
+    // the credits settled to the video's real length (the voice's)
+    const { data: made } = await admin.from("projects").select("duration_seconds, quality").eq("id", projectId).single();
+    if (made) await settleVideo(projectId, userId, (TIER_IDS as readonly string[]).includes(made.quality) ? (made.quality as TierId) : "standard", Number(made.duration_seconds) || 0).catch((e) => console.error("settle failed:", projectId, e instanceof Error ? e.message : e));
     await setPipeline({ pipeline_status: "completed", pipeline_step: null, pipeline_error: null, status: "completed" });
   } catch (e) {
     await fail(e instanceof Error ? e.message : "Generation failed.");
@@ -774,9 +808,18 @@ export async function retryPipeline(projectId: string) {
   if (!user) redirect("/login");
 
   // RLS: only returns the project if this user owns it.
-  const { data: project } = await supabase.from("projects").select("pipeline_status").eq("id", projectId).maybeSingle();
+  const { data: project } = await supabase.from("projects").select("pipeline_status, credits_charged, quality, duration_seconds").eq("id", projectId).maybeSingle();
   // Failed runs resume; projects created before the pipeline existed can start.
   if (!project || !["failed", "idle"].includes(project.pipeline_status)) return;
+  // its credits were given back when it failed: taken again for the new try
+  const { admin: team } = await userAccess(supabase, user.id);
+  if (!team && !project.credits_charged) {
+    try {
+      await chargeVideo(projectId, user.id, (TIER_IDS as readonly string[]).includes(project.quality) ? (project.quality as TierId) : "standard", Number(project.duration_seconds) || 0);
+    } catch {
+      redirect("/billing?error=" + encodeURIComponent("Not enough credits to try this video again. Add credits, then retry."));
+    }
+  }
   if (await claimPipeline(projectId, user.id)) after(() => runPipeline(projectId, user.id));
   revalidatePath(`/projects/${projectId}`);
 }

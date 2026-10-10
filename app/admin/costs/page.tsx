@@ -10,7 +10,7 @@ const JOBS: Record<string, string> = { brief: "Script & brief", motion_director:
 const OPS: Record<string, string> = { openai_brief: "Script & director (AI)", fal_voice: "Voice (FAL)", fal_image: "Images (FAL)", remotion_render: "Rendering", storage: "Storage" };
 
 export default async function CostsPage() {
-  const { db } = await requireAdmin();
+  const { db } = await requireAdmin("costs");
   const d30 = daysAgo(30);
   const [{ data: events }, { data: users }, { count: videos30 }, { data: bench }] = await Promise.all([
     db.from("cost_events").select("user_id, project_id, operation, model, estimated_cost_usd, created_at, kind:metadata->>kind").gte("created_at", d30).limit(50000),

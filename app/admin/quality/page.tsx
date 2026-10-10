@@ -7,7 +7,7 @@ export const metadata = { title: "Video rules" };
 
 export default async function QualityPage({ searchParams }: PageProps<"/admin/quality">) {
   const { error } = await searchParams;
-  const { db } = await requireAdmin();
+  const { db } = await requireAdmin("quality");
   const { data: custom } = await db.from("video_rules").select("*").order("created_at", { ascending: false });
 
   return (

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { balanceOf, grantSignupCredits } from "@/lib/billing";
 import { userAccess } from "@/lib/admin";
 import { VIDEOS_BUCKET } from "@/lib/projects";
 import { DashboardView } from "./view";
@@ -37,18 +37,13 @@ export default async function DashboardPage() {
       .select("id, created_at, brand_name, brand_color, website_url, duration_seconds, format, pipeline_status, pipeline_step, render_status, video_path")
       .order("created_at", { ascending: false })
       .limit(60),
-    supabase.from("profiles").select("full_name, plan_id").eq("id", user.id).maybeSingle(),
+    supabase.from("profiles").select("full_name, credits").eq("id", user.id).maybeSingle(),
+    // (the welcome credits, once the email is confirmed)
+    grantSignupCredits(user.id, !!user.email_confirmed_at).catch(() => {}),
   ]);
   const projects = (rows ?? []) as DashboardRow[];
 
-  // Plans are server-managed; read with the service role on the server only.
-  let plan = "Free";
-  try {
-    const { data } = await createAdminClient().from("plans").select("name").eq("id", profile?.plan_id ?? "free").maybeSingle();
-    if (data) plan = data.name;
-  } catch {
-    // Plan details unavailable: show the plan name only.
-  }
+  const credits = await balanceOf(user.id).catch(() => profile?.credits ?? 0);
 
   const name = profile?.full_name?.split(" ")[0] || user.email?.split("@")[0] || "there";
   const ready = projects.filter((p) => p.render_status === "completed" && p.video_path);
@@ -57,5 +52,5 @@ export default async function DashboardPage() {
     : [];
   const previews = Object.fromEntries(signed.filter((s) => s.signedUrl && s.path).map((s) => [s.path!, s.signedUrl as string]));
 
-  return <DashboardView email={user.email ?? ""} name={name} admin={admin} plan={plan} projects={projects} previews={previews} />;
+  return <DashboardView email={user.email ?? ""} name={name} admin={admin} credits={credits} projects={projects} previews={previews} />;
 }

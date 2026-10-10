@@ -199,6 +199,7 @@
 .gs-account div span { color: var(--gs-ink-2); }
 .gs-account div b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gs-tile.t5 { background: #2f8f83; }
+.gs-tile.t6 { background: linear-gradient(135deg, #0a66d6, #7c3aed); }
 .gs-tile .initial { color: #fff; font-size: 22px; font-weight: 600; text-transform: uppercase; line-height: 1; }
 @media (max-width: 960px) { .gs-videos { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 760px) {

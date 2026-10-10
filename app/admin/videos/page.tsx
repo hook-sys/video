@@ -18,7 +18,7 @@ export default async function VideosPage({ searchParams }: PageProps<"/admin/vid
   const { q, status } = await searchParams;
   const search = cleanSearch(q);
   const filter = typeof status === "string" && status in FILTER ? status : "";
-  const { db } = await requireAdmin();
+  const { db } = await requireAdmin("videos");
 
   let query = db.from("projects").select(PROJECT_COLUMNS).order("created_at", { ascending: false }).limit(300);
   if (search) query = query.or(`brand_name.ilike.%${search}%,website_url.ilike.%${search}%`);

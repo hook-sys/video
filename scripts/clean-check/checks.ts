@@ -29,6 +29,7 @@ import { sfxOf } from "@/components/video/composer/sfx";
 import { inspect, inspected } from "@/components/video/composer/inspect";
 import { type ProbeSample, checkFrames, framesToCheck } from "@/components/video/composer/frame-check";
 import type { ComposerPlan } from "@/components/video/composer/types";
+import { creditsFor, normalizeBilling, pickable, withCoupon } from "@/lib/billing-config";
 import { resolveIcon } from "@/components/video/icons";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
@@ -401,6 +402,13 @@ export async function runChecks(): Promise<Check[]> {
     const fcWrong = checkFrames(fcPlan, fcFrames.map((f) => sample(f, true)));
     const fcWhat = fcWrong.findings.map((x) => x.what).join(" | ");
     add("frame check: a clean video passes; covered words, a cut-off thing, an empty screen, a thing gone too soon are found", fcClean.ok && /flies over the words/.test(fcWhat) && /cut off by the edge/.test(fcWhat) && /screen is empty/.test(fcWhat) && /"Late" is on screen only/.test(fcWhat), fcClean.ok ? `${fcWrong.findings.length} found: ${fcWhat.slice(0, 160)}` : fcClean.findings.map((x) => x.what).join(" | "));
+    // credits: per second at each level's rate, a shortest charge; coupons on a pack; pricing mended
+    const bill = normalizeBilling(null);
+    const fair = creditsFor(bill, "standard", 30) === 90 && creditsFor(bill, "pro", 30) === 120 && creditsFor(bill, "standard", 4) === 45 && creditsFor(bill, "standard", 30.2) === 93;
+    const pack = bill.packs[0];
+    const deals = [withCoupon(pack, { kind: "discount", value: 10 }), withCoupon(pack, { kind: "bonus", value: 100 }), withCoupon(pack, { kind: "discount", value: 100 })];
+    const mendedBill = normalizeBilling({ tiers: { standard: { status: "off", perSecond: -3 }, ultra: { status: "nope" } }, packs: [{ usd: 0, credits: 5 }], signupCredits: "x" });
+    add("credits: per second by level, coupons (% off, % more, free), pricing mended", fair && deals[0].usd === 9 && deals[1].bonus === pack.credits && deals[2].usd === 0 && mendedBill.tiers.standard.status === "on" && mendedBill.tiers.standard.perSecond === 0 && mendedBill.tiers.ultra.status === "soon" && mendedBill.packs.length === 4 && mendedBill.signupCredits === 100 && pickable(bill, "ultra") === null && pickable(bill, "pro") === "pro", `30 s: ${creditsFor(bill, "standard", 30)} / ${creditsFor(bill, "pro", 30)} · $${deals[0].usd} · +${deals[1].bonus}`);
     // an icon name the library lacks becomes the nearest real one
     const icons = [iconFor("notebook-pen-paper-xyz", "Paper diary"), iconFor(null, "Ringing phone"), iconFor("calendar", "x")];
     add("icons: a name the library lacks becomes a real icon", icons.every((x) => !!x && !!resolveIcon(x)) && icons[2] === "calendar", icons.join(" · "));

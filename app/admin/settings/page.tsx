@@ -7,7 +7,7 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage({ searchParams }: PageProps<"/admin/settings">) {
   const { saved } = await searchParams;
-  await requireAdmin();
+  await requireAdmin("settings");
   const values = await getSettings();
 
   return (

@@ -39,6 +39,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "remotion": "4.0.529",
+    "stripe": "^23.0.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
