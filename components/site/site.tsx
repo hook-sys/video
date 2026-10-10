@@ -212,13 +212,10 @@ export function Site({ initial, signedIn, error, message }: Props) {
       <footer className="gs-footer">© MotionBrief</footer>
 
       <nav className="gs-dock gs-glass" aria-label="Main">
-        {/* (a computer: the brand on top of the dock, no bar) */}
-        <Link href="/" className="gs-dock-brand gs-only-wide" onClick={open("overview")} aria-label="MotionBrief">
-          <Mark />
-        </Link>
         {(
           [
-            ["overview", "t1", <path key="p" d="M9 7v10l8-5z" fill="#fff" />],
+            // (the black one carries the MotionBrief mark: the brand is not repeated above it)
+            ["overview", "t1", null],
             ["how", "t2", <path key="p" d="M6 7h12M6 12h8M6 17h10" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />],
             [
               "examples",
@@ -237,9 +234,13 @@ export function Site({ initial, signedIn, error, message }: Props) {
               ref={iconRef(id)}
               className={`gs-tile ${tone}`}
             >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                {glyph}
-              </svg>
+              {glyph ? (
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  {glyph}
+                </svg>
+              ) : (
+                <Mark />
+              )}
             </span>
             <small>{TITLE[id]}</small>
           </Link>

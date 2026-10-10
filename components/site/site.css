@@ -131,6 +131,8 @@
 .gs-dock button, .gs-dock a { font: inherit; background: none; border: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0; color: var(--gs-ink); position: relative; text-decoration: none; }
 .gs-tile { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.12), 0 6px 14px -6px rgba(29, 29, 31, 0.45); }
 .gs-tile svg { width: 26px; height: 26px; }
+.gs-tile .gs-mark { width: 32px; height: 32px; }
+.gs-tile .gs-mark svg { width: 100%; height: 100%; }
 .gs-tile.t1 { background: #1d1d1f; }
 .gs-tile.t2 { background: #0a66d6; }
 .gs-tile.t3 { background: #e2683c; }
