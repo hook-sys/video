@@ -1,31 +1,22 @@
 import { Composition } from "remotion";
-import { Storyboard } from "@/components/video/storyboard";
-import {
-  COMPOSITION_ID,
-  DIMENSIONS,
-  FPS,
-  sceneTimings,
-  type RenderProps,
-} from "@/components/video/types";
+import { ComposerFilm } from "@/components/video/composer/film";
+import { COMPOSER_ID, type ComposerProps } from "@/components/video/composer/types";
 
-// `format` is only used for metadata; the scenes themselves are unchanged.
-const RenderStoryboard = (props: RenderProps) => <Storyboard {...props} />;
-
-// Size and length come from the project's props at render time.
+// The Composer's film: its length and frame (16:9, 9:16 or 1:1) come from the plan.
 export function RemotionRoot() {
   return (
     <Composition
-      id={COMPOSITION_ID}
-      component={RenderStoryboard}
-      fps={FPS}
+      id={COMPOSER_ID}
+      component={ComposerFilm as unknown as React.ComponentType<Record<string, unknown>>}
+      fps={30}
       width={1920}
       height={1080}
-      durationInFrames={1}
-      defaultProps={{ scenes: [], durationSeconds: 1, format: "16:9" } as RenderProps}
-      calculateMetadata={({ props }) => ({
-        ...(DIMENSIONS[props.format] ?? DIMENSIONS["16:9"]),
-        durationInFrames: sceneTimings(props.scenes, props.durationSeconds).total,
-      })}
+      durationInFrames={300}
+      defaultProps={{} as Record<string, unknown>}
+      calculateMetadata={({ props }) => {
+        const plan = (props as unknown as ComposerProps).plan;
+        return { durationInFrames: Math.max(1, plan?.duration ?? 300), width: plan?.w ?? 1920, height: plan?.h ?? 1080 };
+      }}
     />
   );
 }

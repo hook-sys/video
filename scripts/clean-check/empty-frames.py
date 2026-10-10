@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+# Empty frames of a studio video (rule "no-empty-cut" in
+# components/video/clean/rules.ts): a frame is empty when, against the same
+# frame of the background alone (StudioFilm `bare`), fewer than EMPTY of its
+# pixels (at 192×108) differ by more than STEP — a line of small text or a
+# dark card on a dark field still counts. The rule allows no run of more than
+# LIMIT empty frames. Frames where the background itself is changing (a new
+# field opening) are not empty: something is happening on screen.
+#
+#   python3 scripts/clean-check/empty-frames.py full.mp4 bare.mp4 [full2.mp4 bare2.mp4 …]
+#
+# Uses Remotion's bundled ffmpeg; needs numpy and Pillow. Exits 1 when a video
+# has a longer run.
+import glob, os, shutil, subprocess, sys, tempfile
+
+import numpy as np
+from PIL import Image
+
+STEP = 30
+EMPTY = 0.002
+LIMIT = 8
+FF = "node_modules/@remotion/compositor-linux-x64-gnu/ffmpeg"
+
+
+def frames(path):
+    d = tempfile.mkdtemp()
+    subprocess.run([FF, "-loglevel", "error", "-i", path, "-s", "192x108", f"{d}/f_%05d.png"], check=True)
+    out = [np.asarray(Image.open(f).convert("L"), dtype=np.float32) for f in sorted(glob.glob(f"{d}/f_*.png"))]
+    shutil.rmtree(d)
+    return out
+
+
+def runs(full, bare):
+    a, b = frames(full), frames(bare)
+    n = min(len(a), len(b))
+    diff = [float((np.abs(a[i] - b[i]) > STEP).mean()) for i in range(n)]
+    moving = [i > 0 and float(np.abs(b[i] - b[i - 1]).mean()) > 1.5 for i in range(n)]
+    diff = [1.0 if moving[i] else d for i, d in enumerate(diff)]
+    found, start = [], None
+    for i, v in enumerate(diff + [1.0]):
+        if v < EMPTY and start is None:
+            start = i
+        elif v >= EMPTY and start is not None:
+            found.append((start, i - start))
+            start = None
+    return found
+
+
+bad = False
+args = sys.argv[1:]
+for full, bare in zip(args[::2], args[1::2]):
+    r = sorted(runs(full, bare), key=lambda x: -x[1])
+    worst = r[0][1] if r else 0
+    ok = worst <= LIMIT
+    bad |= not ok
+    print(f"{'ok  ' if ok else 'FAIL'} {os.path.basename(full)}: longest empty run {worst} frames (limit {LIMIT}); runs {[(s, n) for s, n in r[:5]]}")
+sys.exit(1 if bad else 0)

@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* dark: styles only inside .dark (the app is light glass whatever the OS theme) */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -23,3 +26,19 @@ body {
   background: var(--background);
   color: var(--foreground);
 }
+
+/* MotionBrief logo intro (components/brand/logo.tsx). Hidden until it plays,
+   so the intro is never skipped by a slow first paint. */
+.mb-waiting .mb-box, .mb-waiting .mb-line, .mb-waiting .mb-play { opacity: 0; }
+.mb-animated .mb-box { transform-box: fill-box; transform-origin: center; animation: mb-pop 450ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.mb-animated .mb-line { transform-box: fill-box; transform-origin: left center; animation: mb-type 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.mb-animated .mb-l1 { animation-delay: 300ms; }
+.mb-animated .mb-l2 { animation-delay: 420ms; }
+.mb-animated .mb-l3 { animation-delay: 540ms; }
+.mb-animated .mb-play { animation: mb-arrive 600ms cubic-bezier(0.16, 1, 0.3, 1) 750ms both; }
+.mb-word { display: inline-block; animation: mb-word 600ms cubic-bezier(0.22, 1, 0.36, 1) 1000ms both; }
+@keyframes mb-pop { from { opacity: 0; transform: scale(0.4) rotate(-12deg); } to { opacity: 1; transform: none; } }
+@keyframes mb-type { from { transform: scaleX(0); } to { transform: none; } }
+@keyframes mb-arrive { 0% { opacity: 0; transform: translateX(-16px); } 60% { opacity: 1; transform: translateX(2.5px); } 100% { opacity: 1; transform: none; } }
+@keyframes mb-word { from { opacity: 0; transform: translateX(-12px); clip-path: inset(0 100% 0 0); } to { opacity: 1; transform: none; clip-path: inset(0 0 0 0); } }
+@media (prefers-reduced-motion: reduce) { .mb-animated *, .mb-word { animation: none !important; } .mb-waiting * { opacity: 1 !important; } }

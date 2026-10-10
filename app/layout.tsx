@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ProductName",
-  description: "AI-generated promotional motion-graphics videos for SaaS and digital products.",
+  title: { default: "MotionBrief", template: "%s · MotionBrief" },
+  description: "MotionBrief turns your script and brief into a motion-graphics promo video for your SaaS or digital product.",
+  applicationName: "MotionBrief",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
