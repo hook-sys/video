@@ -32,14 +32,13 @@ export type ProjectDetails = { category: BrandCategory; use: Use; mood: Mood; fe
 
 const isOne = <T extends string>(xs: readonly T[], v: unknown): v is T => typeof v === "string" && (xs as readonly string[]).includes(v);
 
-// The form's answers, checked (every one is required).
+// The form's answers, checked (every one is required; "before", the old way, is no longer asked: [] for new videos).
 export function detailsFrom(formData: FormData): { details?: ProjectDetails; error?: string } {
   const category = formData.get("category");
   const use = formData.get("use");
   const mood = formData.get("mood");
   const before = formData.getAll("before").map(String).filter((b) => isOne(OLD_WAYS, b));
   if (!isOne(BRAND_CATEGORIES, category)) return { error: "Choose your type of business." };
-  if (!before.length) return { error: "Choose what your customers used before." };
   if (!isOne(MOODS, mood)) return { error: "Choose a mood." };
   if (!isOne(USES, use)) return { error: "Choose where the video will be used." };
   return { details: { category, use, mood, features: [], before } };

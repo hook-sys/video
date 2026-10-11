@@ -546,7 +546,7 @@ function requestOf(input: MotionInput): string {
     `Call to action: ${input.cta}${input.url ? ` (${input.url})` : ""}`,
     input.category ? `Category (the customer's choice): ${input.category}` : "",
     input.customer
-      ? `THE CUSTOMER'S ANSWERS (facts — build on them exactly as given): for ${input.customer.audience}; ${input.customer.features.length ? `features: ${input.customer.features.join("; ")}; ` : ""}before it they used: ${input.customer.before.join(", ")} (picture that old way in the problem scenes); mood: ${input.customer.mood}; the video is ${USE_NOTE[input.customer.use]}.`
+      ? `THE CUSTOMER'S ANSWERS (facts — build on them exactly as given): for ${input.customer.audience}; ${input.customer.features.length ? `features: ${input.customer.features.join("; ")}; ` : ""}${input.customer.before.length ? `before it they used: ${input.customer.before.join(", ")} (picture that old way in the problem scenes); ` : ""}mood: ${input.customer.mood}; the video is ${USE_NOTE[input.customer.use]}.`
       : "",
     w?.url ? `Website: ${w.url}` : "",
     w?.title ? `Website title: ${w.title}` : "",
