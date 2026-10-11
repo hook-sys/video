@@ -79,3 +79,16 @@ reads the same — one family.
   **Bold Plates**, **Kinetic Type**. Then **Collage** and **Walkthrough**.
 - House rules become per family (Bold Plates and Collage cut fast; Dark
   Cinematic holds long; Kinetic Type has no cards for whole scenes).
+
+## Built (Oct 11, 2026): the looks
+
+The soft-glass family is gone for new videos. Every video is now built in
+one of six looks (`components/video/composer/looks.ts`, `art.ts`
+lookPalette, `field.tsx` LookField): **cinematic** (family 1), **plates**
+(family 2), **kinetic** (family 3), **editorial**, **neon**, **swiss**.
+A look sets the palette, background, cards, icons, faces, highlight, pace,
+camera, cuts, the UI's tilt and (cinematic, kinetic) a ghost word behind
+the scene. The Director picks the look (ART in its prompt); the build
+enforces it, and never repeats a look from the customer's last three videos
+or from the other videos of the same set. Older videos (no look) keep the
+look they were made in.

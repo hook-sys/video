@@ -33,6 +33,9 @@ export function Glyph({ c, name, size, tone = "accent", k = 1 }: { c: Ctx; name:
     </div>
   );
   const onPanel = tone === "panel";
+  // the flat looks draw an icon as a flat tile (no gradient, no glow); neon as a lit outline
+  if (pal.look === "plates" || pal.look === "kinetic" || pal.look === "swiss" || pal.look === "editorial") return box(fill, pal.onFill, pal.look === "swiss" || pal.look === "kinetic" ? { borderRadius: 4 } : undefined);
+  if (pal.look === "neon") return box(pal.panel, pal.accent, { border: `2px solid ${pal.accent}`, boxShadow: `0 0 ${size * 0.35}px ${pal.shadow}` });
   // on a dark field an icon is a bright thing too (a lit tile)
   if (pal.dark && !onPanel && art.icons !== "tile" && art.icons !== "round" && art.icons !== "bare")
     return box("rgba(255,255,255,0.94)", fill, { border: "1.5px solid #ffffff", boxShadow: `0 ${size * 0.12}px ${size * 0.4}px ${pal.shadow}` });

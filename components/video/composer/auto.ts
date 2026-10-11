@@ -1,7 +1,7 @@
 import { searchIcons } from "@/lib/icons";
 import { DISPLAY_FACES, TEXT_FACES, hueOf, rng, type Rng } from "./art";
 import type { ArtT, ArrangeKind, CameraKind, ItemT, LayoutKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
-import { CAMERAS, FIELDS, ICON_STYLES, KEYS, MOTIONS, OVERLAYS, SURFACES } from "./types";
+import { CAMERAS, FIELDS, ICON_STYLES, KEYS, LOOKS, MOTIONS, OVERLAYS, SURFACES } from "./types";
 
 // The Composer's own director: reads the narration (questions, lists, steps,
 // numbers, "no more…", the product's name, the ask at the end) and composes
@@ -186,6 +186,7 @@ export function drawArt(R: Rng, brandColor: string, avoid: Partial<Record<keyof 
     camera: R.pick(CAMERAS.filter((x) => x !== "still")),
     icons: R.pick(ICON_STYLES),
     energy: Number(R.range(0.25, 0.85).toFixed(2)),
+    look: fresh("look", LOOKS),
   };
 }
 

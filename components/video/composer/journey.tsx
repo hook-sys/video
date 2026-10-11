@@ -268,12 +268,16 @@ export function JourneyField({ f, cam, st, darks, pals, hue, grid }: { f: number
   const gap = (grid ? 96 : 42) * cam.z * (0.75 + depth * 0.25);
   const ox = (-cam.x * cam.z * depth) % gap, oy = (-cam.y * cam.z * depth) % gap;
   const glows: ReactNode[] = [];
-  st.forEach((p, i) => {
+  // a look keeps its own field on the canvas: flat looks have no pools of light; cinematic and neon a dim one
+  const look = pa.look;
+  const lit = !look || look === "cinematic" || look === "neon";
+  const dim = look === "cinematic" ? 0.45 : 1;
+  if (lit) st.forEach((p, i) => {
     const s = toScreen({ x: p.x + noise2D(`gx${i}`, f / 140, 0) * 220, y: p.y + noise2D(`gy${i}`, 0, f / 160) * 160 }, cam, 0.8);
     if (s.x < -1600 || s.x > W + 1600 || s.y < -1200 || s.y > H + 1200) return;
     const dk = darks[i];
-    const c1 = hsl(hue + i * 18, 85, dk ? 58 : 66, dk ? 0.5 : 0.38);
-    const c2 = hsl(hue + 50 + i * 12, 80, dk ? 55 : 72, dk ? 0.36 : 0.32);
+    const c1 = hsl(hue + (look ? 0 : i * 18), 85, dk ? 58 : 66, (dk ? 0.5 : 0.38) * dim);
+    const c2 = hsl(hue + 50 + (look ? 0 : i * 12), 80, dk ? 55 : 72, (dk ? 0.36 : 0.32) * dim);
     const w1 = 1700 * cam.z, h1 = 1100 * cam.z;
     glows.push(<Radial key={`a${i}`} w={w1} h={h1} stops={[[0, c1], [0.62, c1, 0]]} place={{ x: s.x - 420 * cam.z - w1 / 2, y: s.y - 160 * cam.z - h1 / 2 }} />);
     glows.push(<Radial key={`b${i}`} w={w1 * 0.9} h={h1} stops={[[0, c2], [0.62, c2, 0]]} place={{ x: s.x + 480 * cam.z - (w1 * 0.9) / 2, y: s.y + 220 * cam.z - h1 / 2 }} />);
@@ -283,7 +287,7 @@ export function JourneyField({ f, cam, st, darks, pals, hue, grid }: { f: number
       {glows}
       {/* (the field turns with the camera: drawn twice the frame's size, turned about its middle) */}
       <div style={{ position: "absolute", left: -W / 2, top: -H / 2, width: W * 2, height: H * 2, transform: cam.rot ? `rotate(${cam.rot.toFixed(3)}deg)` : undefined }}>
-        <Tiles w={W * 2} h={H * 2} kind={grid ? "grid" : "dots"} gap={gap} size={grid ? 0.8 : 1.8 * cam.z} color={hsl(hue, 40, d ? 75 : 40, d ? 0.22 : 0.18)} dx={ox} dy={oy} />
+        <Tiles w={W * 2} h={H * 2} kind={grid || look === "swiss" || look === "neon" ? "grid" : "dots"} gap={gap} size={grid ? 0.8 : 1.8 * cam.z} color={look === "swiss" || look === "editorial" ? "rgba(0,0,0,0.08)" : look === "plates" || look === "kinetic" ? (d ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)") : hsl(hue, 40, d ? 75 : 40, d ? 0.22 : 0.18)} dx={ox} dy={oy} />
       </div>
     </AbsoluteFill>
   );

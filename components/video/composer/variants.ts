@@ -5,8 +5,9 @@ import { LENSES, autoScript, drawArt } from "./auto";
 import { placeAll, type Problem } from "./layout";
 import { type Language, type Staging, sceneAt, stageOf, staged } from "./staging";
 import { houseRules, varyLayouts } from "./rules";
-import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
-import type { ArtT, Brand, ComposerPlan, GuideKind, ItemT, JourneyKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
+import { inLook, pickLook } from "./looks";
+import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, LOOKS, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
+import type { ArtT, Brand, Look, ComposerPlan, GuideKind, ItemT, JourneyKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
 
 // Four Composer videos of one narration. With the Director's ideas (its
 // scenes, two or three ways to picture each, and its art directions) each
@@ -50,6 +51,7 @@ export function mendArt(raw: Record<string, unknown> | undefined, fallback: ArtT
     camera: oneOf(raw.camera, CAMERAS) ?? fallback.camera,
     icons: oneOf(raw.icons, ICON_STYLES) ?? fallback.icons,
     energy: num(raw.energy, 0.1, 0.95) ?? fallback.energy,
+    look: oneOf(raw.look, LOOKS) ?? fallback.look ?? null,
   };
 }
 
@@ -129,7 +131,7 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
 }
 
 // rules: false — the house rules (rules.ts) are not applied (admin → Settings, "Video rules")
-export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null; size?: [number, number]; rules?: boolean };
+export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null; size?: [number, number]; rules?: boolean; avoidLooks?: (Look | null)[] };
 
 // What the Motion Director decided that the build keeps (lib/studio.ts
 // CreativePlan): the camera language, the scheme, where the story turns and
@@ -160,25 +162,32 @@ function shaped(script: ScriptT, creative: Creative | null | undefined, look: Co
 // when shown) and how it is staged (staging.ts; older videos: cuts).
 export type StoredComposition = { script: ScriptT; seed: number; source: ComposerPlan["source"]; staging?: Staging | null };
 
-export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look, size, rules = true }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
+export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look, size, rules = true, avoidLooks = [] }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
   const problems: string[] = [];
   const plans: ComposerPlan[] = [];
   const videos: StoredComposition[] = [];
   const used: Partial<Record<keyof ArtT, unknown[]>> = { ...avoid };
+  const looks: Look[] = [];
+  // every video in a look (looks.ts): the Director's, unless this set or this customer's last videos had it
+  const built = (sc: ScriptT, s: number) => {
+    const lk = pickLook(sc.art.look, s, looks, avoidLooks);
+    return fitScript(inLook(sc, lk, s));
+  };
   for (let v = 0; v < count; v++) {
     const s = (seed + v * 104729) >>> 0;
     // each video avoids the faces, fields and schemes of the ones before it
     const avoidNow: Partial<Record<keyof ArtT, unknown[]>> = { display: [...(used.display ?? [])], field: [...(used.field ?? [])], key: [...(used.key ?? [])], surface: [...(used.surface ?? [])], hue: [...(used.hue ?? [])] };
     let script: ScriptT = ideas?.scenes.length ? scriptFromIdeas(ideas, v, s, words, brand, avoidNow) : autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens });
-    script = fitScript(shaped(script, creative, look, !ideas?.scenes.length, s, rules));
+    script = built(shaped(script, creative, look, !ideas?.scenes.length, s, rules), s);
     let placed = placeAll(script, words, duration, brand, s, screens, ideas ? "director" : "auto", size);
     if (ideas && tooBroken(placed.problems, placed.plan)) {
       problems.push(`video ${v + 1}: the Director's scenes did not lay out (${placed.problems.slice(0, 3).map((p) => p.what).join("; ")}) — composed by the Composer instead`);
-      script = fitScript(shaped(autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens }), creative, look, true, s, rules));
+      script = built(shaped(autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens }), creative, look, true, s, rules), s);
       placed = placeAll(script, words, duration, brand, s, screens, "auto", size);
     }
     placed.problems.forEach((p) => problems.push(`video ${v + 1}, scene ${p.scene + 1}: ${p.what}`));
     for (const k of ["display", "field", "key", "surface", "hue"] as const) (used[k] ??= []).push(placed.plan.art[k]);
+    if (script.art.look) looks.push(script.art.look);
     // how it is staged: the Motion Director's camera language (else one drawn,
     // unlike the ones before it), its signature move at the hero moment
     const heroWord = creative?.hero != null ? words[Math.max(0, Math.min(words.length - 1, creative.hero))] : null;
@@ -220,4 +229,4 @@ export function fitScript(sc: ScriptT): ScriptT {
 }
 
 // What a customer has seen (to keep the next videos different).
-export const artSignature = (a: ArtT) => ({ display: a.display, field: a.field, key: a.key, surface: a.surface });
+export const artSignature = (a: ArtT) => ({ display: a.display, field: a.field, key: a.key, surface: a.surface, look: a.look ?? null });

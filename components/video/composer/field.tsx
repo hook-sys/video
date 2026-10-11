@@ -21,9 +21,12 @@ const glow = (x: number, y: number, w: number, h: number, color: string, at = "5
   return <Radial w={w} h={h} at={[ax, ay]} stops={[[0, color], [stop, color, 0]]} place={{ x: x - w / 2, y: y - h / 2 }} />;
 };
 
-export function Field({ f: frame, kind, pal, hue, anchor: a, energy, overlay, style }: { f: number; kind: FieldKind; pal: Pal; hue: number; anchor: Anchor; energy: number; overlay: Overlay; style?: CSSProperties }) {
+export function Field({ f: frame, kind: asked, pal, hue, anchor: a, energy, overlay: askedOverlay, style }: { f: number; kind: FieldKind; pal: Pal; hue: number; anchor: Anchor; energy: number; overlay: Overlay; style?: CSSProperties }) {
   // (a still background: every frame drawn as the first)
   const f = STILL_BACKGROUND ? 0 : frame;
+  // a look draws its own background (looks.ts)
+  if (pal.look) return <LookField f={f} pal={pal} hue={hue} a={a} energy={energy} style={style} kind={asked} />;
+  const kind = asked, overlay = askedOverlay;
   const e = 0.6 + energy * 0.8;
   const d = pal.dark;
   const c1 = hsl(hue, 85, d ? 58 : 66, d ? 0.55 : 0.42);
@@ -169,6 +172,82 @@ export function Field({ f: frame, kind, pal, hue, anchor: a, energy, overlay, st
       <OverlayLayer f={f} kind={overlay} pal={pal} hue={hue} />
     </AbsoluteFill>
   );
+}
+
+// A look's background: what makes the frame read as its family at a glance.
+function LookField({ f, pal, hue, a, energy, style, kind }: { f: number; pal: Pal; hue: number; a: Anchor; energy: number; style?: CSSProperties; kind: FieldKind }) {
+  const e = 0.6 + energy * 0.8;
+  const sway = (k: number, amp = 60) => noise2D(`lk${k}`, f / (120 + k * 13), k) * amp * e;
+  const fill = (background: string, body: ReactNode, overlay: Overlay = "none") => (
+    <AbsoluteFill style={{ background, overflow: "hidden", ...style }}>
+      {body}
+      <OverlayLayer f={f} kind={overlay} pal={pal} hue={hue} />
+    </AbsoluteFill>
+  );
+  switch (pal.look) {
+    case "cinematic":
+      // near-black, one soft pool of light where the subject is, the edges falling to black
+      return fill(
+        pal.bg,
+        <>
+          {glow(a.x + sway(1, 40), a.y + 60 + sway(2, 30), 1700 * a.s, 1200 * a.s, hsl(hue, 70, 45, 0.2), "50% 50%", 0.6)}
+          {glow(W / 2, H + 120, 2600, 700, hsl(hue, 80, 50, 0.16), "50% 40%")}
+        </>,
+        "vignette",
+      );
+    case "plates": {
+      // one flat colour per scene, turning through the brand's partner hues (white words read on every one)
+      const turn = [0, 150, 210, 40][Math.floor(a.t * 4) % 4];
+      const plate = hsl(hue + turn, 70, 38);
+      return fill(plate, <div style={{ position: "absolute", left: a.x - 900 * a.s, top: a.y - 900 * a.s, width: 1800 * a.s, height: 1800 * a.s, borderRadius: 9999, background: hsl(hue + turn, 72, 44) }} />);
+    }
+    case "kinetic":
+      return fill(pal.bg, null);
+    case "editorial":
+      // warm paper: a fine grain and two hairline rules
+      return fill(
+        pal.bg,
+        <>
+          <div style={{ position: "absolute", left: 80, right: 80, top: 64, height: 1.5, background: pal.faint }} />
+          <div style={{ position: "absolute", left: 80, right: 80, bottom: 64, height: 1.5, background: pal.faint }} />
+        </>,
+        "grain",
+      );
+    case "neon": {
+      // a night horizon: a perspective grid running to it, the electric glow behind
+      const lines = Array.from({ length: 14 }, (_, k) => {
+        const y = H * 0.62 + ((k * k * 7 + (f * 0.8 * e)) % (H * 0.5));
+        return <div key={`h${k}`} style={{ position: "absolute", left: 0, right: 0, top: y, height: 1.5, background: hsl(hue, 100, 62, 0.08 + (y - H * 0.62) / (H * 0.5) * 0.25) }} />;
+      });
+      const rays = Array.from({ length: 17 }, (_, k) => {
+        const x = (k - 8) * 260;
+        return <div key={`v${k}`} style={{ position: "absolute", left: W / 2, top: H * 0.62, width: 1.5, height: H, background: `linear-gradient(180deg, ${hsl(hue, 100, 62, 0.25)}, transparent)`, transformOrigin: "0 0", transform: `rotate(${(-Math.atan2(x, H) * 180) / Math.PI}deg)` }} />;
+      });
+      return fill(
+        `linear-gradient(180deg, ${pal.bg}, ${pal.bg2})`,
+        <>
+          {glow(W / 2 + sway(1, 80), H * 0.6, 2400, 900, hsl(hue, 100, 55, 0.35), "50% 50%")}
+          {glow(a.x + sway(2, 60), a.y - 120, 1200, 900, hsl(hue + 60, 100, 60, 0.18))}
+          {rays}
+          {lines}
+        </>,
+      );
+    }
+    case "swiss":
+      // white, a fine black grid (or a column grid), nothing soft
+      return fill(
+        "#ffffff",
+        <AbsoluteFill>
+          {kind === "dots" || kind === "discs" ? (
+            Array.from({ length: 12 }, (_, k) => <div key={k} style={{ position: "absolute", top: 0, bottom: 0, left: (W / 12) * k, width: 1, background: "rgba(0,0,0,0.07)" }} />)
+          ) : (
+            <Tiles w={W} h={H} kind="grid" gap={90} size={0.7} color="rgba(0,0,0,0.07)" dx={0} dy={0} />
+          )}
+        </AbsoluteFill>,
+      );
+    default:
+      return fill(pal.bg, null);
+  }
 }
 
 // (where on the frame, 0–1)

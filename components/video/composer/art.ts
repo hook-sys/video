@@ -1,4 +1,4 @@
-import type { ArtT, Surface } from "./types";
+import type { ArtT, Look, Surface } from "./types";
 
 // Colour, type and randomness for the Composer. A video's palette is made
 // from its art direction (a hue, a harmony, dark or light) — never picked
@@ -105,6 +105,8 @@ export type Pal = {
   panelSoft: string; // inner panels (rows, fields)
   panelDark: boolean;
   shadow: string;
+  // the video's look (types.ts LOOKS); null: an older video's light glass look
+  look: Look | null;
 };
 
 const partners = (h: number, harmony: ArtT["harmony"]): [number, number] => {
@@ -116,7 +118,8 @@ const partners = (h: number, harmony: ArtT["harmony"]): [number, number] => {
 };
 
 // A palette for one field (dark or light) of an art direction.
-export function palette(art: Pick<ArtT, "hue" | "harmony" | "surface">, dark: boolean): Pal {
+export function palette(art: Pick<ArtT, "hue" | "harmony" | "surface"> & { look?: Look | null }, dark: boolean): Pal {
+  if (art.look) return lookPalette(art.look, art, dark);
   const h = art.hue;
   const [h2, h3] = partners(h, art.harmony);
   const bg = dark ? hsl(h, 38, 6) : hsl(h, 30, 97);
@@ -140,7 +143,48 @@ export function palette(art: Pick<ArtT, "hue" | "harmony" | "surface">, dark: bo
   const glow = hsl(h, 90, dark ? 70 : 60);
   // on a dark field the bright things glow faintly in the key colour
   const shadow = dark ? hsl(h, 80, 55, 0.28) : hsl(h, 40, 30, 0.16);
-  return { dark, bg, bg2, ink, sub, faint: dark ? hsl(h, 20, 40) : hsl(h, 15, 75), accent, accent2, accent3, fill, fill2, onFill, glow, panel, panelInk, panelSub, panelLine, panelSoft, panelDark, shadow };
+  return { dark, bg, bg2, ink, sub, faint: dark ? hsl(h, 20, 40) : hsl(h, 15, 75), accent, accent2, accent3, fill, fill2, onFill, glow, panel, panelInk, panelSub, panelLine, panelSoft, panelDark, shadow, look: null };
+}
+
+// Each look's own colours (dark: the scene's field is dark — a look that is
+// always dark or always light ignores it, see looks.ts).
+function lookPalette(look: Look, art: Pick<ArtT, "hue" | "harmony">, dark: boolean): Pal {
+  const h = art.hue;
+  const [h2, h3] = partners(h, art.harmony);
+  const on = (bg: string) => (contrast("#ffffff", bg) >= 3.2 ? "#ffffff" : "#0b0b0d");
+  const base = { accent3: readable(h3, 72, 66, "#0b0b0d", 2.6), look } as const;
+  switch (look) {
+    case "cinematic": {
+      const bg = hsl(h, 22, 4), bg2 = hsl(h, 34, 8);
+      const fill = hsl(h, 82, 58);
+      return { ...base, dark: true, bg, bg2, ink: "#f4f5f7", sub: hsl(h, 8, 66), faint: hsl(h, 10, 30), accent: readable(h, 85, 68, bg, 4), accent2: readable(h2, 80, 70, bg, 3.4), fill, fill2: hsl(h2, 76, 56), onFill: on(fill), glow: hsl(h, 90, 62), panel: hsl(h, 16, 9), panelInk: "#eef0f4", panelSub: hsl(h, 8, 62), panelLine: hsl(h, 12, 19), panelSoft: hsl(h, 16, 13), panelDark: true, shadow: "rgba(0,0,0,0.62)" };
+    }
+    case "plates": {
+      // the plate: a deep, saturated colour that white words read on (field.tsx turns it scene by scene)
+      const bg = hsl(h, 70, 38), bg2 = hsl(h, 70, 34);
+      return { ...base, dark: true, bg, bg2, ink: "#ffffff", sub: "rgba(255,255,255,0.82)", faint: "rgba(255,255,255,0.4)", accent: hsl(h + 18, 100, 86), accent2: hsl(h2, 100, 86), fill: "#0d0d10", fill2: hsl(h, 30, 22), onFill: "#ffffff", glow: hsl(h, 100, 80), panel: "#ffffff", panelInk: "#0d0d10", panelSub: "#55575f", panelLine: "#e7e7ea", panelSoft: "#f3f3f5", panelDark: false, shadow: "rgba(0,0,0,0.25)" };
+    }
+    case "kinetic": {
+      const bg = dark ? "#000000" : "#ffffff";
+      const ink = dark ? "#ffffff" : "#000000";
+      const accent = readable(h, 96, dark ? 62 : 46, bg, 3.6);
+      return { ...base, dark, bg, bg2: bg, ink, sub: dark ? "#a3a3a8" : "#55555c", faint: dark ? "#3a3a40" : "#c9c9cf", accent, accent2: readable(h2, 92, dark ? 64 : 46, bg, 3.2), fill: accent, fill2: ink, onFill: on(accent), glow: accent, panel: bg, panelInk: ink, panelSub: dark ? "#a3a3a8" : "#55555c", panelLine: dark ? "#2a2a2f" : "#e2e2e6", panelSoft: dark ? "#111114" : "#f4f4f6", panelDark: dark, shadow: "rgba(0,0,0,0)" };
+    }
+    case "editorial": {
+      const bg = "#f3ede3", bg2 = "#ebe3d6";
+      const accent = readable(h, 58, 36, bg, 4.5);
+      return { ...base, dark: false, bg, bg2, ink: "#1d1a16", sub: "#5f584e", faint: "#bdb3a4", accent, accent2: readable(h2, 50, 36, bg, 4), fill: accent, fill2: "#1d1a16", onFill: on(accent), glow: accent, panel: "#fffdf8", panelInk: "#1d1a16", panelSub: "#6b6458", panelLine: "#ddd3c3", panelSoft: "#f7f2e9", panelDark: false, shadow: "rgba(60,45,25,0.10)" };
+    }
+    case "neon": {
+      const bg = hsl(h, 60, 5), bg2 = hsl(h + 30, 70, 10);
+      const accent = readable(h, 100, 64, bg, 4.5);
+      return { ...base, dark: true, bg, bg2, ink: "#f2f6ff", sub: hsl(h, 30, 72), faint: hsl(h, 40, 28), accent, accent2: readable(h + 60, 100, 64, bg, 4), fill: hsl(h, 100, 58), fill2: hsl(h + 60, 100, 58), onFill: on(hsl(h, 100, 58)), glow: hsl(h, 100, 62), panel: hsl(h, 50, 8), panelInk: "#eef3ff", panelSub: hsl(h, 25, 66), panelLine: hsl(h, 45, 18), panelSoft: hsl(h, 50, 12), panelDark: true, shadow: hsl(h, 100, 55, 0.3) };
+    }
+    case "swiss": {
+      const accent = readable(h, 92, 48, "#ffffff", 3.6);
+      return { ...base, dark: false, bg: "#ffffff", bg2: "#ffffff", ink: "#0a0a0a", sub: "#4a4a4f", faint: "#d0d0d4", accent, accent2: "#0a0a0a", fill: accent, fill2: "#0a0a0a", onFill: on(accent), glow: accent, panel: "#ffffff", panelInk: "#0a0a0a", panelSub: "#55555b", panelLine: "#e3e3e7", panelSoft: "#f4f4f6", panelDark: false, shadow: "rgba(0,0,0,0)" };
+    }
+  }
 }
 
 // ── type ──────────────────────────────────────────────────────────────────
@@ -212,6 +256,15 @@ export function emWidth(text: string, f: Face, weight = 700, upper = false) {
 // ── surfaces (cards, pills, tiles) ────────────────────────────────────────
 export function surfaceStyle(surface: Surface, pal: Pal, radius: number, lift = 1): Record<string, string | number> {
   const r = Math.round(radius);
+  // (a look draws its own cards)
+  switch (pal.look) {
+    case "cinematic": return { background: `linear-gradient(165deg, ${pal.panelSoft}, ${pal.panel})`, border: "1px solid rgba(255,255,255,0.10)", borderTop: "1px solid rgba(255,255,255,0.22)", boxShadow: `0 ${Math.round(40 * lift)}px ${Math.round(120 * lift)}px rgba(0,0,0,0.65), 0 0 0 1px rgba(0,0,0,0.4)`, borderRadius: r };
+    case "plates": return { background: pal.panel, boxShadow: `${Math.round(14 * lift)}px ${Math.round(14 * lift)}px 0 rgba(0,0,0,0.22)`, borderRadius: Math.max(r, 22) };
+    case "kinetic": return { background: pal.panel, border: `3px solid ${pal.panelInk}`, borderRadius: Math.min(r, 10) };
+    case "editorial": return { background: pal.panel, border: `1px solid ${pal.panelLine}`, boxShadow: `0 1px 0 ${pal.panelLine}, 0 ${Math.round(18 * lift)}px ${Math.round(40 * lift)}px ${pal.shadow}`, borderRadius: Math.min(r, 8) };
+    case "neon": return { background: `linear-gradient(160deg, ${pal.panelSoft}, ${pal.panel})`, border: `1.5px solid ${pal.accent}`, boxShadow: `0 0 0 1px rgba(0,0,0,0.5), 0 0 ${Math.round(60 * lift)}px ${pal.shadow}`, borderRadius: r };
+    case "swiss": return { background: pal.panel, border: `2.5px solid ${pal.panelInk}`, borderRadius: Math.min(r, 4) };
+  }
   const shade = `0 ${Math.round(30 * lift)}px ${Math.round(80 * lift)}px ${pal.shadow}`;
   if (surface === "glass")
     return pal.panelDark

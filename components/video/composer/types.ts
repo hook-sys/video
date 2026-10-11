@@ -26,6 +26,17 @@ export const CASES = ["sentence", "upper", "lower"] as const;
 export const MOTIONS = ["soft", "snappy", "springy", "glide"] as const;
 export const CAMERAS = ["still", "drift", "push", "pull", "tilt", "float", "orbit", "rise"] as const;
 export const ICON_STYLES = ["tile", "round", "bare", "duotone", "outline", "glass"] as const;
+// The look: the visual family of the whole video — it sets the background,
+// the cards, the type, the colour and the rhythm together (art.ts, field.tsx,
+// looks.ts), so two videos in different looks never read as one template.
+//  cinematic: near-black, the product's UI lit like an object (dark glass), one glow
+//  plates:    flat full-bleed colour that changes scene to scene, white UI, bold type
+//  kinetic:   type-led, giant words on black or white, hard cuts, minimal cards
+//  editorial: warm paper, serif headlines, hairline cards, calm
+//  neon:      deep night blue, electric lines and a perspective grid, glowing cards
+//  swiss:     white, black rules and a grid, one strong colour, heavy grotesk
+export const LOOKS = ["cinematic", "plates", "kinetic", "editorial", "neon", "swiss"] as const;
+export type Look = (typeof LOOKS)[number];
 // (the last five compose the words with the things: an icon beside the words,
 // the words as a thing's label, a caption over a thing that fills the frame,
 // things around the words, the words between two things — see layout.ts)
@@ -110,6 +121,8 @@ export const Art = z.object({
   camera: z.enum(CAMERAS),
   icons: z.enum(ICON_STYLES),
   energy: z.number().min(0).max(1),
+  // (older videos have none: they keep the light glass look they were made in)
+  look: n(z.enum(LOOKS)),
 });
 export const Script = z.object({ art: Art, scenes: z.array(Scene).min(1).max(24) });
 export type RowT = z.infer<typeof Row>;

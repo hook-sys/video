@@ -53,6 +53,8 @@ import { scorePlan } from "@/components/video/composer/score";
 import { type BrandProfile, type CreativePlan } from "@/lib/studio";
 import { frameOf } from "@/components/video/composer/frame";
 import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
+import { lookOf } from "@/components/video/composer/looks";
+import type { Look } from "@/components/video/composer/types";
 import { scriptWords } from "@/components/video/composer/words";
 import { neverList } from "@/lib/video-rules";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
@@ -410,7 +412,7 @@ async function loadNeverList(admin: ReturnType<typeof createAdminClient>) {
 
 // What the Motion Director is given: the brand, the script, the website, and
 // what this customer has had before (the next video is unlike those).
-type Past = { seen: { display: string[]; field: string[] }; seenStaging: (NonNullable<StoredComposition["staging"]> | null)[]; recent: { staging: NonNullable<StoredComposition["staging"]> | null; display: string | null }[] };
+type Past = { seen: { display: string[]; field: string[] }; seenStaging: (NonNullable<StoredComposition["staging"]> | null)[]; recent: { staging: NonNullable<StoredComposition["staging"]> | null; display: string | null }[]; avoidLooks?: (Look | null)[] };
 type MotionDirection = { input: MotionInput; result: MotionResult; past: Past; usage: BriefUsage[] };
 
 async function pastOf(admin: ReturnType<typeof createAdminClient>, projectId: string, userId: string, name: string) {
@@ -427,7 +429,9 @@ async function pastOf(admin: ReturnType<typeof createAdminClient>, projectId: st
   const recent = pastVideos.slice(0, 8).map((v) => ({ staging: v.staging ?? null, display: (v.script as { art?: { display?: string } } | undefined)?.art?.display ?? null }));
   // (for the Creative Director: how their last videos looked, any brand)
   const looks = pastVideos.map((v) => pastLookOf(v)).filter((x): x is PastLook => !!x).slice(0, 6);
-  return { known, earlier, looks, past: { seen, seenStaging, recent } };
+  // the looks (composer/looks.ts) of their last three videos: the next is in another
+  const avoidLooks = pastVideos.slice(0, 3).map((v) => lookOf((v.script as { art?: unknown } | undefined)?.art));
+  return { known, earlier, looks, past: { seen, seenStaging, recent, avoidLooks } };
 }
 
 const brandOf = (project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null }, brief: { product_name?: string; cta?: string } | null) => {
@@ -514,8 +518,8 @@ async function composerSet(
   const reviewed = await reviewMotion(dir.result.plan, input, addUsage);
   const plan = reviewed.plan;
   const { count: screens } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
-  const { seen, seenStaging, recent } = dir.past;
-  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, rules: dir.input.rules !== false, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
+  const { seen, seenStaging, recent, avoidLooks } = dir.past;
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, rules: dir.input.rules !== false, avoidLooks, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
   const video = set.videos[0];
   // the code's own check of what was built (shown in the studio; it picks nothing)
   const score = scorePlan(set.plans[0], video.script, { staging: video.staging, motif: plan.creative.motif, heroScene: video.staging?.hero ?? null, recent, problems: set.problems.length });
