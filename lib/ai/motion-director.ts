@@ -293,12 +293,17 @@ export type MotionInput = {
   recent?: PastLook[] | null;
   // false: the video rules are off (admin → Settings, "Video rules")
   rules?: boolean;
+  // the customer's own direction (the form's "Video direction") and the names
+  // of the screenshots they uploaded, in order (a screenshot item's value is its number)
+  direction?: string | null;
+  screenshots?: string[];
 };
-export type Customer = { audience: string; features: string[]; before: string[]; mood: Mood; use: Use };
+// (mood and use: null when the form did not ask them — admin → Settings, "Form: …")
+export type Customer = { audience: string; features: string[]; before: string[]; mood: Mood | null; use: Use | null };
 
 // The customer's answers win over what the Director (or the rule) read from the script.
 const withCustomer = (p: BrandProfile, c: Customer | null | undefined): BrandProfile =>
-  c ? { ...p, audience: c.audience.slice(0, 60) || p.audience, features: c.features.length ? c.features.slice(0, 3) : p.features, before: c.before.length ? c.before.slice(0, 3) : p.before, mood: c.mood } : p;
+  c ? { ...p, audience: c.audience.slice(0, 60) || p.audience, features: c.features.length ? c.features.slice(0, 3) : p.features, before: c.before.length ? c.before.slice(0, 3) : p.before, mood: c.mood ?? p.mood } : p;
 
 const narrationOf = (words: Word[]) => words.map((w) => w.text).join(" ");
 
@@ -536,6 +541,19 @@ export function mendAnswer(raw: unknown): unknown {
 const BASE_FORMAT = zodTextFormat(MotionModel, "motion_plan");
 const FORMAT = { format: { ...BASE_FORMAT, $parseRaw: (text: string) => MotionModel.parse(mendAnswer(JSON.parse(text))) } as typeof BASE_FORMAT };
 
+// The customer's answers (the ones the form asked), as facts.
+function customerLine(c: Customer | null | undefined): string {
+  if (!c) return "";
+  const facts = [
+    c.audience ? `for ${c.audience}` : "",
+    c.features.length ? `features: ${c.features.join("; ")}` : "",
+    c.before.length ? `before it they used: ${c.before.join(", ")} (picture that old way in the problem scenes)` : "",
+    c.mood ? `mood: ${c.mood}` : "",
+    c.use ? `the video is ${USE_NOTE[c.use]}` : "",
+  ].filter(Boolean);
+  return facts.length ? `THE CUSTOMER'S ANSWERS (facts — build on them exactly as given): ${facts.join("; ")}.` : "";
+}
+
 function requestOf(input: MotionInput): string {
   const w = input.website, k = input.known;
   const seconds = input.words.length ? input.words[input.words.length - 1].end : 0;
@@ -545,8 +563,10 @@ function requestOf(input: MotionInput): string {
     `Brand colour: ${input.color}`,
     `Call to action: ${input.cta}${input.url ? ` (${input.url})` : ""}`,
     input.category ? `Category (the customer's choice): ${input.category}` : "",
-    input.customer
-      ? `THE CUSTOMER'S ANSWERS (facts — build on them exactly as given): for ${input.customer.audience}; ${input.customer.features.length ? `features: ${input.customer.features.join("; ")}; ` : ""}${input.customer.before.length ? `before it they used: ${input.customer.before.join(", ")} (picture that old way in the problem scenes); ` : ""}mood: ${input.customer.mood}; the video is ${USE_NOTE[input.customer.use]}.`
+    customerLine(input.customer),
+    input.direction?.trim() ? `THE CUSTOMER'S DIRECTION (how they want the video to look and feel — follow it wherever THE MENU and the rules allow; it never changes the narration): ${input.direction.trim().slice(0, 1500)}` : "",
+    input.screenshots?.length
+      ? `SCREENSHOTS: the customer uploaded ${input.screenshots.length} real screenshot${input.screenshots.length > 1 ? "s" : ""} of the product (${input.screenshots.map((n, i) => `${i + 1}: ${n}`).join("; ")}). Show them where the words talk about what they show: an item { kind: "screenshot", value: "<its number>", title: what it shows } — at most one per scene, big; a screenshot fills a browser frame.`
       : "",
     w?.url ? `Website: ${w.url}` : "",
     w?.title ? `Website title: ${w.title}` : "",

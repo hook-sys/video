@@ -198,7 +198,9 @@ function Chart({ c, it, w, h }: P) {
 function Device({ c, it, w, h, shot }: P & { shot?: boolean }) {
   const v = it.variant ?? "phone";
   const { pal } = c;
-  const src = shot ? c.screens[Math.abs(it.at) % Math.max(1, c.screens.length)] : undefined;
+  // (the Director names the screenshot by its number in its value; else one by the item's moment)
+  const n = Number(it.value);
+  const src = shot ? c.screens[(Number.isInteger(n) && n >= 1 ? n - 1 : Math.abs(it.at)) % Math.max(1, c.screens.length)] : undefined;
   const screen = (sw: number, sh: number) => {
     if (src) return <Img src={src} style={{ width: sw, height: sh, objectFit: "cover", objectPosition: "top" }} />;
     const variant = it.screen ?? "list";

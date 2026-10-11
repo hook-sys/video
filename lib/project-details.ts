@@ -27,31 +27,34 @@ export const OLD_WAYS = ["Spreadsheets", "Paper", "Phone calls", "WhatsApp", "Em
 
 export const CATEGORY_LABEL = (c: BrandCategory) => (c === "hr & teams" ? "HR & teams" : c.charAt(0).toUpperCase() + c.slice(1));
 
-// (features: asked for until Oct 2026; older projects keep theirs, new ones have none)
-export type ProjectDetails = { category: BrandCategory; use: Use; mood: Mood; features: string[]; before: string[] };
+// (features: asked for until Oct 2026; older projects keep theirs, new ones
+// have none; category, use and mood are null when the form did not ask them —
+// admin → Settings, "Form: …")
+export type ProjectDetails = { category: BrandCategory | null; use: Use | null; mood: Mood | null; features: string[]; before: string[] };
 
 const isOne = <T extends string>(xs: readonly T[], v: unknown): v is T => typeof v === "string" && (xs as readonly string[]).includes(v);
 
-// The form's answers, checked (every one is required; "before", the old way, is no longer asked: [] for new videos).
-export function detailsFrom(formData: FormData): { details?: ProjectDetails; error?: string } {
+// The form's answers, checked: each one it asked is required ("before", the
+// old way, is no longer asked: [] for new videos).
+export function detailsFrom(formData: FormData, ask: { business: boolean; mood: boolean; use: boolean } = { business: true, mood: true, use: true }): { details?: ProjectDetails; error?: string } {
   const category = formData.get("category");
   const use = formData.get("use");
   const mood = formData.get("mood");
   const before = formData.getAll("before").map(String).filter((b) => isOne(OLD_WAYS, b));
-  if (!isOne(BRAND_CATEGORIES, category)) return { error: "Choose your type of business." };
-  if (!isOne(MOODS, mood)) return { error: "Choose a mood." };
-  if (!isOne(USES, use)) return { error: "Choose where the video will be used." };
-  return { details: { category, use, mood, features: [], before } };
+  if (ask.business && !isOne(BRAND_CATEGORIES, category)) return { error: "Choose your type of business." };
+  if (ask.mood && !isOne(MOODS, mood)) return { error: "Choose a mood." };
+  if (ask.use && !isOne(USES, use)) return { error: "Choose where the video will be used." };
+  return { details: { category: ask.business && isOne(BRAND_CATEGORIES, category) ? category : null, use: ask.use && isOne(USES, use) ? use : null, mood: ask.mood && isOne(MOODS, mood) ? mood : null, features: [], before } };
 }
 
 // A stored value (older projects have none).
 export function parseDetails(raw: unknown): ProjectDetails | null {
   const d = raw as Partial<ProjectDetails> | null;
-  if (!d || !isOne(BRAND_CATEGORIES, d.category) || !isOne(USES, d.use) || !isOne(MOODS, d.mood)) return null;
+  if (!d || typeof d !== "object") return null;
   return {
-    category: d.category,
-    use: d.use,
-    mood: d.mood,
+    category: isOne(BRAND_CATEGORIES, d.category) ? d.category : null,
+    use: isOne(USES, d.use) ? d.use : null,
+    mood: isOne(MOODS, d.mood) ? d.mood : null,
     features: Array.isArray(d.features) ? d.features.map(String).slice(0, 3) : [],
     before: Array.isArray(d.before) ? d.before.map(String).slice(0, 6) : [],
   };
