@@ -449,6 +449,7 @@ async function motionDirection(
     model: tier.model || null,
     prompt: settings.feature_creative_director === true ? "creative" : "classic",
     recent: looks,
+    rules: settings.feature_video_rules !== false,
   };
   const result = await directMotion(input, (u) => usage.push(u));
   console.info("motion director:", { projectId, source: result.plan.source, ms: result.ms, category: result.plan.profile.category, mood: result.plan.profile.mood, idea: result.plan.creative.idea, language: result.plan.creative.language, scheme: result.plan.creative.scheme, scenes: result.plan.ideas?.scenes.length ?? 0, problems: result.problems.slice(0, 6) });
@@ -480,7 +481,7 @@ async function composerSet(
   const plan = reviewed.plan;
   const { count: screens } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
   const { seen, seenStaging, recent } = dir.past;
-  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, rules: dir.input.rules !== false, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
   const video = set.videos[0];
   // the code's own check of what was built (shown in the studio; it picks nothing)
   const score = scorePlan(set.plans[0], video.script, { staging: video.staging, motif: plan.creative.motif, heroScene: video.staging?.hero ?? null, recent, problems: set.problems.length });

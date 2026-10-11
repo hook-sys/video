@@ -138,7 +138,29 @@ ${PARTS}`;
 
 const CREATIVE_REVIEW = `Also check: is it unlike RECENT (camera language, layouts, the opening, the ending, highlight, faces, surface, cards) — and is every difference right for THIS brief? Is it built on its own concept, not on a safe default?`;
 
-const instructionsOf = (input: Pick<MotionInput, "prompt">) => (input.prompt === "creative" ? CREATIVE_INSTRUCTIONS : MOTION_INSTRUCTIONS);
+// ── Video rules off (admin → Settings, "Video rules"): the house rules, the
+// team's never list and the style rules written into the parts are left
+// out, so the Director composes freely. What the renderer needs (the format,
+// scenes in narration order, the renderer's limits) and honesty (no invented
+// numbers or claims, no placeholder data) always stay.
+const STYLE_RULES = [
+  ` Premium means: one focal point per scene, generous space, a clear hierarchy (the words, then the thing), every scene held long enough to be seen, nothing generic, nothing crowded, every detail specific to THIS brand.`,
+  `Taste: condensed faces (oswald, bebas-neue, anton, big-shoulders-display) only in upper case; serif faces with sentence case and italic/underline/color keys; wide faces (unbounded, krona-one, dela-gothic-one) with smaller sizes. `,
+  ` EVERY scene is at least 3 seconds of speech (about 8 words or more) so the viewer can see it: a short sentence or question ("Why should you?") joins the sentence before or after it. 15 s → 3–5 scenes, 30 s → 6–8, 60 s → 10–14.`,
+  `\nNever the same layout twice in a row, and no layout more than twice in a video (the closing ask aside).`,
+  ` Never people, faces, hands or animals.`,
+  `\n- 1–2 main items per scene (a badge may be added): ONE focal point, big (size l for the main thing). Fewer, bigger things read better; never a small thing lost in a big frame.`,
+  `\n- Mix icons and cards: most scenes pair ONE card (or a phone/laptop showing one) with 1–2 icons beside it, each icon with its word.`,
+  `\n- The old way (what customers used before) appears ONLY in the problem scenes before the turn — never beside the product's features after it. A phone/browser/laptop for "the app does X" moments; chips/flow/steps for spoken lists; stat/chart only for spoken numbers; compare for "no more …"; logo when the product is named first; button on the closing line.`,
+  `\n- Build every scene inside your concept and staging: the motif in 2–3 scenes, before the turn the problem and from it the product, the hero scene the strongest.`,
+];
+const withoutRules = (text: string) => STYLE_RULES.reduce((t, r) => t.replace(r, ""), text);
+const instructionsOf = (input: Pick<MotionInput, "prompt" | "rules">) => {
+  const text = input.prompt === "creative" ? CREATIVE_INSTRUCTIONS : MOTION_INSTRUCTIONS;
+  return input.rules === false ? withoutRules(text) : text;
+};
+// the instructions with the house rules and the team's never list (none when the rules are off)
+const directionOf = (input: Pick<MotionInput, "prompt" | "rules" | "never">) => (input.rules === false ? instructionsOf(input) : `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}`);
 
 // ── What this customer has already seen (their last videos, any brand), for
 // the Creative Director: one line per video and what keeps coming back.
@@ -269,6 +291,8 @@ export type MotionInput = {
   // for the creative one what this customer has already seen
   prompt?: DirectorPrompt;
   recent?: PastLook[] | null;
+  // false: the video rules are off (admin → Settings, "Video rules")
+  rules?: boolean;
 };
 export type Customer = { audience: string; features: string[]; before: string[]; mood: Mood; use: Use };
 
@@ -398,11 +422,22 @@ const PLACEHOLDER = /\b(jane doe|john doe|lorem|ipsum|product x|acme|foo|bar baz
 
 // What a reviewer should look at: our layout check on the plan as it would be
 // built (in its own staging), and the plan's own repetition.
-export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; color: string; cta: string; url?: string }, creative?: CreativePlan | null): string[] {
+// (rules off: only what would break the video — the layout's own problems,
+// an icon with no name — and placeholder data)
+export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; color: string; cta: string; url?: string }, creative?: CreativePlan | null, rules = true): string[] {
   const notes: string[] = [];
   const duration = Math.round(((words[words.length - 1]?.end ?? 0) + 1) * 30);
-  const set = composeVariants({ words, brand: { ...brand, url: brand.url ?? "", tagline: "", icon: null }, duration, seed: 1, ideas, count: 1, creative });
+  const set = composeVariants({ words, brand: { ...brand, url: brand.url ?? "", tagline: "", icon: null }, duration, seed: 1, ideas, count: 1, creative, rules });
   notes.push(...set.problems.map((p) => p.replace(/^video 1, /, "")));
+  if (!rules) {
+    ideas.scenes.forEach((x, i) => {
+      const items = x.options[0]?.items ?? [];
+      if (items.some((it) => it.kind === "icon" && !String(it.icon ?? "").trim())) notes.push(`scene ${i + 1} has an icon with no icon name`);
+      const said = JSON.stringify(items);
+      if (PLACEHOLDER.test(said)) notes.push(`scene ${i + 1} shows placeholder data (${said.match(PLACEHOLDER)?.[0]}) — write rows specific to this product`);
+    });
+    return [...new Set(notes)].slice(0, 20);
+  }
   const sc = ideas.scenes;
   const layoutOf = (i: number) => sc[i]?.options[0]?.layout ?? "";
   const kindsOf = (i: number) => (sc[i]?.options[0]?.items ?? []).map((it) => String(it.kind)).sort().join("+");
@@ -561,7 +596,7 @@ export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage)
   if (!ai || !input.words.length) return done(fallback, ["no model (turned off on /admin/models, or no key) — plan by rule"]);
   const deadline = t0 + budgetMs;
   try {
-    const o = await ask<Answer>(ai, { model, instructions: `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}`, input: requestOf(input), text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+    const o = await ask<Answer>(ai, { model, instructions: directionOf(input), input: requestOf(input), text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
     if (!o) return done(fallback, ["no answer — plan by rule"]);
     return done(planOf(o, input, fallback), ideaProblems(o, input.words.length));
   } catch (e) {
@@ -585,7 +620,7 @@ function planOf(o: Answer, input: Pick<MotionInput, "words" | "category" | "know
 // (its answer is most of what a call costs).
 export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 100_000): Promise<MotionResult> {
   const t0 = Date.now();
-  const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative) : [];
+  const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative, input.rules !== false) : [];
   const { ai, model, quick } = await modelOf(client, input.model);
   const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
   const done = (p: MotionPlan, problems: string[]): MotionResult => {
@@ -602,7 +637,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
     if (round > 1 && (!notes.length || deadline - Date.now() < 40_000)) break;
     const request = `${requestOf(input)}\n\nYOUR PLAN (scenes numbered from 1):\n${JSON.stringify(answerOf(best))}\n\nProblems found by our checks on the recorded voice (fix every one):\n${notes.map((a) => `- ${a}`).join("\n")}`;
     try {
-      const fix = await ask<Fixes>(ai, { model, instructions: `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}\n\n${REVIEW}${input.prompt === "creative" ? `\n${CREATIVE_REVIEW}` : ""}\n\n${FIXES}`, input: request, text: FIXES_FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+      const fix = await ask<Fixes>(ai, { model, instructions: `${directionOf(input)}\n\n${input.rules === false ? REVIEW_FREE : `${REVIEW}${input.prompt === "creative" ? `\n${CREATIVE_REVIEW}` : ""}`}\n\n${FIXES}`, input: request, text: FIXES_FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
       if (!fix?.fixes.length) {
         log.push(`review ${round}: ${fix ? "no changes" : "no answer"} — the plan is kept`);
         break;
@@ -617,7 +652,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
         log.push(`review ${round}: no scenes — the plan is kept`);
         break;
       }
-      const again = [...ideaProblems(o, input.words.length), ...reviewNotes(revised.ideas, input.words, input, revised.creative)];
+      const again = [...ideaProblems(o, input.words.length), ...reviewNotes(revised.ideas, input.words, input, revised.creative, input.rules !== false)];
       if (again.length > notes.length) {
         log.push(`review ${round} made it worse — the plan is kept`);
         break;
@@ -640,6 +675,7 @@ const REVIEW = `Now review YOUR PLAN as a senior motion designer before it is bu
 - Is every scene's text a 2–6 word highlight? Every UI row realistic for THIS product, every icon literal, every number spoken?
 - Do the concept and staging hold: the motif in 2–3 scenes, the turn where the product arrives, the hero scene the strongest, the scheme and camera language right for this brand?
 Fix every weak scene and every problem listed, keep what is already strong.`;
+const REVIEW_FREE = `Now fix YOUR PLAN before it is built: fix every problem listed and keep everything else as it is.`;
 
 // The review's answer: only the scenes it changes.
 const FixesM = z.object({ fixes: z.array(z.object({ scene: z.number(), remove: z.boolean(), with: n(SceneM) })) });
