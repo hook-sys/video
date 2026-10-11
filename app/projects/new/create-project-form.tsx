@@ -118,7 +118,7 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
               maxLength={scriptMax}
               value={script}
               onChange={(e) => setScript(e.target.value)}
-              placeholder="Paste your short script… e.g. Running an online store means juggling orders, stock and couriers. SeloraX brings it all into one dashboard…"
+              placeholder="Paste your script — exactly what the voice will say"
               className={area}
             />
             <div className="flex items-center justify-between">
@@ -170,7 +170,7 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
               </Upload>
               <div className="flex flex-col gap-4">
                 <Field title="Company name">
-                  <input name="brand_name" required defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="e.g. SeloraX" className={input} />
+                  <input name="brand_name" required defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="Your company name" className={input} />
                 </Field>
                 <div className="flex flex-col gap-1.5">
                   <span className={label}>Brand colour</span>
