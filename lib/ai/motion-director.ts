@@ -580,6 +580,9 @@ function planOf(o: Answer, input: Pick<MotionInput, "words" | "category" | "know
 
 // Its review once the voice is timed: the plan, with what our layout check
 // found on the real timings; the improved plan is kept unless it is worse.
+// Only when the check found something (a clean plan is built as it is), and
+// the Director answers with the scenes it changes, not the whole plan again
+// (its answer is most of what a call costs).
 export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 100_000): Promise<MotionResult> {
   const t0 = Date.now();
   const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative) : [];
@@ -589,7 +592,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
     onUsage?.(usage);
     return { plan: p, problems, ms: Date.now() - t0 };
   };
-  if (!ai || !plan.ideas || plan.source !== "ai") return done(plan, asked);
+  if (!ai || !plan.ideas || plan.source !== "ai" || !asked.length) return done(plan, asked);
   const deadline = t0 + budgetMs;
   // up to two rounds: the plan is checked again after each, and a round
   // that makes it worse is not kept
@@ -597,11 +600,16 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
   const log: string[] = [];
   for (let round = 1; round <= 2; round++) {
     if (round > 1 && (!notes.length || deadline - Date.now() < 40_000)) break;
-    const request = `${requestOf(input)}\n\nYOUR PLAN:\n${JSON.stringify(answerOf(best))}\n\nProblems found by our checks on the recorded voice (fix every one):\n${notes.length ? notes.map((a) => `- ${a}`).join("\n") : "- (none; judge the design yourself)"}`;
+    const request = `${requestOf(input)}\n\nYOUR PLAN (scenes numbered from 1):\n${JSON.stringify(answerOf(best))}\n\nProblems found by our checks on the recorded voice (fix every one):\n${notes.map((a) => `- ${a}`).join("\n")}`;
     try {
-      const o = await ask<Answer>(ai, { model, instructions: `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}\n\n${REVIEW}${input.prompt === "creative" ? `\n${CREATIVE_REVIEW}` : ""}`, input: request, text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+      const fix = await ask<Fixes>(ai, { model, instructions: `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}\n\n${REVIEW}${input.prompt === "creative" ? `\n${CREATIVE_REVIEW}` : ""}\n\n${FIXES}`, input: request, text: FIXES_FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+      if (!fix?.fixes.length) {
+        log.push(`review ${round}: ${fix ? "no changes" : "no answer"} — the plan is kept`);
+        break;
+      }
+      const o = patched(best, fix);
       if (!o) {
-        log.push(`review ${round}: no answer — the plan is kept`);
+        log.push(`review ${round}: its changes could not be read — the plan is kept`);
         break;
       }
       const revised = planOf(o, input, best, best.profile);
@@ -624,7 +632,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
   return done(best, [...log, ...notes]);
 }
 
-const REVIEW = `Now review YOUR PLAN as a senior motion designer before it is built, and return the WHOLE improved plan (same format). Check, scene by scene:
+const REVIEW = `Now review YOUR PLAN as a senior motion designer before it is built. Check, scene by scene:
 - Is every scene at least 3 s, held long enough to be seen? Is its one focal point big, with nothing small lost in the frame?
 - Are the on-screen words ONLY the hook (1–${SHOWN} words naming what is shown), never a sentence? Does every icon come in with its own word, on the word that names it? Are icons and cards mixed?
 - Does every scene picture what ITS words say, literally? Is it one strong idea, not a crowd? Is the product's UI shown where the words describe what the app does? Is every detail specific to THIS product (no placeholder data, every icon named)?
@@ -632,3 +640,25 @@ const REVIEW = `Now review YOUR PLAN as a senior motion designer before it is bu
 - Is every scene's text a 2–6 word highlight? Every UI row realistic for THIS product, every icon literal, every number spoken?
 - Do the concept and staging hold: the motif in 2–3 scenes, the turn where the product arrives, the hero scene the strongest, the scheme and camera language right for this brand?
 Fix every weak scene and every problem listed, keep what is already strong.`;
+
+// The review's answer: only the scenes it changes.
+const FixesM = z.object({ fixes: z.array(z.object({ scene: z.number(), remove: z.boolean(), with: n(SceneM) })) });
+type Fixes = z.infer<typeof FixesM>;
+const FIXES_FORMAT = { format: zodTextFormat(FixesM, "plan_fixes") };
+const FIXES = `ANSWER WITH YOUR CHANGES ONLY, not the whole plan: "fixes", one per scene you change — { scene: its number in YOUR PLAN (1 = the first), remove: true to drop it (its words then belong to the scene before), with: the whole new scene in the same format as YOUR PLAN's scenes (null when removed) }. Scenes you keep are left out; the brand, concept, staging and art stay as they are.`;
+
+// YOUR PLAN with the review's changes, read like a whole answer (null when it cannot be).
+function patched(plan: MotionPlan, fix: Fixes): Answer | null {
+  const whole = answerOf(plan) as Record<string, unknown> & { scenes: unknown[] };
+  const scenes: (unknown | null)[] = [...whole.scenes];
+  for (const f of fix.fixes) {
+    const i = Math.round(f.scene) - 1;
+    if (i < 0 || i >= scenes.length) continue;
+    scenes[i] = f.remove ? null : (f.with ?? scenes[i]);
+  }
+  try {
+    return MotionModel.parse(mendAnswer({ ...whole, scenes: scenes.filter((x) => x != null) }));
+  } catch {
+    return null;
+  }
+}
