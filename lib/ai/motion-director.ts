@@ -8,6 +8,7 @@ import { HOUSE_RULES, extraRules } from "@/lib/ai/house-rules";
 import { DISPLAY_FACES, TEXT_FACES } from "@/components/video/composer/art";
 import { STYLE_NOTES, type StyleRules, styleLine, styleOf } from "@/components/video/composer/style";
 import { RECIPES } from "@/components/video/composer/recipes";
+import { MEANING_MAP } from "@/components/video/composer/meaning";
 import { IN_USE, LANGUAGES, LANGUAGE_NOTES, type Language } from "@/components/video/composer/staging";
 import { SHOWN } from "@/components/video/composer/highlight";
 import { MIN_SCENE } from "@/components/video/composer/layout";
@@ -167,12 +168,16 @@ const STYLE_RULES = [
   `\n- Build every scene inside your concept and staging: the motif in 2–3 scenes, before the turn the problem and from it the product, the hero scene the strongest.`,
 ];
 const withoutRules = (text: string) => STYLE_RULES.reduce((t, r) => t.replace(r, ""), text);
-const instructionsOf = (input: Pick<MotionInput, "prompt" | "rules">) => {
+// (the map of what pictures what — admin → Settings, "Visual match")
+const MATCH_PART = `WHAT PICTURES WHAT — every scene's things picture what THAT scene's words say (it is checked in code, and a mismatch comes back to you): a scene about bookings shows a calendar, not an invoice; an icon shows its own word. The map (meaning → what shows it):
+${MEANING_MAP}`;
+const instructionsOf = (input: Pick<MotionInput, "prompt" | "rules" | "match">) => {
   const text = input.prompt === "creative" ? CREATIVE_INSTRUCTIONS : MOTION_INSTRUCTIONS;
-  return input.rules === false ? withoutRules(text) : text;
+  const base = input.rules === false ? withoutRules(text) : text;
+  return input.match === false ? base : `${base}\n\n${MATCH_PART}`;
 };
 // the instructions with the house rules and the team's never list (none when the rules are off)
-const directionOf = (input: Pick<MotionInput, "prompt" | "rules" | "never">) => (input.rules === false ? instructionsOf(input) : `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}`);
+const directionOf = (input: Pick<MotionInput, "prompt" | "rules" | "never" | "match">) => (input.rules === false ? instructionsOf(input) : `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}`);
 
 // ── What this customer has already seen (their last videos, any brand), for
 // the Creative Director: one line per video and what keeps coming back.
@@ -321,6 +326,8 @@ export type MotionInput = {
   rules?: boolean;
   // the looks the team allows (admin → Settings, "Looks"; null: looks off)
   styles?: StyleRules | null;
+  // false: the visual match is off (admin → Settings, "Visual match")
+  match?: boolean;
   // the customer's own direction (the form's "Video direction") and the names
   // of the screenshots they uploaded, in order (a screenshot item's value is its number)
   direction?: string | null;
@@ -457,10 +464,10 @@ const PLACEHOLDER = /\b(jane doe|john doe|lorem|ipsum|product x|acme|foo|bar baz
 // built (in its own staging), and the plan's own repetition.
 // (rules off: only what would break the video — the layout's own problems,
 // an icon with no name — and placeholder data)
-export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; color: string; cta: string; url?: string }, creative?: CreativePlan | null, rules = true): string[] {
+export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; color: string; cta: string; url?: string }, creative?: CreativePlan | null, rules = true, match = true): string[] {
   const notes: string[] = [];
   const duration = Math.round(((words[words.length - 1]?.end ?? 0) + 1) * 30);
-  const set = composeVariants({ words, brand: { ...brand, url: brand.url ?? "", tagline: "", icon: null }, duration, seed: 1, ideas, count: 1, creative, rules });
+  const set = composeVariants({ words, brand: { ...brand, url: brand.url ?? "", tagline: "", icon: null }, duration, seed: 1, ideas, count: 1, creative, rules, match });
   notes.push(...set.problems.map((p) => p.replace(/^video 1, /, "")));
   if (!rules) {
     ideas.scenes.forEach((x, i) => {
@@ -673,7 +680,7 @@ function planOf(o: Answer, input: Pick<MotionInput, "words" | "category" | "know
 // (its answer is most of what a call costs).
 export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 100_000): Promise<MotionResult> {
   const t0 = Date.now();
-  const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative, input.rules !== false) : [];
+  const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative, input.rules !== false, input.match !== false) : [];
   const { ai, model, quick } = await modelOf(client, input.model);
   const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
   const done = (p: MotionPlan, problems: string[]): MotionResult => {
@@ -705,7 +712,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
         log.push(`review ${round}: no scenes — the plan is kept`);
         break;
       }
-      const again = [...ideaProblems(o, input.words.length), ...reviewNotes(revised.ideas, input.words, input, revised.creative, input.rules !== false)];
+      const again = [...ideaProblems(o, input.words.length), ...reviewNotes(revised.ideas, input.words, input, revised.creative, input.rules !== false, input.match !== false)];
       if (again.length > notes.length) {
         log.push(`review ${round} made it worse — the plan is kept`);
         break;

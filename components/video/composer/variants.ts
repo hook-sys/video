@@ -7,6 +7,7 @@ import { type Language, type Staging, sceneAt, stageOf, staged } from "./staging
 import { houseRules, varyLayouts } from "./rules";
 import { ALL_STYLES, type StyleRules, type StyleT, inStyle, pickStyle } from "./style";
 import { RECIPES } from "./recipes";
+import { matched } from "./meaning";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, LOOKS, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
 import type { ArtT, Brand, ComposerPlan, GuideKind, ItemT, JourneyKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
 
@@ -133,7 +134,7 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
 }
 
 // rules: false — the house rules (rules.ts) are not applied (admin → Settings, "Video rules")
-export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null; size?: [number, number]; rules?: boolean; styles?: StyleRules | null; avoidStyles?: (StyleT | null)[] };
+export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null; size?: [number, number]; rules?: boolean; match?: boolean; styles?: StyleRules | null; avoidStyles?: (StyleT | null)[] };
 
 // What the Motion Director decided that the build keeps (lib/studio.ts
 // CreativePlan): the camera language, the scheme, where the story turns and
@@ -164,7 +165,7 @@ function shaped(script: ScriptT, creative: Creative | null | undefined, look: Co
 // when shown) and how it is staged (staging.ts; older videos: cuts).
 export type StoredComposition = { script: ScriptT; seed: number; source: ComposerPlan["source"]; staging?: Staging | null };
 
-export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look, size, rules = true, styles = ALL_STYLES, avoidStyles = [] }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
+export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look, size, rules = true, match = true, styles = ALL_STYLES, avoidStyles = [] }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
   const problems: string[] = [];
   const plans: ComposerPlan[] = [];
   const videos: StoredComposition[] = [];
@@ -173,11 +174,21 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
   // every video in its own style (style.ts): the Director's, or a reference's
   // changed — unlike the other videos of this set and this customer's last
   // ones (admin → Settings, "Looks"; off: the first light glass look)
+  // and every scene's things checked against its words (meaning.ts; admin → Settings, "Visual match")
+  let matchNotes: string[] = [];
   const built = (sc: ScriptT, s: number, asked: unknown) => {
-    if (!styles) return fitScript({ ...sc, art: { ...sc.art, look: null, style: null } });
-    const { style, recipe } = pickStyle(asked, s, RECIPES, made, avoidStyles, styles);
-    made.push(style);
-    return fitScript(inStyle(sc, style, s, recipe));
+    let out = sc;
+    if (styles) {
+      const { style, recipe } = pickStyle(asked, s, RECIPES, made, avoidStyles, styles);
+      made.push(style);
+      out = inStyle(sc, style, s, recipe);
+    } else out = { ...sc, art: { ...sc.art, look: null, style: null } };
+    if (match) {
+      const m = matched(out, words);
+      out = m.script;
+      matchNotes = m.problems;
+    }
+    return fitScript(out);
   };
   for (let v = 0; v < count; v++) {
     const s = (seed + v * 104729) >>> 0;
@@ -193,6 +204,7 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
       placed = placeAll(script, words, duration, brand, s, screens, "auto", size);
     }
     placed.problems.forEach((p) => problems.push(`video ${v + 1}, scene ${p.scene + 1}: ${p.what}`));
+    matchNotes.forEach((p) => problems.push(`video ${v + 1}, ${p}`));
     for (const k of ["display", "field", "key", "surface", "hue"] as const) (used[k] ??= []).push(placed.plan.art[k]);
     // how it is staged: the Motion Director's camera language (else one drawn,
     // unlike the ones before it), its signature move at the hero moment
