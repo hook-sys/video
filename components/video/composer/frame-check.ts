@@ -1,4 +1,5 @@
-import type { ComposerPlan } from "./types";
+import { dealt, hardShape, platesOver } from "./layout";
+import type { ComposerPlan, PlacedItem } from "./types";
 
 // The frame check: what a viewer would see wrong, read from the video as it
 // really plays — where every word and every thing is on each frame (the
@@ -22,8 +23,10 @@ export type FrameFinding = { from: number; to: number; scene: number; what: stri
 export type FrameCheck = { ok: boolean; frames: number; findings: FrameFinding[] };
 
 type Box = { x: number; y: number; w: number; h: number };
-// (things that may sit on others: a pointer, a shape behind)
+// (things that may sit on others: a pointer, a glow or a dot grid behind — a
+// drawn shape, a ring or a star, is looked up in the plan and counted)
 const LOOSE = new Set(["cursor", "shape"]);
+const PICTURE = new Set(["screenshot", "device", "logo", "icon", "shape"]);
 const SEEN = 0.5, SOLID = 0.6;
 // a thing on screen at least this long, words fully on screen at least this long (frames)
 export const THING_MIN = 36, WORDS_MIN = 30;
@@ -72,6 +75,18 @@ export function checkFrames(plan: ComposerPlan, samples: ProbeSample[]): FrameCh
     empty = { from: -1, to: -1 };
   };
 
+  // the plan's thing behind a probe key (scene:kind:title:x:y)
+  const itemOf = (key: string): PlacedItem | undefined => {
+    const [si, kind, title, x, y] = key.split(":");
+    return plan.scenes[Number(si)]?.items.find((it) => it.kind === kind && (it.title ?? "") === title && Math.round(it.box.x) === Number(x) && Math.round(it.box.y) === Number(y));
+  };
+  const hard = new Map<string, boolean>();
+  const isHard = (key: string) => hard.get(key) ?? hard.set(key, (() => { const it = itemOf(key); return !!it && hardShape(it); })()).get(key)!;
+  const loose = (t: { key: string; kind: string }) => LOOSE.has(t.kind) && !(t.kind === "shape" && isHard(t.key));
+  // (a scene's words may lie on a plate over its picture — a picture only, never a thing full of words)
+  const plateOk = plan.scenes.map((sc) => (sc.layout === "over" || sc.layout === "caption") && platesOver(sc.items));
+  const deck = plan.scenes.map((sc) => sc.arrange === "cascade" && dealt(sc.items));
+
   S.forEach((s, idx) => {
     const words = s.w.map(([key, x, y, w, h, o]) => ({ key, box: { x, y, w, h }, o, scene: sceneOf(key) }));
     const things = s.t.map(([key, x, y, w, h, o, kind, title, fly]) => ({ key, box: { x, y, w, h }, o, kind, title, fly: !!fly, scene: sceneOf(key) }));
@@ -83,20 +98,22 @@ export function checkFrames(plan: ComposerPlan, samples: ProbeSample[]): FrameCh
     for (const w of words) {
       if (w.o < SEEN) continue;
       const wb = shrink(w.box, 0.01, 0.16);
-      const plated = ["over", "caption"].includes(plan.scenes[w.scene]?.layout ?? "");
+      const plated = !!plateOk[w.scene];
       for (const t of things) {
-        if (t.o < SEEN || LOOSE.has(t.kind) || (plated && t.scene === w.scene && !t.fly)) continue;
+        if (t.o < SEEN || loose(t) || (plated && PICTURE.has(t.kind) && t.scene === w.scene && !t.fly)) continue;
         const tb = shrink(t.box, t.kind === "badge" ? 0 : 0.05, t.kind === "badge" ? 0 : 0.05);
         if (meet(wb, tb) > Math.min(wb.w * wb.h, tb.w * tb.h) * 0.02) note(`wt|${t.key}|${w.scene}`, s.f, w.scene, `${nameOf(t.kind, t.title)} ${t.fly ? "flies over" : "covers"} the words${t.scene !== w.scene ? " (two scenes on screen at once)" : ""}`, idx);
       }
     }
     // two things on each other
-    const solid = things.filter((t) => t.o >= SOLID && !LOOSE.has(t.kind) && t.kind !== "badge");
+    // (a badge on a thing counts too; only cards dealt one over the other may meet)
+    const solid = things.filter((t) => t.o >= SOLID && !loose(t));
     for (let a = 0; a < solid.length; a++)
       for (let b = a + 1; b < solid.length; b++) {
         const A = solid[a], B = solid[b];
-        if (A.scene === B.scene && !A.fly && !B.fly && ["cascade", "orbit"].includes(plan.scenes[A.scene]?.arrange ?? "")) continue;
-        const ab = shrink(A.box, 0.06, 0.06), bb = shrink(B.box, 0.06, 0.06);
+        if (A.scene === B.scene && !A.fly && !B.fly && deck[A.scene] && A.kind !== "badge" && B.kind !== "badge") continue;
+        const k = (t: typeof A) => (t.kind === "badge" || t.kind === "shape" ? 0.02 : 0.06);
+        const ab = shrink(A.box, k(A), k(A)), bb = shrink(B.box, k(B), k(B));
         if (meet(ab, bb) > Math.min(ab.w * ab.h, bb.w * bb.h) * 0.03) {
           const [p, q] = A.key < B.key ? [A, B] : [B, A];
           note(`tt|${p.key}|${q.key}`, s.f, p.scene, `${nameOf(p.kind, p.title)} and ${nameOf(q.kind, q.title)} are on each other${p.scene !== q.scene ? " (two scenes on screen at once)" : ""}`, idx);

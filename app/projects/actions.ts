@@ -429,7 +429,7 @@ async function pastOf(admin: ReturnType<typeof createAdminClient>, projectId: st
   const seenStaging = pastVideos.map((v) => v.staging ?? null).slice(0, 8).reverse();
   const recent = pastVideos.slice(0, 8).map((v) => ({ staging: v.staging ?? null, display: (v.script as { art?: { display?: string } } | undefined)?.art?.display ?? null }));
   // (for the Creative Director: how their last videos looked, any brand)
-  const looks = pastVideos.map((v) => pastLookOf(v)).filter((x): x is PastLook => !!x).slice(0, 6);
+  const looks = rows.slice(0, 12).flatMap((p) => (p.composer?.videos ?? []).map((v) => pastLookOf(v, p.composer?.creative?.shape))).filter((x): x is PastLook => !!x).slice(0, 6);
   // the styles (composer/style.ts) of their last three videos: the next is unlike them
   const avoidStyles = pastVideos.slice(0, 3).map((v) => styleOf((v.script as { art?: Parameters<typeof styleOf>[0] } | undefined)?.art));
   return { known, earlier, looks, past: { seen, seenStaging, recent, avoidStyles } };
@@ -488,6 +488,8 @@ async function motionDirection(
     rules: settings.feature_video_rules !== false,
     styles: styleRulesOf(settings, RECIPES.map((r) => r.id)),
     match: settings.feature_visual_match !== false,
+    shapes: settings.feature_story_shapes !== false,
+    motion: settings.feature_director_motion !== false,
     // the customer's own direction and screenshots (when the form asked for them)
     direction: project.advanced_direction?.trim() || null,
     screenshots: (shots ?? []).map((x) => String(x.original_filename ?? "screenshot")),

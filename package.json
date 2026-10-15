@@ -12,6 +12,7 @@
     "lottie:build": "node scripts/lottie/build.mjs",
     "check:parity": "node scripts/parity/run.mjs",
     "check:clean": "node scripts/clean-check/run.mjs",
+    "check:frames": "node scripts/frame-check/local.mjs",
     "refs:ingest": "node scripts/references/ingest.mjs"
   },
   "dependencies": {
