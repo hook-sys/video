@@ -51,6 +51,18 @@ export function enterStyle(kind: EnterKind, k: number, tilt = 0): CSSProperties 
     case "swing": return { opacity: o, transform: `scaleX(${mix(0.35, 1, 1 - r).toFixed(3)}) skewY(${(8 * r).toFixed(2)}deg)${rot}`, transformOrigin: "0% 50%" };
     case "unfold": return { opacity: clamp01(k * 3), clipPath: `inset(0 ${Math.round(100 * r)}% 0 0 round 24px)`, transform: rot || undefined };
     case "draw": return { opacity: clamp01(k * 3), transform: rot || undefined };
+    // in jumps: shifted, sliced and split into its colours, then still (ref 25)
+    case "glitch": {
+      if (k >= 0.9) return { opacity: 1, transform: rot || undefined };
+      const step = Math.floor(k * 9);
+      const j = ((step * 7919) % 13) - 6;
+      return {
+        opacity: k < 0.06 ? 0 : step % 3 === 1 ? 0.6 : 1,
+        transform: `translateX(${(j * 7 * r).toFixed(1)}px) skewX(${(j * 0.9 * r).toFixed(2)}deg)${rot}`,
+        clipPath: `inset(${(step * 13) % 38}% 0 ${(step * 29) % 33}% 0)`,
+        filter: `drop-shadow(${(5 * r).toFixed(1)}px 0 0 rgba(255,40,110,0.75)) drop-shadow(${(-5 * r).toFixed(1)}px 0 0 rgba(0,220,255,0.75))`,
+      };
+    }
     default: return { opacity: o, transform: `translateY(${80 * r}px)${rot}`, filter: blurOf(r * 10) };
   }
 }
@@ -122,6 +134,8 @@ export function cameraOf(kind: string, p: number, f: number, energy: number): st
     case "orbit": return `${breathe} translateX(${(Math.sin(q * Math.PI - Math.PI / 2) * 28 * e).toFixed(1)}px) rotateZ(${mix(-0.8, 0.8, q).toFixed(3)}deg) scale(1.02)`;
     case "rise": return `${breathe} translateY(${mix(26, -22, q) * e}px)`;
     case "float": return `${breathe} translateY(${(noise2D("cam-float", f / 45, 0.5) * 12 * e).toFixed(1)}px)`;
+    // deep into the scene's main thing (the scene sets the origin there — film.tsx)
+    case "macro": return `${breathe} scale(${mix(1, 1.32, q).toFixed(4)})`;
     default: return breathe;
   }
 }

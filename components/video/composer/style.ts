@@ -10,7 +10,7 @@ import type { ArtT, CameraKind, KeyStyle, Look, Motion, ScriptT, TransitionKind 
 // a video starts from one and changes it, or the Director writes its own.
 
 export const GROUNDS = ["black", "night", "deep", "dusk", "plate", "bright", "tint", "paper", "white"] as const;
-export const BACKDROPS = ["none", "glow", "spot", "rays", "horizon", "grid", "columns", "dots", "rules", "disc", "arcs"] as const;
+export const BACKDROPS = ["none", "glow", "spot", "rays", "horizon", "grid", "columns", "dots", "rules", "disc", "arcs", "orb"] as const;
 export const TEXTURES = ["none", "grain", "vignette"] as const;
 export const SHIFTS = ["none", "scene"] as const;
 export const CARDS = ["glass", "solid", "offset", "outline", "hairline", "glow", "lifted"] as const;
@@ -38,13 +38,16 @@ export const Style = z.object({
   rhythm: z.enum(RHYTHMS),
   tilt: z.number().min(0).max(12),
   ghost: z.boolean(),
+  // (later parts: optional, so the styles made before them still read)
+  frame: z.boolean().optional(),
+  confetti: z.boolean().optional(),
 });
 export type StyleT = z.infer<typeof Style>;
 
 // What each part means (for the Director's menu).
 export const STYLE_NOTES = {
   ground: "black (neutral near-black), night (near-black tinted by the hue), deep (deep saturated dark: aubergine, teal, navy), dusk (dark two-hue gradient), plate (saturated colour, white words), bright (vivid light colour, black words), tint (pale tint of the hue), paper (warm off-white), white",
-  backdrop: "none, glow (soft pools of light; dark grounds), spot (one pool on the subject; dark), rays (light beams; dark), horizon (perspective grid to a glowing horizon; dark), grid (fine grid lines), columns (column lines), dots (dot grid), rules (two hairline rules), disc (a big tone-on-tone circle; colour grounds), arcs (big flat coloured arcs at the corners; light grounds)",
+  backdrop: "none, glow (soft pools of light; dark grounds), spot (one pool on the subject; dark), rays (light beams; dark), horizon (perspective grid to a glowing horizon; dark), grid (fine grid lines), columns (column lines), dots (dot grid), rules (two hairline rules), disc (a big tone-on-tone circle; colour grounds), arcs (big flat coloured arcs at the corners; light grounds), orb (a sphere of glowing points turning behind the subject; dark)",
   texture: "none, grain, vignette (dark)",
   shift: "none, scene (the ground's colour turns scene by scene; plate, bright, deep, tint)",
   card: "glass (dark glass, lit edge; dark panels), solid (plain panel), offset (hard offset shadow), outline (thick ink border), hairline (1px line, flat), glow (accent border that glows; dark), lifted (soft deep shadow; colour grounds)",
@@ -56,6 +59,8 @@ export const STYLE_NOTES = {
   rhythm: "calm (slow, long holds), steady, quick, rapid (fast, snappy)",
   tilt: "0, 6 or 10 — the product's UI set at that angle",
   ghost: "true: the scene's key word huge and faint behind its things",
+  frame: "true: a design tool's selection frame, handles and name tab round the scene's main thing",
+  confetti: "true: a burst of confetti at the hero moment",
 } as const;
 
 const DARK = new Set<Ground>(["black", "night", "deep", "dusk", "plate"]);
@@ -75,6 +80,7 @@ const BACKDROP_ON: Record<(typeof BACKDROPS)[number], Ground[]> = {
   rules: ["paper", "white", "bright", "tint", "black"],
   disc: ["plate", "bright", "deep", "dusk", "tint"],
   arcs: ["white", "tint", "paper", "bright"],
+  orb: [...LIT],
 };
 const CARDS_OF: Record<(typeof PANELS)[number], (typeof CARDS)[number][]> = {
   light: ["solid", "offset", "outline", "hairline", "lifted"],
@@ -95,6 +101,8 @@ const ok = {
 const ORDER = ["backdrop", "texture", "shift", "panel", "card", "icon", "accent", "ghost"] as const;
 const OPTIONS: { [K in keyof StyleT]: readonly StyleT[K][] } = {
   ground: GROUNDS, backdrop: BACKDROPS, texture: TEXTURES, shift: SHIFTS, card: CARDS, panel: PANELS, icon: ICON_LOOKS, accent: ACCENTS, size: TYPE_SIZES, cuts: CUTS, rhythm: RHYTHMS, tilt: TILTS, ghost: [false, true],
+  // (a frame or confetti now and then: one in four)
+  frame: [false, false, false, true], confetti: [false, false, false, true],
 };
 
 // What the team allows (admin → Settings, "Looks"): parts turned off, the
@@ -142,7 +150,7 @@ export function mendStyle(raw: unknown, R: Rng, rules?: StyleRules): StyleT {
 }
 
 // How far apart two styles are (the parts that differ; the ground counts twice).
-const PARTS = ["ground", "backdrop", "texture", "shift", "card", "panel", "icon", "accent", "size", "cuts", "rhythm", "ghost"] as const;
+const PARTS = ["ground", "backdrop", "texture", "shift", "card", "panel", "icon", "accent", "size", "cuts", "rhythm", "ghost", "frame", "confetti"] as const;
 export function styleDistance(a: StyleT, b: StyleT): number {
   let d = PARTS.filter((k) => a[k] !== b[k]).length + (a.ground !== b.ground ? 1 : 0);
   if (Math.abs(a.tilt - b.tilt) >= 5) d++;
@@ -157,6 +165,8 @@ export function mutate(s: StyleT, R: Rng, n: number, rules?: StyleRules): StyleT
   let out = { ...s };
   for (const k of R.shuffle(PARTS).slice(0, n)) {
     const xs = (OPTIONS[k] as readonly unknown[]).filter((x) => x !== out[k] && allowed(rules, k, x));
+    // (a frame or confetti is an accent: turned on now and then, not whenever it is changed)
+    if ((k === "frame" || k === "confetti") && !out[k] && !R.chance(0.3)) continue;
     if (xs.length) (out as Record<string, unknown>)[k] = R.pick(xs);
   }
   if (R.chance(0.3)) out.tilt = R.pick(TILTS.filter((t) => t !== out.tilt));
@@ -226,7 +236,7 @@ const CUT_SETS: Record<(typeof CUTS)[number], TransitionKind[]> = {
 };
 const PACE: Record<(typeof RHYTHMS)[number], [number, number]> = { calm: [0.82, 0.92], steady: [0.95, 1.06], quick: [1.1, 1.2], rapid: [1.24, 1.35] };
 const MOTION: Record<(typeof RHYTHMS)[number], Motion[]> = { calm: ["soft", "glide"], steady: ["glide", "soft", "springy"], quick: ["snappy", "springy"], rapid: ["snappy"] };
-const CAMERA: Record<(typeof RHYTHMS)[number], CameraKind[]> = { calm: ["drift", "push", "float"], steady: ["drift", "push", "rise", "orbit", "float"], quick: ["push", "still", "rise"], rapid: ["still", "push"] };
+const CAMERA: Record<(typeof RHYTHMS)[number], CameraKind[]> = { calm: ["drift", "push", "float", "macro"], steady: ["drift", "push", "rise", "orbit", "float", "macro"], quick: ["push", "still", "rise"], rapid: ["still", "push"] };
 const SMALL = new Set(["icon", "badge", "chips", "shape"]);
 const UP: Record<string, "s" | "m" | "l" | "xl"> = { s: "m", m: "l", l: "xl", xl: "xl" };
 
@@ -268,20 +278,23 @@ export function inStyle(script: ScriptT, style: StyleT, seed: number, recipe?: R
     const camera = s.camera && !CAMERA[style.rhythm].includes(s.camera) ? null : s.camera;
     const items = style.tilt ? s.items.map((it, j) => (it.kind === "device" || it.kind === "card" || it.kind === "screenshot" ? { ...it, tilt: it.tilt || ((i + j) % 2 ? style.tilt : -style.tilt) } : it)) : s.items;
     const text = s.text && style.size !== "normal" ? { ...s.text, size: style.size === "giant" ? ("xl" as const) : UP[s.text.size] } : s.text;
-    // giant type: a scene of only small things is the words alone
-    if (style.size === "giant" && text && i !== last && items.length && items.every((it) => SMALL.has(it.kind))) return { ...s, dark, enter, camera, text, items: [], layout: "type" as const, arrange: null };
-    return { ...s, dark, enter, camera, items, text };
+    // (hard cuts and rapid rhythms: the logo comes in glitching — ref 25)
+    const glitchy = style.cuts === "hard" || style.rhythm === "rapid";
+    const items2 = glitchy ? items.map((it) => (it.kind === "logo" && !it.enter && R.chance(0.6) ? { ...it, enter: "glitch" as const } : it)) : items;
+    // giant type: a scene of only small things is the words alone (one word at a time, now and then)
+    if (style.size === "giant" && text && i !== last && items2.length && items2.every((it) => SMALL.has(it.kind))) return { ...s, dark, enter, camera, text: R.chance(0.5) ? { ...text, reveal: "beat" as const } : text, items: [], layout: "type" as const, arrange: null };
+    return { ...s, dark, enter, camera, items: items2, text };
   });
   return { art, scenes };
 }
 
 // A short line naming a style (the studio, the logs, RECENT).
-export const styleLine = (s: StyleT) => `${s.ground} ground${s.backdrop !== "none" ? ` + ${s.backdrop}` : ""}${s.shift === "scene" ? " (turning)" : ""}, ${s.card} ${s.panel} cards, ${s.icon} icons, ${s.accent} accent, ${s.size} type, ${s.cuts} cuts, ${s.rhythm}${s.tilt ? `, UI at ${s.tilt}°` : ""}${s.ghost ? ", ghost word" : ""}`;
+export const styleLine = (s: StyleT) => `${s.ground} ground${s.backdrop !== "none" ? ` + ${s.backdrop}` : ""}${s.shift === "scene" ? " (turning)" : ""}, ${s.card} ${s.panel} cards, ${s.icon} icons, ${s.accent} accent, ${s.size} type, ${s.cuts} cuts, ${s.rhythm}${s.tilt ? `, UI at ${s.tilt}°` : ""}${s.ghost ? ", ghost word" : ""}${s.frame ? ", design frame" : ""}${s.confetti ? ", confetti" : ""}`;
 
 // ── the team's switches (admin → Settings, "Looks") ──────────────────────
 // One switch for every part's every option, one for every reference, and
 // four for how a style is chosen. Read by createProject's build (actions.ts).
-const PART_LABEL: Record<string, string> = { ground: "Ground", backdrop: "Background", texture: "Texture", shift: "Colour turning", card: "Cards", panel: "UI colour", icon: "Icons", accent: "Accent", size: "Type size", cuts: "Cuts", rhythm: "Rhythm", tilt: "UI at an angle", ghost: "Ghost word" };
+const PART_LABEL: Record<string, string> = { ground: "Ground", backdrop: "Background", texture: "Texture", shift: "Colour turning", card: "Cards", panel: "UI colour", icon: "Icons", accent: "Accent", size: "Type size", cuts: "Cuts", rhythm: "Rhythm", tilt: "UI at an angle", ghost: "Ghost word", frame: "Design frame", confetti: "Confetti" };
 const PART_VALUES: [keyof StyleT, string[]][] = [
   ["ground", [...GROUNDS]],
   ["backdrop", BACKDROPS.filter((b) => b !== "none")],
@@ -296,6 +309,8 @@ const PART_VALUES: [keyof StyleT, string[]][] = [
   ["rhythm", [...RHYTHMS]],
   ["tilt", ["on"]],
   ["ghost", ["true"]],
+  ["frame", ["true"]],
+  ["confetti", ["true"]],
 ];
 const noteOf = (k: keyof StyleT, v: string) => {
   const all = (STYLE_NOTES as Record<string, string>)[k] ?? "";
@@ -311,7 +326,7 @@ export const STYLE_SWITCHES: { how: StyleSwitch[]; parts: StyleSwitch[]; refs: S
     { key: "looks_no_repeat", label: "Looks: never like the last ones", help: "A new video's style is far from this customer's last three videos (another ground, most parts different). Off: it may repeat." },
   ],
   parts: PART_VALUES.flatMap(([k, vs]) =>
-    vs.map((v) => ({ key: `look_${k}_${v}`, label: `${PART_LABEL[k]}: ${k === "tilt" || k === "ghost" || k === "shift" ? "on" : v}`, help: k === "tilt" ? "The product's UI set at an angle (6° or 10°). Off: always flat." : k === "ghost" ? "The scene's key word huge and faint behind its things. Off: never." : k === "shift" ? "The ground's colour turns scene by scene. Off: one colour all video." : noteOf(k, v) ? `${noteOf(k, v)}. Off: never used.` : "Off: never used." })),
+    vs.map((v) => ({ key: `look_${k}_${v}`, label: `${PART_LABEL[k]}: ${k === "tilt" || k === "ghost" || k === "shift" || k === "frame" || k === "confetti" ? "on" : v}`, help: k === "tilt" ? "The product's UI set at an angle (6° or 10°). Off: always flat." : k === "ghost" ? "The scene's key word huge and faint behind its things. Off: never." : k === "frame" ? "A design tool's selection frame, handles and name tab round the scene's main thing (ref 17). Off: never." : k === "confetti" ? "A burst of confetti at the hero moment (refs 01, 20). Off: never." : k === "shift" ? "The ground's colour turns scene by scene. Off: one colour all video." : noteOf(k, v) ? `${noteOf(k, v)}. Off: never used.` : "Off: never used." })),
   ),
   refs: [],
 };

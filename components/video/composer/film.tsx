@@ -551,12 +551,14 @@ function SceneBody(props: SceneProps) {
   let body = (
     <AbsoluteFill style={inStyle}>
       <AbsoluteFill style={J ? undefined : { perspective: 1800, perspectiveOrigin: "50% 45%" }}>
-        <AbsoluteFill style={{ transform: cam, transformStyle: J ? undefined : "preserve-3d" }}>
+        <AbsoluteFill style={{ transform: cam, transformStyle: J ? undefined : "preserve-3d", transformOrigin: !J && sc.camera === "macro" ? `${Math.round(o.x)}px ${Math.round(o.y)}px` : undefined }}>
           <CtxC.Provider value={c}>
             {!J && ghostOf(!!pal.style?.ghost, sc, texts[i]) && <Ghost c={c} word={ghostOf(!!pal.style?.ghost, sc, texts[i])!} p={p} dir={i % 2 ? -1 : 1} />}
             {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} si={i} />)}
             {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over" || sc.layout === "caption"} hide={J?.hiddenWord} out={J?.dim} si={i} />}
             {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} si={i} />)}
+            {!J && pal.style?.frame && mainOf(sc) && <DesignFrame c={c} it={mainOf(sc)!} />}
+            {!J && pal.style?.confetti && plan.hero === i && <Confetti c={c} at={sc.from + 10} o={o} />}
           </CtxC.Provider>
         </AbsoluteFill>
       </AbsoluteFill>
@@ -584,6 +586,53 @@ function SceneBody(props: SceneProps) {
         {moving.filter((it) => !travels(it)).map((it, j) => <Thing key={`m${j}`} c={c} it={it} idx={j + 20} si={i} travel={{ from: it.from!, start, dur: 22 }} />)}
       </CtxC.Provider>
     </AbsoluteFill>
+  );
+}
+
+// The scene's main thing (its biggest, not an accent).
+const mainOf = (sc: PlacedScene) => sc.items.filter((it) => !isAccent(it)).sort((a, b) => b.box.w * b.box.h - a.box.w * a.box.h)[0] ?? null;
+
+// A design tool's selection round the main thing (ref 17): a thin frame,
+// four handles and its name on a tab, drawn once it has come in.
+function DesignFrame({ c, it }: { c: Ctx; it: PlacedItem }) {
+  const k = enterK(c.m, c.f, it.at + 8, 14);
+  if (k <= 0) return null;
+  const pad = 14;
+  const { x, y, w, h } = it.box;
+  const L = x - w / 2 - pad, T = y - h / 2 - pad, Wd = w + pad * 2, Ht = h + pad * 2;
+  const col = c.pal.accent;
+  const handle = (hx: number, hy: number, key: string) => <div key={key} style={{ position: "absolute", left: hx - 7, top: hy - 7, width: 14, height: 14, background: c.pal.dark ? "#0b0b0d" : "#ffffff", border: `2.5px solid ${col}`, transform: `scale(${k})` }} />;
+  const name = (it.title ?? it.variant ?? it.kind).slice(0, 22);
+  return (
+    <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, pointerEvents: "none", zIndex: 40, opacity: clamp01(k * 1.5) }}>
+      <div style={{ position: "absolute", left: L, top: T, width: Wd, height: Ht, border: `2px solid ${col}`, clipPath: `inset(0 ${(1 - k) * 100}% 0 0)` }} />
+      {handle(L, T, "a")}
+      {handle(L + Wd, T, "b")}
+      {handle(L, T + Ht, "c")}
+      {handle(L + Wd, T + Ht, "d")}
+      <div style={{ position: "absolute", left: L, top: T - 38, height: 30, padding: "0 12px", display: "flex", alignItems: "center", background: col, color: c.pal.dark ? "#0b0b0d" : "#ffffff", fontFamily: c.text, fontSize: 17, fontWeight: 600, borderRadius: 6, whiteSpace: "nowrap" }}>
+        {name} · {Math.round(w)}×{Math.round(h)}
+      </div>
+    </div>
+  );
+}
+
+// A burst of confetti at the hero moment (refs 01, 20): seeded pieces flung
+// out from the main thing, falling and turning; gone in under two seconds.
+function Confetti({ c, at, o }: { c: Ctx; at: number; o: { x: number; y: number } }) {
+  const t = c.f - at;
+  if (t < 0 || t > 54) return null;
+  const cols = [c.pal.accent, c.pal.accent2, c.pal.fill, c.pal.fill2, c.pal.ink];
+  return (
+    <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, pointerEvents: "none", zIndex: 45 }}>
+      {Array.from({ length: 46 }, (_, i) => {
+        const a = (i * 137.5 * Math.PI) / 180;
+        const v = 14 + ((i * 53) % 17);
+        const x = o.x + Math.cos(a) * v * t * 0.9;
+        const y = o.y + Math.sin(a) * v * t * 0.6 - v * t * 0.35 + 0.42 * t * t;
+        return <div key={i} style={{ position: "absolute", left: x, top: y, width: 12 + (i % 3) * 4, height: 7 + (i % 2) * 5, borderRadius: i % 4 === 0 ? 99 : 2, background: cols[i % cols.length], transform: `rotate(${(i * 47 + t * (8 + (i % 5) * 3)) % 360}deg)`, opacity: clamp01((54 - t) / 14) }} />;
+      })}
+    </div>
   );
 }
 

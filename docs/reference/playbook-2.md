@@ -51,22 +51,22 @@ reads the same — one family.
 
 | technique | refs | what it would be in the Composer |
 |---|---|---|
-| full-bleed colour plates that change per section | 16, 29 | field "plate" + per-scene plate colour from the palette |
+| full-bleed colour plates that change per section | 16, 29 | **built**: grounds plate/bright + "shift" |
 | word in a pill that swaps (Create [custom] rules) | 13 | text effect "swap pill" |
 | giant gradient-filled word filling the frame | 13, 21 | text size "giant" + gradient fill |
-| ghost word huge behind the scene | 21 | background word layer at 6–10 % |
-| scattered letters assembling into a word | 15 | text reveal "assemble" |
-| one word per beat, black frame | 26, 24 | layout "beat words": one word per cut on the voice |
+| ghost word huge behind the scene | 21 | **built**: style part "ghost" |
+| scattered letters assembling into a word | 15 | **built**: reveal "assemble" |
+| one word per beat, black frame | 26, 24 | **built**: reveal "beat" (giant type, words-only scenes) |
 | UI in 3D perspective, slow drift | 14, 21 | device / card "perspective" with tilt-x + camera drift |
-| macro close-up into one control | 22, 14 | camera "macro" into a row/button of a card |
+| macro close-up into one control | 22, 14 | **built**: camera "macro" (into the main thing) |
 | orbiting 3D laptop | 21 | device "laptop-3d" orbit (pre-rendered angles) |
-| particle sphere / energy orb | 15, 23 | field "orb" (canvas particles) |
+| particle sphere / energy orb | 15, 23 | **built**: backdrop "orb" |
 | app icons on a ring | 23 | flow "ring" exists — needs real app logos |
-| frame boxes and selection handles | 17 | decoration "design frame" around a thing |
+| frame boxes and selection handles | 17 | **built**: style part "frame" |
 | photos in rounded / circular masks | 18, 19 | real photos (we have none: needs a photo source) |
 | step list in a sidebar following the story | 20 | layout "sidebar steps" |
-| confetti success | 20 | burst at the hero moment |
-| glitch reveal of the logo | 25 | logo enter "glitch" |
+| confetti success | 20 | **built**: style part "confetti" (hero moment) |
+| glitch reveal of the logo | 25 | **built**: enter "glitch" (logos in hard/rapid styles) |
 | spoken prompt as a caption under the phone | 25, 29 | caption plate "quote" under the device |
 | live footage | 24 | needs stock video — out of scope for now |
 
@@ -101,3 +101,7 @@ choosing, mixing, no repeats, every option of every part, every reference.
 **Adding references:** for each new video, add its contact sheet and numbers
 here and one line to `recipes.ts`. Parts we cannot draw yet are listed in
 "Techniques seen here that we cannot do yet" until they are built.
+
+Also built: wide-spaced words closing up (reveal "track", refs 09 and 21).
+Each technique has an admin switch (Settings → "Techniques", and the style
+parts under "Looks: parts").

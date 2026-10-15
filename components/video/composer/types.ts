@@ -25,7 +25,8 @@ export const SURFACES = ["glass", "solid", "outline", "soft", "tinted", "ink"] a
 export const KEYS = ["color", "pill", "underline", "gradient", "box", "outline", "italic", "glow"] as const;
 export const CASES = ["sentence", "upper", "lower"] as const;
 export const MOTIONS = ["soft", "snappy", "springy", "glide"] as const;
-export const CAMERAS = ["still", "drift", "push", "pull", "tilt", "float", "orbit", "rise"] as const;
+// (macro: a slow push deep into the scene's main thing — ref 22)
+export const CAMERAS = ["still", "drift", "push", "pull", "tilt", "float", "orbit", "rise", "macro"] as const;
 export const ICON_STYLES = ["tile", "round", "bare", "duotone", "outline", "glass"] as const;
 // The look: the visual family of the whole video — it sets the background,
 // the cards, the type, the colour and the rhythm together (art.ts, field.tsx,
@@ -43,9 +44,12 @@ export type Look = (typeof LOOKS)[number];
 // things around the words, the words between two things — see layout.ts)
 export const LAYOUTS = ["center", "split-left", "split-right", "top", "bottom", "type", "visual", "corner", "over", "inline", "label", "caption", "around", "between"] as const;
 export const ARRANGES = ["single", "row", "column", "grid", "cascade", "orbit", "scatter", "diagonal"] as const;
-export const REVEALS = ["word", "rise", "mask", "type", "scale", "blur", "slide", "line"] as const;
+// (assemble: scattered letters come together — ref 15; track: a wide-spaced word closes up — refs 09, 21;
+// beat: one word at a time, each replacing the last — refs 24, 26)
+export const REVEALS = ["word", "rise", "mask", "type", "scale", "blur", "slide", "line", "assemble", "track", "beat"] as const;
 export const TRANSITIONS = ["blur", "fade", "push-left", "push-right", "push-up", "push-down", "zoom-in", "zoom-out", "whip", "iris", "wipe", "flip", "morph", "drop", "clock"] as const;
-export const ENTERS = ["rise", "drop", "left", "right", "scale", "pop", "blur", "flip", "unfold", "draw", "swing"] as const;
+// (glitch: comes in in jumps, split into its colours — ref 25)
+export const ENTERS = ["rise", "drop", "left", "right", "scale", "pop", "blur", "flip", "unfold", "draw", "swing", "glitch"] as const;
 export const ITEM_KINDS = ["icon", "chips", "stat", "chart", "card", "device", "logo", "button", "compare", "flow", "avatars", "badge", "cursor", "shape", "screenshot", "steps", "quote"] as const;
 // What a card shows (the product's UI, drawn).
 export const CARD_VARIANTS = ["list", "kpi", "form", "chat", "notify", "invoice", "calendar", "table", "kanban", "toggles", "timeline", "checklist", "search", "profile", "doc", "pay"] as const;
@@ -193,6 +197,8 @@ export type ComposerPlan = {
   recap?: boolean | null;
   // sound effects on what happens (off only when the team turns them off)
   sfx?: boolean;
+  // the scene the hero moment is in (staging.ts): a style's confetti bursts there
+  hero?: number | null;
 };
 // (`qa`: the frame check's probe on — probe.tsx; never in a video a customer sees)
 export type ComposerProps = { plan: ComposerPlan; audioUrl?: string | null; webAudio?: boolean; bare?: boolean; qa?: boolean };

@@ -126,7 +126,8 @@ export const RECAP = 140;
 export const withRecap = (plan: ComposerPlan): ComposerPlan => (plan.recap ? plan : { ...plan, recap: true, duration: plan.duration + RECAP });
 
 // The plan as staged (and its recap's seconds added).
-export function staged(plan: ComposerPlan, s: Staging | null | undefined): ComposerPlan {
+export function staged(given: ComposerPlan, s: Staging | null | undefined): ComposerPlan {
+  const plan = s?.hero != null ? { ...given, hero: s.hero } : given;
   if (!s || s.family === "cuts" || STILL_BACKGROUND) return plan;
   // (a video staged in whip pans before they were left out: the line instead)
   if (s.language === "whip") s = { ...s, language: "line", family: "path", link: "line", links: null, journey: s.journey ?? "right" };
