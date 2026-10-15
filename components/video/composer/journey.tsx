@@ -269,9 +269,9 @@ export function JourneyField({ f, cam, st, darks, pals, hue, grid }: { f: number
   const ox = (-cam.x * cam.z * depth) % gap, oy = (-cam.y * cam.z * depth) % gap;
   const glows: ReactNode[] = [];
   // a look keeps its own field on the canvas: flat looks have no pools of light; cinematic and neon a dim one
-  const look = pa.look;
-  const lit = !look || look === "cinematic" || look === "neon";
-  const dim = look === "cinematic" ? 0.45 : 1;
+  const look = pa.style;
+  const lit = !look || ["glow", "spot", "rays", "horizon"].includes(look.backdrop);
+  const dim = look?.backdrop === "spot" ? 0.45 : 1;
   if (lit) st.forEach((p, i) => {
     const s = toScreen({ x: p.x + noise2D(`gx${i}`, f / 140, 0) * 220, y: p.y + noise2D(`gy${i}`, 0, f / 160) * 160 }, cam, 0.8);
     if (s.x < -1600 || s.x > W + 1600 || s.y < -1200 || s.y > H + 1200) return;
@@ -287,7 +287,7 @@ export function JourneyField({ f, cam, st, darks, pals, hue, grid }: { f: number
       {glows}
       {/* (the field turns with the camera: drawn twice the frame's size, turned about its middle) */}
       <div style={{ position: "absolute", left: -W / 2, top: -H / 2, width: W * 2, height: H * 2, transform: cam.rot ? `rotate(${cam.rot.toFixed(3)}deg)` : undefined }}>
-        <Tiles w={W * 2} h={H * 2} kind={grid || look === "swiss" || look === "neon" ? "grid" : "dots"} gap={gap} size={grid ? 0.8 : 1.8 * cam.z} color={look === "swiss" || look === "editorial" ? "rgba(0,0,0,0.08)" : look === "plates" || look === "kinetic" ? (d ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)") : hsl(hue, 40, d ? 75 : 40, d ? 0.22 : 0.18)} dx={ox} dy={oy} />
+        <Tiles w={W * 2} h={H * 2} kind={grid || look?.backdrop === "grid" || look?.backdrop === "horizon" || look?.backdrop === "columns" ? "grid" : "dots"} gap={gap} size={grid ? 0.8 : 1.8 * cam.z} color={look ? (d ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.08)") : hsl(hue, 40, d ? 75 : 40, d ? 0.22 : 0.18)} dx={ox} dy={oy} />
       </div>
     </AbsoluteFill>
   );

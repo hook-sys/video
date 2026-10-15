@@ -9,15 +9,25 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
   const { saved } = await searchParams;
   await requireAdmin("settings");
   const values = await getSettings();
+  // (general settings first, then each group under its heading, in order)
+  const groups: [string, typeof SETTINGS][] = [];
+  for (const s of SETTINGS) {
+    const g = s.group ?? "";
+    const at = groups.find(([k]) => k === g);
+    if (at) at[1].push(s);
+    else groups.push([g, [s]]);
+  }
 
   return (
     <>
       <PageHeader title="Settings" sub="Controls for the whole app. Changes apply immediately and are written to the audit log." />
       {typeof saved === "string" && <Notice>{saved === "0" ? "Nothing changed." : `Saved ${saved} setting${saved === "1" ? "" : "s"}.`}</Notice>}
       <form action={saveSettings} className="flex flex-col gap-4">
-        <Card>
-          <div className="divide-y divide-white/[0.05]">
-            {SETTINGS.map((s) => (
+        {groups.map(([group, list]) => (
+          <Card key={group || "general"}>
+            {group && <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-400">{group}</p>}
+            <div className="divide-y divide-white/[0.05]">
+              {list.map((s) => (
               <div key={s.key} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 md:flex-row md:items-center md:justify-between">
                 <div className="max-w-xl">
                   <p className="font-medium text-white">{s.label}</p>
@@ -35,8 +45,9 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
                 </div>
               </div>
             ))}
-          </div>
-        </Card>
+            </div>
+          </Card>
+        ))}
         <div className="flex justify-end">
           <button className={btnPrimary}>Save settings</button>
         </div>

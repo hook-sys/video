@@ -494,11 +494,11 @@ function SceneLayer(props: SceneProps) {
 
 // One scene, reading the frame itself (so the trail can sample it a moment
 // earlier): its way in and out, camera, words and things.
-// The ghost word (cinematic, kinetic — refs 21, 26): the scene's key word
+// The ghost word (a style's `ghost` — refs 12, 21): the scene's key word
 // huge and faint behind its things, drifting slowly; never with the words
 // alone (it would only repeat them).
-function ghostOf(look: string | null | undefined, sc: PlacedScene, tb: TextBlock | null | undefined): string | null {
-  if ((look !== "cinematic" && look !== "kinetic") || !tb || !sc.items.some((it) => !isAccent(it))) return null;
+function ghostOf(on: boolean, sc: PlacedScene, tb: TextBlock | null | undefined): string | null {
+  if (!on || !tb || !sc.items.some((it) => !isAccent(it))) return null;
   const word = (tb.words.find((w) => w.key) ?? [...tb.words].sort((x, y) => y.t.length - x.t.length)[0])?.t.replace(/[^\p{L}\p{N}%$৳€£-]/gu, "");
   return word && word.length >= 3 ? word : null;
 }
@@ -506,7 +506,7 @@ function Ghost({ c, word, p, dir }: { c: Ctx; word: string; p: number; dir: numb
   const size = Math.min(H * 0.42, (W * 0.95) / Math.max(3, word.length * 0.62));
   return (
     <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", overflow: "hidden", pointerEvents: "none" }}>
-      <div style={{ fontFamily: c.display, fontSize: size, fontWeight: c.art.weight, letterSpacing: "-0.02em", lineHeight: 1, whiteSpace: "nowrap", textTransform: "uppercase", color: c.pal.ink, opacity: c.pal.look === "kinetic" ? 0.07 : 0.055, transform: `translateX(${dir * (0.5 - p) * W * 0.08}px)` }}>{word}</div>
+      <div style={{ fontFamily: c.display, fontSize: size, fontWeight: c.art.weight, letterSpacing: "-0.02em", lineHeight: 1, whiteSpace: "nowrap", textTransform: "uppercase", color: c.pal.ink, opacity: c.pal.dark ? 0.06 : 0.05, transform: `translateX(${dir * (0.5 - p) * W * 0.08}px)` }}>{word}</div>
     </AbsoluteFill>
   );
 }
@@ -553,7 +553,7 @@ function SceneBody(props: SceneProps) {
       <AbsoluteFill style={J ? undefined : { perspective: 1800, perspectiveOrigin: "50% 45%" }}>
         <AbsoluteFill style={{ transform: cam, transformStyle: J ? undefined : "preserve-3d" }}>
           <CtxC.Provider value={c}>
-            {!J && ghostOf(art.look, sc, texts[i]) && <Ghost c={c} word={ghostOf(art.look, sc, texts[i])!} p={p} dir={i % 2 ? -1 : 1} />}
+            {!J && ghostOf(!!pal.style?.ghost, sc, texts[i]) && <Ghost c={c} word={ghostOf(!!pal.style?.ghost, sc, texts[i])!} p={p} dir={i % 2 ? -1 : 1} />}
             {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} si={i} />)}
             {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over" || sc.layout === "caption"} hide={J?.hiddenWord} out={J?.dim} si={i} />}
             {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} si={i} />)}

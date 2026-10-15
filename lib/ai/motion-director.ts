@@ -6,11 +6,12 @@ import type { BriefUsage } from "@/lib/ai/product-brief";
 import { countUsage, textAi, textClient } from "@/lib/ai/models";
 import { HOUSE_RULES, extraRules } from "@/lib/ai/house-rules";
 import { DISPLAY_FACES, TEXT_FACES } from "@/components/video/composer/art";
-import { LOOK_NOTES, LOOK_RULES } from "@/components/video/composer/looks";
+import { STYLE_NOTES, type StyleRules, styleLine, styleOf } from "@/components/video/composer/style";
+import { RECIPES } from "@/components/video/composer/recipes";
 import { IN_USE, LANGUAGES, LANGUAGE_NOTES, type Language } from "@/components/video/composer/staging";
 import { SHOWN } from "@/components/video/composer/highlight";
 import { MIN_SCENE } from "@/components/video/composer/layout";
-import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, FIELDS, FLOW_VARIANTS, GUIDES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, LOOKS, MOTIONS, OVERLAYS, SHAPE_VARIANTS, SURFACES, type ScriptT, type Word } from "@/components/video/composer/types";
+import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, FIELDS, FLOW_VARIANTS, GUIDES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, SHAPE_VARIANTS, SURFACES, type ScriptT, type Word } from "@/components/video/composer/types";
 import { type Ideas, type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { BEATS, BRAND_CATEGORIES, type BrandProfile, type CreativePlan, LANGUAGE_WEIGHTS, MOODS, type Mood, ruleCreative, ruleProfile, sentencesOf } from "@/lib/studio";
 import { FPS } from "@/components/video/composer/types";
@@ -52,13 +53,17 @@ ${IN_USE.map((l) => `  ${l}: ${LANGUAGE_NOTES[l]}`).join("\n")}
 - recap: true to end by pulling back over the whole way the video came (canvas languages only).
 - scheme: dark|light — ONE background for the whole video, never changing (the only place dark or light is decided; never mixed).`;
 
-const LOOK_LINES = LOOKS.map((l) => `- ${l}: ${LOOK_NOTES[l]} (faces: ${LOOK_RULES[l].faces.join(", ")})`).join("\n");
+const STYLE_LINES = Object.entries(STYLE_NOTES).map(([k, v]) => `- ${k}: ${v}`).join("\n");
+// (the references as short lines: a starting point, never a copy)
+const REFERENCE_LINES = RECIPES.filter((r) => r.id.startsWith("ref-")).map((r) => `- ${r.from}: ${r.note}`).join("\n");
 
 const ART_PART = `4. ART — exactly 1 "art" in "arts", the one visual identity that suits THIS brand.
-First its LOOK — the visual family of the whole video; it decides the background, the cards, the type, the colour and the cuts together, so choose the one that fits THIS brand and story (and never the look of the customer's last video, in RECENT):
-${LOOK_LINES}
-The look sets dark or light: staging.scheme must match it (cinematic, plates, neon: dark; editorial, swiss: light; kinetic: either). Choose the display and text faces from the look's set.
-{ look ${LOOKS.join("|")}, name (2–3 words), hue 0–360 (close to the brand colour unless another serves the story better), harmony mono|analogous|complement|split|triad, field ${FIELDS.join("|")}, overlay none|grain|particles|sheen|vignette|lines, surface glass|solid|outline|soft|tinted|ink, radius 0–40, display (headline face) one of: ${DISPLAY_FACES.map((f) => f.slug).join(", ")}, text (UI face) one of: ${TEXT_FACES.map((f) => f.slug).join(", ")}, weight 500–850, case sentence|upper|lower, tracking -0.05..0.02, key color|pill|underline|gradient|box|outline|italic|glow, motion soft|snappy|springy|glide, pace 0.85–1.25, camera drift|push|pull|tilt|float|orbit|rise, icons tile|round|bare|duotone|outline|glass, energy 0.2–0.85 }.
+First its STYLE — the parts the whole video is drawn in, each chosen on its own (thousands of combinations: never a fixed look). Build it for THIS brand, THIS story and the customer's direction, and unlike RECENT (another ground and most parts different):
+${STYLE_LINES}
+A ground sets dark or light: staging.scheme must match it (black, night, deep, dusk, plate: dark; bright, tint, paper, white: light). Dark glass, glow cards and glow backdrops only on dark grounds; a soft-shadowed white card never on a pale ground.
+The reference promos we learn from (a style may start from one and change it; never copy one whole):
+${REFERENCE_LINES}
+{ style { ground, backdrop, texture, shift, card, panel, icon, accent, size, cuts, rhythm, tilt (0–10), ghost (true|false) }, name (2–3 words), hue 0–360 (close to the brand colour unless another serves the story better), harmony mono|analogous|complement|split|triad, field ${FIELDS.join("|")}, overlay none|grain|particles|sheen|vignette|lines, surface glass|solid|outline|soft|tinted|ink, radius 0–40, display (headline face) one of: ${DISPLAY_FACES.map((f) => f.slug).join(", ")}, text (UI face) one of: ${TEXT_FACES.map((f) => f.slug).join(", ")}, weight 500–850, case sentence|upper|lower, tracking -0.05..0.02, key color|pill|underline|gradient|box|outline|italic|glow, motion soft|snappy|springy|glide, pace 0.85–1.25, camera drift|push|pull|tilt|float|orbit|rise, icons tile|round|bare|duotone|outline|glass, energy 0.2–0.85 }.
 Taste: condensed faces (oswald, bebas-neue, anton, big-shoulders-display) only in upper case; serif faces with sentence case and italic/underline/color keys; wide faces (unbounded, krona-one, dela-gothic-one) with smaller sizes. AVOID the faces and fields listed under SEEN (this customer has seen them).`;
 
 const SCENES_PART = `5. SCENES — the narration is final; its words are given numbered (index:word). You decide every scene — nothing is a template.
@@ -122,7 +127,7 @@ const MENU = `THE MENU — everything our renderer can build; choose freely from
 - layouts: ${LAYOUTS.join(", ")}; arrangements of 2+ things: ${ARRANGES.join(", ")}
 - things: ${ITEM_KINDS.filter((k) => k !== "screenshot").join(", ")}
 - card / screen kinds: ${CARD_VARIANTS.join(", ")}; devices: ${DEVICE_VARIANTS.join(", ")}; charts: ${CHART_VARIANTS.join(", ")}; flows: ${FLOW_VARIANTS.join(", ")}; shapes: ${SHAPE_VARIANTS.join(", ")}
-- looks (the visual family of a video): ${LOOKS.join(", ")} — described under ART
+- style parts (each chosen on its own; thousands of combinations): ground, backdrop, texture, shift, card, panel, icon, accent, size, cuts, rhythm, tilt, ghost — described under ART
 - art: fields ${FIELDS.join(", ")}; overlays ${OVERLAYS.join(", ")}; surfaces ${SURFACES.join(", ")}; word highlights ${KEYS.join(", ")}; motion ${MOTIONS.join(", ")}; camera ${CAMERAS.filter((c) => c !== "still").join(", ")}; icon styles ${ICON_STYLES.join(", ")}; faces as listed under ART.
 Timed for you by the renderer (not yours to write): each scene's way in, the text's reveal, the easing, and the sound — a soft sound plays on every moment you place (an icon with its word, a card or a screen coming in, a scene change, the click on the button, the end). So place each moment on the right word.`;
 
@@ -130,7 +135,7 @@ export const CREATIVE_INSTRUCTIONS = `You are the Central Creative Director of M
 
 You have full creative freedom over the concept, the visual metaphor, the composition of every scene, the layouts, the type, the art direction, the camera language and the pacing — chosen from THE MENU below.
 - Originality: design THIS video for THIS brief. Never reach for a structure because it is safe: no default opening (a lone icon in the centre), no default ending (the words centred over a button), no default card, no default face or highlight.
-- RECENT (in the request) is what this customer has already seen. Make this video look and move unlike those — its look, its camera language, layouts, opening, ending, highlight, faces, surface and kinds of cards — unless THIS brief clearly needs the same choice. Different must also be better for this brief: never different only for its own sake.
+- RECENT (in the request) is what this customer has already seen. Make this video look and move unlike those — its style, its camera language, layouts, opening, ending, highlight, faces, surface and kinds of cards — unless THIS brief clearly needs the same choice. Different must also be better for this brief: never different only for its own sake.
 - Every scene gets the composition ITS words call for, and the video has a rhythm: vary the layout, the arrangement, the kind of thing and its size from scene to scene (a wide scene, a close one, the product's screen, words composed with their things).
 - Every movement has a purpose: it leads the eye, shows a change, or carries the story on. Nothing moves only to fill time.
 - The brand comes first: its colour, its mood, what the customer told us. Premium means clear, calm and specific — not one fixed style.
@@ -171,7 +176,14 @@ const directionOf = (input: Pick<MotionInput, "prompt" | "rules" | "never">) => 
 
 // ── What this customer has already seen (their last videos, any brand), for
 // the Creative Director: one line per video and what keeps coming back.
-export type PastLook = { look?: string | null; language: string | null; journey: string | null; scheme: string | null; camera: string | null; key: string | null; text: string | null; display: string | null; surface: string | null; motion: string | null; layouts: string[]; first: string; last: string; cards: string[] };
+// (what the team turned off in admin → Settings, "Looks": the Director never chooses it)
+function stylesLine(rules: StyleRules | null | undefined): string {
+  if (rules === null) return "STYLE: the team turned looks off — write any style; the video is drawn in the classic look.";
+  if (!rules?.off.length) return "";
+  return `STYLE PARTS TURNED OFF (never choose them): ${rules.off.map((x) => x.replace(":", " ")).join(", ")}`;
+}
+
+export type PastLook = { look?: string | null; style?: string | null; language: string | null; journey: string | null; scheme: string | null; camera: string | null; key: string | null; text: string | null; display: string | null; surface: string | null; motion: string | null; layouts: string[]; first: string; last: string; cards: string[] };
 
 const shapeOf = (s: ScriptT["scenes"][number] | undefined) => (s ? `${s.layout}: ${s.items.map((it) => (it.kind === "card" || it.kind === "device") && it.variant ? `${it.kind} ${it.variant}` : it.kind).join(" + ") || "words"}` : "");
 
@@ -182,6 +194,10 @@ export function pastLookOf(v: Pick<StoredComposition, "script" | "staging">): Pa
   const items = sc.flatMap((s) => s.items);
   return {
     look: a?.look ?? null,
+    style: (() => {
+      const st = styleOf(a as Parameters<typeof styleOf>[0]);
+      return st ? styleLine(st) : null;
+    })(),
     language: v.staging?.language ?? null,
     journey: v.staging?.journey ?? null,
     scheme: a?.scheme ?? null,
@@ -207,7 +223,7 @@ export function recentText(looks: PastLook[] | null | undefined): string {
   };
   const lines = looks.map((l, i) => {
     const lay = tally(l.layouts).map(([k, c]) => (c > 1 ? `${k}×${c}` : k)).join(", ");
-    return `${i + 1}. ${l.look ? `look ${l.look}; ` : ""}${l.language ?? "?"}${l.journey ? `/${l.journey}` : ""}, ${l.scheme ?? "?"}; camera ${l.camera}; highlight ${l.key}; faces ${l.display} / ${l.text}; surface ${l.surface}; motion ${l.motion}; layouts ${lay}; opens on ${l.first}; ends on ${l.last}; cards ${l.cards.join(", ") || "none"}`;
+    return `${i + 1}. ${l.style ? `style: ${l.style}; ` : l.look ? `look ${l.look}; ` : ""}${l.language ?? "?"}${l.journey ? `/${l.journey}` : ""}, ${l.scheme ?? "?"}; camera ${l.camera}; highlight ${l.key}; faces ${l.display} / ${l.text}; surface ${l.surface}; motion ${l.motion}; layouts ${lay}; opens on ${l.first}; ends on ${l.last}; cards ${l.cards.join(", ") || "none"}`;
   });
   // what came back in half of them or more
   const half = Math.max(2, Math.ceil(looks.length / 2));
@@ -269,7 +285,8 @@ const ItemM = z.object({
 const OptionM = z.object({ layout: z.enum(LAYOUTS), arrange: n(z.enum(ARRANGES)), items: z.array(ItemM) });
 const SceneM = z.object({ at: z.number(), text: n(z.object({ from: z.number(), to: z.number(), size: z.enum(["s", "m", "l", "xl"]), key: z.array(z.string()) })), kicker: n(z.string()), options: z.array(OptionM) });
 // (no scheme: the staging decides dark or light)
-const ArtM = z.object({ look: z.string(), name: z.string(), hue: z.number(), harmony: z.string(), field: z.string(), overlay: z.string(), surface: z.string(), radius: z.number(), display: z.string(), text: z.string(), weight: z.number(), case: z.string(), tracking: z.number(), key: z.string(), motion: z.string(), pace: z.number(), camera: z.string(), icons: z.string(), energy: z.number() });
+const StyleM = z.object({ ground: z.string(), backdrop: z.string(), texture: z.string(), shift: z.string(), card: z.string(), panel: z.string(), icon: z.string(), accent: z.string(), size: z.string(), cuts: z.string(), rhythm: z.string(), tilt: z.number(), ghost: z.boolean() });
+const ArtM = z.object({ style: StyleM, name: z.string(), hue: z.number(), harmony: z.string(), field: z.string(), overlay: z.string(), surface: z.string(), radius: z.number(), display: z.string(), text: z.string(), weight: z.number(), case: z.string(), tracking: z.number(), key: z.string(), motion: z.string(), pace: z.number(), camera: z.string(), icons: z.string(), energy: z.number() });
 export const MotionModel = z.object({ brand: BrandM, concept: ConceptM, staging: StagingM, arts: z.array(ArtM), scenes: z.array(SceneM) });
 type Answer = z.infer<typeof MotionModel>;
 
@@ -302,6 +319,8 @@ export type MotionInput = {
   recent?: PastLook[] | null;
   // false: the video rules are off (admin → Settings, "Video rules")
   rules?: boolean;
+  // the looks the team allows (admin → Settings, "Looks"; null: looks off)
+  styles?: StyleRules | null;
   // the customer's own direction (the form's "Video direction") and the names
   // of the screenshots they uploaded, in order (a screenshot item's value is its number)
   direction?: string | null;
@@ -529,7 +548,11 @@ export function mendAnswer(raw: unknown): unknown {
       recap: st.recap === true, scheme: st.scheme === "light" ? "light" : "dark",
     },
     arts: list(o.arts).map((x) => obj(x)).map((a) => ({
-      look: str(a.look) ?? "", name: str(a.name) ?? "", hue: num(a.hue, 220), harmony: str(a.harmony) ?? "mono", field: str(a.field) ?? "aurora", overlay: str(a.overlay) ?? "none", surface: str(a.surface) ?? "glass", radius: num(a.radius, 16),
+      style: (() => {
+        const t = obj(a.style);
+        return { ground: str(t.ground) ?? "", backdrop: str(t.backdrop) ?? "", texture: str(t.texture) ?? "", shift: str(t.shift) ?? "", card: str(t.card) ?? "", panel: str(t.panel) ?? "", icon: str(t.icon) ?? "", accent: str(t.accent) ?? "", size: str(t.size) ?? "", cuts: str(t.cuts) ?? "", rhythm: str(t.rhythm) ?? "", tilt: num(t.tilt, 0), ghost: t.ghost === true };
+      })(),
+      name: str(a.name) ?? "", hue: num(a.hue, 220), harmony: str(a.harmony) ?? "mono", field: str(a.field) ?? "aurora", overlay: str(a.overlay) ?? "none", surface: str(a.surface) ?? "glass", radius: num(a.radius, 16),
       display: str(a.display) ?? "", text: str(a.text) ?? "", weight: num(a.weight, 700), case: str(a.case) ?? "sentence", tracking: num(a.tracking), key: str(a.key) ?? "color", motion: str(a.motion) ?? "soft", pace: num(a.pace, 1),
       camera: str(a.camera) ?? "drift", icons: str(a.icons) ?? "tile", energy: num(a.energy, 0.5),
     })),
@@ -586,6 +609,7 @@ function requestOf(input: MotionInput): string {
     `EARLIER (this brand's videos): ${input.earlier?.length ? input.earlier.map((e) => `"${e.idea}" (${e.language ?? "?"})`).join("; ") : "(none)"}`,
     `SEEN faces: ${input.seen?.display.join(", ") || "(none)"}; SEEN fields: ${input.seen?.field.join(", ") || "(none)"}`,
     input.prompt === "creative" ? recentText(input.recent) : "",
+    stylesLine(input.styles),
     `Length: about ${Math.round(seconds)} s, ${input.words.length} words`,
     `NARRATION (index:word), one sentence per line:\n${sentences.join("\n")}`,
   ].filter(Boolean).join("\n");

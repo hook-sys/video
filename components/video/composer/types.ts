@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Style } from "./style";
 
 // A still background: the field of light doesn't drift or glide between
 // scenes, and the camera doesn't travel (every video staged as cuts). Off:
@@ -121,8 +122,11 @@ export const Art = z.object({
   camera: z.enum(CAMERAS),
   icons: z.enum(ICON_STYLES),
   energy: z.number().min(0).max(1),
-  // (older videos have none: they keep the light glass look they were made in)
+  // (the first build's six looks; newer videos have a style instead)
   look: n(z.enum(LOOKS)),
+  // its style (style.ts): the parts it is drawn in; older videos have none
+  // and keep the look they were made in
+  style: n(Style),
 });
 export const Script = z.object({ art: Art, scenes: z.array(Scene).min(1).max(24) });
 export type RowT = z.infer<typeof Row>;

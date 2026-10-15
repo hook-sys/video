@@ -33,9 +33,19 @@ export function Glyph({ c, name, size, tone = "accent", k = 1 }: { c: Ctx; name:
     </div>
   );
   const onPanel = tone === "panel";
-  // the flat looks draw an icon as a flat tile (no gradient, no glow); neon as a lit outline
-  if (pal.look === "plates" || pal.look === "kinetic" || pal.look === "swiss" || pal.look === "editorial") return box(fill, pal.onFill, pal.look === "swiss" || pal.look === "kinetic" ? { borderRadius: 4 } : undefined);
-  if (pal.look === "neon") return box(pal.panel, pal.accent, { border: `2px solid ${pal.accent}`, boxShadow: `0 0 ${size * 0.35}px ${pal.shadow}` });
+  // a style draws its icons its own way (style.ts ICON_LOOKS)
+  const st = pal.style;
+  if (st) {
+    const sq = c.art.radius <= 8 ? { borderRadius: Math.max(2, c.art.radius * 0.5) } : undefined;
+    switch (st.icon) {
+      case "tile": return box(fill, pal.onFill, sq);
+      case "ink": return box(onPanel ? pal.panelInk : pal.ink, onPanel ? pal.panel : pal.bg, sq);
+      case "outline": return box("transparent", onPanel ? pal.panelInk : pal.accent, { border: `2px solid ${onPanel ? pal.panelLine : pal.accent}`, ...sq });
+      case "glow": return box(pal.panel, pal.accent, { border: `2px solid ${pal.accent}`, boxShadow: `0 0 ${size * 0.35}px ${pal.glow}66`, ...sq });
+      case "bare": return <Icon name={icon} size={size * 0.86} color={onPanel ? pal.panelInk : pal.accent} strokeWidth={2} draw={k} />;
+      case "gradient": return box(`linear-gradient(140deg, ${fill}, ${pal.fill2})`, pal.onFill, { boxShadow: pal.dark ? `0 ${size * 0.14}px ${size * 0.4}px rgba(0,0,0,0.4)` : `0 ${size * 0.1}px ${size * 0.3}px ${fill}44`, ...sq });
+    }
+  }
   // on a dark field an icon is a bright thing too (a lit tile)
   if (pal.dark && !onPanel && art.icons !== "tile" && art.icons !== "round" && art.icons !== "bare")
     return box("rgba(255,255,255,0.94)", fill, { border: "1.5px solid #ffffff", boxShadow: `0 ${size * 0.12}px ${size * 0.4}px ${pal.shadow}` });

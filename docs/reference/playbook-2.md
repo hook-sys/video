@@ -80,15 +80,24 @@ reads the same — one family.
 - House rules become per family (Bold Plates and Collage cut fast; Dark
   Cinematic holds long; Kinetic Type has no cards for whole scenes).
 
-## Built (Oct 11, 2026): the looks
+## Built: styles, not looks (Oct 2026)
 
-The soft-glass family is gone for new videos. Every video is now built in
-one of six looks (`components/video/composer/looks.ts`, `art.ts`
-lookPalette, `field.tsx` LookField): **cinematic** (family 1), **plates**
-(family 2), **kinetic** (family 3), **editorial**, **neon**, **swiss**.
-A look sets the palette, background, cards, icons, faces, highlight, pace,
-camera, cuts, the UI's tilt and (cinematic, kinetic) a ghost word behind
-the scene. The Director picks the look (ART in its prompt); the build
-enforces it, and never repeats a look from the customer's last three videos
-or from the other videos of the same set. Older videos (no look) keep the
-look they were made in.
+A video is no longer one of a few finished looks. Its style is a set of
+independent parts (`components/video/composer/style.ts`): ground, backdrop,
+texture, colour turning, cards, UI colour, icons, accent, type size, cuts,
+rhythm, UI angle, ghost word — each chosen on its own and kept compatible by
+rules, so thousands of looks come out of them (300 picks in a row gave 299
+different styles).
+
+Every reference is a recipe (`components/video/composer/recipes.ts`): its
+style in those parts, and the faces and highlights it suits. A video starts
+from the Director's own style or from a recipe changed in 2–4 parts, and is
+always far from this customer's last three videos (another ground, most
+parts different).
+
+Admin → Settings has a switch for everything: looks on/off, the Director
+choosing, mixing, no repeats, every option of every part, every reference.
+
+**Adding references:** for each new video, add its contact sheet and numbers
+here and one line to `recipes.ts`. Parts we cannot draw yet are listed in
+"Techniques seen here that we cannot do yet" until they are built.
