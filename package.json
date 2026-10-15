@@ -11,7 +11,8 @@
     "icons:build": "node scripts/icons/build.mjs",
     "lottie:build": "node scripts/lottie/build.mjs",
     "check:parity": "node scripts/parity/run.mjs",
-    "check:clean": "node scripts/clean-check/run.mjs"
+    "check:clean": "node scripts/clean-check/run.mjs",
+    "refs:ingest": "node scripts/references/ingest.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
