@@ -186,6 +186,8 @@ export function drawArt(R: Rng, brandColor: string, avoid: Partial<Record<keyof 
     camera: R.pick(CAMERAS.filter((x) => x !== "still")),
     icons: R.pick(ICON_STYLES),
     energy: Number(R.range(0.25, 0.85).toFixed(2)),
+    look: null,
+    style: null,
   };
 }
 

@@ -34,7 +34,10 @@ import {
   logoPath,
   parseHttpUrl,
   validateLogo,
+  validateScreenshots,
+  VERCEL_SCREENSHOT_TOTAL_BYTES,
 } from "@/lib/projects";
+import { formAskOf } from "@/lib/project-form";
 import { runWebsiteCapture } from "@/lib/website-capture";
 import { type BriefUsage, ProductBrief, generateProductBrief } from "@/lib/ai/product-brief";
 import { falCost, openaiCost, storageCost } from "@/lib/costs/pricing";
@@ -50,6 +53,8 @@ import { scorePlan } from "@/components/video/composer/score";
 import { type BrandProfile, type CreativePlan } from "@/lib/studio";
 import { frameOf } from "@/components/video/composer/frame";
 import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
+import { type StyleT, styleOf, styleRulesOf } from "@/components/video/composer/style";
+import { RECIPES } from "@/components/video/composer/recipes";
 import { scriptWords } from "@/components/video/composer/words";
 import { neverList } from "@/lib/video-rules";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
@@ -82,12 +87,15 @@ export async function createProject(
   const creativeDirection = oneOf(CREATIVE_DIRECTIONS, formData.get("creative_direction")) ?? CREATIVE_DEFAULTS.creative_direction;
   const motionLevel = oneOf(MOTION_LEVELS, formData.get("motion_level")) ?? CREATIVE_DEFAULTS.motion_level;
   const visualDensity = oneOf(VISUAL_DENSITIES, formData.get("visual_density")) ?? CREATIVE_DEFAULTS.visual_density;
-  const advancedDirection = String(formData.get("advanced_direction") ?? "").trim();
+  // the questions the form asks (admin → Settings, "Form: …"); an answer to
+  // one it does not ask is not taken
+  const ask = formAskOf(await getSettings());
+  const advancedDirection = ask.direction ? String(formData.get("advanced_direction") ?? "").trim() : "";
   const brandName = String(formData.get("brand_name") ?? "").trim();
   const brandColorRaw = String(formData.get("brand_color") ?? "").trim();
   const brandColor = brandColorRaw && isHexColor(brandColorRaw) ? brandColorRaw.toUpperCase() : null;
-  const callToAction = String(formData.get("call_to_action") ?? "").trim();
-  const targetAudience = String(formData.get("target_audience") ?? "").trim();
+  const callToAction = ask.ending ? String(formData.get("call_to_action") ?? "").trim() : "";
+  const targetAudience = ask.audience ? String(formData.get("target_audience") ?? "").trim() : "";
 
   if (!direction) return { error: "The voiceover script is required." };
   if (voiceScript.length > VOICE_SCRIPT_MAX || direction.length > DIRECTION_MAX)
@@ -99,23 +107,29 @@ export async function createProject(
   if (brandColorRaw && !brandColor) return { error: "Brand colour must be a hex colour like #0E9CA6." };
   if (brandName.length > BRAND_NAME_MAX || callToAction.length > CTA_MAX || targetAudience.length > AUDIENCE_MAX)
     return { error: "Brand name and call to action must be 60 characters or less, audience 200." };
-  // every answer is required (the Director builds on them)
+  // every answer the form asks is required (the Director builds on them)
   if (!brandName) return { error: "Your company name is required." };
-  if (!targetAudience) return { error: "Say who the video is for." };
-  if (!callToAction) return { error: "The call to action is required." };
-  if (!websiteUrl) return { error: "Your website is required." };
-  const { details, error: detailsError } = detailsFrom(formData);
+  if (ask.audience && !targetAudience) return { error: "Say who the video is for." };
+  if (ask.ending && !callToAction) return { error: "The call to action is required." };
+  if (ask.ending && !websiteUrl) return { error: "Your website is required." };
+  const { details, error: detailsError } = detailsFrom(formData, ask);
   if (!details) return { error: detailsError ?? "Please answer every question." };
   if (!duration || !format || !voiceLanguage || !voiceStyle)
     return { error: "Please choose a valid option for every field." };
   if (websiteUrl && !parseHttpUrl(websiteUrl))
     return { error: "Website URL must be a valid http:// or https:// address." };
 
-  // The logo (the icon) is required.
-  const logoEntry = formData.get("logo");
-  const logo = logoEntry instanceof File ? logoEntry : null;
-  const logoError = validateLogo(logo);
-  if (logoError) return { error: logoError };
+  // The logo (the icon) is required when the form asks for it.
+  const logoEntry = ask.logo ? formData.get("logo") : null;
+  const logo = logoEntry instanceof File && logoEntry.size > 0 ? logoEntry : null;
+  if (ask.logo) {
+    const logoError = validateLogo(logo);
+    if (logoError) return { error: logoError };
+  }
+  // Screenshots: optional, up to 5 (sharing the request's upload budget with the icon on Vercel).
+  const shots = ask.screenshots ? formData.getAll("screenshots").filter((f): f is File => f instanceof File && f.size > 0) : [];
+  const shotsError = shots.length ? validateScreenshots(shots, process.env.VERCEL ? VERCEL_SCREENSHOT_TOTAL_BYTES - (logo?.size ?? 0) : undefined) : null;
+  if (shotsError) return { error: shotsError };
 
   const supabase = await createClient();
   const {
@@ -198,12 +212,30 @@ export async function createProject(
     }
   }
 
-  const logoAt = logoPath(user.id, data.id, SCREENSHOT_TYPES[logo!.type]);
-  const logoUpload = await supabase.storage.from(SCREENSHOTS_BUCKET).upload(logoAt, logo!, { contentType: logo!.type });
-  if (logoUpload.error) {
+  const uploaded: string[] = [];
+  const undo = async (message: string) => {
+    if (uploaded.length) await supabase.storage.from(SCREENSHOTS_BUCKET).remove(uploaded).catch(() => {});
     await refundVideo(data.id, user.id, "Upload failed — credits returned").catch(() => {});
     await supabase.from("projects").delete().eq("id", data.id);
-    return { error: "Icon upload failed. Please try again." };
+    return { error: message };
+  };
+  if (logo) {
+    const logoAt = logoPath(user.id, data.id, SCREENSHOT_TYPES[logo.type]);
+    const logoUpload = await supabase.storage.from(SCREENSHOTS_BUCKET).upload(logoAt, logo, { contentType: logo.type });
+    if (logoUpload.error) return undo("Icon upload failed. Please try again.");
+    uploaded.push(logoAt);
+  }
+  const shotPaths: string[] = [];
+  for (const file of shots) {
+    const at = `${user.id}/${data.id}/${crypto.randomUUID()}.${SCREENSHOT_TYPES[file.type]}`;
+    const { error: shotError } = await supabase.storage.from(SCREENSHOTS_BUCKET).upload(at, file, { contentType: file.type });
+    if (shotError) return undo("Screenshot upload failed. Please try again.");
+    uploaded.push(at);
+    shotPaths.push(at);
+  }
+  if (shotPaths.length) {
+    const { error: rowsError } = await supabase.from("project_screenshots").insert(shotPaths.map((storage_path, i) => ({ project_id: data.id, user_id: user.id, storage_path, original_filename: shots[i].name })));
+    if (rowsError) return undo("Screenshot upload failed. Please try again.");
   }
 
   // Direction library: what the customer asked for, kept as data the product
@@ -226,8 +258,8 @@ export async function createProject(
       brand_color: brandColor,
       call_to_action: callToAction || null,
       target_audience: targetAudience || null,
-      has_logo: true,
-      screenshot_count: 0,
+      has_logo: !!logo,
+      screenshot_count: shotPaths.length,
     });
   if (libraryError) console.error("direction library insert failed:", data.id, libraryError.message);
 
@@ -380,7 +412,7 @@ async function loadNeverList(admin: ReturnType<typeof createAdminClient>) {
 
 // What the Motion Director is given: the brand, the script, the website, and
 // what this customer has had before (the next video is unlike those).
-type Past = { seen: { display: string[]; field: string[] }; seenStaging: (NonNullable<StoredComposition["staging"]> | null)[]; recent: { staging: NonNullable<StoredComposition["staging"]> | null; display: string | null }[] };
+type Past = { seen: { display: string[]; field: string[] }; seenStaging: (NonNullable<StoredComposition["staging"]> | null)[]; recent: { staging: NonNullable<StoredComposition["staging"]> | null; display: string | null }[]; avoidStyles?: (StyleT | null)[] };
 type MotionDirection = { input: MotionInput; result: MotionResult; past: Past; usage: BriefUsage[] };
 
 async function pastOf(admin: ReturnType<typeof createAdminClient>, projectId: string, userId: string, name: string) {
@@ -397,7 +429,9 @@ async function pastOf(admin: ReturnType<typeof createAdminClient>, projectId: st
   const recent = pastVideos.slice(0, 8).map((v) => ({ staging: v.staging ?? null, display: (v.script as { art?: { display?: string } } | undefined)?.art?.display ?? null }));
   // (for the Creative Director: how their last videos looked, any brand)
   const looks = pastVideos.map((v) => pastLookOf(v)).filter((x): x is PastLook => !!x).slice(0, 6);
-  return { known, earlier, looks, past: { seen, seenStaging, recent } };
+  // the styles (composer/style.ts) of their last three videos: the next is unlike them
+  const avoidStyles = pastVideos.slice(0, 3).map((v) => styleOf((v.script as { art?: Parameters<typeof styleOf>[0] } | undefined)?.art));
+  return { known, earlier, looks, past: { seen, seenStaging, recent, avoidStyles } };
 }
 
 const brandOf = (project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null }, brief: { product_name?: string; cta?: string } | null) => {
@@ -411,20 +445,21 @@ async function motionDirection(
   admin: ReturnType<typeof createAdminClient>,
   projectId: string,
   userId: string,
-  project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null; details?: unknown; target_audience?: string | null },
+  project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null; details?: unknown; target_audience?: string | null; advanced_direction?: string | null },
   narration: string,
   brief: { product_name?: string; product_summary?: string; cta?: string } | null,
 ): Promise<MotionDirection> {
   const usage: BriefUsage[] = [];
   const details = parseDetails(project.details);
   const brand = brandOf(project, brief);
-  const [{ known, earlier, looks, past }, { data: capture }, never, { data: level }, billing, settings] = await Promise.all([
+  const [{ known, earlier, looks, past }, { data: capture }, never, { data: level }, billing, settings, { data: shots }] = await Promise.all([
     pastOf(admin, projectId, userId, brand.name),
     admin.from("website_captures").select("url, title, meta_description, visible_text").eq("project_id", projectId).eq("status", "completed").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     loadNeverList(admin),
     admin.from("projects").select("quality").eq("id", projectId).maybeSingle(),
     getBilling(),
     getSettings(),
+    admin.from("project_screenshots").select("original_filename").eq("project_id", projectId).order("created_at"),
   ]);
   // the video's quality level directs it on that level's model
   const tier = billing.tiers[(TIER_IDS as readonly string[]).includes(level?.quality ?? "") ? (level!.quality as TierId) : "standard"];
@@ -449,6 +484,12 @@ async function motionDirection(
     model: tier.model || null,
     prompt: settings.feature_creative_director === true ? "creative" : "classic",
     recent: looks,
+    rules: settings.feature_video_rules !== false,
+    styles: styleRulesOf(settings, RECIPES.map((r) => r.id)),
+    match: settings.feature_visual_match !== false,
+    // the customer's own direction and screenshots (when the form asked for them)
+    direction: project.advanced_direction?.trim() || null,
+    screenshots: (shots ?? []).map((x) => String(x.original_filename ?? "screenshot")),
   };
   const result = await directMotion(input, (u) => usage.push(u));
   console.info("motion director:", { projectId, source: result.plan.source, ms: result.ms, category: result.plan.profile.category, mood: result.plan.profile.mood, idea: result.plan.creative.idea, language: result.plan.creative.language, scheme: result.plan.creative.scheme, scenes: result.plan.ideas?.scenes.length ?? 0, problems: result.problems.slice(0, 6) });
@@ -479,8 +520,10 @@ async function composerSet(
   const reviewed = await reviewMotion(dir.result.plan, input, addUsage);
   const plan = reviewed.plan;
   const { count: screens } = await admin.from("project_screenshots").select("id", { count: "exact", head: true }).eq("project_id", projectId);
-  const { seen, seenStaging, recent } = dir.past;
-  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
+  const { seen, seenStaging, recent, avoidStyles } = dir.past;
+  // the looks the team allows (admin → Settings, "Looks")
+  const styles = styleRulesOf(await getSettings(), RECIPES.map((r) => r.id));
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, rules: dir.input.rules !== false, match: dir.input.match !== false, styles, avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
   const video = set.videos[0];
   // the code's own check of what was built (shown in the studio; it picks nothing)
   const score = scorePlan(set.plans[0], video.script, { staging: video.staging, motif: plan.creative.motif, heroScene: video.staging?.hero ?? null, recent, problems: set.problems.length });

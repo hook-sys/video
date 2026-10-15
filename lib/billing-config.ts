@@ -19,7 +19,7 @@ export type Billing = { tiers: Record<TierId, Tier>; packs: Pack[]; signupCredit
 
 export const DEFAULT_BILLING: Billing = {
   tiers: {
-    standard: { name: "Standard", blurb: "Clean motion video, fast.", badge: "", perSecond: 3, model: "", status: "on", paidOnly: false },
+    standard: { name: "Standard", blurb: "Clean motion video, fast.", badge: "", perSecond: 3, model: "anthropic/claude-opus-5.5", status: "on", paidOnly: false },
     pro: { name: "Pro", blurb: "A smarter director: richer story, smoother motion.", badge: "Best result", perSecond: 4, model: "anthropic/claude-opus-5.5", status: "on", paidOnly: true },
     ultra: { name: "Ultra", blurb: "Our most advanced director.", badge: "", perSecond: 5, model: "", status: "soon", paidOnly: true },
   },

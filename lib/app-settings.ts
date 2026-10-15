@@ -1,5 +1,8 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { FORM_FIELDS, FORM_FIELD_LABEL } from "@/lib/project-form";
+import { STYLE_SWITCHES } from "@/components/video/composer/style";
+import { RECIPES } from "@/components/video/composer/recipes";
 
 // Runtime settings edited from /admin/settings (table app_settings, service
 // role only).
@@ -9,6 +12,8 @@ export type SettingDef = {
   help: string;
   type: "bool" | "text" | "number";
   fallback: boolean | string | number;
+  // (shown under its own heading; none: the general settings)
+  group?: string;
 };
 
 export const SETTINGS: SettingDef[] = [
@@ -21,6 +26,12 @@ export const SETTINGS: SettingDef[] = [
   { key: "feature_frame_check", label: "Frame check", help: "Before a video is shown, it is opened in a browser (a Vercel Sandbox) and checked frame by frame: nothing on the words, nothing on each other, nothing cut off, no empty screen, nothing gone before it can be seen. What it finds is shown on the video's admin page. Adds about a minute.", type: "bool", fallback: true },
   { key: "feature_server_render", label: "Server render", help: "Each finished video is rendered on the server (a Vercel Sandbox, real Chrome) as a high-quality 1080p MP4 the customer downloads at once. When off (or if it fails), the video is rendered in the customer's browser when they download it.", type: "bool", fallback: true },
   { key: "feature_creative_director", label: "Creative Director", help: "The Motion Director works from the new creative brief: full freedom inside what the renderer can build, and it is shown how this customer's last videos looked so the next one is unlike them. Off: the classic instructions, exactly as before.", type: "bool", fallback: false },
+  { key: "feature_video_rules", label: "Video rules", help: "The house rules and the style rules: in the Director's instructions (the rulebook, the team's never list, one focal point, at most 2 things, scene length, layout repetition…) and kept by the Composer (at most 3 things and 3 ways in, one calm background, no busy fields, varied layouts). Off: all of them are left out, so the Director composes freely. The renderer's limits and honesty (no invented numbers or claims, no placeholder data) always stay.", type: "bool", fallback: true },
+  { key: "feature_visual_match", label: "Visual match", help: "Every scene's things picture what its words say: the Director is given the map (bookings → a calendar, payments → a pay card, an icon shows its own word…), every video is checked against it, icons that don't fit are swapped and the rest is sent back to the Director's review. Off: no map, no check.", type: "bool", fallback: true },
+  ...FORM_FIELDS.map((f): SettingDef => ({ key: `form_${f}`, label: `Form: ${FORM_FIELD_LABEL[f]}`, help: f === "screenshots" ? "Customers can upload up to 5 product screenshots; the Director shows them where the words talk about that screen. Off: not asked." : f === "direction" ? "A free text (up to 1,500 characters) about how the video should look and feel; the Director follows it where it can. Off: not asked." : "Asked in the new video form. Off: not asked, and the Director works without it.", type: "bool", fallback: true })),
+  ...STYLE_SWITCHES.how.map((x): SettingDef => ({ ...x, type: "bool", fallback: true, group: "Looks" })),
+  ...STYLE_SWITCHES.parts.map((x): SettingDef => ({ ...x, type: "bool", fallback: true, group: "Looks: parts" })),
+  ...RECIPES.map((r): SettingDef => ({ key: `look_ref_${r.id}`, label: `${r.id.startsWith("ref-") ? `Reference ${r.id.slice(4)}` : "House look"}: ${r.from === "house" ? r.id : r.from}`, help: `${r.note}. Off: never used as a starting point.`, type: "bool", fallback: true, group: "Looks: references" })),
   { key: "max_videos_per_day", label: "Videos per customer per day", help: "New videos a customer can start in 24 hours. 0 = no limit. Admins are exempt.", type: "number", fallback: 20 },
 ];
 

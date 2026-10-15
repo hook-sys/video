@@ -1,3 +1,4 @@
+import { styleOf } from "@/components/video/composer/style";
 import { after } from "next/server";
 import { internalAllowed } from "@/lib/internal-key";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -114,6 +115,6 @@ async function direct(projectId: string, name: string, prompt: DirectorPrompt, b
   const words = scriptWords(narration, voice);
   const reviewed = await reviewMotion(first.plan, { ...input, words }, (u) => usage.push(u));
   const plan = reviewed.plan;
-  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: input.seed, ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: 0, avoidStaging: pastVideos.map((v) => v.staging ?? null).reverse(), creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: input.seed, ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: 0, avoidStyles: pastVideos.slice(-3).reverse().map((v) => styleOf(v.script.art)), avoidStaging: pastVideos.map((v) => v.staging ?? null).reverse(), creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
   return { name, prompt, project: projectId, brand: brand.name, video: set.videos[0] ?? null, plan: set.plans[0] ?? null, idea: plan.creative.idea, source: plan.source, problems: [...first.problems, ...reviewed.problems, ...set.problems].slice(0, 20), usage };
 }

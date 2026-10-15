@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { noise2D } from "@remotion/noise";
 import { AbsoluteFill } from "remotion";
 import type { Pal } from "./art";
-import { hsl } from "./art";
+import { groundColours, hsl } from "./art";
 import { Radial, reachOf, Tiles } from "./radial";
 import { STILL_BACKGROUND, type FieldKind, type Overlay } from "./types";
 import { H, W } from "./frame";
@@ -21,9 +21,12 @@ const glow = (x: number, y: number, w: number, h: number, color: string, at = "5
   return <Radial w={w} h={h} at={[ax, ay]} stops={[[0, color], [stop, color, 0]]} place={{ x: x - w / 2, y: y - h / 2 }} />;
 };
 
-export function Field({ f: frame, kind, pal, hue, anchor: a, energy, overlay, style }: { f: number; kind: FieldKind; pal: Pal; hue: number; anchor: Anchor; energy: number; overlay: Overlay; style?: CSSProperties }) {
+export function Field({ f: frame, kind: asked, pal, hue, anchor: a, energy, overlay: askedOverlay, style }: { f: number; kind: FieldKind; pal: Pal; hue: number; anchor: Anchor; energy: number; overlay: Overlay; style?: CSSProperties }) {
   // (a still background: every frame drawn as the first)
   const f = STILL_BACKGROUND ? 0 : frame;
+  // a look draws its own background (looks.ts)
+  if (pal.style) return <StyleField f={f} pal={pal} hue={hue} a={a} energy={energy} style={style} />;
+  const kind = asked, overlay = askedOverlay;
   const e = 0.6 + energy * 0.8;
   const d = pal.dark;
   const c1 = hsl(hue, 85, d ? 58 : 66, d ? 0.55 : 0.42);
@@ -167,6 +170,104 @@ export function Field({ f: frame, kind, pal, hue, anchor: a, energy, overlay, st
     <AbsoluteFill style={base}>
       {body}
       <OverlayLayer f={f} kind={overlay} pal={pal} hue={hue} />
+    </AbsoluteFill>
+  );
+}
+
+// A look's background: what makes the frame read as its family at a glance.
+// A style's background (style.ts): its ground (turning scene by scene when
+// it shifts), what is drawn on it, its texture.
+const TURN = [0, 150, 210, 40];
+function StyleField({ f, pal, hue, a, energy, style }: { f: number; pal: Pal; hue: number; a: Anchor; energy: number; style?: CSSProperties }) {
+  const st = pal.style!;
+  const e = 0.6 + energy * 0.8;
+  const sway = (k: number, amp = 60) => noise2D(`lk${k}`, f / (120 + k * 13), k) * amp * e;
+  const h = st.shift === "scene" ? hue + TURN[Math.floor(a.t * 4) % 4] : hue;
+  const [bg, bg2] = st.shift === "scene" ? groundColours(st.ground, h) : [pal.bg, pal.bg2];
+  const dark = pal.dark;
+  const line = dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
+  const tone = (dl: number, alpha = 1) => (st.ground === "tint" || st.ground === "paper" || st.ground === "white" ? hsl(h, 55, 80, alpha) : hsl(h, st.ground === "deep" || st.ground === "dusk" ? 55 : 72, Math.max(4, Math.min(92, (st.ground === "bright" ? 66 : st.ground === "plate" ? 38 : 14) + dl)), alpha));
+  let body: ReactNode = null;
+  switch (st.backdrop) {
+    case "glow":
+      body = (
+        <>
+          {glow(a.x + sway(1, 80), a.y + sway(2, 60), 1800 * a.s, 1200 * a.s, hsl(h, 85, 55, 0.3), "50% 50%")}
+          {glow(W * 0.85 + sway(3, 60), H * 0.15, 1400, 900, hsl(h + 50, 85, 55, 0.2))}
+        </>
+      );
+      break;
+    case "spot":
+      body = (
+        <>
+          {glow(a.x + sway(1, 40), a.y + 60 + sway(2, 30), 1700 * a.s, 1200 * a.s, hsl(h, 70, 45, 0.22), "50% 50%", 0.6)}
+          {glow(W / 2, H + 120, 2600, 700, hsl(h, 80, 50, 0.16), "50% 40%")}
+        </>
+      );
+      break;
+    case "rays":
+      body = (
+        <>
+          {glow(W * 0.2, -100, 1400, 900, hsl(h, 100, 60, 0.28))}
+          {Array.from({ length: 5 }, (_, k) => (
+            <div key={k} style={{ position: "absolute", left: W * (0.05 + k * 0.17) + sway(k, 40), top: -H * 0.3, width: 70 + k * 18, height: H * 1.8, transform: "rotate(24deg)", transformOrigin: "50% 0", background: `linear-gradient(180deg, ${hsl(h + k * 12, 100, 65, 0.16)}, transparent 75%)` }} />
+          ))}
+        </>
+      );
+      break;
+    case "horizon": {
+      const lines = Array.from({ length: 14 }, (_, k) => {
+        const y = H * 0.62 + ((k * k * 7 + f * 0.8 * e) % (H * 0.5));
+        return <div key={`h${k}`} style={{ position: "absolute", left: 0, right: 0, top: y, height: 1.5, background: hsl(h, 100, 62, 0.08 + ((y - H * 0.62) / (H * 0.5)) * 0.25) }} />;
+      });
+      const rays = Array.from({ length: 17 }, (_, k) => {
+        const x = (k - 8) * 260;
+        return <div key={`v${k}`} style={{ position: "absolute", left: W / 2, top: H * 0.62, width: 1.5, height: H, background: `linear-gradient(180deg, ${hsl(h, 100, 62, 0.25)}, transparent)`, transformOrigin: "0 0", transform: `rotate(${(-Math.atan2(x, H) * 180) / Math.PI}deg)` }} />;
+      });
+      body = (
+        <>
+          {glow(W / 2 + sway(1, 80), H * 0.6, 2400, 900, hsl(h, 100, 55, 0.35), "50% 50%")}
+          {rays}
+          {lines}
+        </>
+      );
+      break;
+    }
+    case "grid":
+      body = <Tiles w={W} h={H} kind="grid" gap={90} size={0.7} color={line} dx={0} dy={0} />;
+      break;
+    case "columns":
+      body = Array.from({ length: 12 }, (_, k) => <div key={k} style={{ position: "absolute", top: 0, bottom: 0, left: (W / 12) * k, width: 1, background: line }} />);
+      break;
+    case "dots":
+      body = <Tiles w={W} h={H} kind="dots" gap={44} size={1.8} color={dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"} dx={0} dy={0} />;
+      break;
+    case "rules":
+      body = (
+        <>
+          <div style={{ position: "absolute", left: 80, right: 80, top: 64, height: 1.5, background: pal.faint }} />
+          <div style={{ position: "absolute", left: 80, right: 80, bottom: 64, height: 1.5, background: pal.faint }} />
+        </>
+      );
+      break;
+    case "disc":
+      body = <div style={{ position: "absolute", left: a.x - 900 * a.s + sway(1, 30), top: a.y - 900 * a.s, width: 1800 * a.s, height: 1800 * a.s, borderRadius: 9999, background: tone(dark ? 7 : -6, dark ? 1 : 0.9) }} />;
+      break;
+    case "arcs": {
+      const r1 = Math.max(W, H) * 0.55;
+      body = (
+        <>
+          <div style={{ position: "absolute", left: -r1 * 0.55 + sway(1, 20), top: H - r1 * 0.45, width: r1, height: r1, borderRadius: 9999, background: hsl(h, 80, 62) }} />
+          <div style={{ position: "absolute", right: -r1 * 0.5, top: -r1 * 0.55 + sway(2, 20), width: r1 * 0.9, height: r1 * 0.9, borderRadius: 9999, background: hsl(h + 150, 80, 68) }} />
+        </>
+      );
+      break;
+    }
+  }
+  return (
+    <AbsoluteFill style={{ background: st.ground === "dusk" ? `linear-gradient(${150 + a.t * 40}deg, ${bg}, ${bg2})` : bg, overflow: "hidden", ...style }}>
+      {body}
+      <OverlayLayer f={f} kind={st.texture === "none" ? "none" : st.texture} pal={pal} hue={h} />
     </AbsoluteFill>
   );
 }

@@ -7,8 +7,9 @@ import type { TierId } from "@/lib/billing-config";
 import { createProject } from "@/app/projects/actions";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import { BRAND_CATEGORIES } from "@/lib/studio";
-import { CATEGORY_LABEL, MOOD_CHOICES, OLD_WAYS, USES, USE_LABEL } from "@/lib/project-details";
-import { AUDIENCE_MAX, BRAND_NAME_MAX, CTA_MAX, directionFor, VOICE_SCRIPT_MAX, FORMATS, LOGO_MAX_BYTES, STYLE_PRESETS, VOICE_LANGUAGES, VOICE_STYLES, estimateVideoSeconds, validateLogo, type StylePreset } from "@/lib/projects";
+import { CATEGORY_LABEL, MOOD_CHOICES, USES, USE_LABEL } from "@/lib/project-details";
+import { ADVANCED_DIRECTION_MAX, AUDIENCE_MAX, BRAND_NAME_MAX, CTA_MAX, directionFor, VOICE_SCRIPT_MAX, FORMATS, LOGO_MAX_BYTES, SCREENSHOT_MAX_BYTES, SCREENSHOT_MAX_FILES, STYLE_PRESETS, VERCEL_SCREENSHOT_TOTAL_BYTES, VOICE_LANGUAGES, VOICE_STYLES, estimateVideoSeconds, validateLogo, validateScreenshots, type StylePreset } from "@/lib/projects";
+import { FORM_FIELDS, type FormAsk } from "@/lib/project-form";
 
 const label = "text-sm font-medium";
 const hint = "text-xs text-foreground/50";
@@ -54,16 +55,25 @@ async function colourOf(url: string): Promise<string> {
 // A quality level as the form shows it (lib/billing-config: no model names).
 export type Level = { id: TierId; name: string; blurb: string; badge: string; perSecond: number; soon: boolean; locked: boolean };
 
-// scriptMax: shorter for a customer on welcome credits only (/admin/billing)
-export function CreateProjectForm({ prefill, voices = [], levels = [], minSeconds = 0, credits = null, scriptMax = VOICE_SCRIPT_MAX }: { prefill?: Prefill; voices?: VoiceOption[]; levels?: Level[]; minSeconds?: number; credits?: number | null; scriptMax?: number }) {
+const ASK_ALL = Object.fromEntries(FORM_FIELDS.map((f) => [f, true])) as FormAsk;
+
+// scriptMax: shorter for a customer on welcome credits only (/admin/billing);
+// ask: the questions the form asks (admin → Settings, "Form: …")
+export function CreateProjectForm({ prefill, voices = [], levels = [], minSeconds = 0, credits = null, scriptMax = VOICE_SCRIPT_MAX, ask = ASK_ALL }: { prefill?: Prefill; voices?: VoiceOption[]; levels?: Level[]; minSeconds?: number; credits?: number | null; scriptMax?: number; ask?: FormAsk }) {
   const [state, action, pending] = useActionState(createProject, {});
   const [script, setScript] = useState(prefill?.script ?? "");
   const [format, setFormat] = useState<string>(FORMATS[0]);
   const [logo, setLogo] = useState<{ name: string; url: string; colour: string | null } | null>(null);
+  const logoSize = useRef<number | null>(null);
   const [logoError, setLogoError] = useState<string>();
-  const [before, setBefore] = useState<string[]>([]);
-  const [localError, setLocalError] = useState<string>();
-  const error = logoError ?? localError ?? state.error;
+  const [shots, setShots] = useState<string[]>([]);
+  const [shotsError, setShotsError] = useState<string>();
+  const [directionText, setDirectionText] = useState("");
+  const error = logoError ?? shotsError ?? state.error;
+  // (the steps are numbered in the order they are shown)
+  let n = 0;
+  const step = () => ++n;
+  const answers = [ask.business || ask.audience, ask.mood, ask.use].filter(Boolean).length;
   const seconds = script.trim() ? estimateVideoSeconds(script) : 0;
   const [quality, setQuality] = useState<TierId>("standard");
   const level = levels.find((l) => l.id === quality);
@@ -71,7 +81,7 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
   // real charge follows the voice's length — only used to say credits are short)
   const cost = level && credits !== null ? Math.ceil(Math.max(minSeconds, Math.ceil(seconds || minSeconds)) * level.perSecond) : 0;
   const short = credits !== null && cost > credits;
-  const blocked = pending || !!logoError;
+  const blocked = pending || !!logoError || !!shotsError;
 
   const submit = (
     <button disabled={blocked} className="w-full rounded-full bg-[#0a66d6] px-6 py-4 text-base font-semibold text-white hover:bg-[#0859bd] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#0a66d6]/30 disabled:opacity-60">
@@ -92,14 +102,6 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
       {pending && <WaitingScreen />}
       <form
         action={action}
-        onSubmit={(e) => {
-          // (a group of checkboxes can't be "required" in HTML)
-          if (!before.length) {
-            e.preventDefault();
-            setLocalError("Choose what your customers used before.");
-            document.getElementById("before")?.scrollIntoView({ block: "center" });
-          } else setLocalError(undefined);
-        }}
         className={`grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] ${pending ? "hidden" : ""}`}
       >
         <input type="hidden" name="direction" value={directionFor(script, STYLE)} />
@@ -111,14 +113,14 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
 
         <div className="flex min-w-0 flex-col gap-5">
-          <Step n={1} title="Your voice-over" sub="Exactly what the voice will say. The video lasts as long as the voice.">
+          <Step n={step()} title="Your voice-over" sub="Exactly what the voice will say. The video lasts as long as the voice.">
             <textarea
               required
               rows={7}
               maxLength={scriptMax}
               value={script}
               onChange={(e) => setScript(e.target.value)}
-              placeholder="Paste your short script… e.g. Running an online store means juggling orders, stock and couriers. SeloraX brings it all into one dashboard…"
+              placeholder="Paste your script — exactly what the voice will say"
               className={area}
             />
             <div className="flex items-center justify-between">
@@ -135,8 +137,9 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
             )}
           </Step>
 
-          <Step n={2} title="Your brand" sub="Your icon and name reveal the product and close the video.">
+          <Step n={step()} title="Your brand" sub={ask.logo ? "Your icon and name reveal the product and close the video." : "Your name reveals the product and closes the video."}>
             <div className="grid gap-4 sm:grid-cols-2">
+              {ask.logo && (
               <Upload
                 title="Icon"
                 text={logo ? logo.name : "Upload your icon"}
@@ -157,6 +160,7 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (logo) URL.revokeObjectURL(logo.url);
+                    logoSize.current = file?.size ?? null;
                     const problem = validateLogo(file);
                     setLogoError(problem);
                     if (!file || problem) return setLogo(null);
@@ -168,10 +172,12 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
                   }}
                 />
               </Upload>
+              )}
               <div className="flex flex-col gap-4">
                 <Field title="Company name">
-                  <input name="brand_name" required defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="e.g. SeloraX" className={input} />
+                  <input name="brand_name" required defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="Your company name" className={input} />
                 </Field>
+                {ask.logo && (
                 <div className="flex flex-col gap-1.5">
                   <span className={label}>Brand colour</span>
                   <span className="flex items-center gap-2.5 rounded-xl bg-white/60 px-3.5 py-2.5 text-sm text-foreground/60 ring-1 ring-black/[0.06]">
@@ -179,17 +185,22 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
                     {logo?.colour ? `${logo.colour} · from your icon` : "Taken from your icon"}
                   </span>
                 </div>
+                )}
               </div>
             </div>
           </Step>
 
+          {answers > 0 && (
           <div className="mt-4 flex flex-col gap-1.5 px-1">
             <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Now, make it unmistakably yours.</h2>
-            <p className="text-foreground/60">Five quick answers. Your director uses every one.</p>
+            <p className="text-foreground/60">A few quick answers. Your director uses every one.</p>
           </div>
+          )}
 
-          <Step n={3} title="Your business">
+          {(ask.business || ask.audience) && (
+          <Step n={step()} title="Your business">
             <div className="grid gap-4 sm:grid-cols-2">
+              {ask.business && (
               <Field title="Type of business">
                 <select name="category" required defaultValue="" className={input}>
                   <option value="" disabled>
@@ -202,31 +213,18 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
                   ))}
                 </select>
               </Field>
+              )}
+              {ask.audience && (
               <Field title="Who it's for">
                 <input name="target_audience" required maxLength={AUDIENCE_MAX} placeholder="e.g. Owners of small clinics" className={input} />
               </Field>
+              )}
             </div>
           </Step>
+          )}
 
-          <Step n={4} title="What your customers used before" sub="The old way the video starts from. Choose all that apply.">
-            <div id="before" className="flex flex-wrap gap-2">
-              {OLD_WAYS.map((o) => (
-                <label key={o} className="cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="before"
-                    value={o}
-                    className="peer sr-only"
-                    checked={before.includes(o)}
-                    onChange={(e) => setBefore((b) => (e.target.checked ? [...b, o] : b.filter((x) => x !== o)))}
-                  />
-                  <span className="block rounded-full border border-foreground/12 bg-white/70 px-3.5 py-1.5 text-sm hover:border-foreground/30 peer-checked:border-[#0a66d6] peer-checked:bg-[#0a66d6]/10 peer-checked:font-medium peer-checked:text-[#0a66d6] peer-focus-visible:ring-4 peer-focus-visible:ring-[#0a66d6]/25">{o}</span>
-                </label>
-              ))}
-            </div>
-          </Step>
-
-          <Step n={5} title="Mood">
+          {ask.mood && (
+          <Step n={step()} title="Mood">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               {MOOD_CHOICES.map((m) => (
                 <label key={m.mood} className="cursor-pointer">
@@ -239,16 +237,54 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
               ))}
             </div>
           </Step>
+          )}
 
-          <Step n={6} title="Where the video will be used">
+          {ask.use && (
+          <Step n={step()} title="Where the video will be used">
             <Chips name="use" options={USES} format={(u) => USE_LABEL[u]} />
           </Step>
+          )}
 
-          <Step n={7} title="Voice" sub="English voice-over. Press play to hear each voice.">
+          {ask.screenshots && (
+          <Step n={step()} title="Screenshots" sub={`Optional · up to ${SCREENSHOT_MAX_FILES} real screens of your product, shown where your words talk about them.`}>
+            <Upload title="Product screenshots" text={shots.length ? `${shots.length} screenshot${shots.length > 1 ? "s" : ""} chosen` : "Upload screenshots"} sub={shots.length ? shots.join(", ") : `PNG, JPG or WebP · ${SCREENSHOT_MAX_BYTES / 1024 / 1024} MB each`}>
+              <input
+                name="screenshots"
+                type="file"
+                multiple
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                onChange={(e) => {
+                  const files = [...(e.target.files ?? [])];
+                  setShotsError(files.length ? (validateScreenshots(files, VERCEL_SCREENSHOT_TOTAL_BYTES - (logoSize.current ?? 0)) ?? undefined) : undefined);
+                  setShots(files.map((f) => f.name));
+                }}
+              />
+            </Upload>
+          </Step>
+          )}
+
+          {ask.direction && (
+          <Step n={step()} title="Video direction" sub="Optional · how the video should look and feel: the style, the scenes, what to show or avoid.">
+            <textarea name="advanced_direction" rows={5} maxLength={ADVANCED_DIRECTION_MAX} value={directionText} onChange={(e) => setDirectionText(e.target.value)} placeholder="Describe the look and feel you want" className={area} />
+            <span className={`${hint} self-end tabular-nums`}>
+              {directionText.length}/{ADVANCED_DIRECTION_MAX}
+            </span>
+          </Step>
+          )}
+
+          {ask.voice ? (
+          <Step n={step()} title="Voice" sub="English voice-over. Press play to hear each voice.">
             <VoicePicker voices={voices} initial={prefill?.voice} />
           </Step>
+          ) : (
+            <>
+              <input type="hidden" name="voice_language" value={VOICE_LANGUAGES[0]} />
+              <input type="hidden" name="voice_gender" value="female" />
+            </>
+          )}
 
-          <Step n={8} title="Format">
+          <Step n={step()} title="Format">
             <fieldset className="flex flex-col gap-2">
               <legend className="sr-only">Format</legend>
               <div className="grid grid-cols-3 gap-3">
@@ -274,7 +310,8 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
             </fieldset>
           </Step>
 
-          <Step n={9} title="The ending" sub="Shown on the last scene, under your icon.">
+          {ask.ending && (
+          <Step n={step()} title="The ending" sub={ask.logo ? "Shown on the last scene, under your icon." : "Shown on the last scene, under your name."}>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field title="Call to action">
                 <input name="call_to_action" required defaultValue={prefill?.cta} maxLength={CTA_MAX} placeholder="e.g. Start your free trial" className={input} />
@@ -284,9 +321,10 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
               </Field>
             </div>
           </Step>
+          )}
 
           {levels.length > 1 && (
-            <Step n={10} title="Quality" sub="The same video, directed with more care.">
+            <Step n={step()} title="Quality" sub="The same video, directed with more care.">
               <div className="grid gap-3 sm:grid-cols-3">
                 {levels.map((l) => (
                   <button

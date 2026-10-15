@@ -5,6 +5,8 @@ import { userAccess } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getAiConfig } from "@/lib/ai/models";
 import { TIER_IDS, balanceOf, getBilling, grantSignupCredits, hasPaid } from "@/lib/billing";
+import { getSettings } from "@/lib/app-settings";
+import { formAskOf } from "@/lib/project-form";
 import { CreateProjectForm, type Level, type Prefill } from "./create-project-form";
 
 export const metadata: Metadata = { title: "New video" };
@@ -39,6 +41,8 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
   });
   if (user) await grantSignupCredits(user.id, !!user.email_confirmed_at).catch(() => {});
   const credits = user && !admin ? await balanceOf(user.id) : null;
+  // the questions the form asks (admin → Settings, "Form: …")
+  const ask = formAskOf(await getSettings());
   return (
     <AppShell title="New video" admin={admin} active="new" initial={(user?.email ?? "?")[0]} wide action={<span />}>
       <div className="mb-6 flex flex-col gap-2">
@@ -49,7 +53,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
         <p className="mb-6 rounded-2xl border border-amber-500/25 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">Your account is waiting for approval. You can look around and fill in your video now — your welcome credits arrive as soon as it&apos;s approved.</p>
       )}
       {/* (only welcome credits so far: a script short enough for them) */}
-      <CreateProjectForm prefill={prefill} voices={voices} levels={levels} minSeconds={billing.minSeconds} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} />
+      <CreateProjectForm prefill={prefill} voices={voices} levels={levels} minSeconds={billing.minSeconds} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} ask={ask} />
     </AppShell>
   );
 }
