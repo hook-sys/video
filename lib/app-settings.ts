@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { FORM_FIELDS, FORM_FIELD_LABEL } from "@/lib/project-form";
 import { STYLE_SWITCHES } from "@/components/video/composer/style";
 import { RECIPES } from "@/components/video/composer/recipes";
+import { TECHNIQUES } from "@/components/video/composer/techniques";
 
 // Runtime settings edited from /admin/settings (table app_settings, service
 // role only).
@@ -29,6 +30,7 @@ export const SETTINGS: SettingDef[] = [
   { key: "feature_video_rules", label: "Video rules", help: "The house rules and the style rules: in the Director's instructions (the rulebook, the team's never list, one focal point, at most 2 things, scene length, layout repetition…) and kept by the Composer (at most 3 things and 3 ways in, one calm background, no busy fields, varied layouts). Off: all of them are left out, so the Director composes freely. The renderer's limits and honesty (no invented numbers or claims, no placeholder data) always stay.", type: "bool", fallback: true },
   { key: "feature_visual_match", label: "Visual match", help: "Every scene's things picture what its words say: the Director is given the map (bookings → a calendar, payments → a pay card, an icon shows its own word…), every video is checked against it, icons that don't fit are swapped and the rest is sent back to the Director's review. Off: no map, no check.", type: "bool", fallback: true },
   ...FORM_FIELDS.map((f): SettingDef => ({ key: `form_${f}`, label: `Form: ${FORM_FIELD_LABEL[f]}`, help: f === "screenshots" ? "Customers can upload up to 5 product screenshots; the Director shows them where the words talk about that screen. Off: not asked." : f === "direction" ? "A free text (up to 1,500 characters) about how the video should look and feel; the Director follows it where it can. Off: not asked." : "Asked in the new video form. Off: not asked, and the Director works without it.", type: "bool", fallback: true })),
+  ...TECHNIQUES.map((t): SettingDef => ({ key: t.key, label: t.label, help: t.help, type: "bool", fallback: true, group: "Techniques" })),
   ...STYLE_SWITCHES.how.map((x): SettingDef => ({ ...x, type: "bool", fallback: true, group: "Looks" })),
   ...STYLE_SWITCHES.parts.map((x): SettingDef => ({ ...x, type: "bool", fallback: true, group: "Looks: parts" })),
   ...RECIPES.map((r): SettingDef => ({ key: `look_ref_${r.id}`, label: `${r.id.startsWith("ref-") ? `Reference ${r.id.slice(4)}` : "House look"}: ${r.from === "house" ? r.id : r.from}`, help: `${r.note}. Off: never used as a starting point.`, type: "bool", fallback: true, group: "Looks: references" })),

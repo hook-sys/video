@@ -55,6 +55,7 @@ import { frameOf } from "@/components/video/composer/frame";
 import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { type StyleT, styleOf, styleRulesOf } from "@/components/video/composer/style";
 import { RECIPES } from "@/components/video/composer/recipes";
+import { techOffOf } from "@/components/video/composer/techniques";
 import { scriptWords } from "@/components/video/composer/words";
 import { neverList } from "@/lib/video-rules";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
@@ -523,7 +524,7 @@ async function composerSet(
   const { seen, seenStaging, recent, avoidStyles } = dir.past;
   // the looks the team allows (admin → Settings, "Looks")
   const styles = styleRulesOf(await getSettings(), RECIPES.map((r) => r.id));
-  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, rules: dir.input.rules !== false, match: dir.input.match !== false, styles, avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
+  const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: seen.display, field: seen.field.slice(0, 3) }, screens: screens ?? 0, avoidStaging: seenStaging, rules: dir.input.rules !== false, match: dir.input.match !== false, techOff: techOffOf(await getSettings()), styles, avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
   const video = set.videos[0];
   // the code's own check of what was built (shown in the studio; it picks nothing)
   const score = scorePlan(set.plans[0], video.script, { staging: video.staging, motif: plan.creative.motif, heroScene: video.staging?.hero ?? null, recent, problems: set.problems.length });

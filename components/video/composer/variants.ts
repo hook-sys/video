@@ -8,6 +8,7 @@ import { houseRules, varyLayouts } from "./rules";
 import { ALL_STYLES, type StyleRules, type StyleT, inStyle, pickStyle } from "./style";
 import { RECIPES } from "./recipes";
 import { matched } from "./meaning";
+import { withoutTechniques } from "./techniques";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, LOOKS, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
 import type { ArtT, Brand, ComposerPlan, GuideKind, ItemT, JourneyKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
 
@@ -98,7 +99,8 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
   const art = mendArt(ideas.arts[v % Math.max(1, ideas.arts.length)], drawArt(R, brand.color, avoid));
   const family = R.shuffle(TRANSITIONS.filter((t) => t !== "morph" && t !== "fade")).slice(0, 3) as TransitionKind[];
   const accentT = R.pick(["iris", "zoom-in", "whip", "flip", "wipe", "clock"] as TransitionKind[]);
-  const reveals = R.shuffle(REVEALS).slice(0, 2) as Reveal[];
+  // (one word at a time only where the style's type is giant — style.ts inStyle)
+  const reveals = R.shuffle(REVEALS.filter((r) => r !== "beat")).slice(0, 2) as Reveal[];
   const n = words.length;
   let prevT: TransitionKind | null = null;
   const scenes: SceneT[] = ideas.scenes.map((s, i) => {
@@ -134,7 +136,7 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
 }
 
 // rules: false — the house rules (rules.ts) are not applied (admin → Settings, "Video rules")
-export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null; size?: [number, number]; rules?: boolean; match?: boolean; styles?: StyleRules | null; avoidStyles?: (StyleT | null)[] };
+export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null; size?: [number, number]; rules?: boolean; match?: boolean; techOff?: string[]; styles?: StyleRules | null; avoidStyles?: (StyleT | null)[] };
 
 // What the Motion Director decided that the build keeps (lib/studio.ts
 // CreativePlan): the camera language, the scheme, where the story turns and
@@ -165,7 +167,7 @@ function shaped(script: ScriptT, creative: Creative | null | undefined, look: Co
 // when shown) and how it is staged (staging.ts; older videos: cuts).
 export type StoredComposition = { script: ScriptT; seed: number; source: ComposerPlan["source"]; staging?: Staging | null };
 
-export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look, size, rules = true, match = true, styles = ALL_STYLES, avoidStyles = [] }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
+export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look, size, rules = true, match = true, techOff = [], styles = ALL_STYLES, avoidStyles = [] }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
   const problems: string[] = [];
   const plans: ComposerPlan[] = [];
   const videos: StoredComposition[] = [];
@@ -188,7 +190,7 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
       out = m.script;
       matchNotes = m.problems;
     }
-    return fitScript(out);
+    return fitScript(withoutTechniques(out, techOff));
   };
   for (let v = 0; v < count; v++) {
     const s = (seed + v * 104729) >>> 0;

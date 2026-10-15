@@ -253,6 +253,25 @@ function StyleField({ f, pal, hue, a, energy, style }: { f: number; pal: Pal; hu
     case "disc":
       body = <div style={{ position: "absolute", left: a.x - 900 * a.s + sway(1, 30), top: a.y - 900 * a.s, width: 1800 * a.s, height: 1800 * a.s, borderRadius: 9999, background: tone(dark ? 7 : -6, dark ? 1 : 0.9) }} />;
       break;
+    case "orb": {
+      // a sphere of points turning slowly behind the subject (refs 15, 23)
+      const R0 = Math.min(W, H) * 0.36 * Math.max(0.7, a.s);
+      const spin = f * 0.006 * e;
+      body = (
+        <>
+          {glow(a.x, a.y, R0 * 3.2, R0 * 3.2, hsl(h, 95, 55, 0.22))}
+          {Array.from({ length: 150 }, (_, k) => {
+            const yy = 1 - (k / 149) * 2;
+            const rr = Math.sqrt(1 - yy * yy);
+            const th = k * 2.39996 + spin;
+            const z = Math.sin(th) * rr;
+            const sz = 2.5 + (z + 1) * 2.2;
+            return <div key={k} style={{ position: "absolute", left: a.x + Math.cos(th) * rr * R0 - sz / 2, top: a.y + yy * R0 - sz / 2, width: sz, height: sz, borderRadius: 99, background: hsl(h + z * 30, 100, 72), opacity: 0.18 + (z + 1) * 0.32 }} />;
+          })}
+        </>
+      );
+      break;
+    }
     case "arcs": {
       const r1 = Math.max(W, H) * 0.55;
       body = (

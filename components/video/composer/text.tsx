@@ -18,6 +18,7 @@ export function Headline({ c, tb, out = 0, plate, hide, si }: { c: Ctx; tb: Text
   const box = tb.box;
   const lines = tb.lines;
   const kickerK = tb.kicker ? enterK(m, f, (tb.words[0]?.at ?? 0) - 8) : 0;
+  if (tb.reveal === "beat") return <Beat c={c} tb={tb} si={si} hide={hide} />;
   return (
     <div data-scene={si} style={{ position: "absolute", left: box.x - box.w / 2, top: box.y - box.h / 2, width: box.w, height: box.h, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: tb.align === "center" ? "center" : tb.align === "right" ? "flex-end" : "flex-start", opacity: 1 - out, zIndex: 3 }}>
       {tb.kicker && (
@@ -78,11 +79,64 @@ function Plate({ c, tb, lh, upper, lower }: { c: Ctx; tb: TextBlock; lh: number;
   );
 }
 
+// One word at a time (refs 24, 26): each word big in the middle of the
+// words' place as it is said, replacing the one before (held at least 12
+// frames, so each can be read); the key words in the key style.
+function Beat({ c, tb, si, hide }: { c: Ctx; tb: TextBlock; si?: number; hide?: (wi: number) => boolean }) {
+  const { art, f, m } = c;
+  const upper = art.case === "upper";
+  const lower = art.case === "lower";
+  const starts: number[] = [];
+  tb.words.forEach((w, i) => starts.push(Math.max(w.at - 2, i ? starts[i - 1] + 12 : -Infinity)));
+  const wi = starts.findLastIndex((s) => s <= f);
+  if (wi < 0 || hide?.(wi)) return null;
+  const w = tb.words[wi];
+  const text = upper ? w.t.toUpperCase() : lower ? w.t.toLowerCase() : w.t;
+  const box = tb.box;
+  const est = (typeof document === "undefined" ? text.length * 0.6 : measureText({ text, fontFamily: c.display, fontSize: 100, fontWeight: art.weight, letterSpacing: `${art.tracking}em`, validateFontIsLoaded: false }).width / 100) || 1;
+  const size = Math.max(tb.size, Math.min(tb.size * 2, (box.w * 0.94) / est, box.h * 0.9));
+  const k = enterK(m, f, starts[wi], 8);
+  return (
+    <div data-scene={si} style={{ position: "absolute", left: box.x - box.w / 2, top: box.y - box.h / 2, width: box.w, height: box.h, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+      <span data-qa="word" data-key={`${si ?? 0}:w${wi}`} style={{ display: "inline-block", whiteSpace: "nowrap", fontFamily: c.display, fontSize: size, fontWeight: art.weight, letterSpacing: `${art.tracking}em`, color: c.pal.ink, transform: `scale(${mix(1.18, 1, k).toFixed(4)})`, opacity: clamp01(k * 2) }}>
+        <Word c={c} text={text} k={1} reveal="word" keyed={w.key} at={starts[wi] + 2} />
+      </span>
+    </div>
+  );
+}
+
+// a word's letters, scattered (seeded by the word) and coming together as k goes to 1 (ref 15)
+function Letters({ text, k }: { text: string; k: number }) {
+  const r = 1 - k;
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) >>> 0;
+  return (
+    <>
+      {[...text].map((ch, i) => {
+        const a = ((h >>> (i % 24)) % 360) * (Math.PI / 180) + i * 2.4;
+        const d = 0.9 + ((i * 37 + h) % 7) / 6;
+        const kk = clamp01(k * 1.25 - (i % 5) * 0.05);
+        const rr = 1 - kk;
+        return (
+          <span key={i} style={{ display: "inline-block", whiteSpace: "pre", transform: `translate(${(Math.cos(a) * d * rr).toFixed(3)}em, ${(Math.sin(a) * d * rr).toFixed(3)}em) rotate(${((((h >> i) % 90) - 45) * rr).toFixed(1)}deg) scale(${mix(0.6, 1, kk).toFixed(3)})`, opacity: clamp01(kk * 1.8 + (r < 0.02 ? 1 : 0)) }}>
+            {ch}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 function Word({ c, text, k, reveal, keyed, at }: { c: Ctx; text: string; k: number; reveal: TextBlock["reveal"]; keyed: boolean; at: number }) {
   const { pal, art, f, m } = c;
   const r = 1 - k;
   let style: CSSProperties;
+  // (the letters themselves move: assemble)
+  const body = reveal === "assemble" && k < 1 ? <Letters text={text} k={k} /> : text;
   switch (reveal) {
+    case "assemble": style = { display: "inline-block" }; break;
+    // (wide-spaced, closing up to the face's own spacing; the space it takes is the word's own)
+    case "track": style = { display: "inline-block", letterSpacing: `${(r * 0.32).toFixed(3)}em`, marginRight: `${(-r * 0.32 * text.length).toFixed(3)}em`, opacity: clamp01(k * 1.5), filter: r > 0.02 ? `blur(${r * 6}px)` : undefined }; break;
     case "mask": style = { display: "inline-block", transform: `translateY(${r * 105}%)` }; break;
     case "rise": style = { display: "inline-block", transform: `translateY(${r * 0.45}em)`, opacity: clamp01(k * 1.6), filter: r > 0.02 ? `blur(${r * 8}px)` : undefined }; break;
     case "scale": style = { display: "inline-block", transform: `scale(${mix(1.5, 1, k)})`, opacity: clamp01(k * 1.6), filter: r > 0.02 ? `blur(${r * 10}px)` : undefined }; break;
@@ -93,7 +147,7 @@ function Word({ c, text, k, reveal, keyed, at }: { c: Ctx; text: string; k: numb
     case "line": style = { display: "inline-block", transform: `translateY(${r * 0.35}em)`, opacity: clamp01(k * 1.5), filter: r > 0.02 ? `blur(${r * 10}px)` : undefined }; break;
     default: style = { display: "inline-block", transform: `translateY(${r * 0.18}em)`, opacity: clamp01(k * 1.4), filter: r > 0.02 ? `blur(${r * 12}px)` : undefined };
   }
-  if (!keyed) return <span style={style}>{text}</span>;
+  if (!keyed) return <span style={style}>{body}</span>;
   // the key word's moment: just after it is said
   const kk = enterK(m, f, at + 4, 16);
   const key = art.key;
@@ -101,13 +155,13 @@ function Word({ c, text, k, reveal, keyed, at }: { c: Ctx; text: string; k: numb
     return (
       <span style={{ ...style, position: "relative", color: pal.onFill, padding: "0 0.22em", margin: "0 -0.1em" }}>
         <span style={{ position: "absolute", inset: "0.06em 0", borderRadius: Math.min(999, art.radius * 2 + 12), background: `linear-gradient(120deg, ${pal.fill}, ${pal.fill2})`, transform: `scaleX(${mix(0.3, 1, kk)})`, opacity: clamp01(kk * 2), zIndex: 0 }} />
-        <span style={{ position: "relative", color: kk > 0.4 ? pal.onFill : pal.ink }}>{text}</span>
+        <span style={{ position: "relative", color: kk > 0.4 ? pal.onFill : pal.ink }}>{body}</span>
       </span>
     );
   if (key === "underline")
     return (
       <span style={{ ...style, position: "relative" }}>
-        {text}
+        {body}
         <span style={{ position: "absolute", left: 0, bottom: "0.02em", height: "0.09em", width: `${kk * 100}%`, borderRadius: 99, background: pal.accent }} />
       </span>
     );
@@ -115,14 +169,14 @@ function Word({ c, text, k, reveal, keyed, at }: { c: Ctx; text: string; k: numb
     return (
       <span style={{ ...style, position: "relative" }}>
         <span style={{ position: "absolute", inset: "0.02em -0.14em", border: `0.05em solid ${pal.accent}`, borderRadius: Math.min(24, art.radius), clipPath: `inset(0 ${(1 - kk) * 100}% 0 0)` }} />
-        {text}
+        {body}
       </span>
     );
-  if (key === "outline") return <span style={{ ...style, color: kk > 0.3 ? "transparent" : pal.ink, WebkitTextStroke: `0.03em ${pal.accent}` }}>{text}</span>;
-  if (key === "italic") return <span style={{ ...style, fontStyle: "italic", color: pal.accent }}>{text}</span>;
-  if (key === "glow") return <span style={{ ...style, color: pal.accent, textShadow: `0 0 ${Math.round(30 * kk)}px ${pal.glow}` }}>{text}</span>;
+  if (key === "outline") return <span style={{ ...style, color: kk > 0.3 ? "transparent" : pal.ink, WebkitTextStroke: `0.03em ${pal.accent}` }}>{body}</span>;
+  if (key === "italic") return <span style={{ ...style, fontStyle: "italic", color: pal.accent }}>{body}</span>;
+  if (key === "glow") return <span style={{ ...style, color: pal.accent, textShadow: `0 0 ${Math.round(30 * kk)}px ${pal.glow}` }}>{body}</span>;
   if (key === "gradient")
-    return <span style={{ ...style, background: `linear-gradient(110deg, ${pal.accent}, ${pal.accent2})`, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", paddingRight: "0.04em" }}>{text}</span>;
-  return <span style={{ ...style, color: mixColor(kk, pal.ink, pal.accent) }}>{text}</span>;
+    return <span style={{ ...style, background: `linear-gradient(110deg, ${pal.accent}, ${pal.accent2})`, WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent", paddingRight: "0.04em" }}>{body}</span>;
+  return <span style={{ ...style, color: mixColor(kk, pal.ink, pal.accent) }}>{body}</span>;
 }
 const mixColor = (k: number, a: string, b: string) => (k > 0.5 ? b : a);
