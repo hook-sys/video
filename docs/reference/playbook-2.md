@@ -98,8 +98,14 @@ parts different).
 Admin → Settings has a switch for everything: looks on/off, the Director
 choosing, mixing, no repeats, every option of every part, every reference.
 
-**Adding references:** for each new video, add its contact sheet and numbers
-here and one line to `recipes.ts`. Parts we cannot draw yet are listed in
+**Adding references:** `npm run refs:ingest -- <videos, folders or direct
+links>` (scripts/references/ingest.mjs) makes each one's contact sheet
+(`ref-NN.jpg`), measures it (cuts, average shot, motion, still share, dark
+share, light, saturation, main hue and how far it turns → `metrics-3.json`),
+writes a row in `playbook-3.md` and a draft recipe in `recipes.ts` (its
+ground, colour turning, rhythm and cuts from the numbers). Each draft is then
+finished from its sheet: cards, panel, icons, accent, backdrop, type size,
+ghost/frame/confetti and the note. Parts we cannot draw yet are listed in
 "Techniques seen here that we cannot do yet" until they are built.
 
 Also built: wide-spaced words closing up (reveal "track", refs 09 and 21).
