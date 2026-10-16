@@ -23,12 +23,4 @@ export async function plansOf(projectId: string): Promise<{ id: string; plans: C
   return { id: project.id, plans: composer.plans };
 }
 
-// what the check found kept with the project, as the server's check would
-export async function saveResult(projectId: string, result: object) {
-  const db = createAdminClient();
-  const { data } = await db.from("projects").select("brief").eq("id", projectId).single();
-  const brief = (data?.brief as { composer?: object } | null) ?? {};
-  if (brief.composer) await db.from("projects").update({ brief: { ...brief, composer: { ...brief.composer, frames: result } } }).eq("id", projectId);
-}
-
 export const check = (plan: ComposerPlan, samples: ProbeSample[]) => checkFrames(plan, samples);

@@ -8,10 +8,10 @@
 //   npm run check:frames -- --plan plan.json        (a plan from a file)
 //
 //   --stills <folder>   a picture of each finding (and one per scene)
-//   --save              keep the result with the project (as the server's check does)
 //   --browser <path>    a Chrome to use (else Remotion's own, downloaded once)
 //
-// Needs .env.local (the project's database) for an id; the film is bundled
+// Read-only: it never writes to the database (the result is printed, the
+// stills go to a folder here). Needs .env.local (the project's database) for an id; the film is bundled
 // first when .remotion-bundle is missing (npm run build makes it too).
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -32,9 +32,13 @@ const flag = (name) => {
 const planFile = opt("--plan");
 const stills = opt("--stills");
 const browser = opt("--browser");
-const save = flag("--save");
+// (--save was removed: this tool runs against the live database and must never write to it)
+if (flag("--save")) {
+  console.error("--save is not supported: check:frames never writes to the database. Run it again without --save.");
+  process.exit(2);
+}
 if (!planFile && !args.length) {
-  console.error("usage: npm run check:frames -- <project id> [--stills folder] [--save] [--browser path]\n       npm run check:frames -- --plan plan.json");
+  console.error("usage: npm run check:frames -- <project id> [--stills folder] [--browser path]\n       npm run check:frames -- --plan plan.json");
   process.exit(1);
 }
 if (existsSync(path.join(root, ".env.local"))) process.loadEnvFile(path.join(root, ".env.local"));
@@ -114,10 +118,6 @@ for (const id of args) {
   for (const [i, plan] of plans.entries()) {
     const r = await run(`${full.slice(0, 8)}${plans.length > 1 ? `-v${i + 1}` : ""}`, plan);
     if (!r.ok) failed++;
-    if (save && i === 0) {
-      await P.saveResult(full, r);
-      console.log("  saved with the project");
-    }
   }
 }
 process.exit(failed ? 1 : 0);
