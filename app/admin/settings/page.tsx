@@ -9,9 +9,14 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
   const { saved } = await searchParams;
   const { role } = await requireAdmin("settings");
   const values = await getSettings();
+  // "New version" on: the old version's settings are hidden; their stored
+  // values are sent back unchanged (below), so saving never turns them off
+  const nv = values.feature_new_version === true;
+  const kept = nv ? SETTINGS.filter((s) => s.oldOnly) : [];
   // (general settings first, then each group under its heading, in order)
   const groups: [string, typeof SETTINGS][] = [];
   for (const s of SETTINGS) {
+    if (nv && s.oldOnly) continue;
     const g = s.group ?? "";
     const at = groups.find(([k]) => k === g);
     if (at) at[1].push(s);
@@ -22,7 +27,9 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
     <>
       <PageHeader title="Settings" sub="Controls for the whole app. Changes apply immediately and are written to the audit log." />
       {typeof saved === "string" && <Notice>{saved === "0" ? "Nothing changed." : `Saved ${saved} setting${saved === "1" ? "" : "s"}.`}</Notice>}
+      {nv && <Notice>New version is on: {kept.length} settings of the old version are hidden and have no effect on new videos. They come back, as they were, when New version is turned off.</Notice>}
       <form action={saveSettings} className="flex flex-col gap-4">
+        {kept.map((s) => (s.type === "bool" ? values[s.key] === true && <input key={s.key} type="hidden" name={s.key} value="on" /> : <input key={s.key} type="hidden" name={s.key} value={String(values[s.key])} />))}
         {groups.map(([group, list]) => (
           <Card key={group || "general"}>
             {group && <p className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-400">{group}</p>}

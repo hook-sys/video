@@ -8,7 +8,7 @@ import { getAiConfig } from "@/lib/ai/models";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
-import { type TierId, balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, pickable, refundVideo } from "@/lib/billing";
+import { balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, refundVideo } from "@/lib/billing";
 import { newVersionOn } from "@/lib/new-version";
 import { V2_VOICE_TYPES, type V2Details } from "@/lib/v2/form";
 import { startPipelineV2 } from "@/lib/v2/pipeline";
@@ -81,11 +81,9 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
   }
 
   const billing = await getBilling();
-  const asked = String(formData.get("quality") ?? "standard");
   const paid = access.admin || (await hasPaid(user.id));
-  const picked = pickable(billing, asked, paid);
-  if (!picked && asked !== "standard") return { error: billing.tiers[asked as TierId]?.paidOnly && !paid ? `${billing.tiers[asked as TierId].name} is for customers who have bought credits. Buy credits to use it, or choose ${billing.tiers.standard.name}.` : "That quality level isn't available." };
-  const quality = picked ?? "standard";
+  // one level: every new-version video is priced as Standard (/admin/billing)
+  const quality = "standard" as const;
   if (!paid && mode === "script" && script.length > billing.trialScriptMax)
     return { error: `With welcome credits the script can be up to ${billing.trialScriptMax} characters. Shorten it, or buy credits for a longer video.` };
   if (!paid && mode === "upload" && heardSeconds > trialSecondsOf(billing.trialScriptMax))

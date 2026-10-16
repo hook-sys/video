@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import type { TierId } from "@/lib/billing-config";
 import { createProjectV2 } from "@/app/projects/v2-actions";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import { BRAND_NAME_MAX, CTA_MAX, FORMATS, LOGO_MAX_BYTES, VERCEL_SCREENSHOT_TOTAL_BYTES, VOICE_LANGUAGES, VOICE_SCRIPT_MAX, VOICE_STYLES, estimateVideoSeconds, validateLogo, voiceVideoSeconds } from "@/lib/projects";
 import { V2_VOICE_TYPES } from "@/lib/v2/form";
-import { Field, Step, Upload, VoicePicker, colourOf, type Level, type Prefill } from "./create-project-form";
+import { Field, Step, Upload, VoicePicker, colourOf, type Prefill } from "./create-project-form";
 
 const input =
   "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
@@ -31,8 +30,8 @@ function secondsOf(file: File): Promise<number> {
 
 // "New version" (admin → Settings): the script or the customer's own
 // recording, the logo, the voice, the format, the name and the call to action.
-// No website, no screenshots, no questions.
-export function CreateProjectFormV2({ prefill, voices = [], levels = [], credits = null, scriptMax = VOICE_SCRIPT_MAX }: { prefill?: Prefill; voices?: VoiceOption[]; levels?: Level[]; credits?: number | null; scriptMax?: number }) {
+// No website, no screenshots, no questions, one quality level.
+export function CreateProjectFormV2({ prefill, voices = [], credits = null, scriptMax = VOICE_SCRIPT_MAX }: { prefill?: Prefill; voices?: VoiceOption[]; credits?: number | null; scriptMax?: number }) {
   const [state, action, pending] = useActionState(createProjectV2, {});
   const [mode, setMode] = useState<"script" | "upload">("script");
   const [script, setScript] = useState(prefill?.script ?? "");
@@ -41,7 +40,6 @@ export function CreateProjectFormV2({ prefill, voices = [], levels = [], credits
   const [format, setFormat] = useState<string>(FORMATS[0]);
   const [logo, setLogo] = useState<{ name: string; size: number; url: string; colour: string | null } | null>(null);
   const [logoError, setLogoError] = useState<string>();
-  const [quality, setQuality] = useState<TierId>("standard");
   const tooBig = mode === "upload" && voiceFile && voiceFile.size + (logo?.size ?? 0) > VERCEL_SCREENSHOT_TOTAL_BYTES ? `The voice file and the icon together must be ${VERCEL_SCREENSHOT_TOTAL_BYTES / 1024 / 1024} MB or smaller.` : undefined;
   const error = logoError ?? voiceError ?? tooBig ?? state.error;
   const seconds = mode === "upload" ? (voiceFile?.seconds ? voiceVideoSeconds(voiceFile.seconds) : 0) : script.trim() ? estimateVideoSeconds(script) : 0;
@@ -54,7 +52,6 @@ export function CreateProjectFormV2({ prefill, voices = [], levels = [], credits
         <input type="hidden" name="voice_mode" value={mode} />
         <input type="hidden" name="voice_seconds" value={voiceFile?.seconds ? voiceFile.seconds.toFixed(2) : ""} />
         <input type="hidden" name="format" value={format} />
-        <input type="hidden" name="quality" value={quality} />
         <input type="hidden" name="brand_color" value={logo?.colour ?? ""} />
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
 
@@ -165,19 +162,6 @@ export function CreateProjectFormV2({ prefill, voices = [], levels = [], credits
             ))}
           </div>
         </Step>
-
-        {levels.length > 1 && (
-          <Step n={mode === "script" ? 5 : 4} title="Quality">
-            <div className="grid gap-3 sm:grid-cols-3">
-              {levels.map((l) => (
-                <button key={l.id} type="button" disabled={l.soon || l.locked} onClick={() => setQuality(l.id)} aria-pressed={quality === l.id} className={`flex flex-col items-start gap-1 rounded-2xl border bg-white/70 p-4 text-left disabled:cursor-not-allowed disabled:opacity-60 ${quality === l.id ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/12 hover:border-foreground/30"}`}>
-                  <span className="text-base font-semibold">{l.name}</span>
-                  <span className="text-xs text-foreground/60">{l.soon ? "Coming soon" : l.locked ? "Buy credits to unlock" : l.blurb}</span>
-                </button>
-              ))}
-            </div>
-          </Step>
-        )}
 
         {error && <p className="rounded-xl bg-[#fdecea] px-4 py-3 text-sm text-[#a1281b]">{error}</p>}
         <button disabled={blocked} className="w-full rounded-full bg-[#0a66d6] px-6 py-4 text-base font-semibold text-white hover:bg-[#0859bd] disabled:opacity-60">

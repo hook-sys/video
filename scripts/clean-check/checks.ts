@@ -466,14 +466,17 @@ export async function runChecks(): Promise<Check[]> {
   {
     const nv = SETTINGS.find((x) => x.key === "feature_new_version");
     add("the switch is off unless a super admin turns it on", !!nv && nv.fallback === false && nv.superAdmin === true && nv.type === "bool", nv ? `fallback ${nv.fallback} · super admin only ${nv.superAdmin}` : "missing");
+    const old = SETTINGS.filter((x) => x.oldOnly).map((x) => x.key);
+    const shouldHide = ["feature_creative_director", "feature_video_rules", "feature_story_shapes", "feature_director_motion", "feature_visual_match", "form_ending", "form_screenshots", "form_direction"];
+    add("new version on: the old version's settings are hidden (the switch, looks and techniques stay)", shouldHide.every((k) => old.includes(k)) && !old.includes("feature_new_version") && !old.some((k) => k.startsWith("tech_") || k.startsWith("look_")), `${old.length} hidden: ${old.join(", ")}`);
     const engines = [engineOf({ engine: "v2" }), engineOf({ engine: "v2", voice: {} }), engineOf(null), engineOf({}), engineOf({ engine: "v1" }), engineOf("v2"), engineOf({ category: "finance" })];
     add("each video keeps its version (only engine v2 is v2)", engines.join(",") === "v2,v2,v1,v1,v1,v1,v1", engines.join(","));
     const d = v2DetailsOf({ engine: "v2", voice: { source: "upload", name: null, path: "u/p/voice/upload.mp3" } });
     add("a v2 video's details read back", d?.voice.source === "upload" && d.voice.path === "u/p/voice/upload.mp3" && v2DetailsOf({ category: "finance" }) === null && v2DetailsOf({ engine: "v2" })?.voice.source === "script", JSON.stringify(d));
     const cfg = normalizeConfig({ v2: { text: " google/gemini-2.5-flash ", whisper: "fal-ai/whisper" } });
     add("its models are only what the admin saved (none by default)", defaultConfig().v2.text === "" && defaultConfig().v2.whisper === "" && cfg.v2.text === "google/gemini-2.5-flash" && cfg.v2.whisper === "fal-ai/whisper" && normalizeConfig({}).v2.text === "", JSON.stringify(cfg.v2));
-    const missing = await v2Text(null).then(() => "no error", (e: Error) => e.message);
-    add("no text model set: a clear error, no fallback", /No text model is set for the new version/.test(missing), missing);
+    const missing = await v2Text({}, normalizeConfig({ text: { model: "google/gemini-2.5-flash" } })).then(() => "no error", (e: Error) => e.message);
+    add("no Director model set: a clear error, no fallback (not even the old main model)", /No Director model is set for the new version/.test(missing), missing);
     const empty = ["", "  ", null, undefined].map((m) => {
       try {
         return v2DirectorModel(m);
@@ -484,9 +487,9 @@ export async function runChecks(): Promise<Check[]> {
     add("an empty Director model is an error, never OPENAI_MODEL / gpt-5-mini", empty.every((m) => /Director has no model/.test(m)) && v2DirectorModel(" google/gemini-2.5-flash ") === "google/gemini-2.5-flash", empty[0]);
     const key = process.env.FAL_KEY;
     process.env.FAL_KEY = "test";
-    const picked = await v2Text("anthropic/claude-opus-5.5").catch(() => null);
+    const picked = await v2Text({}, normalizeConfig({ v2: { text: "anthropic/claude-opus-5.5" } })).catch(() => null);
     process.env.FAL_KEY = key;
-    add("the level's model runs through fal's OpenRouter router", picked?.provider === "fal" && picked.model === "anthropic/claude-opus-5.5", `${picked?.provider} ${picked?.model}`);
+    add("the Director model runs through fal's OpenRouter router", picked?.provider === "fal" && picked.model === "anthropic/claude-opus-5.5", `${picked?.provider} ${picked?.model}`);
     const voice = { ...defaultConfig().voice, model: "fal-ai/elevenlabs/tts/turbo-v2.5", female: "", male: "Brian", choices: parseVoiceChoices("Sarah, female, Warm") };
     const noFemale = (() => {
       try {

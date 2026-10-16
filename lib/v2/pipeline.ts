@@ -14,7 +14,7 @@ import { getSettings } from "@/lib/app-settings";
 import { brandOf, loadNeverList, pastOf } from "@/lib/director-context";
 import { checkProjectFrames, prepareFrameCheck } from "@/lib/frame-check";
 import { renderWithin } from "@/lib/render-server";
-import { TIER_IDS, type TierId, getBilling, refundVideo, settleVideo } from "@/lib/billing";
+import { TIER_IDS, type TierId, refundVideo, settleVideo } from "@/lib/billing";
 import type { PipelineStep } from "@/lib/pipeline";
 import { composeVariants } from "@/components/video/composer/variants";
 import { scorePlan } from "@/components/video/composer/score";
@@ -98,10 +98,10 @@ export async function runPipelineV2(projectId: string, userId: string) {
     const v2 = v2DetailsOf(project?.details);
     if (!project || !v2) return void (await fail("This video was not made with the new version."));
     const ai = await getAiConfig();
-    const billing = await getBilling();
+    // (one level: priced as Standard; a video made before keeps its level)
     const tierId: TierId = (TIER_IDS as readonly string[]).includes(project.quality) ? (project.quality as TierId) : "standard";
     // every model this video needs is checked before anything is spent
-    const text = await v2Text(billing.tiers[tierId].model, { timeout: 120_000 });
+    const text = await v2Text({ timeout: 120_000 });
     await v2Whisper(ai);
     if (v2.voice.source === "script" && !ai.voice.model) throw new Error("No voice model is set for the new version. A super admin must choose it on /admin/models.");
 

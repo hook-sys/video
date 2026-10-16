@@ -56,7 +56,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
       )}
       {/* (only welcome credits so far: a script short enough for them) */}
       {(await newVersionOn()) ? (
-        <CreateProjectFormV2 prefill={prefill} voices={voices} levels={levels} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} />
+        <CreateProjectFormV2 prefill={prefill} voices={voices} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} />
       ) : (
       <CreateProjectForm prefill={prefill} voices={voices} levels={levels} minSeconds={billing.minSeconds} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} ask={ask} />
       )}
