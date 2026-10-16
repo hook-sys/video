@@ -9,6 +9,7 @@ import { ALL_STYLES, type StyleRules, type StyleT, inStyle, pickStyle } from "./
 import { RECIPES } from "./recipes";
 import { matched } from "./meaning";
 import { withoutTechniques } from "./techniques";
+import type { StoryShape } from "@/lib/studio";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, LOOKS, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
 import type { ArtT, Brand, ComposerPlan, GuideKind, ItemT, JourneyKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
 
@@ -22,7 +23,8 @@ import type { ArtT, Brand, ComposerPlan, GuideKind, ItemT, JourneyKind, Reveal, 
 export type LooseItem = Record<string, unknown>;
 export type Ideas = {
   arts: Record<string, unknown>[];
-  scenes: { at: number; text: { from: number; to: number; size?: string; key?: string[] } | null; kicker?: string | null; options: { layout?: string | null; arrange?: string | null; items: LooseItem[] }[] }[];
+  // enter, reveal, camera: the Director's own choice for the scene (null: drawn here)
+  scenes: { at: number; text: { from: number; to: number; size?: string; key?: string[] } | null; kicker?: string | null; enter?: string | null; reveal?: string | null; camera?: string | null; options: { layout?: string | null; arrange?: string | null; items: LooseItem[] }[] }[];
 };
 
 const str = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
@@ -108,25 +110,29 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
     const o = opts[(v + (i % 2 ? R.int(0, 2) : 0)) % opts.length];
     const items = (o.items ?? []).map((x) => mendItem(x, n)).filter((x): x is ItemT => !!x).slice(0, 6);
     const carried = items.some((x) => x.id && i > 0);
-    let enter: TransitionKind = i === 0 ? "fade" : carried && R.chance(0.7) ? "morph" : R.chance(0.18) ? accentT : R.pick(family.filter((t) => t !== prevT));
+    // (the Director's own way in where it chose one; a carried thing may morph)
+    const asked = i === 0 ? null : oneOf(s.enter, TRANSITIONS);
+    let enter: TransitionKind = i === 0 ? "fade" : asked && (asked !== "morph" || carried) ? asked : carried && R.chance(0.7) ? "morph" : R.chance(0.18) ? accentT : R.pick(family.filter((t) => t !== prevT));
     if (!enter) enter = "blur";
+    const reveal = oneOf(s.reveal, REVEALS.filter((r) => r !== "beat"));
     prevT = enter;
     const from = int(s.text?.from, n), to = int(s.text?.to, n);
     return {
       at: int(s.at, n) ?? 0,
-      text: s.text && from != null && to != null ? { from, to, size: oneOf(s.text.size, ["s", "m", "l", "xl"] as const) ?? "l", reveal: R.chance(0.75) ? reveals[0] : reveals[1], align: null, key: (s.text.key ?? []).map((k) => String(k).slice(0, 30)).slice(0, 3) } : null,
+      text: s.text && from != null && to != null ? { from, to, size: oneOf(s.text.size, ["s", "m", "l", "xl"] as const) ?? "l", reveal: reveal ?? (R.chance(0.75) ? reveals[0] : reveals[1]), align: null, key: (s.text.key ?? []).map((k) => String(k).slice(0, 30)).slice(0, 3) } : null,
       kicker: str(s.kicker, 36),
       layout: oneOf(o.layout, LAYOUTS) ?? "center",
       arrange: oneOf(o.arrange, ARRANGES),
       ratio: Number(R.range(0.38, 0.5).toFixed(2)),
       dark: art.scheme === "mixed" ? (i % 3 === 2 ? true : i % 3 === 0 ? false : R.chance(0.5)) : null,
-      camera: R.chance(0.7) ? null : R.pick(CAMERAS),
+      camera: oneOf(s.camera, CAMERAS) ?? (R.chance(0.7) ? null : R.pick(CAMERAS)),
       enter,
       items,
     };
   });
-  // the film ends on the brand's ask
+  // the film ends on the brand's ask (the button says it as the customer did)
   const end = scenes[scenes.length - 1];
+  if (end && brand.cta) for (const x of end.items) if (x.kind === "button") x.title = brand.cta;
   if (end && !end.items.some((x) => x.kind === "button")) {
     end.items = [...end.items.filter((x) => x.kind === "logo"), { kind: "button", at: end.at, hit: end.text?.to ?? end.at, id: null, enter: null, variant: null, title: brand.cta, sub: brand.url || null, icon: null, value: null, values: null, rows: null, screen: null, size: "s", tilt: null }];
     if (!["top", "center", "bottom"].includes(end.layout)) end.layout = "top";
@@ -141,7 +147,7 @@ export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed
 // What the Motion Director decided that the build keeps (lib/studio.ts
 // CreativePlan): the camera language, the scheme, where the story turns and
 // the hero moment (word indexes), the motif.
-export type Creative = { language: Language; journey?: JourneyKind | null; guide?: GuideKind | null; recap?: boolean; scheme?: "dark" | "light" | "mixed"; hero?: number | null; turn?: number | null; motif?: { icon: string; label: string } | null };
+export type Creative = { shape?: StoryShape | null; language: Language; journey?: JourneyKind | null; guide?: GuideKind | null; recap?: boolean; scheme?: "dark" | "light" | "mixed"; hero?: number | null; turn?: number | null; motif?: { icon: string; label: string } | null };
 
 // A script shaped by the plan and the house rules (rules.ts): the plan's
 // scheme, the brand's energy; a motif badge where the story turns and at the
@@ -159,6 +165,22 @@ function shaped(script: ScriptT, creative: Creative | null | undefined, look: Co
     const hero = sceneOf(creative.hero);
     const marks = [...new Set([turn, hero, turn != null ? turn + 1 : null].filter((x): x is number => x != null && x > 0 && x < out.scenes.length - 1))];
     out = { ...out, scenes: out.scenes.map((sc, i) => (marks.includes(i) && !sc.items.some((it) => it.kind === "badge") && sc.items.length ? { ...sc, items: [...sc.items, { kind: "badge", at: sc.at, icon: resolveIcon(creative.motif!.icon) ?? "sparkles", title: creative.motif!.label, size: "s" }] } : sc)) };
+  }
+  // told as kinetic type (the plan by rule): the words are the picture — big
+  // type alone on every scene but the hero moment and the end
+  if (byRule && creative?.shape === "kinetic-type") {
+    const hero = sceneOf(creative.hero);
+    const last = out.scenes.length - 1;
+    out = { ...out, scenes: out.scenes.map((sc, i) => (i === hero || i === last || !sc.text ? sc : { ...sc, layout: "type", arrange: null, items: sc.items.filter((it) => it.kind === "badge"), text: { ...sc.text, size: "xl" } })) };
+  }
+  // told demo-first or feature-led: the film opens on the product (its screen, or its first card)
+  if (byRule && (creative?.shape === "demo-first" || creative?.shape === "feature-led") && out.scenes.length > 2) {
+    const want = creative.shape === "demo-first" ? ["device", "screenshot", "card"] : ["card", "device", "chart"];
+    const first = out.scenes[0];
+    const has = first.items.some((it) => want.includes(it.kind));
+    const pool = out.scenes.slice(1, -1).flatMap((sc) => sc.items);
+    const from = want.map((k) => pool.find((it) => it.kind === k)).find((it) => !!it);
+    if (!has && from) out = { ...out, scenes: [{ ...first, layout: first.text ? "center" : "visual", arrange: null, items: [...first.items.filter((it) => it.kind === "badge"), { ...from, id: null, at: first.at, hit: null, size: "l" }] }, ...out.scenes.slice(1)] };
   }
   return rules ? varyLayouts(houseRules(out, turn), seed) : out;
 }

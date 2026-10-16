@@ -26,14 +26,58 @@ export type BrandProfile = {
   source: "ai" | "rule";
 };
 
-export const BEATS = ["hook", "problem", "turn", "feature", "proof", "cta"] as const;
+export const BEATS = ["hook", "problem", "turn", "feature", "proof", "demo", "before", "after", "cta"] as const;
 export type Beat = (typeof BEATS)[number];
+
+// The story's shape: how the whole video is told (the narration's order never
+// changes — the shape decides what the scenes show and where the product first
+// appears). One per video, unlike this customer's last ones where the script allows.
+export const STORY_SHAPES = ["problem-led", "demo-first", "before-after", "feature-led", "kinetic-type"] as const;
+export type StoryShape = (typeof STORY_SHAPES)[number];
+export const SHAPE_NOTES: Record<StoryShape, string> = {
+  "problem-led": "opens on the pain the script names, turns when the product arrives, then what it does, ends on the ask (the classic arc — only when the script is built that way)",
+  "demo-first": "opens on the product already at work (its screen, its result) — no problem scene first; every scene shows the product doing what its words say; a problem the script names is shown in passing, beside the product",
+  "before-after": "the old way and the new one side by side all through: the opening a before (the old way's mess), then each scene pairs a before with its after (compare, a split, a card that changes), ending on the after",
+  "feature-led": "a run of features, one per scene, each with its own picture (a card, a screen, a chart) — no problem arc; opens on the strongest feature or the product's name",
+  "kinetic-type": "the words are the picture: big kinetic type on most scenes (layout type, or one small thing beside the words), a picture only at the hero moment and the end",
+};
+// the beat of each sentence in a shape (i: the sentence, n: how many, turn: where the product arrives)
+export function beatsOf(shape: StoryShape, texts: string[], turn: number): Beat[] {
+  const n = texts.length;
+  const proof = (t: string) => /\d|twice|double|half|faster|more|less/i.test(t);
+  return texts.map((t, i): Beat => {
+    if (i === n - 1 && n > 1) return "cta";
+    if (shape === "demo-first") return i === 0 ? "demo" : proof(t) ? "proof" : "feature";
+    if (shape === "feature-led") return i === 0 ? "hook" : proof(t) ? "proof" : "feature";
+    if (shape === "before-after") return i === 0 ? "before" : i < turn ? "before" : i === turn ? "turn" : "after";
+    if (shape === "kinetic-type") return i === 0 ? "hook" : i === turn ? "turn" : proof(t) ? "proof" : "feature";
+    return i === 0 ? "hook" : i < turn ? "problem" : i === turn ? "turn" : proof(t) ? "proof" : "feature";
+  });
+}
+// The shape a script supports, by rule (unlike the last ones where it can be).
+export function ruleShape(texts: string[], brandName: string, seed: number, recent: (StoryShape | null | undefined)[] = []): StoryShape {
+  const all = texts.join(" ").toLowerCase();
+  const first = (texts[0] ?? "").toLowerCase();
+  const name = brandName.toLowerCase();
+  const pain = /\b(tired|still|struggl|problem|hard|messy|lost|waste|stuck|chaos|boring|generic|fail|miss|slow|manual|spreadsheet|paper)\w*|\?/;
+  const contrast = /\b(no more|instead of|stop|without|from .+ to|before|after|old way|replace)\b/;
+  const fits: StoryShape[] = [];
+  if (name && first.includes(name)) fits.push("demo-first", "feature-led");
+  if (contrast.test(all)) fits.push("before-after");
+  if (pain.test(first)) fits.push("problem-led");
+  if (texts.length >= 4) fits.push("feature-led");
+  fits.push("demo-first", "kinetic-type");
+  const fresh = [...new Set(fits)].filter((x) => !recent.slice(0, 2).includes(x));
+  const pool = fresh.length ? fresh : [...new Set(fits)];
+  return pool[Math.abs(seed) % Math.min(pool.length, 3)];
+}
 export type CreativePlan = {
   idea: string; // the one idea the whole video is built on
   motif: { icon: string; label: string } | null; // a thing that comes back through the video
   hero: number; // the word the hero moment is on
   turn: number; // the word the product arrives on (the story turns)
   beats: { at: number; beat: Beat }[]; // the story, sentence by sentence
+  shape?: StoryShape; // how the story is told (older plans: none — told problem-led)
   language: Language; // one camera language for the whole video
   journey: JourneyKind | null;
   guide: GuideKind | null;
@@ -156,7 +200,7 @@ export function sentencesOf(words: Word[]): { from: number; to: number }[] {
   return out;
 }
 
-export function ruleCreative(profile: BrandProfile, words: Word[], brandName: string, seed: number, recent: (Language | null | undefined)[] = []): CreativePlan {
+export function ruleCreative(profile: BrandProfile, words: Word[], brandName: string, seed: number, recent: (Language | null | undefined)[] = [], recentShapes: (StoryShape | null | undefined)[] = [], fixed?: StoryShape): CreativePlan {
   const R = rng(stir(seed ^ 0x68e31da4) || 1);
   const sentences = sentencesOf(words);
   const textOf = (s: { from: number; to: number }) => words.slice(s.from, s.to + 1).map((w) => w.text).join(" ");
@@ -165,10 +209,10 @@ export function ruleCreative(profile: BrandProfile, words: Word[], brandName: st
   const turnI = turnS > 0 ? turnS : Math.max(1, Math.round(sentences.length / 3));
   const numbered = sentences.findIndex((s, i) => i >= turnI && /\d|twice|double|half/i.test(textOf(s)));
   const heroS = numbered >= 0 ? numbered : Math.min(sentences.length - 1, turnI);
-  const beats = sentences.map((s, i): { at: number; beat: Beat } => ({
-    at: s.from,
-    beat: i === 0 ? "hook" : i === sentences.length - 1 ? "cta" : i < turnI ? "problem" : i === turnI ? "turn" : /\d|twice|double|half|faster|more|less/i.test(textOf(s)) ? "proof" : "feature",
-  }));
+  const texts = sentences.map(textOf);
+  const shape = fixed ?? ruleShape(texts, brandName, seed, recentShapes);
+  const kinds = beatsOf(shape, texts, turnI);
+  const beats = sentences.map((s, i): { at: number; beat: Beat } => ({ at: s.from, beat: kinds[i] }));
   const language = pickLanguage(profile.mood, seed, recent);
   const journey = ["line", "carry", "words", "guide"].includes(language) ? PATHS[Math.floor(R.next() * PATHS.length) % PATHS.length] : null;
   const old = profile.before[0];
@@ -176,8 +220,10 @@ export function ruleCreative(profile: BrandProfile, words: Word[], brandName: st
     idea: (old ? `From ${old} to ${brandName}` : profile.promise ? profile.promise.replace(/[.!?।]+$/, "") : `${brandName}: one calm place for the whole job`).slice(0, 120),
     motif: MOTIF_OF[profile.category],
     hero: sentences[heroS]?.from ?? 0,
-    turn: sentences[turnI]?.from ?? 0,
+    // (told demo-first or feature-led: the product is there from the start)
+    turn: shape === "demo-first" || shape === "feature-led" ? 0 : (sentences[turnI]?.from ?? 0),
     beats,
+    shape,
     language,
     journey,
     guide: language === "guide" ? (["plane", "cursor", "orb"] as const)[Math.floor(R.next() * 3) % 3] : null,

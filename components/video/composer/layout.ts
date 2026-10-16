@@ -19,6 +19,18 @@ type Rect = { l: number; t: number; r: number; b: number };
 const rect = (l: number, t: number, r: number, b: number): Rect => ({ l, t, r, b });
 const ACCENTS = new Set(["badge", "shape", "cursor"]);
 export const isAccent = (it: Pick<ItemT, "kind">) => ACCENTS.has(it.kind);
+// What words on a plate may lie over: a picture (a screen, a phone, a logo, a
+// big icon) — never a thing full of its own words (a list, a table, a flow):
+// two texts on each other cannot be read.
+const PICTURES = new Set<ItemT["kind"]>(["screenshot", "device", "logo", "icon", "shape"]);
+export const platesOver = (items: Pick<ItemT, "kind">[]) => items.filter((it) => !isAccent(it)).every((it) => PICTURES.has(it.kind));
+// Shapes drawn as lines (a ring, a star, an arrow) are kept off the words and
+// the things; an orb's glow and a dot grid may lie behind them.
+const SOFT_SHAPES = new Set(["orb", "grid"]);
+export const hardShape = (it: Pick<ItemT, "kind" | "variant">) => it.kind === "shape" && !SOFT_SHAPES.has(it.variant ?? "ring");
+// things that may be dealt like cards, one partly over the other (a cascade)
+const DECK = new Set<ItemT["kind"]>(["card", "device", "chart", "screenshot", "compare", "flow", "steps", "quote"]);
+export const dealt = (items: Pick<ItemT, "kind">[]) => items.filter((it) => !isAccent(it)).every((it) => DECK.has(it.kind));
 // (letters of any script: Bengali keys match too)
 const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}%$€£৳]+/gu, "");
 const LEAD = 6;
@@ -196,7 +208,8 @@ export function layoutFits(layout: LayoutKind, items: ItemT[], hasText: boolean)
     case "type": return !vis.length;
     case "inline": return hasText && vis.some((it) => it.kind === "icon") && vis.length <= 3;
     case "label": return hasText && vis.some((it) => FRAMED.has(it.kind)) && vis.length <= 3;
-    case "caption": return hasText && vis.length >= 1 && vis.length <= 2 && FILLS.has(vis[0].kind);
+    case "caption": return hasText && vis.length >= 1 && vis.length <= 2 && FILLS.has(vis[0].kind) && platesOver(vis);
+    case "over": return vis.length > 0 && (!hasText || platesOver(vis));
     case "around": return hasText && vis.length >= 2 && vis.length <= 4 && vis.every((it) => baseSize(it as PlacedItem)[0] <= 760);
     case "between": return hasText && vis.length === 2 && vis.every((it) => baseSize(it as PlacedItem)[0] <= 1120);
     default: return vis.length > 0;
@@ -336,6 +349,8 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   const shown = ws.map((w, i) => shownWord(w.text, i === 0, i === ws.length - 1));
   let layout = s.layout;
   if (layout === "type" && vis.length) layout = "center";
+  // (words on a plate over a list, a table, a flow: two texts on each other — the words go above it, or are its label)
+  if ((layout === "over" || layout === "caption") && hasText && !platesOver(vis)) layout = layoutFits("label", items, hasText) ? "label" : "center";
   if (COMPOSED.has(layout) && !layoutFits(layout, items, hasText)) layout = vis.length ? "center" : "type";
   // the words in a place: sized to fill it, each coming in as it is said —
   // only as much earlier as they need to be read before the scene goes (and
@@ -383,45 +398,87 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
       tb = textIn(reg.text, cap, layout === "visual" ? 2 : s.text!.size === "xl" ? 3 : 4, s.text!.align ?? reg.align, anchor);
       const { y: cy, h: bh } = tb.box;
       // give the things the room the words did not take
-      if (reg.vis && (layout === "top" || layout === "center")) reg.vis.t = Math.max(reg.vis.t - 120, cy + bh / 2 + 56);
+      if (reg.vis && (layout === "top" || layout === "center")) reg.vis.t = Math.max(reg.vis.t - 120, cy + bh / 2 + 72);
       if (reg.vis && layout === "bottom") reg.vis.b = Math.min(reg.vis.b + 100, cy - bh / 2 - 56);
       if (reg.vis && layout === "corner") reg.vis.t = Math.max(reg.vis.t - 60, cy + bh / 2 + 40);
     }
     const SAFE = safe();
     const visRect = reg.vis ?? rect(SAFE.l, SAFE.t, SAFE.r, SAFE.b);
     kind = s.arrange ?? (vis.length > 1 ? "row" : "single");
-    const spots = vis.length ? arrange(vis, kind, visRect, p.seed) : [];
+    // (only cards are dealt one over the other: an icon or a logo laid on a card hides it)
+    if (kind === "cascade" && !dealt(vis)) kind = (visRect.r - visRect.l) / (visRect.b - visRect.t) > 1.3 ? "row" : "column";
+    let spots = vis.length ? arrange(vis, kind, visRect, p.seed) : [];
+    // (an orbit or a scatter whose things land on each other: set in a row or a column instead)
+    if (kind !== "cascade" && spots.some((a, i) => spots.some((b, j) => j > i && overlap(a.box, b.box) > 0.01))) {
+      kind = (visRect.r - visRect.l) / (visRect.b - visRect.t) > 1.3 ? (vis.length > 3 ? "grid" : "row") : "column";
+      spots = arrange(vis, kind, visRect, p.seed);
+    }
     placed = vis.map((it, i) => ({ ...it, ...timeOf(it), box: spots[i].box, scale: spots[i].scale, z: spots[i].z }));
   }
   if (layout === "over") placed.forEach((it) => (it.z = 0));
   // (words on a plate over the picture: they may cover it)
   const plated = layout === "over" || layout === "caption";
-  // accents: a badge sits on a thing's corner, a shape behind, the cursor on its target
+  // accents: a badge sits beside its thing, a shape in the free room, the cursor on its target
+  const SAFE = safe();
+  const inside = (b: Box) => ({ ...b, x: Math.max(SAFE.l + b.w / 2, Math.min(SAFE.r - b.w / 2, b.x)), y: Math.max(SAFE.t + b.h / 2, Math.min(SAFE.b - b.h / 2, b.y)) });
+  // a box clear of the words and of every thing already placed (a clear gap around each)
+  const clear = (b: Box, gap: number) => {
+    const g = { ...b, w: b.w + gap * 2, h: b.h + gap * 2 };
+    return (!tb || overlap(g, tb.box) === 0) && !placed.some((q) => (q.kind !== "shape" || hardShape(q)) && q.kind !== "cursor" && overlap(g, q.box) > 0);
+  };
+  // the free spot nearest to a wish: the spots asked for first, then any on a grid over the frame
+  const freeSpot = (wish: Box[], w: number, h: number, gap: number): Box | null => {
+    const first = wish.map(inside).find((b) => clear(b, gap));
+    if (first) return first;
+    const near = wish[0] ?? { x: W / 2, y: H / 2, w, h };
+    const grid: Box[] = [];
+    for (let y = SAFE.t + h / 2; y <= SAFE.b - h / 2; y += 30) for (let x = SAFE.l + w / 2; x <= SAFE.r - w / 2; x += 30) grid.push({ x, y, w, h });
+    grid.sort((a, b) => Math.hypot(a.x - near.x, a.y - near.y) - Math.hypot(b.x - near.x, b.y - near.y));
+    return grid.find((b) => clear(b, gap)) ?? null;
+  };
   acc.forEach((it, i) => {
     const t = timeOf(it);
-    const host = placed.find((q) => q.id && q.id === it.title) ?? placed[i % Math.max(1, placed.length)] ?? null;
+    const host = placed.find((q) => q.id && q.id === it.title) ?? placed.filter((q) => !isAccent(q))[i % Math.max(1, vis.length)] ?? null;
     const [bw, bh] = baseSize(it as PlacedItem);
     if (it.kind === "badge") {
-      // on a corner of its thing (or beside the words), never over the words
+      // beside its thing (or beside the words), never on the thing or over the words
       const sc = 1.1;
       const bwS = bw * sc, bhS = bh * sc;
       const hb = host?.box ?? null;
       const spots: Box[] = [];
       const R = rng(p.seed + i * 31);
-      if (hb) for (const [sx, sy] of R.shuffle([[1, -1], [-1, 1], [1, 1], [-1, -1]] as const)) spots.push({ x: hb.x + sx * (hb.w / 2 - bwS * 0.15), y: hb.y + sy * (hb.h / 2 - bhS * 0.1), w: bwS, h: bhS });
-      if (tb) for (const sy of [-1, 1]) spots.push({ x: tb.box.x, y: tb.box.y + sy * (tb.box.h / 2 + bhS * 0.9), w: bwS, h: bhS });
-      spots.push({ x: W * 0.75, y: H * 0.2, w: bwS, h: bhS }, { x: W * 0.25, y: H * 0.8, w: bwS, h: bhS });
-      const SAFE = safe();
-      const inside = (b: Box) => ({ ...b, x: Math.max(SAFE.l + b.w / 2, Math.min(SAFE.r - b.w / 2, b.x)), y: Math.max(SAFE.t + b.h / 2, Math.min(SAFE.b - b.h / 2, b.y)) });
-      const ok = spots.map(inside).find((b) => (!tb || overlap(b, tb.box) < 0.02) && !placed.some((q) => q.kind === "badge" && overlap(q.box, b) > 0.02)) ?? inside(spots[spots.length - 1]);
-      placed.push({ ...it, ...t, box: ok, scale: sc, z: 5 });
+      const G = 36;
+      if (hb)
+        for (const [sx, sy] of R.shuffle([[1, -1], [-1, 1], [1, 1], [-1, -1]] as const)) {
+          // just outside a corner: past the side, or past the top or bottom edge
+          spots.push({ x: hb.x + sx * (hb.w / 2 + G + bwS / 2), y: hb.y + sy * (hb.h / 2 - bhS / 2), w: bwS, h: bhS });
+          spots.push({ x: hb.x + sx * (hb.w / 2 - bwS / 2), y: hb.y + sy * (hb.h / 2 + G + bhS / 2), w: bwS, h: bhS });
+        }
+      if (tb) for (const sy of [-1, 1]) spots.push({ x: tb.box.x, y: tb.box.y + sy * (tb.box.h / 2 + G + bhS / 2), w: bwS, h: bhS });
+      const ok = freeSpot(spots, bwS, bhS, 12);
+      if (ok) placed.push({ ...it, ...t, box: ok, scale: sc, z: 5 });
+      else problems.push("no free room for a badge: left out");
     } else if (it.kind === "cursor") {
       const hb = host?.box ?? { x: W * 0.6, y: H * 0.6, w: 0, h: 0 };
       placed.push({ ...it, ...t, box: { x: hb.x + hb.w * 0.22, y: hb.y + hb.h * 0.25, w: bw, h: bh }, scale: 1, z: 9 });
-    } else {
+    } else if (!hardShape(it)) {
+      // a glow or a dot grid behind its thing
       const hb = host?.box ?? { x: W / 2, y: H / 2, w: 800, h: 500 };
-      const sc = Math.max(hb.w, hb.h) / bw * (it.variant === "orb" ? 0.45 : 1.25);
+      const sc = (Math.max(hb.w, hb.h) / bw) * (it.variant === "orb" ? 0.45 : 1.25);
       placed.push({ ...it, ...t, box: { x: hb.x + (i % 2 ? -1 : 1) * hb.w * 0.42, y: hb.y - hb.h * 0.36, w: bw * sc, h: bh * sc }, scale: sc, z: -1 });
+    } else {
+      // a drawn shape (a ring, a star, an arrow) in the free room near its thing, off the words and the things
+      const hb = host?.box ?? { x: W / 2, y: H / 2, w: 0, h: 0 };
+      for (const side of [300, 220, 160]) {
+        const sc = side / Math.max(bw, bh);
+        const w = bw * sc, h = bh * sc, sx = i % 2 ? -1 : 1;
+        const wish = [{ x: hb.x + sx * (hb.w / 2 + 40 + w / 2), y: hb.y - hb.h * 0.25, w, h }, { x: hb.x - sx * (hb.w / 2 + 40 + w / 2), y: hb.y + hb.h * 0.25, w, h }];
+        const ok = freeSpot(wish, w, h, 40);
+        if (ok) {
+          placed.push({ ...it, ...t, box: ok, scale: sc, z: -1 });
+          break;
+        }
+      }
     }
   });
   // a thing named again from the last scene travels from where it was

@@ -12,9 +12,9 @@ import { MEANING_MAP } from "@/components/video/composer/meaning";
 import { IN_USE, LANGUAGES, LANGUAGE_NOTES, type Language } from "@/components/video/composer/staging";
 import { SHOWN } from "@/components/video/composer/highlight";
 import { MIN_SCENE } from "@/components/video/composer/layout";
-import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, FIELDS, FLOW_VARIANTS, GUIDES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, SHAPE_VARIANTS, SURFACES, type ScriptT, type Word } from "@/components/video/composer/types";
+import { ARRANGES, CAMERAS, CARD_VARIANTS, REVEALS, TRANSITIONS, CHART_VARIANTS, DEVICE_VARIANTS, FIELDS, FLOW_VARIANTS, GUIDES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, SHAPE_VARIANTS, SURFACES, type ScriptT, type Word } from "@/components/video/composer/types";
 import { type Ideas, type StoredComposition, composeVariants } from "@/components/video/composer/variants";
-import { BEATS, BRAND_CATEGORIES, type BrandProfile, type CreativePlan, LANGUAGE_WEIGHTS, MOODS, type Mood, ruleCreative, ruleProfile, sentencesOf } from "@/lib/studio";
+import { BEATS, BRAND_CATEGORIES, type BrandProfile, type CreativePlan, LANGUAGE_WEIGHTS, MOODS, type Mood, SHAPE_NOTES, STORY_SHAPES, type StoryShape, ruleCreative, ruleProfile, sentencesOf } from "@/lib/studio";
 import { FPS } from "@/components/video/composer/types";
 import { resolveIcon } from "@/components/video/icons";
 import { searchIcons } from "@/lib/icons";
@@ -39,12 +39,18 @@ const BRAND_PART = `1. BRAND — read what we know of the brand (its website's w
 - keywords: up to 6 words from the SCRIPT that carry its meaning (exact words). numbers: the numbers the SCRIPT says, exactly as said; [] when none.
 - look: face geometric|humanist|serif|condensed|rounded|wide (the headline type that suits the character), energy 0.2–0.85 (calm → low).`;
 
+// (the story shapes: one fixed line instead when the team turns them off)
+const SHAPE_BLOCK = /- shape: how the story is told[\s\S]*?unless the script supports no other; problem-led only when the script really opens on a problem\.\n/;
+const SHAPE_FIXED = "- shape: problem-led (the classic arc: the problem, the turn when the product arrives, what it does, the ask).\n";
 const CONCEPT_PART = `2. CONCEPT — what the whole video is built on:
 - idea: the ONE idea, one line — a concrete visual concept for THIS brand, not a slogan ("the clinic's day as a calendar that fills itself").
 - motif: one thing that comes back through the video: { icon (a Lucide icon that pictures it literally), label (1–3 words) } — show it in 2–3 scenes.
-- turn: the word index where the product arrives and the story turns from the problem.
+- shape: how the story is told — the one THIS script's sentences support best (the narration's order never changes; the shape decides what the scenes show, the opening, where the product first appears and the ending):
+${STORY_SHAPES.map((x) => `  ${x}: ${SHAPE_NOTES[x]}`).join("\n")}
+  Never the shape of the customer's last videos (RECENT, "story") unless the script supports no other; problem-led only when the script really opens on a problem.
+- turn: the word index where the product arrives and the story turns (demo-first and feature-led: 0 — the product is there from the start).
 - hero: the word index of the hero moment — the strongest moment (usually the product's result or a spoken number); its scene has one big thing, few words, and is held.
-- beats: one per sentence, in order: { at: the sentence's first word index, beat: ${BEATS.join("|")} }.
+- beats: one per sentence, in order, as the shape tells it: { at: the sentence's first word index, beat: ${BEATS.join("|")} }.
 AVOID the ideas and camera languages listed under EARLIER (this brand's earlier videos).`;
 
 const STAGING_PART = `3. STAGING — how the whole video moves (the camera and the ways between scenes are drawn from it; you picture the scenes):
@@ -72,8 +78,8 @@ const SCENES_PART = `5. SCENES — the narration is final; its words are given n
 - "text": ONLY the scene's HOOK on screen as kinetic type — 1 to ${SHOWN} words that NAME what the scene shows ("Ringing phone", "Empty slots", "Book online", "50% off"), never the sentence the voice says: { from, to } word indexes inside the scene; "size" l|xl (big: few words); "key": 1–2 of its words to light up (exact words). A scene of icons, each with its own word (title), needs no text: null.
 - "kicker": optional 1–3 word eyebrow above the text ("Step 1", the product's name, "Before") or null.
 - "options": exactly ONE — the best way to picture the scene: { layout, arrange, items }, picturing THAT scene's words literally.
-LAYOUTS: center (text above things), top (text band on top, big things below), bottom, split-left (text left, things right), split-right, corner, type (only big kinetic text; no things except a badge), visual (things fill the frame, text as a caption), over (text on a glass plate over a big thing).
-COMPOSED LAYOUTS (the words composed WITH the things — use them often): inline (an icon beside the words on one line — needs an icon item), label (the words as the label on top of a card, a phone or a chart), caption (one card/phone/chart fills the frame, the words a small caption on a plate in a corner), around (the words in the middle, 2–4 small things around them), between (the words between two things, one left, one right).
+LAYOUTS: center (text above things), top (text band on top, big things below), bottom, split-left (text left, things right), split-right, corner, type (only big kinetic text; no things except a badge), visual (things fill the frame, text as a caption), over (text on a glass plate over a big picture — a screenshot, a phone, a logo or a big icon; never over a card, list, table, flow or anything with words of its own).
+COMPOSED LAYOUTS (the words composed WITH the things — use them often): inline (an icon beside the words on one line — needs an icon item), label (the words as the label on top of a card, a phone or a chart), caption (one screenshot or phone fills the frame, the words a small caption on a plate in a corner — never over a card with words), around (the words in the middle, 2–4 small things around them), between (the words between two things, one left, one right).
 Never the same layout twice in a row, and no layout more than twice in a video (the closing ask aside).
 ARRANGE (for 2+ things): ${ARRANGES.join(", ")}.
 ITEMS. Every item: { kind, at (word index it appears on, inside the scene), hit (word index of its moment or null), id (same id on an item in the NEXT scene = it travels there: a match cut; else null), variant, title, sub, icon, value, values, rows, screen, size (s|m|l), tilt (-12..12 or 0), enter (null) }.
@@ -84,7 +90,7 @@ ITEMS. Every item: { kind, at (word index it appears on, inside the scene), hit 
 - stat: one big number — value MUST be a number the narration says; title: what it is.
 - chart: variant ${CHART_VARIANTS.join(", ")}; values: 5–9 numbers rising/falling as the words say; value only if spoken; ring/progress: values [percent].
 - compare: before vs after: rows { title: the old way, meta: the new way }; sub: the product's name; hit: when the old way is struck out.
-- icon: one big icon (+ optional title 1–2 words). badge: a small pill on a corner of a thing: icon + title (2–3 words) or value.
+- icon: one big icon (+ optional title 1–2 words). badge: a small pill beside a thing (never on it): icon + title (2–3 words) or value.
 - logo: the brand's mark and name (the product reveal). button: the call to action (title: the CTA text, sub: the website); hit: the click.
 - avatars: people as initials only. quote: a short testimonial (title) by sub (a name). shape: decoration (ring, orb, arrow, spark, grid, line, plus, wave, star, burst, hex).
 Icons: Lucide names that picture the thing LITERALLY. Never people, faces, hands or animals.
@@ -123,6 +129,9 @@ ${PARTS}`;
 export const DIRECTOR_PROMPTS = ["classic", "creative"] as const;
 export type DirectorPrompt = (typeof DIRECTOR_PROMPTS)[number];
 
+// How each scene moves: the Director's (admin → Settings, "Director's transitions"), or the renderer's.
+const SCENE_MOTION_FREE = "Timed for you by the renderer (not yours to write): each scene's way in, the text's reveal, the easing, and the sound — a soft sound plays on every moment you place (an icon with its word, a card or a screen coming in, a scene change, the click on the button, the end). So place each moment on the right word.";
+const SCENE_MOTION = `Each scene may set how it moves — choose where it serves the story, null leaves it to the renderer: enter (its way in: ${TRANSITIONS.join(", ")} — a wipe or a push from the before to the after, a zoom-in onto the hero, morph when a thing carries over; one family of 2–3 ways for the whole video, an accent once or twice), reveal (how its words come in: ${REVEALS.filter((r) => r !== "beat").join(", ")}), camera (its move: ${CAMERAS.filter((c) => c !== "still").join(", ")}; null: the art's camera). The camera language decides the way between scenes on a canvas (line, carry, words, guide), so there enter is null. The easing, the timing and the sound are the renderer's: a soft sound plays on every moment you place (an icon with its word, a card or a screen coming in, a scene change, the click on the button, the end) — so place each moment on the right word.`;
 const MENU = `THE MENU — everything our renderer can build; choose freely from it, and nothing outside it exists (never invent a feature, a field or a value):
 - camera languages: ${IN_USE.join(", ")}; canvas paths: right, zigzag, down, diagonal, snake; guides: ${GUIDES.join(", ")}; a recap at the end (canvas languages)
 - layouts: ${LAYOUTS.join(", ")}; arrangements of 2+ things: ${ARRANGES.join(", ")}
@@ -130,7 +139,7 @@ const MENU = `THE MENU — everything our renderer can build; choose freely from
 - card / screen kinds: ${CARD_VARIANTS.join(", ")}; devices: ${DEVICE_VARIANTS.join(", ")}; charts: ${CHART_VARIANTS.join(", ")}; flows: ${FLOW_VARIANTS.join(", ")}; shapes: ${SHAPE_VARIANTS.join(", ")}
 - style parts (each chosen on its own; thousands of combinations): ground, backdrop, texture, shift, card, panel, icon, accent, size, cuts, rhythm, tilt, ghost — described under ART
 - art: fields ${FIELDS.join(", ")}; overlays ${OVERLAYS.join(", ")}; surfaces ${SURFACES.join(", ")}; word highlights ${KEYS.join(", ")}; motion ${MOTIONS.join(", ")}; camera ${CAMERAS.filter((c) => c !== "still").join(", ")}; icon styles ${ICON_STYLES.join(", ")}; faces as listed under ART.
-Timed for you by the renderer (not yours to write): each scene's way in, the text's reveal, the easing, and the sound — a soft sound plays on every moment you place (an icon with its word, a card or a screen coming in, a scene change, the click on the button, the end). So place each moment on the right word.`;
+${SCENE_MOTION}`;
 
 export const CREATIVE_INSTRUCTIONS = `You are the Central Creative Director of MotionBrief: you turn a customer's brief into an original motion-design video, the work of a professional motion designer — never a template. You alone direct the whole video and write its complete plan in five parts, all consistent with each other.
 
@@ -140,7 +149,7 @@ You have full creative freedom over the concept, the visual metaphor, the compos
 - Every scene gets the composition ITS words call for, and the video has a rhythm: vary the layout, the arrangement, the kind of thing and its size from scene to scene (a wide scene, a close one, the product's screen, words composed with their things).
 - Every movement has a purpose: it leads the eye, shows a change, or carries the story on. Nothing moves only to fill time.
 - The brand comes first: its colour, its mood, what the customer told us. Premium means clear, calm and specific — not one fixed style.
-- The closing ask always shows the button on the closing line, but compose it as part of YOUR concept (the logo with the button, the button beside the product's screen, the motif carried into it…), not the same centred ending every time.
+- The closing ask shows the button on the closing line — its title exactly the Call to action given — composed as the shape ends and as part of YOUR concept (demo-first: the button on the product's screen; before-after: on the after; feature-led: beside the last feature; kinetic-type: the ask as big type with a small button; problem-led: the logo with the button…), never the same centred ending every time.
 - Work in order: interpret the brief → find the concept → plan the sequence of scenes → decide staging, timing, type and art → check every scene against the narration, the rules below and RECENT → fix what fails → answer.
 
 ${DEPTH}
@@ -171,13 +180,15 @@ const withoutRules = (text: string) => STYLE_RULES.reduce((t, r) => t.replace(r,
 // (the map of what pictures what — admin → Settings, "Visual match")
 const MATCH_PART = `WHAT PICTURES WHAT — every scene's things picture what THAT scene's words say (it is checked in code, and a mismatch comes back to you): a scene about bookings shows a calendar, not an invoice; an icon shows its own word. The map (meaning → what shows it):
 ${MEANING_MAP}`;
-const instructionsOf = (input: Pick<MotionInput, "prompt" | "rules" | "match">) => {
-  const text = input.prompt === "creative" ? CREATIVE_INSTRUCTIONS : MOTION_INSTRUCTIONS;
+const instructionsOf = (input: Pick<MotionInput, "prompt" | "rules" | "match" | "shapes" | "motion">) => {
+  const told = input.prompt === "creative" ? CREATIVE_INSTRUCTIONS : MOTION_INSTRUCTIONS;
+  const shaped = input.shapes === false ? told.replace(SHAPE_BLOCK, SHAPE_FIXED) : told;
+  const text = input.motion === false ? shaped.replace(SCENE_MOTION, SCENE_MOTION_FREE) : shaped;
   const base = input.rules === false ? withoutRules(text) : text;
   return input.match === false ? base : `${base}\n\n${MATCH_PART}`;
 };
 // the instructions with the house rules and the team's never list (none when the rules are off)
-const directionOf = (input: Pick<MotionInput, "prompt" | "rules" | "never" | "match">) => (input.rules === false ? instructionsOf(input) : `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}`);
+const directionOf = (input: Pick<MotionInput, "prompt" | "rules" | "never" | "match" | "shapes" | "motion">) => (input.rules === false ? instructionsOf(input) : `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}`);
 
 // ── What this customer has already seen (their last videos, any brand), for
 // the Creative Director: one line per video and what keeps coming back.
@@ -188,16 +199,17 @@ function stylesLine(rules: StyleRules | null | undefined): string {
   return `STYLE PARTS TURNED OFF (never choose them): ${rules.off.map((x) => x.replace(":", " ")).join(", ")}`;
 }
 
-export type PastLook = { look?: string | null; style?: string | null; language: string | null; journey: string | null; scheme: string | null; camera: string | null; key: string | null; text: string | null; display: string | null; surface: string | null; motion: string | null; layouts: string[]; first: string; last: string; cards: string[] };
+export type PastLook = { shape?: StoryShape | null; look?: string | null; style?: string | null; language: string | null; journey: string | null; scheme: string | null; camera: string | null; key: string | null; text: string | null; display: string | null; surface: string | null; motion: string | null; layouts: string[]; first: string; last: string; cards: string[] };
 
 const shapeOf = (s: ScriptT["scenes"][number] | undefined) => (s ? `${s.layout}: ${s.items.map((it) => (it.kind === "card" || it.kind === "device") && it.variant ? `${it.kind} ${it.variant}` : it.kind).join(" + ") || "words"}` : "");
 
-export function pastLookOf(v: Pick<StoredComposition, "script" | "staging">): PastLook | null {
+export function pastLookOf(v: Pick<StoredComposition, "script" | "staging">, shape?: StoryShape | null): PastLook | null {
   const sc = v.script?.scenes;
   if (!sc?.length) return null;
   const a = v.script.art;
   const items = sc.flatMap((s) => s.items);
   return {
+    shape: shape ?? null,
     look: a?.look ?? null,
     style: (() => {
       const st = styleOf(a as Parameters<typeof styleOf>[0]);
@@ -228,12 +240,13 @@ export function recentText(looks: PastLook[] | null | undefined): string {
   };
   const lines = looks.map((l, i) => {
     const lay = tally(l.layouts).map(([k, c]) => (c > 1 ? `${k}×${c}` : k)).join(", ");
-    return `${i + 1}. ${l.style ? `style: ${l.style}; ` : l.look ? `look ${l.look}; ` : ""}${l.language ?? "?"}${l.journey ? `/${l.journey}` : ""}, ${l.scheme ?? "?"}; camera ${l.camera}; highlight ${l.key}; faces ${l.display} / ${l.text}; surface ${l.surface}; motion ${l.motion}; layouts ${lay}; opens on ${l.first}; ends on ${l.last}; cards ${l.cards.join(", ") || "none"}`;
+    return `${i + 1}. ${l.shape ? `story ${l.shape}; ` : ""}${l.style ? `style: ${l.style}; ` : l.look ? `look ${l.look}; ` : ""}${l.language ?? "?"}${l.journey ? `/${l.journey}` : ""}, ${l.scheme ?? "?"}; camera ${l.camera}; highlight ${l.key}; faces ${l.display} / ${l.text}; surface ${l.surface}; motion ${l.motion}; layouts ${lay}; opens on ${l.first}; ends on ${l.last}; cards ${l.cards.join(", ") || "none"}`;
   });
   // what came back in half of them or more
   const half = Math.max(2, Math.ceil(looks.length / 2));
   const often = (label: string, xs: (string | null)[]) => tally(xs).filter(([, c]) => c >= half).map(([k, c]) => `${label} ${k} (${c}/${looks.length})`);
   const repeated = [
+    ...often("story", looks.map((l) => l.shape ?? null)),
     ...often("look", looks.map((l) => l.look ?? null)),
     ...often("camera language", looks.map((l) => l.language)),
     ...often("camera", looks.map((l) => l.camera)),
@@ -261,7 +274,7 @@ const BrandM = z.object({
   numbers: z.array(z.string()),
   look: z.object({ face: z.enum(["geometric", "humanist", "serif", "condensed", "rounded", "wide"]), energy: z.number() }),
 });
-const ConceptM = z.object({ idea: z.string(), motif: z.object({ icon: z.string(), label: z.string() }), turn: z.number(), hero: z.number(), beats: z.array(z.object({ at: z.number(), beat: z.enum(BEATS) })) });
+const ConceptM = z.object({ idea: z.string(), motif: z.object({ icon: z.string(), label: z.string() }), shape: z.enum(STORY_SHAPES), turn: z.number(), hero: z.number(), beats: z.array(z.object({ at: z.number(), beat: z.enum(BEATS) })) });
 const StagingM = z.object({
   language: z.enum(LANGUAGES),
   journey: n(z.enum(["right", "zigzag", "down", "diagonal", "snake"])),
@@ -288,7 +301,7 @@ const ItemM = z.object({
   enter: n(z.string()),
 });
 const OptionM = z.object({ layout: z.enum(LAYOUTS), arrange: n(z.enum(ARRANGES)), items: z.array(ItemM) });
-const SceneM = z.object({ at: z.number(), text: n(z.object({ from: z.number(), to: z.number(), size: z.enum(["s", "m", "l", "xl"]), key: z.array(z.string()) })), kicker: n(z.string()), options: z.array(OptionM) });
+const SceneM = z.object({ at: z.number(), text: n(z.object({ from: z.number(), to: z.number(), size: z.enum(["s", "m", "l", "xl"]), key: z.array(z.string()) })), kicker: n(z.string()), enter: n(z.enum(TRANSITIONS)), reveal: n(z.enum(REVEALS)), camera: n(z.enum(CAMERAS)), options: z.array(OptionM) });
 // (no scheme: the staging decides dark or light)
 const StyleM = z.object({ ground: z.string(), backdrop: z.string(), texture: z.string(), shift: z.string(), card: z.string(), panel: z.string(), icon: z.string(), accent: z.string(), size: z.string(), cuts: z.string(), rhythm: z.string(), tilt: z.number(), ghost: z.boolean(), frame: z.boolean(), confetti: z.boolean() });
 const ArtM = z.object({ style: StyleM, name: z.string(), hue: z.number(), harmony: z.string(), field: z.string(), overlay: z.string(), surface: z.string(), radius: z.number(), display: z.string(), text: z.string(), weight: z.number(), case: z.string(), tracking: z.number(), key: z.string(), motion: z.string(), pace: z.number(), camera: z.string(), icons: z.string(), energy: z.number() });
@@ -328,6 +341,10 @@ export type MotionInput = {
   styles?: StyleRules | null;
   // false: the visual match is off (admin → Settings, "Visual match")
   match?: boolean;
+  // false: every video told the classic way (admin → Settings, "Story shapes")
+  shapes?: boolean;
+  // false: the renderer draws every scene's way in, reveal and camera (admin → Settings, "Director's transitions")
+  motion?: boolean;
   // the customer's own direction (the form's "Video direction") and the names
   // of the screenshots they uploaded, in order (a screenshot item's value is its number)
   direction?: string | null;
@@ -343,9 +360,9 @@ const withCustomer = (p: BrandProfile, c: Customer | null | undefined): BrandPro
 const narrationOf = (words: Word[]) => words.map((w) => w.text).join(" ");
 
 // The plan by rule (no model, or a model that failed): the Composer pictures the scenes.
-export function rulePlan(input: Pick<MotionInput, "name" | "words" | "website" | "category" | "known" | "earlier" | "seed" | "customer">): MotionPlan {
+export function rulePlan(input: Pick<MotionInput, "name" | "words" | "website" | "category" | "known" | "earlier" | "seed" | "customer" | "recent" | "shapes">): MotionPlan {
   const profile = withCustomer(input.known ?? ruleProfile({ name: input.name, script: narrationOf(input.words), category: input.category, website: input.website }), input.customer);
-  const creative = ruleCreative(profile, input.words, input.name, input.seed, (input.earlier ?? []).map((e) => e.language));
+  const creative = ruleCreative(profile, input.words, input.name, input.seed, (input.earlier ?? []).map((e) => e.language), (input.recent ?? []).map((l) => l.shape), input.shapes === false ? "problem-led" : undefined);
   return { profile, creative, ideas: null, source: "rule" };
 }
 
@@ -379,6 +396,7 @@ function creativeOf(o: Answer, nWords: number, fallback: CreativePlan): Creative
     hero: inRange(o.concept.hero, fallback.hero),
     turn: inRange(o.concept.turn, fallback.turn),
     beats: beats.length ? beats : fallback.beats,
+    shape: o.concept.shape ?? fallback.shape,
     language: s.language,
     journey: path ? (s.journey ?? fallback.journey ?? "right") : null,
     guide: s.language === "guide" ? (s.guide ?? "plane") : null,
@@ -410,8 +428,8 @@ export function mendIcons(scenes: Answer["scenes"]): Answer["scenes"] {
 }
 
 // Scenes in order from word 0 (what can be mended); the art takes the staging's scheme.
-function ideasOf(o: Answer, nWords: number): Ideas | null {
-  const scenes = mendIcons([...o.scenes]).filter((x) => x.at >= 0 && x.at < nWords).sort((a, b) => a.at - b.at).filter((x, i, xs) => !i || x.at > xs[i - 1].at);
+function ideasOf(o: Answer, nWords: number, motion = true): Ideas | null {
+  const scenes = mendIcons([...o.scenes]).map((x) => (motion ? x : { ...x, enter: null, reveal: null, camera: null })).filter((x) => x.at >= 0 && x.at < nWords).sort((a, b) => a.at - b.at).filter((x, i, xs) => !i || x.at > xs[i - 1].at);
   if (!scenes.length || !o.arts.length) return null;
   scenes[0] = { ...scenes[0], at: 0 };
   return { arts: [{ ...o.arts[0], scheme: o.staging.scheme }] as unknown as Record<string, unknown>[], scenes: scenes as unknown as Ideas["scenes"] };
@@ -442,7 +460,7 @@ export function answerOf(plan: MotionPlan, script?: ScriptT | null): Record<stri
   delete art.scheme;
   return {
     brand: { category: p.category, personality: p.personality, mood: p.mood, audience: p.audience, promise: p.promise, features: p.features, before: p.before, keywords: p.keywords, numbers: p.numbers, look: { face: p.look.face, energy: p.look.energy } },
-    concept: { idea: c.idea, motif: c.motif ?? { icon: "sparkles", label: "" }, turn: c.turn, hero: c.hero, beats: c.beats },
+    concept: { idea: c.idea, motif: c.motif ?? { icon: "sparkles", label: "" }, shape: c.shape ?? "problem-led", turn: c.turn, hero: c.hero, beats: c.beats },
     staging: { language: c.language, journey: c.journey, guide: c.guide, recap: c.recap, scheme: c.scheme },
     arts: [art],
     scenes: ideas?.scenes ?? [],
@@ -453,7 +471,7 @@ export function answerOf(plan: MotionPlan, script?: ScriptT | null): Record<stri
 export function scenesOf(script: ScriptT): Ideas {
   return {
     arts: [script.art as unknown as Record<string, unknown>],
-    scenes: script.scenes.map((sc) => ({ at: sc.at, text: sc.text ? { from: sc.text.from, to: sc.text.to, size: sc.text.size, key: sc.text.key ?? [] } : null, kicker: sc.kicker ?? null, options: [{ layout: sc.layout, arrange: sc.arrange ?? null, items: sc.items as unknown as Record<string, unknown>[] }] })),
+    scenes: script.scenes.map((sc) => ({ at: sc.at, text: sc.text ? { from: sc.text.from, to: sc.text.to, size: sc.text.size, key: sc.text.key ?? [] } : null, kicker: sc.kicker ?? null, enter: sc.enter ?? null, reveal: sc.text?.reveal ?? null, camera: sc.camera ?? null, options: [{ layout: sc.layout, arrange: sc.arrange ?? null, items: sc.items as unknown as Record<string, unknown>[] }] })),
   };
 }
 
@@ -499,7 +517,25 @@ export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; 
     if (x.text && x.text.to - x.text.from + 1 > SHOWN) notes.push(`scene ${i + 1}'s on-screen words are ${x.text.to - x.text.from + 1} — show only its hook (at most ${SHOWN} words)`);
     if (items.some((it) => it.kind === "icon" && !String(it.title ?? "").trim())) notes.push(`scene ${i + 1} has an icon without its word (title)`);
   });
+  notes.push(...shapeNotes(sc, creative?.shape));
   return [...new Set(notes)].slice(0, 20);
+}
+
+// Is the story told as its shape says? (what the scenes show, checked in code)
+const PRODUCT = new Set(["device", "screenshot", "card", "chart", "logo", "stat", "compare", "flow", "steps", "chips"]);
+function shapeNotes(sc: Ideas["scenes"], shape: StoryShape | null | undefined): string[] {
+  const notes: string[] = [];
+  const main = (i: number) => (sc[i]?.options[0]?.items ?? []).map((it) => String(it.kind)).filter((k) => k !== "badge" && k !== "shape" && k !== "cursor");
+  const layout = (i: number) => sc[i]?.options[0]?.layout ?? "";
+  const body = sc.map((_, i) => i).slice(0, -1);
+  if (main(0).length === 1 && main(0)[0] === "icon") notes.push("scene 1 is a lone icon — open on something specific to this story");
+  if (!shape) return notes;
+  if (shape === "demo-first" && !main(0).some((k) => PRODUCT.has(k))) notes.push(`the story is demo-first: scene 1 shows the product at work (its screen, a card, its result), not ${main(0).join(" + ") || "words alone"}`);
+  if (shape === "before-after" && body.filter((i) => main(i).includes("compare") || layout(i).startsWith("split") || layout(i) === "between").length < 2) notes.push("the story is before-after: at least two scenes pair a before with its after (compare, a split or between with the old way beside the new)");
+  if (shape === "feature-led" && body.filter((i) => main(i).length > 0 && main(i).every((k) => k === "icon")).length > 1) notes.push("the story is feature-led: every feature its own picture (a card, a screen, a chart) — not icons alone");
+  if (shape === "kinetic-type" && sc.filter((_, i) => layout(i) === "type" || !main(i).length).length < Math.ceil(sc.length / 2)) notes.push("the story is kinetic-type: at least half of the scenes are the words alone (layout type)");
+  if (shape !== "problem-led" && body.length > 2 && body.filter((i) => main(i).length === 1 && main(i)[0] === "icon").length > body.length / 2) notes.push("most scenes are a lone icon — picture the story with its cards, screens and results");
+  return notes;
 }
 
 // ── the calls ──────────────────────────────────────────────────────────────
@@ -547,7 +583,7 @@ export function mendAnswer(raw: unknown): unknown {
       look: { face: pick(["geometric", "humanist", "serif", "condensed", "rounded", "wide"] as const, obj(b.look).face, "geometric"), energy: num(obj(b.look).energy, 0.5) },
     },
     concept: {
-      idea: str(c.idea) ?? "", motif: { icon: str(obj(c.motif).icon) ?? "", label: str(obj(c.motif).label) ?? "" }, turn: num(c.turn), hero: num(c.hero),
+      idea: str(c.idea) ?? "", motif: { icon: str(obj(c.motif).icon) ?? "", label: str(obj(c.motif).label) ?? "" }, shape: pick(STORY_SHAPES, c.shape, "problem-led", { demo: "demo-first", "before/after": "before-after", features: "feature-led", kinetic: "kinetic-type", type: "kinetic-type", problem: "problem-led" }), turn: num(c.turn), hero: num(c.hero),
       beats: list(c.beats).map((x) => obj(x)).filter((x) => (BEATS as readonly string[]).includes(String(x.beat))).map((x) => ({ at: num(x.at), beat: x.beat })),
     },
     staging: {
@@ -569,6 +605,7 @@ export function mendAnswer(raw: unknown): unknown {
         at: num(sc.at),
         text: t ? { from: num(t.from), to: num(t.to), size: pick(SIZE4, t.size, "m", NEAR4), key: list(t.key).map(String) } : null,
         kicker: str(sc.kicker),
+        enter: orNull(TRANSITIONS, sc.enter, { cut: "fade", dissolve: "fade", crossfade: "fade", zoom: "zoom-in", push: "push-left", slide: "push-left" }), reveal: orNull(REVEALS, sc.reveal), camera: orNull(CAMERAS, sc.camera),
         options: list(sc.options).map((y) => obj(y)).map((op) => ({
           layout: pick(LAYOUTS, op.layout, "center"), arrange: orNull(ARRANGES, op.arrange),
           items: list(op.items).map(item).filter((it): it is NonNullable<ReturnType<typeof item>> => !!it),
@@ -664,13 +701,13 @@ export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage)
   }
 }
 
-function planOf(o: Answer, input: Pick<MotionInput, "words" | "category" | "known" | "customer">, fallback: MotionPlan, keepBrand?: BrandProfile | null): MotionPlan {
+function planOf(o: Answer, input: Pick<MotionInput, "words" | "category" | "known" | "customer" | "motion">, fallback: MotionPlan, keepBrand?: BrandProfile | null): MotionPlan {
   const count = input.words.length;
   const creative = creativeOf(o, count, fallback.creative);
   // (the brand's look takes the staging's scheme: dark or light is decided once)
   const kept = keepBrand ?? input.known;
   const profile = withCustomer(kept ? { ...kept, look: { ...kept.look, scheme: creative.scheme } } : profileOf(o.brand, narrationOf(input.words), input.category, creative.scheme), input.customer);
-  return { profile, creative, ideas: ideasOf(o, count), source: "ai" };
+  return { profile, creative, ideas: ideasOf(o, count, input.motion !== false), source: "ai" };
 }
 
 // Its review once the voice is timed: the plan, with what our layout check

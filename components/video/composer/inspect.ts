@@ -1,4 +1,4 @@
-import { isAccent } from "./layout";
+import { dealt, hardShape, isAccent, platesOver } from "./layout";
 import type { Box, ComposerPlan, PlacedItem, PlacedScene, TransitionKind } from "./types";
 
 // The Frame Inspector (the QA director): code, not a model — it looks at the
@@ -33,8 +33,8 @@ function crosses(a: Box, b: Box, box: Box) {
   return false;
 }
 const solid = (s: PlacedScene) => s.items.filter((it) => !isAccent(it) || it.kind === "badge");
-// (words laid on a plate over the picture may cover it)
-const plated = (s: PlacedScene) => s.layout === "over" || s.layout === "caption";
+// (words laid on a plate over a picture may cover it — a picture only, never a thing full of words)
+const plated = (s: PlacedScene) => (s.layout === "over" || s.layout === "caption") && platesOver(s.items);
 const lastWord = (s: PlacedScene) => Math.max(...(s.text?.words.map((w) => w.at) ?? [s.from]));
 
 // Everything wrong with the plan as it plays.
@@ -48,8 +48,14 @@ export function inspect(plan: ComposerPlan): Finding[] {
     // held: what is on screen once all of it has come in
     const held = Math.max(s.from, ...things.map((it) => it.at), s.text ? lastWord(s) : s.from);
     if (tb && !plated(s)) for (const it of things) if (touches(tb, it.box, it.kind === "badge" ? 6 : TEXT_GAP)) found.push({ scene: i, frame: held, what: `${it.kind}${it.title ? ` "${it.title}"` : ""} touches the words` });
-    const tidy = s.arrange !== "cascade" && s.arrange !== "orbit";
-    for (let a = 0; a < things.length; a++) for (let b = a + 1; b < things.length; b++) if (tidy && things[a].kind !== "badge" && things[b].kind !== "badge" && touches(things[a].box, things[b].box, THING_GAP)) found.push({ scene: i, frame: held, what: `${things[a].kind} and ${things[b].kind} touch` });
+    // (only cards dealt one over the other may meet; a badge sits beside its thing, never on it)
+    const tidy = !(s.arrange === "cascade" && dealt(s.items));
+    for (let a = 0; a < things.length; a++) for (let b = a + 1; b < things.length; b++) {
+      const badge = things[a].kind === "badge" || things[b].kind === "badge";
+      if ((tidy || badge) && touches(things[a].box, things[b].box, badge ? 0 : THING_GAP)) found.push({ scene: i, frame: held, what: `${things[a].kind} and ${things[b].kind} touch` });
+    }
+    // a drawn shape (a ring, a star) across the words or a thing
+    for (const sh of s.items.filter(hardShape)) if ((tb && touches(tb, sh.box, 0)) || things.some((it) => touches(it.box, sh.box, 0))) found.push({ scene: i, frame: held, what: `a ${sh.variant ?? "ring"} shape crosses the words or a thing` });
     for (const bx of [...things.map((it) => it.box), ...(tb ? [tb] : [])]) if (bx.x - bx.w / 2 < -EDGE || bx.x + bx.w / 2 > W + EDGE || bx.y - bx.h / 2 < -EDGE || bx.y + bx.h / 2 > H + EDGE) found.push({ scene: i, frame: held, what: "something is off the frame" });
     // long enough on screen
     const last = i === plan.scenes.length - 1;
@@ -95,6 +101,17 @@ export function inspected(plan: ComposerPlan): { plan: ComposerPlan; fixed: stri
       const before = s.items.length;
       s.items = s.items.filter((it) => !(it.kind === "badge" && touches(tb, it.box, 6)));
       if (s.items.length < before) fixed.push(`scene ${f.scene + 1}: a badge on the words left out`);
+    } else if (/^badge and |and badge touch$/.test(f.what) || f.what.includes("shape crosses")) {
+      // a badge on a thing, a drawn shape across the words: a small extra, left out
+      const tb = s.text?.box ?? null;
+      const main = s.items.filter((it) => !isAccent(it));
+      const before = s.items.length;
+      s.items = s.items.filter((it) => {
+        if (it.kind === "badge") return !main.some((q) => touches(q.box, it.box, 0));
+        if (hardShape(it)) return !((tb && touches(tb, it.box, 0)) || main.some((q) => touches(q.box, it.box, 0)));
+        return true;
+      });
+      if (s.items.length < before) fixed.push(`scene ${f.scene + 1}: a badge or shape on a thing left out`);
     } else if (f.what.includes("off the frame")) {
       // moved inside (and made smaller if it is bigger than the frame)
       const inside = (b: Box) => {
