@@ -16,12 +16,12 @@ type Pricing = {
 };
 
 function defaultRates(): Pricing {
-  const openaiModel = process.env.OPENAI_MODEL || "gpt-5-mini";
+  const openaiModel = process.env.OPENAI_MODEL;
   const voiceModel = process.env.FAL_VOICE_MODEL;
   return {
     openai: {
       // External source: OpenAI API pricing page (USD per 1M tokens). Unknown → 0.
-      [openaiModel]: { input_per_1m_tokens: 0, output_per_1m_tokens: 0 },
+      ...(openaiModel && { [openaiModel]: { input_per_1m_tokens: 0, output_per_1m_tokens: 0 } }),
     },
     fal: {
       // External source: fal.ai model page (USD per character). Unknown → 0.

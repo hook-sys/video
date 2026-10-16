@@ -545,9 +545,12 @@ function shapeNotes(sc: Ideas["scenes"], shape: StoryShape | null | undefined): 
 type Client = Pick<OpenAI, "responses">;
 async function modelOf(client?: Client, level?: string | null, clientModel?: string | null) {
   // (a quality level's own model runs through fal, like every text job)
-  const own = !client && level ? await textAi("composer").then((t) => (t ? textClient("fal", level, false) : null)).catch(() => null) : null;
-  const picked = client ? null : own ?? (await textAi("composer").catch(() => null));
-  const model = (client && clientModel) || (picked?.model ?? (process.env.OPENAI_MODEL || "gpt-5-mini"));
+  // (no model chosen on /admin/models: said in the log, and the plan is made by rule)
+  const unset = (e: unknown) => (console.warn("Motion Director:", e instanceof Error ? e.message : e), null);
+  const own = !client && level ? await textAi("composer").then((t) => (t ? textClient("fal", level, false) : null)).catch(unset) : null;
+  const picked = client ? null : own ?? (await textAi("composer").catch(unset));
+  // (a client passed in — "New version", lib/v2 — is named by its own model)
+  const model = (client && clientModel) || (picked?.model ?? (client ? "injected" : ""));
   const quick = (picked ? picked.quick : /(^|\/)(gpt-5|o\d)/.test(model)) ? { reasoning: { effort: "low" as const } } : {};
   return { ai: client ?? picked?.client ?? null, model, quick };
 }
