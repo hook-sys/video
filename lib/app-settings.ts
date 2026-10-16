@@ -4,7 +4,7 @@ import { FORM_FIELDS, FORM_FIELD_LABEL } from "@/lib/project-form";
 import { STYLE_SWITCHES } from "@/components/video/composer/style";
 import { RECIPES } from "@/components/video/composer/recipes";
 import { TECHNIQUES } from "@/components/video/composer/techniques";
-import { V2_RULES, V2_RULES_MASTER, v2RuleKey } from "@/lib/v2/rules";
+import { V2_DIRECTOR, V2_RULES, V2_RULES_MASTER, v2RuleKey } from "@/lib/v2/rules";
 
 // Runtime settings edited from /admin/settings (table app_settings, service
 // role only).
@@ -41,6 +41,7 @@ export const SETTINGS: SettingDef[] = [
   { key: "feature_director_motion", label: "Director's transitions", help: "The Director chooses each scene's way in (a wipe from the before to the after, a zoom onto the hero…), how its words come in and its camera move, where they serve the story; the techniques switched off below are never used. Off: the renderer draws them for every scene, as before.", type: "bool", fallback: true, oldOnly: true },
   { key: "feature_visual_match", label: "Visual match", help: "Every scene's things picture what its words say: the Director is given the map (bookings → a calendar, payments → a pay card, an icon shows its own word…), every video is checked against it, icons that don't fit are swapped and the rest is sent back to the Director's review. Off: no map, no check.", type: "bool", fallback: true, oldOnly: true },
   ...FORM_FIELDS.map((f): SettingDef => ({ key: `form_${f}`, label: `Form: ${FORM_FIELD_LABEL[f]}`, help: f === "screenshots" ? "Customers can upload up to 5 product screenshots; the Director shows them where the words talk about that screen. Off: not asked." : f === "direction" ? "A free text (up to 1,500 characters) about how the video should look and feel; the Director follows it where it can. Off: not asked." : "Asked in the new video form. Off: not asked, and the Director works without it.", type: "bool", fallback: true, oldOnly: true })),
+  ...V2_DIRECTOR.map((d): SettingDef => ({ ...d, type: "bool", fallback: true, group: "New version: Director", newOnly: true })),
   { key: V2_RULES_MASTER, label: "All video rules", help: "The master switch: off turns every rule below off at once (honesty, the renderer's limits and no music always stay). On: each rule follows its own switch.", type: "bool", fallback: true, group: "New version: video rules", newOnly: true },
   ...V2_RULES.map((r): SettingDef => ({ key: v2RuleKey(r.id), label: r.label, help: `${r.help} On: written into the Director's instructions and kept in code where it can be.`, type: "bool", fallback: r.on, group: "New version: video rules", newOnly: true })),
   ...TECHNIQUES.map((t): SettingDef => ({ key: t.key, label: t.label, help: t.help, type: "bool", fallback: true, group: "Techniques" })),

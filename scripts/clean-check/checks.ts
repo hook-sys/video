@@ -36,8 +36,11 @@ import { engineOf } from "@/lib/new-version";
 import { ownedPath } from "@/lib/projects";
 import { v2DetailsOf } from "@/lib/v2/form";
 import { v2DirectorModel, v2Role, v2VoiceName } from "@/lib/v2/models";
-import { V2_RULES, V2_RULES_MASTER, V2_SHOWN, v2RuleKey, v2RulesOf } from "@/lib/v2/rules";
-import { drawLook, lookOf, lookText } from "@/lib/v2/variety";
+import { V2_DIRECTOR, V2_RULES, V2_RULES_MASTER, V2_SHOWN, v2DirectorOf, v2RuleKey, v2RulesOf } from "@/lib/v2/rules";
+import { drawLook, hueColour, lookOf, lookText } from "@/lib/v2/variety";
+import { temperatureFor } from "@/lib/ai/models";
+import { groundIsDark } from "@/components/video/composer/style";
+import { RECIPES } from "@/components/video/composer/recipes";
 import { copywrite } from "@/lib/v2/copywriter";
 import { withVariety } from "@/components/video/composer/variants";
 
@@ -558,13 +561,28 @@ export async function runChecks(): Promise<Check[]> {
     const failed = await copywrite(plan as never, cw, broken, () => {}).then(() => "no error", (e: Error) => e.message);
     add("a Copywriter that fails fails the video (no fallback)", /Copywriter \(x\/copy\) failed/.test(failed), failed);
     // the Director (new version): its rules only — none of the old version's
-    const seen: { instructions?: string; reasoning?: unknown }[] = [];
+    const seen: { instructions?: string; reasoning?: unknown; input?: string; temperature?: unknown }[] = [];
     const spy = { responses: { parse: async (body: { instructions?: string; reasoning?: unknown }) => { seen.push(body); throw new Error("stop"); } } } as unknown as Parameters<typeof directMotion>[2];
-    await directMotion({ name: "Flowly", color: "#6a5bff", cta: "Start", words: FLOWLY.words.slice(0, 30), seed: 1, clientModel: "x/director", reasoning: "high", rules: false, ruleText: def.text(null), checks: def.checks }, () => {}, spy, 20_000);
+    await directMotion({ name: "Flowly", color: "#6a5bff", cta: "Start", words: FLOWLY.words.slice(0, 30), seed: 1, clientModel: "x/director", reasoning: "high", rules: false, ruleText: def.text(null), checks: def.checks, prompt: "classic", recent: [] }, () => {}, spy, 20_000);
     await directMotion({ name: "Flowly", color: "#6a5bff", cta: "Start", words: FLOWLY.words.slice(0, 30), seed: 1, clientModel: "x/old" }, () => {}, spy, 20_000);
     const [v2i, v1i] = [seen[0]?.instructions ?? "", seen[1]?.instructions ?? ""];
     add("the new version's Director gets its rules, not the old version's (the old version unchanged)", v2i.includes("RULES (this video keeps them)") && !v2i.includes("HOUSE RULES") && !v2i.includes("Mix icons and cards") && v2i.includes("2 to 6 words") && !v2i.includes("ONE background for the whole video, never changing") && v1i.includes("HOUSE RULES") && v1i.includes("Mix icons and cards"), `${v2i.length} / ${v1i.length} chars`);
     add("each role's reasoning reaches its model", JSON.stringify(seen[0]?.reasoning) === JSON.stringify({ effort: "high" }), JSON.stringify(seen[0]?.reasoning));
+    add("RECENT always reaches the new version's Director (the old classic prompt: not)", String(seen[0]?.input ?? "").includes("RECENT") && !String(seen[1]?.input ?? "").includes("RECENT"), `${String(seen[0]?.input ?? "").includes("RECENT")} / ${String(seen[1]?.input ?? "").includes("RECENT")}`);
+    await directMotion({ name: "Flowly", color: "#6a5bff", cta: "Start", words: FLOWLY.words.slice(0, 30), seed: 1, clientModel: "google/gemini-2.5-flash", reasoning: "default", temperature: 0.9, rules: false, ruleText: def.text(null), checks: def.checks }, () => {}, spy, 20_000);
+    add("the Director's temperature (0.9) is sent where the model takes one", seen[2]?.temperature === 0.9 && temperatureFor("openai/gpt-5", "default", 0.9).temperature === undefined && temperatureFor("google/gemini-2.5-flash", "high", 0.9).temperature === undefined && defaultConfig().v2.roles.director.temperature === 0.9 && defaultConfig().v2.roles.copywriter.temperature === null, `sent ${seen[2]?.temperature}`);
+    // the look is one of the 35 recipes, and the code's recipe wins over the Director's style
+    const recipeIds = RECIPES.map((r) => r.id);
+    const lk = drawLook(99, []);
+    const asked = { ground: "black", backdrop: "glow", card: "glow", panel: "dark", icon: "glow", accent: "electric", size: "giant", cuts: "hard", rhythm: "rapid" };
+    const forcedSet = composeVariants({ words: BOOKWELL.words, brand: BOOKWELL.brand, duration: 900, seed: lk.seed, count: 1, ideas: { arts: [{ style: asked }], scenes: [] }, variety: lk, rules: def.ruleSet });
+    const art = forcedSet.videos[0].script.art;
+    const recipe = RECIPES.find((r) => r.id === lk.recipe)!;
+    add("the look is built on one of the 35 recipes; the code's recipe beats the Director's style", RECIPES.length === 35 && recipeIds.includes(lk.recipe) && art.style?.ground === recipe.style.ground && (lk.scheme === "dark") === groundIsDark(recipe.style.ground!) && art.display === lk.display, `${lk.recipe} (${recipe.from}): ground ${art.style?.ground} · asked ${asked.ground}`);
+    add("only the recipes the team allows", drawLook(5, [], { recipes: ["ref-02"] }).recipe === "ref-02", drawLook(5, [], { recipes: ["ref-02"] }).recipe);
+    const dirOn = v2DirectorOf({});
+    add("story shapes, Director's transitions, visual match: new-version switches, on by default", dirOn.shapes && dirOn.motion && dirOn.match && !v2DirectorOf({ v2_visual_match: false }).match && V2_DIRECTOR.every((d) => SETTINGS.some((x) => x.key === d.key && x.newOnly && x.fallback === true)), JSON.stringify(dirOn));
+    add("a logo without colour: a colour from the look's random hue (not #6a5bff)", /^#[0-9A-F]{6}$/.test(hueColour(lk.hue)) && hueColour(0) !== hueColour(180) && hueColour(lk.hue) !== "#6A5BFF" && drawLook(1, []).hue !== drawLook(2, []).hue, `${lk.hue}° → ${hueColour(lk.hue)}`);
   }
 
   section = "covered elsewhere";

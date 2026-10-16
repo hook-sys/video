@@ -1,7 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import { countUsage } from "@/lib/ai/models";
+import { countUsage, temperatureFor } from "@/lib/ai/models";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import type { Ideas } from "@/components/video/composer/variants";
 import type { Word } from "@/components/video/composer/types";
@@ -28,7 +28,7 @@ export async function copywrite(ideas: Ideas, words: Word[], ai: RoleAi, onUsage
   const usage: BriefUsage = { model: ai.model, inputTokens: 0, outputTokens: 0 };
   const effort = ai.reasoning === "default" ? (ai.quick ? { reasoning: { effort: "low" as const } } : {}) : ai.reasoning === "none" ? {} : { reasoning: { effort: ai.reasoning } };
   try {
-    const res = await ai.client.responses.parse({ model: ai.model, instructions: INSTRUCTIONS, input, text: FORMAT, ...effort }, { timeout: timeoutMs });
+    const res = await ai.client.responses.parse({ model: ai.model, instructions: INSTRUCTIONS, input, text: FORMAT, ...effort, ...temperatureFor(ai.model, ai.reasoning, ai.temperature) }, { timeout: timeoutMs });
     countUsage(usage, res.usage as Parameters<typeof countUsage>[1]);
     const answer = res.output_parsed;
     if (!answer) throw new Error("no answer");

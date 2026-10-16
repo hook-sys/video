@@ -124,9 +124,10 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
                   if (!file || problem) return setLogo(null);
                   const url = URL.createObjectURL(file);
                   setLogo({ name: file.name, size: file.size, url, colour: null });
-                  colourOf(url)
+                  // (a colourless icon: no colour — the video draws one from a random hue)
+                  colourOf(url, "")
                     .then((colour) => setLogo((l) => (l?.url === url ? { ...l, colour } : l)))
-                    .catch(() => setLogo((l) => (l?.url === url ? { ...l, colour: "#0A66D6" } : l)));
+                    .catch(() => setLogo((l) => (l?.url === url ? { ...l, colour: "" } : l)));
                 }}
               />
             </Upload>

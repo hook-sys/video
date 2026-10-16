@@ -25,8 +25,8 @@ import { techOffOf } from "@/components/video/composer/techniques";
 import { scriptWords } from "@/components/video/composer/words";
 import { v2DetailsOf, type V2Details } from "@/lib/v2/form";
 import { type RoleAi, v2DirectorModel, v2Role, v2Speak, v2TimeScript, v2Transcribe, v2Whisper } from "@/lib/v2/models";
-import { type V2Rules, v2RulesOf } from "@/lib/v2/rules";
-import { type V2Look, drawLook, freshSeed, lookOf, lookText } from "@/lib/v2/variety";
+import { type V2Rules, v2DirectorOf, v2RulesOf } from "@/lib/v2/rules";
+import { type V2Look, drawLook, freshSeed, hueColour, lookOf, lookText } from "@/lib/v2/variety";
 import { copywrite } from "@/lib/v2/copywriter";
 
 // "New version" (admin → Settings): one simple path, no fallbacks.
@@ -111,6 +111,11 @@ export async function runPipelineV2(projectId: string, userId: string) {
     // (a fresh seed, unlike this customer's last five; kept with the project)
     const rules = v2RulesOf(settings);
     const look = await lookFor(admin, projectId, userId, project.details, settings, rules);
+    // (a logo without colour: the brand colour from the look's random hue, kept)
+    if (!project.brand_color) {
+      project = { ...project, brand_color: hueColour(look.hue) };
+      await update({ brand_color: project.brand_color });
+    }
     const roles: Roles = { director, review, copywriter, rules, look };
     if (v2.voice.source === "script" && !ai.voice.model) throw new Error("No voice model is set for the new version. A super admin must choose it on /admin/models.");
 
@@ -216,7 +221,8 @@ async function lookFor(admin: Admin, projectId: string, userId: string, details:
   if (kept) return kept;
   const { data: last } = await admin.from("projects").select("details").eq("user_id", userId).neq("id", projectId).eq("details->>engine", "v2").order("created_at", { ascending: false }).limit(5);
   const recent = (last ?? []).map((p) => lookOf((p.details as { look?: unknown } | null)?.look)).filter((l): l is V2Look => !!l);
-  const look = drawLook(freshSeed(), recent, { soft: rules.on.motion, noMacro: techOffOf(settings as Parameters<typeof techOffOf>[0]).includes("camera:macro") });
+  const allowed = styleRulesOf(settings as Parameters<typeof styleRulesOf>[0], RECIPES.map((r) => r.id))?.recipes ?? null;
+  const look = drawLook(freshSeed(), recent, { soft: rules.on.motion, noMacro: techOffOf(settings as Parameters<typeof techOffOf>[0]).includes("camera:macro"), recipes: allowed });
   await admin.from("projects").update({ details: { ...((details as object | null) ?? {}), look } }).eq("id", projectId).eq("user_id", userId);
   return look;
 }
@@ -248,17 +254,16 @@ async function planV2(admin: Admin, projectId: string, userId: string, project: 
     model: null,
     clientModel: text.model,
     reasoning: text.reasoning,
-    // one simple path: the flags are fixed, not read from admin → Settings;
-    // its own rules (the switches that are on) and its look, nothing of the old version's
+    temperature: text.temperature,
+    // its own switches (admin → Settings, "New version"), its own rules and
+    // its look — nothing of the old version's; RECENT always
     prompt: "classic",
     recent: looks,
     rules: false,
     ruleText: `${roles.rules.text(never)}\n\n${lookText(roles.look)}`,
     checks: roles.rules.checks,
     styles,
-    match: false,
-    shapes: false,
-    motion: false,
+    ...v2DirectorOf(settings),
     direction: null,
     screenshots: [],
   };
@@ -283,7 +288,7 @@ async function buildV2(admin: Admin, projectId: string, userId: string, project:
   const { directed, past, styles } = planned;
   const { review, copywriter, rules, look } = roles;
   // (the Director review: its own model and reasoning)
-  const input: MotionInput = { ...planned.input, words, name: brand.name, cta: brand.cta, clientModel: review.model, reasoning: review.reasoning };
+  const input: MotionInput = { ...planned.input, words, name: brand.name, cta: brand.cta, clientModel: review.model, reasoning: review.reasoning, temperature: review.temperature };
   const started = Date.now();
   try {
     v2DirectorModel(input.clientModel);
@@ -292,7 +297,7 @@ async function buildV2(admin: Admin, projectId: string, userId: string, project:
     if (plan.source !== "ai" || !plan.ideas) throw new Error(`The Director review (${review.model}) lost the plan.`);
     // the Copywriter: every scene's on-screen words down to its 2–6 key words
     const copied = await copywrite(plan.ideas, words, copywriter, (u) => usage.push(u));
-    const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: look.seed, ideas: copied.ideas, count: 1, avoid: { display: past.seen.display, field: past.seen.field.slice(0, 3) }, screens: 0, avoidStaging: past.seenStaging, rules: rules.ruleSet, variety: look, match: false, techOff: techOffOf(settings as Parameters<typeof techOffOf>[0]), styles, avoidStyles: past.avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
+    const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: look.seed, ideas: copied.ideas, count: 1, avoid: { display: past.seen.display, field: past.seen.field.slice(0, 3) }, screens: 0, avoidStaging: past.seenStaging, rules: rules.ruleSet, variety: look, match: input.match !== false, techOff: techOffOf(settings as Parameters<typeof techOffOf>[0]), styles, avoidStyles: past.avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
     const video = set.videos[0];
     if (!video || video.source !== "director") throw new Error("The Motion Director's scenes could not be laid out.");
     const score = scorePlan(set.plans[0], video.script, { staging: video.staging, motif: plan.creative.motif, heroScene: video.staging?.hero ?? null, recent: past.recent, problems: set.problems.length });

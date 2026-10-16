@@ -45,7 +45,7 @@ export async function saveAiModels(formData: FormData) {
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: formData.get(`task_${t.id}_on`) === "on", provider: text(formData, `task_${t.id}_provider`), model: text(formData, `task_${t.id}_model`) }])),
     voice: { on: formData.get("voice_on") === "on", model: text(formData, "voice_model"), template: text(formData, "voice_template", 2000), female: text(formData, "voice_female", 80), male: text(formData, "voice_male", 80), choices: text(formData, "voice_choices", 4000), fallback: formData.get("voice_fallback") === "on" },
     prices,
-    v2: { whisper: text(formData, "v2_whisper"), roles: Object.fromEntries(V2_ROLES.map((r) => [r.id, { model: text(formData, `v2_${r.id}_model`), reasoning: text(formData, `v2_${r.id}_reasoning`), on: r.id !== "reviewer" }])) },
+    v2: { whisper: text(formData, "v2_whisper"), roles: Object.fromEntries(V2_ROLES.map((r) => [r.id, { model: text(formData, `v2_${r.id}_model`), reasoning: text(formData, `v2_${r.id}_reasoning`), on: r.id !== "reviewer", temperature: num(formData, `v2_${r.id}_temperature`) ?? null }])) },
   });
   if (!next.text.model) redirect("/admin/models?error=" + encodeURIComponent("Choose a main text model: text jobs have no other default."));
   if (!validTemplate(next.voice.template)) redirect("/admin/models?error=" + encodeURIComponent("An input template is not a valid JSON object."));

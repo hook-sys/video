@@ -147,7 +147,9 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
 export type RuleSet = { house: HouseRuleSet; layoutVariety: boolean; fit: Fit };
 // "New version": the look drawn for this video (lib/v2/variety.ts) — its
 // palette treatment, font pairing, layouts, ways in and camera.
-export type Variety = { harmony: (typeof HARMONIES)[number]; scheme: "dark" | "light"; display: string; text: string; camera: CameraKind; transitions: TransitionKind[]; layouts: LayoutKind[] };
+// `recipe`: the reference it is built from (recipes.ts) — the code's look,
+// never the Director's style.
+export type Variety = { recipe?: string | null; harmony: (typeof HARMONIES)[number]; scheme: "dark" | "light"; display: string; text: string; camera: CameraKind; transitions: TransitionKind[]; layouts: LayoutKind[] };
 
 // rules: false — the house rules (rules.ts) are not applied (admin → Settings, "Video rules");
 // a RuleSet — only the ones it keeps ("New version")
@@ -241,8 +243,10 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
   let matchNotes: string[] = [];
   const built = (sc: ScriptT, s: number, asked: unknown) => {
     let out = sc;
+    // ("New version": its drawn recipe, not the Director's style)
+    const forced = variety?.recipe ? RECIPES.find((r) => r.id === variety.recipe) : null;
     if (styles) {
-      const { style, recipe } = pickStyle(asked, s, RECIPES, made, avoidStyles, styles);
+      const { style, recipe } = forced ? pickStyle(null, s, [forced], made, avoidStyles, { ...styles, director: false, recipes: null }) : pickStyle(asked, s, RECIPES, made, avoidStyles, styles);
       made.push(style);
       out = inStyle(sc, style, s, recipe);
     } else out = { ...sc, art: { ...sc.art, look: null, style: null } };

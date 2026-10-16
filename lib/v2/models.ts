@@ -12,12 +12,12 @@ const SET_IT = "A super admin must choose it on /admin/models.";
 // A role's model (Director, Director review, Copywriter…), through fal's
 // OpenRouter router, with the reasoning chosen for it: only what is set on
 // /admin/models under "New version" (one level: no quality level's model).
-export type RoleAi = TextAi & { reasoning: Reasoning };
+export type RoleAi = TextAi & { reasoning: Reasoning; temperature: number | null };
 export async function v2Role(role: V2Role, opts: { timeout?: number; maxRetries?: number } = {}, config?: AiConfig): Promise<RoleAi> {
   const c = (config ?? (await getAiConfig())).v2.roles[role];
   const label = V2_ROLES.find((r) => r.id === role)?.label ?? role;
   if (!c.model.trim()) throw new Error(`No ${label} model is set for the new version. ${SET_IT}`);
-  return { ...textClient("fal", c.model.trim(), false, opts, false), reasoning: c.reasoning };
+  return { ...textClient("fal", c.model.trim(), false, opts, false), reasoning: c.reasoning, temperature: c.temperature };
 }
 
 // The Director's model, checked right before each call: an empty one would

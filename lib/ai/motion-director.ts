@@ -3,7 +3,7 @@ import type OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
-import { type Reasoning, countUsage, textAi, textClient } from "@/lib/ai/models";
+import { type Reasoning, countUsage, temperatureFor, textAi, textClient } from "@/lib/ai/models";
 import { HOUSE_RULES, extraRules } from "@/lib/ai/house-rules";
 import { DISPLAY_FACES, TEXT_FACES } from "@/components/video/composer/art";
 import { STYLE_NOTES, type StyleRules, styleLine, styleOf } from "@/components/video/composer/style";
@@ -346,6 +346,8 @@ export type MotionInput = {
   clientModel?: string | null;
   // "New version" only: how hard that model reasons (admin → AI models; "default": the model's own)
   reasoning?: Reasoning | null;
+  // "New version" only: that model's temperature (where it takes one; null: its own)
+  temperature?: number | null;
   // "New version" only: its rules (lib/v2/rules.ts), written in place of the
   // house rules, the style rules and the never list ("": none of them), and
   // what the review checks in code
@@ -507,7 +509,7 @@ export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; 
   const duration = Math.round(((words[words.length - 1]?.end ?? 0) + 1) * 30);
   const set = composeVariants({ words, brand: { ...brand, url: brand.url ?? "", tagline: "", icon: null }, duration, seed: 1, ideas, count: 1, creative, rules: checks ? checks.rules : rules, match });
   notes.push(...set.problems.map((p) => p.replace(/^video 1, /, "")));
-  if (checks) return [...new Set([...notes, ...v2Notes(ideas, words, checks)])].slice(0, 20);
+  if (checks) return [...new Set([...notes, ...v2Notes(ideas, words, checks), ...shapeNotes(ideas.scenes, creative?.shape)])].slice(0, 20);
   if (!rules) {
     ideas.scenes.forEach((x, i) => {
       const items = x.options[0]?.items ?? [];
@@ -709,7 +711,7 @@ function requestOf(input: MotionInput): string {
     k ? `Camera languages that usually suit a ${k.mood} brand: ${Object.entries(LANGUAGE_WEIGHTS[k.mood]).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)).slice(0, 5).map(([l]) => l).join(", ")}` : "",
     `EARLIER (this brand's videos): ${input.earlier?.length ? input.earlier.map((e) => `"${e.idea}" (${e.language ?? "?"})`).join("; ") : "(none)"}`,
     `SEEN faces: ${input.seen?.display.join(", ") || "(none)"}; SEEN fields: ${input.seen?.field.join(", ") || "(none)"}`,
-    input.prompt === "creative" ? recentText(input.recent) : "",
+    input.prompt === "creative" || typeof input.ruleText === "string" ? recentText(input.recent) : "",
     stylesLine(input.styles),
     `Length: about ${Math.round(seconds)} s, ${input.words.length} words`,
     `NARRATION (index:word), one sentence per line:\n${sentences.join("\n")}`,
@@ -750,7 +752,7 @@ export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage)
   if (!ai || !input.words.length) return done(fallback, ["no model (turned off on /admin/models, or no key) — plan by rule"]);
   const deadline = t0 + budgetMs;
   try {
-    const o = await ask<Answer>(ai, { model, instructions: directionOf(input), input: requestOf(input), text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+    const o = await ask<Answer>(ai, { model, instructions: directionOf(input), input: requestOf(input), text: FORMAT, ...quick, ...temperatureFor(model, input.reasoning, input.temperature) }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
     if (!o) return done(fallback, ["no answer — plan by rule"]);
     return done(planOf(o, input, fallback), ideaProblems(o, input.words.length));
   } catch (e) {
@@ -791,7 +793,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
     if (round > 1 && (!notes.length || deadline - Date.now() < 40_000)) break;
     const request = `${requestOf(input)}\n\nYOUR PLAN (scenes numbered from 1):\n${JSON.stringify(answerOf(best))}\n\nProblems found by our checks on the recorded voice (fix every one):\n${notes.map((a) => `- ${a}`).join("\n")}`;
     try {
-      const fix = await ask<Fixes>(ai, { model, instructions: `${directionOf(input)}\n\n${typeof input.ruleText === "string" ? `${REVIEW_FREE}${input.ruleText ? " Every scene must also keep the RULES above." : ""}` : input.rules === false ? REVIEW_FREE : `${REVIEW}${input.prompt === "creative" ? `\n${CREATIVE_REVIEW}` : ""}`}\n\n${FIXES}`, input: request, text: FIXES_FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+      const fix = await ask<Fixes>(ai, { model, instructions: `${directionOf(input)}\n\n${typeof input.ruleText === "string" ? `${REVIEW_FREE}${input.ruleText ? " Every scene must also keep the RULES above." : ""}` : input.rules === false ? REVIEW_FREE : `${REVIEW}${input.prompt === "creative" ? `\n${CREATIVE_REVIEW}` : ""}`}\n\n${FIXES}`, input: request, text: FIXES_FORMAT, ...quick, ...temperatureFor(model, input.reasoning, input.temperature) }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
       if (!fix?.fixes.length) {
         log.push(`review ${round}: ${fix ? "no changes" : "no answer"} — the plan is kept`);
         break;

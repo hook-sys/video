@@ -167,7 +167,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
           <Card title={nv ? "New version: roles & Whisper" : "New version (when it is on)"}>
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">
-                Used only by videos made with <b className="text-zinc-300">New version</b> on (admin → Settings). Every role runs through fal&apos;s OpenRouter router with its own model and reasoning; the voice uses the Voice card above (its model and names only). Nothing falls back: a missing model stops the video with an error and its credits go back. Reasoning: <i>default</i> = the model&apos;s own; <i>none</i> = none asked.
+                Used only by videos made with <b className="text-zinc-300">New version</b> on (admin → Settings). Every role runs through fal&apos;s OpenRouter router with its own model and reasoning; the voice uses the Voice card above (its model and names only). Nothing falls back: a missing model stops the video with an error and its credits go back. Reasoning: <i>default</i> = the model&apos;s own; <i>none</i> = none asked. Temperature (empty = the model&apos;s own; the Director starts at 0.9) is sent only where the model takes one — never to OpenAI reasoning models, never with a reasoning effort chosen.
               </p>
               {V2_ROLES.map((r) => {
                 const v = c.v2.roles[r.id];
@@ -179,8 +179,9 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
                     </p>
                     <p className="text-xs text-zinc-500">{r.help}</p>
                     {nv && !locked && !v.model && <p className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-2 text-xs text-amber-200">No model yet: new videos stop with an error until one is set.</p>}
-                    <div className="grid gap-2 md:grid-cols-[1fr_150px]">
+                    <div className="grid gap-2 md:grid-cols-[1fr_150px_150px]">
                       <input name={`v2_${r.id}_model`} list="text-models" defaultValue={v.model} placeholder={locked ? "e.g. a vision model" : "e.g. google/gemini-2.5-flash"} className={input} />
+                      <input name={`v2_${r.id}_temperature`} type="number" min={0} max={2} step="0.05" defaultValue={v.temperature ?? ""} placeholder="temperature: model's" title="Temperature (empty: the model's own). Sent only where the model takes one — never to OpenAI reasoning models, never with a reasoning effort chosen." className={input} />
                       <select name={`v2_${r.id}_reasoning`} defaultValue={v.reasoning} className={input}>
                         {REASONINGS.map((x) => (
                           <option key={x} value={x}>

@@ -11,6 +11,13 @@ import type { RuleSet } from "@/components/video/composer/variants";
 // the renderer's limits and no music are always on.
 
 export const V2_RULES_MASTER = "v2_rules";
+// the Director's own choices in the new version (admin → Settings, "New version: Director")
+export const V2_DIRECTOR = [
+  { key: "v2_story_shapes", label: "Story shapes", help: "Every video told in its own shape (problem-led, demo-first, before-after, feature-led, kinetic type), the one its script supports best and unlike this customer's last videos; the scenes are checked against it. Off: told the classic way." },
+  { key: "v2_director_motion", label: "Director's transitions", help: "The Director chooses each scene's way in (within the video's look), how its words come in and its camera move. Off: the renderer draws them." },
+  { key: "v2_visual_match", label: "Visual match", help: "Every scene's things picture what its words say (bookings → a calendar, payments → a pay card…): the Director is given the map, every video is checked against it, icons that don't fit are swapped." },
+] as const;
+export const v2DirectorOf = (settings: Record<string, unknown>) => ({ shapes: settings.v2_story_shapes !== false, motion: settings.v2_director_motion !== false, match: settings.v2_visual_match !== false });
 export const V2_RULES = [
   { id: "story", label: "Story", help: "A hook (the problem or a question) in the first 3 s; problem → product → 2–3 steps → result → call to action.", on: true, text: "STORY: open on the viewer's pain or a question in the first 3 s. Structure: the problem → the product arrives → how it works in 2–3 steps → the result → the call to action." },
   { id: "frame", label: "Frame", help: "One hero element, no text over it, only 2–6 key words on screen.", on: true, text: "FRAME: one hero per frame — the biggest and brightest; nothing behind or over it and no text on top of it (the words beside it, or as its label). On screen only 2–6 key words the voice says, never the sentence." },

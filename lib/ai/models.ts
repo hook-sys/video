@@ -46,7 +46,12 @@ export type V2Role = (typeof V2_ROLES)[number]["id"];
 // how hard a model reasons ("default": the model's own; "none": no reasoning asked)
 export const REASONINGS = ["default", "none", "low", "medium", "high"] as const;
 export type Reasoning = (typeof REASONINGS)[number];
-export type V2RoleConfig = { model: string; reasoning: Reasoning; on: boolean };
+// temperature: null = the model's own (the Director starts at 0.9)
+export type V2RoleConfig = { model: string; reasoning: Reasoning; on: boolean; temperature: number | null };
+// The temperature a call may carry: only where the model takes one — never
+// OpenAI's reasoning models (gpt-5, o-series), never with a reasoning effort asked.
+export const temperatureFor = (model: string, reasoning: Reasoning | null | undefined, t: number | null | undefined) =>
+  typeof t === "number" && Number.isFinite(t) && !/(^|\/)(gpt-5|o\d)/i.test(model) && (!reasoning || reasoning === "default" || reasoning === "none") ? { temperature: t } : {};
 
 // A voice customers can pick on the form (a name of the voice model's).
 export type VoiceChoice = { name: string; gender: "female" | "male"; label: string };
@@ -73,7 +78,7 @@ export function defaultConfig(): AiConfig {
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: true, provider: "", model: "" }])) as AiConfig["tasks"],
     voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     prices: {},
-    v2: { whisper: "", roles: Object.fromEntries(V2_ROLES.map((r) => [r.id, { model: "", reasoning: "default", on: r.id !== "reviewer" }])) as AiConfig["v2"]["roles"] },
+    v2: { whisper: "", roles: Object.fromEntries(V2_ROLES.map((r) => [r.id, { model: "", reasoning: "default", on: r.id !== "reviewer", temperature: r.id === "director" ? 0.9 : null }])) as AiConfig["v2"]["roles"] },
   };
 }
 
@@ -108,7 +113,9 @@ export function normalizeConfig(raw: unknown): AiConfig {
           const model = str(v?.model) || (role.id === "director" ? str(r.v2?.text) : "");
           const reasoning = (REASONINGS as readonly string[]).includes(String(v?.reasoning)) ? (v!.reasoning as Reasoning) : "default";
           // (the vision reviewer stays off until the Vercel Sandbox is back)
-          return [role.id, { model, reasoning, on: role.id === "reviewer" ? false : bool(v?.on, true) }];
+          const t = v?.temperature;
+          const temperature = t === null ? null : typeof t === "number" && Number.isFinite(t) ? Math.max(0, Math.min(2, t)) : role.id === "director" ? 0.9 : null;
+          return [role.id, { model, reasoning, on: role.id === "reviewer" ? false : bool(v?.on, true), temperature }];
         }),
       ) as AiConfig["v2"]["roles"],
     },
@@ -288,6 +295,7 @@ function falResponses(opts: { timeout?: number; maxRetries?: number }) {
             ? { response_format: strict ? { type: "json_schema", json_schema: { name: format.name ?? "output", strict: true, schema: format.schema } } : { type: "json_object" } }
             : {}),
           ...(effort ? { reasoning: { effort } } : {}),
+          ...(typeof body.temperature === "number" ? { temperature: body.temperature } : {}),
         } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         options?.timeout ? { timeout: options.timeout } : undefined,
       );
