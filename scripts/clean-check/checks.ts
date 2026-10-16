@@ -622,10 +622,17 @@ export async function runChecks(): Promise<Check[]> {
       const r = runs.map((x) => `${x.e} ${(p => (p.links ?? []).slice(1).join(","))(x.plan)}`).join(" · ");
       add("each energy's continuous ways: calm ~30 %, medium ~40 %, lively at least half; never a cut", runs.every((x) => x.plan.flow?.energy === x.e && !(x.plan.links ?? []).includes("cut")) && share(runs[0].plan) >= 0.3 && share(runs[0].plan) <= 0.41 && share(runs[1].plan) >= 0.4 && share(runs[1].plan) <= 0.41 && share(runs[2].plan) >= 0.5, r);
       const pm = runs[1].plan;
-      const mi = (pm.links ?? []).indexOf("morph");
-      const pair = pm.flow?.pairs[mi];
-      add("the Director's morph is kept: the last scene's icon becomes this scene's hero icon (the shared element)", mi === 1 && !!pair && pm.scenes[0].items[pair[0]].icon === "eye-off" && pm.scenes[1].items[pair[1]].icon === "lightbulb", `way ${mi}: ${pair ? `${pm.scenes[0].items[pair[0]].icon} → ${pm.scenes[1].items[pair[1]].icon}` : "none"}`);
-      add("the Director's zoom-in is a zoom through the last scene's icon into the next", (pm.links ?? [])[2] === "dive" && pm.flow?.pairs[2]?.[0] != null, String((pm.links ?? [])[2]));
+      // the Director's continuous ways are suggestions: one plan, three seeds → three placements, the energy's share kept
+      const seeded = [77, 4242, 90001, 31337, 55555, 8080].map((sd) => {
+        const look = { ...drawLook(sd, []), energy: "medium" as const };
+        const set = composeVariants({ words: fw, brand, duration: 48 * 14, seed: look.seed, ideas, count: 1, rules: rules.ruleSet, variety: varietyOf(look, rules.flow), creative: { language: "cuts", hero: 16 } });
+        const v = set.videos[0];
+        return inspected(staged(placeAll(v.script, fw, 48 * 14, brand, v.seed, 0, v.source, [1920, 1080], v.fit ?? {}).plan, v.staging)).plan;
+      });
+      const placesOf = (p: ComposerPlan) => (p.links ?? []).map((l, i) => (l === "morph" || l === "dive" || l === "reveal" ? `${i}${l[0]}` : "")).filter(Boolean).join(",");
+      add("continuous ways vary per video from one Director plan (its picks are suggestions; the energy's share kept) — 6 seeds of a 6-scene video, 3+ placements", new Set(seeded.map(placesOf)).size >= 3 && seeded.every((p) => share(p) >= 0.4 && share(p) <= 0.41), seeded.map(placesOf).join(" · "));
+      const morphs = [...runs.map((x) => x.plan), ...seeded].flatMap((p) => (p.links ?? []).map((l, i) => ({ p, l, i })).filter((x) => x.l === "morph"));
+      add("a morph is always the last scene's icon becoming this scene's hero icon (the shared element)", morphs.every(({ p, i }) => { const pr = p.flow?.pairs[i]; const a = pr && p.scenes[i - 1].items[pr[0]], b = pr && p.scenes[i].items[pr[1]]; return !!a && !!b && a.kind === "icon" && b.kind === "icon" && p.scenes[i].items.filter((q) => q.kind !== "badge" && q.kind !== "shape" && q.kind !== "cursor").every((q) => q.box.w * q.box.h <= b.box.w * b.box.h); }), `${morphs.length} morph(s)`);
       add("never the same layout twice in a row — a scene that must change its layout to fit included (the closing ask aside)", runs.every((x) => x.plan.scenes.every((sc, i) => i === 0 || i === x.plan.scenes.length - 1 || sc.layout !== x.plan.scenes[i - 1].layout)), runs.map((x) => x.plan.scenes.map((sc) => sc.layout).join(",")).join(" · "));
       const cams = runs.map((x) => x.v.script.scenes.map((sc) => sc.camera));
       add("every scene its own camera move (never still, never twice in a row; the Director's kept where the energy has it)", cams.every((cs) => cs.every((c, i) => c && c !== "still" && c !== cs[i - 1])) && cams[1][1] === "orbit" && cams[0][1] !== "orbit", cams.map((c) => c.join(",")).join(" · "));
