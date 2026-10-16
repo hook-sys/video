@@ -9,6 +9,7 @@ import { makePolygon, makeSpark, makeStar } from "@remotion/shapes";
 import { noise2D } from "@remotion/noise";
 import { Connector, drawn, smoothPath } from "./paths";
 import { type Ctx, Glyph, Initial, Mark, Tick, countUp, kIn, show, surf } from "./kit";
+import { emWidth, faceOf } from "./art";
 import { clamp01, mix } from "./motion";
 import type { PlacedItem } from "./types";
 
@@ -277,8 +278,25 @@ function Logo({ c, it, w, h }: P) {
   );
 }
 
+// The call to action's type: its full size when it fits the button, smaller
+// for a long one, then on two lines (three for the longest) — never wider
+// than the button.
+const CTA_PAD = 56, CTA_ARROW = 46 + 18;
+export function ctaType(label: string, w: number, display: string, upper: boolean): { size: number; lines: 1 | 2 | 3 } {
+  const room = (w - CTA_PAD * 2 - CTA_ARROW) * 0.94;
+  const em = Math.max(1, emWidth(label, faceOf(display), 750, upper));
+  const one = Math.floor(room / em);
+  if (one >= 34) return { size: Math.min(50, one), lines: 1 };
+  // two lines: half the width each (with room for an uneven break)
+  const two = Math.floor((room * 1.75) / em);
+  if (two >= 26) return { size: Math.min(40, two), lines: 2 };
+  return { size: Math.max(16, Math.min(30, Math.floor((room * 2.6) / em))), lines: 3 };
+}
+
 function Button({ c, it, w }: P) {
   const hk = it.hit != null ? it.hit : it.at + 30;
+  const cta = it.title ?? c.brand.cta;
+  const type = ctaType(cta, w, c.art.display, c.art.case === "upper" || !!faceOf(c.art.display).upper);
   const press = clamp01(kIn(c, hk - 3, 4) - kIn(c, hk + 3, 8));
   const pressed = c.f >= hk;
   const travel = kIn(c, hk - 26, 24);
@@ -287,8 +305,8 @@ function Button({ c, it, w }: P) {
     <div style={{ width: w, display: "flex", flexDirection: "column", alignItems: "center", gap: 20, position: "relative" }}>
       <div style={{ position: "relative", transform: `scale(${1 - press * 0.06})` }}>
         {glow > 0 && <div style={{ position: "absolute", inset: -30 * (1 - glow), borderRadius: 999, border: `3px solid ${c.pal.accent}`, opacity: glow }} />}
-        <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "0 56px", height: 120, borderRadius: Math.max(20, Math.min(999, c.art.radius * 3)), background: `linear-gradient(140deg, ${c.pal.fill}, ${c.pal.fill2})`, color: c.pal.onFill, fontFamily: c.display, fontSize: 50, fontWeight: 750, letterSpacing: "-0.02em", boxShadow: `0 30px 70px ${c.pal.fill}66`, whiteSpace: "nowrap" }}>
-          {it.title ?? c.brand.cta}
+        <div style={{ display: "flex", alignItems: "center", gap: 18, padding: `0 ${CTA_PAD}px`, height: 120, maxWidth: w, boxSizing: "border-box", borderRadius: Math.max(20, Math.min(999, c.art.radius * 3)), background: `linear-gradient(140deg, ${c.pal.fill}, ${c.pal.fill2})`, color: c.pal.onFill, fontFamily: c.display, fontSize: type.size, fontWeight: 750, letterSpacing: "-0.02em", boxShadow: `0 30px 70px ${c.pal.fill}66` }}>
+          <span style={{ minWidth: 0, whiteSpace: type.lines === 1 ? "nowrap" : "normal", overflowWrap: "anywhere", lineHeight: 1.08, textAlign: "center", overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: type.lines }}>{cta}</span>
           <Icon name="arrow-right" size={46} color={c.pal.onFill} strokeWidth={2.6} />
         </div>
         <div style={{ position: "absolute", left: mix(w * 0.8, w * 0.55, travel), top: mix(170, 70, travel), opacity: clamp01(kIn(c, hk - 30, 8)) * (1 - kIn(c, hk + 24, 10)), transform: `scale(${1 - press * 0.15})` }}>
