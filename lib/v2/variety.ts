@@ -97,6 +97,7 @@ export function varietyOf(l: V2Look, flow: V2Flow, noMacro = false): Variety {
       depth: flow.depth,
       cursor: flow.cursor,
       continuous: flow.continuous,
+      pieces: flow.pieces,
     },
   };
 }

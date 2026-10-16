@@ -10,6 +10,7 @@ import { RECIPES } from "./recipes";
 import { matched } from "./meaning";
 import { withoutTechniques } from "./techniques";
 import { ENERGY, flowStaging } from "./flow";
+import { withPieces } from "./pieces";
 import { groundIsDark } from "./style";
 import type { StoryShape } from "@/lib/studio";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, LOOKS, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
@@ -155,7 +156,8 @@ export type RuleSet = { house: HouseRuleSet; layoutVariety: boolean; fit: Fit };
 // of its own for every scene (from `cameras`), the keyword's highlight,
 // depth (glass and soft shadows, parallax), the big cursor, and the
 // continuous ways between scenes; each part off with its rule.
-export type FlowLook = { energy: Energy; cameras: CameraKind[] | null; key: KeyStyle | null; depth: boolean; cursor: boolean; continuous: boolean };
+// (pieces: the UI piece library fills the product's UI from the script's words — pieces.ts)
+export type FlowLook = { energy: Energy; cameras: CameraKind[] | null; key: KeyStyle | null; depth: boolean; cursor: boolean; continuous: boolean; pieces?: boolean };
 export type Variety = { recipe?: string | null; harmony: (typeof HARMONIES)[number]; scheme: "dark" | "light"; display: string; text: string; camera: CameraKind; transitions: TransitionKind[]; layouts: LayoutKind[]; flow?: FlowLook | null };
 
 // rules: false — the house rules (rules.ts) are not applied (admin → Settings, "Video rules");
@@ -295,6 +297,7 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
       out = m.script;
       matchNotes = m.problems;
     }
+    if (variety?.flow?.pieces) out = withPieces(out, words);
     if (variety) out = withVariety(out, variety, s);
     return fitScript(withoutTechniques(out, techOff));
   };
