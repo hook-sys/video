@@ -1,11 +1,15 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { changeCredits, getBilling, withCoupon, type CouponKind } from "@/lib/billing";
+import { getBilling, withCoupon, type CouponKind } from "@/lib/billing";
 import { stripe } from "@/lib/stripe";
 
 // Buying credits: a pack (and a coupon), paid with Stripe Checkout, credited
 // once — by the webhook, or when the customer comes back from Stripe,
 // whichever is first. Coupons that give credits outright are redeemed here too.
+// What must not half-happen runs in one database transaction
+// (supabase/migrations/20261016000034_atomic_payments.sql): starting a
+// purchase with a coupon (its limits checked under a row lock), crediting a
+// paid purchase, and redeeming a credits code.
 
 type Coupon = { id: string; code: string; kind: CouponKind; value: number; active: boolean; expires_at: string | null; max_uses: number | null; per_user_once: boolean; min_usd: number };
 
@@ -29,20 +33,23 @@ export async function couponFor(userId: string, rawCode: string, opts: { purchas
   return { coupon: { ...c, min_usd: Number(c.min_usd) } as Coupon };
 }
 
-async function redeemed(couponId: string, userId: string, credits: number, paymentId: string | null) {
-  const db = createAdminClient();
-  await db.from("coupon_redemptions").insert({ coupon_id: couponId, user_id: userId, credits, payment_id: paymentId });
-  const { count } = await db.from("coupon_redemptions").select("id", { count: "exact", head: true }).eq("coupon_id", couponId);
-  await db.from("coupons").update({ uses: count ?? 0 }).eq("id", couponId);
+// What the database's coupon refusals say to the customer.
+function couponError(message: string, redeem: boolean): string | null {
+  if (message.includes("coupon_invalid")) return "That code isn't valid.";
+  if (message.includes("coupon_expired")) return "That code has expired.";
+  if (message.includes("coupon_wrong_kind")) return redeem ? "This code works when you buy credits — enter it on a pack." : "This code gives credits — use “Redeem a code” below.";
+  if (message.includes("coupon_min_usd")) return "This code needs a bigger pack.";
+  if (message.includes("coupon_used_up")) return "That code has been used up.";
+  if (message.includes("coupon_used_by_you")) return "You've already used this code (or have a checkout open with it — finish it, or try again in 30 minutes).";
+  return null;
 }
 
-// A code that gives credits outright.
+// A code that gives credits outright (checked, recorded and credited in one transaction).
 export async function redeemCode(userId: string, code: string): Promise<{ credits: number } | { error: string }> {
-  const r = await couponFor(userId, code, { redeem: true });
-  if ("error" in r) return r;
-  await changeCredits(userId, r.coupon.value, "coupon", { coupon: r.coupon.id, note: `Code ${r.coupon.code}` });
-  await redeemed(r.coupon.id, userId, r.coupon.value, null);
-  return { credits: r.coupon.value };
+  if (!code.trim()) return { error: "Enter a code." };
+  const { data, error } = await createAdminClient().rpc("redeem_coupon", { p_user: userId, p_code: code });
+  if (error) return { error: couponError(error.message, true) ?? "Couldn't redeem the code. Please try again." };
+  return { credits: data as number };
 }
 
 // A pack bought: the Stripe Checkout page to send the customer to (or, at
@@ -59,14 +66,17 @@ export async function startPurchase(userId: string, email: string | null, packIn
   }
   const deal = withCoupon(pack, coupon);
   const db = createAdminClient();
-  const { data: payment, error } = await db
-    .from("payments")
-    .insert({ user_id: userId, usd: deal.usd, list_usd: pack.usd, credits: deal.credits, bonus: deal.bonus, coupon_id: coupon?.id ?? null })
-    .select("id")
-    .single();
-  if (error || !payment) return { error: "Couldn't start the purchase. Please try again." };
+  // (the coupon's limits checked again, under its row lock, as the payment is made)
+  const { data: paymentId, error } = await db.rpc("start_payment", { p_user: userId, p_usd: deal.usd, p_list_usd: pack.usd, p_credits: deal.credits, p_bonus: deal.bonus, p_coupon: coupon?.id ?? null });
+  if (error || !paymentId) return { error: (error && couponError(error.message, false)) ?? "Couldn't start the purchase. Please try again." };
+  const payment = { id: paymentId as string };
   if (deal.usd <= 0) {
-    await finishPayment(payment.id);
+    try {
+      await finishPayment(payment.id);
+    } catch (e) {
+      console.error("free purchase not credited:", e instanceof Error ? e.message : e);
+      return { error: "Couldn't add the credits. Please try again." };
+    }
     return { url: `${origin}/billing?paid=1` };
   }
   try {
@@ -85,6 +95,8 @@ export async function startPurchase(userId: string, email: string | null, packIn
         },
       ],
       metadata: { payment_id: payment.id, user_id: userId },
+      // (an open checkout holds its coupon's use for 40 minutes: it expires before that)
+      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
       success_url: `${origin}/billing?paid=1&session={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/billing?cancelled=1`,
     });
@@ -97,15 +109,14 @@ export async function startPurchase(userId: string, email: string | null, packIn
   }
 }
 
-// A paid purchase credited — once (the first caller marks it paid).
+// A paid purchase credited — once, in one transaction: marked paid, its
+// credits, bonus and coupon use, or (on any error) none of them, the payment
+// left pending for Stripe's retry. Throws on a database error, so the
+// webhook answers 500 and Stripe sends it again.
 export async function finishPayment(paymentId: string) {
-  const db = createAdminClient();
-  const { data: p } = await db.from("payments").update({ status: "paid", paid_at: new Date().toISOString() }).eq("id", paymentId).eq("status", "pending").select("id, user_id, credits, bonus, coupon_id, usd").maybeSingle();
-  if (!p) return false;
-  await changeCredits(p.user_id, p.credits, "purchase", { payment: p.id, note: `Bought ${p.credits.toLocaleString("en-US")} credits ($${Number(p.usd).toFixed(2)})` });
-  if (p.bonus > 0) await changeCredits(p.user_id, p.bonus, "bonus", { payment: p.id, coupon: p.coupon_id, note: "Coupon bonus" });
-  if (p.coupon_id) await redeemed(p.coupon_id, p.user_id, p.bonus, p.id);
-  return true;
+  const { data, error } = await createAdminClient().rpc("finish_payment", { p_payment: paymentId });
+  if (error) throw new Error(`finish_payment: ${error.message}`);
+  return data === true;
 }
 
 // Back from Stripe: the session checked with Stripe itself, then credited.
@@ -113,7 +124,7 @@ export async function confirmSession(userId: string, sessionId: string) {
   try {
     const s = await stripe().checkout.sessions.retrieve(sessionId);
     if (s.payment_status !== "paid" || s.metadata?.user_id !== userId || !s.metadata?.payment_id) return false;
-    return finishPayment(s.metadata.payment_id);
+    return await finishPayment(s.metadata.payment_id);
   } catch {
     return false;
   }
