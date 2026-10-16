@@ -1,17 +1,19 @@
 import { generateSoundEffect } from "@/lib/ai/fal";
+import { internalAllowed } from "@/lib/internal-key";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Builds the SFX library: generates the sound effects queued in `sfx_jobs`
 // (rows added by the team) with Fal and stores the audio on the row for
-// review. Preview only; takes no input, so a call can only run queued work.
+// review. Preview only, with the team's key (lib/internal-key.ts); takes no
+// input, so a call can only run queued work.
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const BUDGET_MS = 240_000;
 const BATCH = 8;
 
-export async function GET() {
-  if (process.env.VERCEL_ENV !== "preview") return new Response("Not found", { status: 404 });
+export async function GET(request: Request) {
+  if (!(await internalAllowed(request))) return new Response("Not found", { status: 404 });
   const started = Date.now();
   const admin = createAdminClient();
   const counts = { done: 0, failed: 0 };
