@@ -59,7 +59,7 @@ export function v2RulesOf(settings: Record<string, unknown>): V2Rules {
     // (one hero and up to 4 beside it; icons and a card may share a scene)
     house: { maxItems: on.max_items, maxCount: 5, entries: on.entries, oneBackground: on.one_background, calmBackground: on.calm_background, noIconCardMix: false },
     layoutVariety: on.layout_variety,
-    fit: { minScene: on.min_scene ? MIN_SCENE : PHRASE_MIN, shown: V2_SHOWN },
+    fit: { minScene: on.min_scene ? MIN_SCENE : PHRASE_MIN, shown: V2_SHOWN, ...(on.layout_variety ? { vary: true } : {}) },
   };
   const checks: V2Checks = { rules: ruleSet, noPeople: on.no_people, minSeconds: on.min_scene ? 3 : 1.5, shown: V2_SHOWN };
   const text = (never: string | null | undefined) => {

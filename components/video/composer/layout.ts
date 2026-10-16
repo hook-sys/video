@@ -193,7 +193,8 @@ export type SceneInput = { scene: SceneT; index: number; from: number; to: numbe
 // scene (frames; MIN_SCENE) and the most words on screen (SHOWN). Stored with
 // a "New version" video (StoredComposition.fit) so it is laid out the same
 // whenever it is shown or rendered.
-export type Fit = { minScene?: number; shown?: number };
+// (vary: "New version" — a scene that must change its layout to fit never takes the last scene's)
+export type Fit = { minScene?: number; shown?: number; vary?: boolean };
 
 // The layouts that compose the words with the things (not side by side):
 // inline — an icon beside the words (and the other things beside them);
@@ -581,7 +582,9 @@ export function placeAll(script: ScriptT, words: Word[], duration: number, brand
     const input: SceneInput = { scene: s, index: i, from, to, words, wordFrom: s.at, wordTo, art: script.art, seed: sceneSeed, prev: placed[i - 1] ?? null, screens, shown: fit.shown };
     let best = placeScene(input);
     if (best.problems.length) {
-      for (const layout of [s.layout, ...RETRY.filter((l) => l !== s.layout)]) {
+      const prevLayout = placed[i - 1]?.layout;
+      const retry = RETRY.filter((l) => l !== s.layout);
+      for (const layout of [s.layout, ...(fit.vary ? retry.filter((l) => l !== prevLayout) : retry)]) {
         for (const arrangeK of [s.arrange ?? null, "row", "column", "grid", "single"] as (ArrangeKind | null)[]) {
           const tryIt = placeScene({ ...input, scene: { ...s, layout, arrange: arrangeK } });
           if (tryIt.problems.length < best.problems.length) best = tryIt;
@@ -606,7 +609,7 @@ export function placeAll(script: ScriptT, words: Word[], duration: number, brand
       const own = fillOf(best.placed);
       if (own < 0.32) {
         let pick = best, score = own;
-        for (const layout of ["top", "bottom", "split-left", "split-right", "center"] as LayoutKind[]) {
+        for (const layout of (["top", "bottom", "split-left", "split-right", "center"] as LayoutKind[]).filter((l) => !fit.vary || l === s.layout || l !== placed[i - 1]?.layout)) {
           for (const arrangeK of [s.arrange ?? null, "row", "grid", "column"] as (ArrangeKind | null)[]) {
             const t = placeScene({ ...input, scene: { ...s, layout, arrange: arrangeK } });
             if (t.problems.length) continue;
@@ -620,6 +623,18 @@ export function placeAll(script: ScriptT, words: Word[], duration: number, brand
         }
         best = pick;
       }
+    }
+    // ("New version": never the last scene's layout — the closing ask aside — where another lays it out as well)
+    if (fit.vary && i > 0 && i < kept.length - 1 && best.placed.layout === placed[i - 1].layout && best.placed.items.some((q) => !isAccent(q))) {
+      const other = [s.layout, ...RETRY].filter((l, k, xs) => l !== placed[i - 1].layout && xs.indexOf(l) === k);
+      found: for (const layout of other)
+        for (const arrangeK of [s.arrange ?? null, "row", "column", "grid", "single"] as (ArrangeKind | null)[]) {
+          const t = placeScene({ ...input, scene: { ...s, layout, arrange: arrangeK } });
+          if (t.problems.length <= best.problems.length && t.placed.layout !== placed[i - 1].layout) {
+            best = t;
+            break found;
+          }
+        }
     }
     best.placed.dark = dark;
     // the ask's button shows the customer's own address, or none (never one made up)
