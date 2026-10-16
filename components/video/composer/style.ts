@@ -228,7 +228,7 @@ export function pickStyle(asked: unknown, seed: number, recipes: Recipe[], avoid
 }
 
 // ── the style applied to a script ─────────────────────────────────────────
-const CUT_SETS: Record<(typeof CUTS)[number], TransitionKind[]> = {
+export const CUT_SETS: Record<(typeof CUTS)[number], TransitionKind[]> = {
   soft: ["fade", "blur", "zoom-out"],
   push: ["push-left", "push-up", "wipe"],
   hard: ["whip", "zoom-in", "push-left"],
@@ -236,7 +236,7 @@ const CUT_SETS: Record<(typeof CUTS)[number], TransitionKind[]> = {
 };
 const PACE: Record<(typeof RHYTHMS)[number], [number, number]> = { calm: [0.82, 0.92], steady: [0.95, 1.06], quick: [1.1, 1.2], rapid: [1.24, 1.35] };
 const MOTION: Record<(typeof RHYTHMS)[number], Motion[]> = { calm: ["soft", "glide"], steady: ["glide", "soft", "springy"], quick: ["snappy", "springy"], rapid: ["snappy"] };
-const CAMERA: Record<(typeof RHYTHMS)[number], CameraKind[]> = { calm: ["drift", "push", "float", "macro"], steady: ["drift", "push", "rise", "orbit", "float", "macro"], quick: ["push", "still", "rise"], rapid: ["still", "push"] };
+export const CAMERA: Record<(typeof RHYTHMS)[number], CameraKind[]> = { calm: ["drift", "push", "float", "macro"], steady: ["drift", "push", "rise", "orbit", "float", "macro"], quick: ["push", "still", "rise"], rapid: ["still", "push"] };
 const SMALL = new Set(["icon", "badge", "chips", "shape"]);
 const UP: Record<string, "s" | "m" | "l" | "xl"> = { s: "m", m: "l", l: "xl", xl: "xl" };
 

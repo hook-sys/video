@@ -12,11 +12,11 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
   // "New version" on: the old version's settings are hidden; their stored
   // values are sent back unchanged (below), so saving never turns them off
   const nv = values.feature_new_version === true;
-  const kept = nv ? SETTINGS.filter((s) => s.oldOnly) : [];
+  const kept = SETTINGS.filter((s) => (nv ? s.oldOnly : s.newOnly));
   // (general settings first, then each group under its heading, in order)
   const groups: [string, typeof SETTINGS][] = [];
   for (const s of SETTINGS) {
-    if (nv && s.oldOnly) continue;
+    if (nv ? s.oldOnly : s.newOnly) continue;
     const g = s.group ?? "";
     const at = groups.find(([k]) => k === g);
     if (at) at[1].push(s);

@@ -1,7 +1,7 @@
 import "server-only";
 import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { DIRECTION_MAX, seedFrom, voiceVideoSeconds } from "@/lib/projects";
+import { DIRECTION_MAX, voiceVideoSeconds } from "@/lib/projects";
 import { type BriefUsage, ProductBrief } from "@/lib/ai/product-brief";
 import { getAiConfig, unitCost, usageCost } from "@/lib/ai/models";
 import { type MotionInput, directMotion, reviewMotion } from "@/lib/ai/motion-director";
@@ -24,7 +24,10 @@ import { RECIPES } from "@/components/video/composer/recipes";
 import { techOffOf } from "@/components/video/composer/techniques";
 import { scriptWords } from "@/components/video/composer/words";
 import { v2DetailsOf, type V2Details } from "@/lib/v2/form";
-import { v2DirectorModel, v2Speak, v2Text, v2TimeScript, v2Transcribe, v2Whisper } from "@/lib/v2/models";
+import { type RoleAi, v2DirectorModel, v2Role, v2Speak, v2TimeScript, v2Transcribe, v2Whisper } from "@/lib/v2/models";
+import { type V2Rules, v2DirectorOf, v2RulesOf } from "@/lib/v2/rules";
+import { type V2Look, drawLook, freshSeed, hueColour, lookOf, lookText } from "@/lib/v2/variety";
+import { copywrite } from "@/lib/v2/copywriter";
 
 // "New version" (admin → Settings): one simple path, no fallbacks.
 //   1. the voice: our voice reads the script (timed by the admin's Whisper),
@@ -100,9 +103,20 @@ export async function runPipelineV2(projectId: string, userId: string) {
     const ai = await getAiConfig();
     // (one level: priced as Standard; a video made before keeps its level)
     const tierId: TierId = (TIER_IDS as readonly string[]).includes(project.quality) ? (project.quality as TierId) : "standard";
-    // every model this video needs is checked before anything is spent
-    const text = await v2Text({ timeout: 120_000 });
+    // every model this video needs is checked before anything is spent:
+    // its roles (admin → AI models, "New version") and Whisper
+    const [director, review, copywriter] = await Promise.all([v2Role("director", { timeout: 120_000 }), v2Role("review", { timeout: 120_000 }), v2Role("copywriter", { timeout: 60_000 })]);
     await v2Whisper(ai);
+    // its rules (admin → Settings, "New version: video rules") and its look
+    // (a fresh seed, unlike this customer's last five; kept with the project)
+    const rules = v2RulesOf(settings);
+    const look = await lookFor(admin, projectId, userId, project.details, settings, rules);
+    // (a logo without colour: the brand colour from the look's random hue, kept)
+    if (!project.brand_color) {
+      project = { ...project, brand_color: hueColour(look.hue) };
+      await update({ brand_color: project.brand_color });
+    }
+    const roles: Roles = { director, review, copywriter, rules, look };
     if (v2.voice.source === "script" && !ai.voice.model) throw new Error("No voice model is set for the new version. A super admin must choose it on /admin/models.");
 
     // The Director plans from the script while the voice is made (a
@@ -110,7 +124,7 @@ export async function runPipelineV2(projectId: string, userId: string) {
     const stored = (project.brief as { composer?: unknown } | null)?.composer;
     const budget = () => Math.max(30_000, Math.min(130_000, left() - 120_000));
     const own = v2.voice.source === "script" ? project.direction.trim() : "";
-    const planning = own && !stored ? planV2(admin, projectId, userId, project, own, readingPace(own), text, settings, budget()) : null;
+    const planning = own && !stored ? planV2(admin, projectId, userId, project, own, readingPace(own), roles, settings, budget()) : null;
     planning?.catch(() => {});
 
     // 1. The voice and its words.
@@ -128,8 +142,8 @@ export async function runPipelineV2(projectId: string, userId: string) {
     // 3. The Motion Director's video.
     await enter("visuals");
     if (!stored) {
-      const planned = await (planning ?? planV2(admin, projectId, userId, project, script, words, text, settings, budget()));
-      const composer = await buildV2(admin, projectId, userId, project, words, brief, text, settings, planned);
+      const planned = await (planning ?? planV2(admin, projectId, userId, project, script, words, roles, settings, budget()));
+      const composer = await buildV2(admin, projectId, userId, project, words, brief, roles, settings, planned);
       await update({ brief: { ...brief, composer }, render_status: "idle", render_error: null, video_path: null });
     }
 
@@ -197,11 +211,26 @@ async function voiceOf(admin: Admin, projectId: string, userId: string, project:
 
 // the script's words at a reading pace (before the voice exists)
 const readingPace = (script: string) => script.split(/\s+/).filter(Boolean).map((text, i) => ({ text, start: i * 0.4, end: i * 0.4 + 0.35 }));
-type Text = Awaited<ReturnType<typeof v2Text>>;
+type Roles = { director: RoleAi; review: RoleAi; copywriter: RoleAi; rules: V2Rules; look: V2Look };
+
+// This video's look: the one kept with it (a retry), else one drawn from a
+// fresh seed unlike the customer's last five "New version" looks — kept with
+// the project (projects.details.look).
+async function lookFor(admin: Admin, projectId: string, userId: string, details: unknown, settings: Record<string, unknown>, rules: V2Rules): Promise<V2Look> {
+  const kept = lookOf((details as { look?: unknown } | null)?.look);
+  if (kept) return kept;
+  const { data: last } = await admin.from("projects").select("details").eq("user_id", userId).neq("id", projectId).eq("details->>engine", "v2").order("created_at", { ascending: false }).limit(5);
+  const recent = (last ?? []).map((p) => lookOf((p.details as { look?: unknown } | null)?.look)).filter((l): l is V2Look => !!l);
+  const allowed = styleRulesOf(settings as Parameters<typeof styleRulesOf>[0], RECIPES.map((r) => r.id))?.recipes ?? null;
+  const look = drawLook(freshSeed(), recent, { soft: rules.on.motion, noMacro: techOffOf(settings as Parameters<typeof techOffOf>[0]).includes("camera:macro"), recipes: allowed });
+  await admin.from("projects").update({ details: { ...((details as object | null) ?? {}), look } }).eq("id", projectId).eq("user_id", userId);
+  return look;
+}
 
 // The Motion Director's plan. Throws (the video fails) when it is not the
 // Director's (no plan by rule).
-async function planV2(admin: Admin, projectId: string, userId: string, project: Project, script: string, voice: WordTiming[], text: Text, settings: Record<string, unknown>, budgetMs: number) {
+async function planV2(admin: Admin, projectId: string, userId: string, project: Project, script: string, voice: WordTiming[], roles: Roles, settings: Record<string, unknown>, budgetMs: number) {
+  const text = roles.director;
   const usage: BriefUsage[] = [];
   const words = scriptWords(script, voice);
   const brand = { ...brandOf(project, null), url: "" };
@@ -221,17 +250,20 @@ async function planV2(admin: Admin, projectId: string, userId: string, project: 
     never,
     category: null,
     customer: null,
-    seed: seedFrom(projectId),
+    seed: roles.look.seed,
     model: null,
     clientModel: text.model,
-    // one simple path: the flags are fixed, not read from admin → Settings
+    reasoning: text.reasoning,
+    temperature: text.temperature,
+    // its own switches (admin → Settings, "New version"), its own rules and
+    // its look — nothing of the old version's; RECENT always
     prompt: "classic",
     recent: looks,
-    rules: true,
+    rules: false,
+    ruleText: `${roles.rules.text(never)}\n\n${lookText(roles.look)}`,
+    checks: roles.rules.checks,
     styles,
-    match: false,
-    shapes: false,
-    motion: false,
+    ...v2DirectorOf(settings),
     direction: null,
     screenshots: [],
   };
@@ -249,28 +281,32 @@ async function planV2(admin: Admin, projectId: string, userId: string, project: 
 
 // Its review on the voice's times, and the video built from it. Throws when
 // the video is not the Director's (never composed by rule).
-async function buildV2(admin: Admin, projectId: string, userId: string, project: Project, voice: WordTiming[], brief: ProductBrief, text: Text, settings: Record<string, unknown>, planned: Awaited<ReturnType<typeof planV2>>) {
+async function buildV2(admin: Admin, projectId: string, userId: string, project: Project, voice: WordTiming[], brief: ProductBrief, roles: Roles, settings: Record<string, unknown>, planned: Awaited<ReturnType<typeof planV2>>) {
   const usage: BriefUsage[] = [];
   const words = scriptWords(brief.script, voice);
   const brand = { ...brandOf(project, brief), url: "" };
   const { directed, past, styles } = planned;
-  const input: MotionInput = { ...planned.input, words, name: brand.name, cta: brand.cta };
+  const { review, copywriter, rules, look } = roles;
+  // (the Director review: its own model and reasoning)
+  const input: MotionInput = { ...planned.input, words, name: brand.name, cta: brand.cta, clientModel: review.model, reasoning: review.reasoning, temperature: review.temperature };
   const started = Date.now();
   try {
     v2DirectorModel(input.clientModel);
-    const reviewed = await reviewMotion(directed.plan, input, (u) => usage.push(u), text.client, 90_000);
+    const reviewed = await reviewMotion(directed.plan, input, (u) => usage.push(u), review.client, 90_000);
     const plan = reviewed.plan;
-    if (plan.source !== "ai" || !plan.ideas) throw new Error(`The Motion Director's review (${text.model}) lost the plan.`);
-    const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: seedFrom(projectId), ideas: plan.ideas, count: 1, avoid: { display: past.seen.display, field: past.seen.field.slice(0, 3) }, screens: 0, avoidStaging: past.seenStaging, rules: true, match: false, techOff: techOffOf(settings as Parameters<typeof techOffOf>[0]), styles, avoidStyles: past.avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
+    if (plan.source !== "ai" || !plan.ideas) throw new Error(`The Director review (${review.model}) lost the plan.`);
+    // the Copywriter: every scene's on-screen words down to its 2–6 key words
+    const copied = await copywrite(plan.ideas, words, copywriter, (u) => usage.push(u));
+    const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: look.seed, ideas: copied.ideas, count: 1, avoid: { display: past.seen.display, field: past.seen.field.slice(0, 3) }, screens: 0, avoidStaging: past.seenStaging, rules: rules.ruleSet, variety: look, match: input.match !== false, techOff: techOffOf(settings as Parameters<typeof techOffOf>[0]), styles, avoidStyles: past.avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
     const video = set.videos[0];
     if (!video || video.source !== "director") throw new Error("The Motion Director's scenes could not be laid out.");
     const score = scorePlan(set.plans[0], video.script, { staging: video.staging, motif: plan.creative.motif, heroScene: video.staging?.hero ?? null, recent: past.recent, problems: set.problems.length });
-    const problems = [...directed.problems, ...reviewed.problems, ...set.problems].slice(0, 20);
-    console.info("composer (new version):", { projectId, model: text.model, scenes: plan.ideas.scenes.length, score: score.total, problems: problems.slice(0, 8) });
+    const problems = [...directed.problems, ...reviewed.problems, ...copied.problems, ...set.problems].slice(0, 20);
+    console.info("composer (new version):", { projectId, director: roles.director.model, review: review.model, copywriter: copywriter.model, look: `${look.display}/${look.text} ${look.harmony} ${look.camera}`, scenes: plan.ideas.scenes.length, score: score.total, problems: problems.slice(0, 8) });
     await admin.from("direction_library").update({ narration: brief.script, outcome: { stored: true, engine: "composer-v2", language: video.staging?.language ?? "cuts", problems: problems.slice(0, 8) }, updated_at: new Date().toISOString() }).eq("project_id", projectId);
     return { videos: [video], indexing: "script" as const, source: plan.source, profile: plan.profile, creative: plan.creative, score: { total: score.total, notes: score.notes.slice(0, 6), built: video.source }, changes: [] as { direction: string; at: string; ok: boolean }[], problems, at: new Date().toISOString() };
   } finally {
-    await priceV2(admin, projectId, userId, text.model, usage, started);
+    await priceV2(admin, projectId, userId, [...new Set(usage.map((u) => u.model))].join(", ") || review.model, usage, started);
   }
 }
 

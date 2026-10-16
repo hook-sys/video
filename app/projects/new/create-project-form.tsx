@@ -26,14 +26,15 @@ type VoiceOption = { name: string; gender: "female" | "male"; label: string };
 
 // The brand's colour, read from its icon: the most common colourful shade
 // (a black, white or grey icon gives the house blue).
-export async function colourOf(url: string): Promise<string> {
+// `none`: what a colourless icon gives (the new version: "" — its colour is drawn from a hue)
+export async function colourOf(url: string, none = "#0A66D6"): Promise<string> {
   const img = new Image();
   img.src = url;
   await img.decode();
   const c = document.createElement("canvas");
   c.width = c.height = 48;
   const g = c.getContext("2d");
-  if (!g) return "#0A66D6";
+  if (!g) return none;
   g.drawImage(img, 0, 0, 48, 48);
   const px = g.getImageData(0, 0, 48, 48).data;
   const bins = new Map<number, { n: number; r: number; g: number; b: number }>();
@@ -47,7 +48,7 @@ export async function colourOf(url: string): Promise<string> {
     bins.set(k, { n: bin.n + 1, r: bin.r + r, g: bin.g + gr, b: bin.b + b });
   }
   const best = [...bins.values()].sort((a, b) => b.n - a.n)[0];
-  if (!best || best.n < 12) return "#0A66D6";
+  if (!best || best.n < 12) return none;
   const hex = (v: number) => Math.round(v / best.n).toString(16).padStart(2, "0");
   return `#${hex(best.r)}${hex(best.g)}${hex(best.b)}`.toUpperCase();
 }

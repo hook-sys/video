@@ -3,7 +3,7 @@ import type OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { BriefUsage } from "@/lib/ai/product-brief";
-import { countUsage, textAi, textClient } from "@/lib/ai/models";
+import { type Reasoning, countUsage, temperatureFor, textAi, textClient } from "@/lib/ai/models";
 import { HOUSE_RULES, extraRules } from "@/lib/ai/house-rules";
 import { DISPLAY_FACES, TEXT_FACES } from "@/components/video/composer/art";
 import { STYLE_NOTES, type StyleRules, styleLine, styleOf } from "@/components/video/composer/style";
@@ -13,7 +13,7 @@ import { IN_USE, LANGUAGES, LANGUAGE_NOTES, type Language } from "@/components/v
 import { SHOWN } from "@/components/video/composer/highlight";
 import { MIN_SCENE } from "@/components/video/composer/layout";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, REVEALS, TRANSITIONS, CHART_VARIANTS, DEVICE_VARIANTS, FIELDS, FLOW_VARIANTS, GUIDES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, SHAPE_VARIANTS, SURFACES, type ScriptT, type Word } from "@/components/video/composer/types";
-import { type Ideas, type StoredComposition, composeVariants } from "@/components/video/composer/variants";
+import { type Ideas, type RuleSet, type StoredComposition, composeVariants } from "@/components/video/composer/variants";
 import { BEATS, BRAND_CATEGORIES, type BrandProfile, type CreativePlan, LANGUAGE_WEIGHTS, MOODS, type Mood, SHAPE_NOTES, STORY_SHAPES, type StoryShape, ruleCreative, ruleProfile, sentencesOf } from "@/lib/studio";
 import { FPS } from "@/components/video/composer/types";
 import { resolveIcon } from "@/components/video/icons";
@@ -188,7 +188,17 @@ const instructionsOf = (input: Pick<MotionInput, "prompt" | "rules" | "match" | 
   return input.match === false ? base : `${base}\n\n${MATCH_PART}`;
 };
 // the instructions with the house rules and the team's never list (none when the rules are off)
-const directionOf = (input: Pick<MotionInput, "prompt" | "rules" | "never" | "match" | "shapes" | "motion">) => (input.rules === false ? instructionsOf(input) : `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}`);
+const directionOf = (input: Pick<MotionInput, "prompt" | "rules" | "never" | "match" | "shapes" | "motion" | "ruleText">) =>
+  typeof input.ruleText === "string" ? v2Direction(input) : input.rules === false ? instructionsOf(input) : `${instructionsOf(input)}\n\n${HOUSE_RULES}${extraRules(input.never)}`;
+// "New version": the instructions without any of the old version's rules
+// (house, style, never list), with its own (lib/v2/rules.ts: the switches
+// that are on, honesty always) — and its look decides dark or light.
+const SCHEME_LINE = `- scheme: dark|light — ONE background for the whole video, never changing (the only place dark or light is decided; never mixed).`;
+const HOOK_WORDS = `ONLY the scene's HOOK on screen as kinetic type — 1 to ${SHOWN} words`;
+const v2Direction = (input: Pick<MotionInput, "prompt" | "match" | "shapes" | "motion" | "ruleText">) =>
+  `${instructionsOf({ ...input, rules: false })
+    .replace(SCHEME_LINE, `- scheme: dark|light — the video's background, as THIS VIDEO'S LOOK gives it.`)
+    .replace(HOOK_WORDS, "ONLY the scene's HOOK on screen as kinetic type — 2 to 6 words")}${input.ruleText ? `\n\n${input.ruleText}` : ""}`;
 
 // ── What this customer has already seen (their last videos, any brand), for
 // the Creative Director: one line per video and what keeps coming back.
@@ -334,6 +344,15 @@ export type MotionInput = {
   // the model of a client passed in (directMotion / reviewMotion's `client`;
   // "New version" passes its own, lib/v2)
   clientModel?: string | null;
+  // "New version" only: how hard that model reasons (admin → AI models; "default": the model's own)
+  reasoning?: Reasoning | null;
+  // "New version" only: that model's temperature (where it takes one; null: its own)
+  temperature?: number | null;
+  // "New version" only: its rules (lib/v2/rules.ts), written in place of the
+  // house rules, the style rules and the never list ("": none of them), and
+  // what the review checks in code
+  ruleText?: string | null;
+  checks?: V2Checks | null;
   // which instructions direct it (admin → Settings, "Creative Director"), and
   // for the creative one what this customer has already seen
   prompt?: DirectorPrompt;
@@ -485,11 +504,12 @@ const PLACEHOLDER = /\b(jane doe|john doe|lorem|ipsum|product x|acme|foo|bar baz
 // built (in its own staging), and the plan's own repetition.
 // (rules off: only what would break the video — the layout's own problems,
 // an icon with no name — and placeholder data)
-export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; color: string; cta: string; url?: string }, creative?: CreativePlan | null, rules = true, match = true): string[] {
+export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; color: string; cta: string; url?: string }, creative?: CreativePlan | null, rules = true, match = true, checks?: V2Checks | null): string[] {
   const notes: string[] = [];
   const duration = Math.round(((words[words.length - 1]?.end ?? 0) + 1) * 30);
-  const set = composeVariants({ words, brand: { ...brand, url: brand.url ?? "", tagline: "", icon: null }, duration, seed: 1, ideas, count: 1, creative, rules, match });
+  const set = composeVariants({ words, brand: { ...brand, url: brand.url ?? "", tagline: "", icon: null }, duration, seed: 1, ideas, count: 1, creative, rules: checks ? checks.rules : rules, match });
   notes.push(...set.problems.map((p) => p.replace(/^video 1, /, "")));
+  if (checks) return [...new Set([...notes, ...v2Notes(ideas, words, checks), ...shapeNotes(ideas.scenes, creative?.shape)])].slice(0, 20);
   if (!rules) {
     ideas.scenes.forEach((x, i) => {
       const items = x.options[0]?.items ?? [];
@@ -524,6 +544,38 @@ export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; 
   return [...new Set(notes)].slice(0, 20);
 }
 
+// "New version": what its review checks in code — only the rules switched on
+// (admin → Settings, "New version: video rules"), honesty always.
+export type V2Checks = { rules: RuleSet; noPeople: boolean; minSeconds: number; shown: number };
+const PEOPLE = /^(user|users|user-[a-z-]+|users-[a-z-]+|person-[a-z-]+|contact|contact-round|baby|smile|smile-plus|laugh|frown|meh|annoyed|angry|hand|hand-[a-z-]+|hands|thumbs-up|thumbs-down|dog|cat|bird|fish|rabbit|squirrel|turtle|rat|snail|bug|paw-print|footprints)$/;
+const CARDLIKE = new Set(["card", "device", "screenshot"]);
+function v2Notes(ideas: Ideas, words: Word[], checks: V2Checks): string[] {
+  const notes: string[] = [];
+  const sc = ideas.scenes;
+  const layoutOf = (i: number) => sc[i]?.options[0]?.layout ?? "";
+  const used = new Map<string, number>();
+  sc.forEach((x, i) => {
+    const items = x.options[0]?.items ?? [];
+    const next = sc[i + 1]?.at ?? words.length;
+    const secs = (words[Math.min(words.length - 1, next - 1)]?.end ?? 0) - (words[x.at]?.start ?? 0);
+    const main = items.filter((it) => it.kind !== "badge" && it.kind !== "shape" && it.kind !== "cursor");
+    const layout = layoutOf(i);
+    if (layout && i < sc.length - 1) used.set(layout, (used.get(layout) ?? 0) + 1);
+    if (checks.rules.layoutVariety && i > 0 && layout && layout === layoutOf(i - 1)) notes.push(`scenes ${i}–${i + 1} use the ${layout} layout twice in a row — never the same layout twice in a row`);
+    if (checks.rules.layoutVariety && layout && (used.get(layout) ?? 0) === 3) notes.push(`the ${layout} layout is used more than twice — at most twice per video`);
+    if (i < sc.length - 1 && secs < checks.minSeconds) notes.push(`scene ${i + 1} lasts ${secs.toFixed(1)} s — too short to be seen: join it with its neighbour (every scene at least ${checks.minSeconds} s)`);
+    if (checks.rules.house.maxItems && main.length > 3) notes.push(`scene ${i + 1} is crowded (${main.length} things) — at most 2–3 things`);
+    if (checks.rules.house.noIconCardMix && items.some((it) => CARDLIKE.has(String(it.kind))) && items.some((it) => it.kind === "icon")) notes.push(`scene ${i + 1} mixes icons and a card — never icons and cards in one scene`);
+    if (checks.noPeople && items.some((it) => PEOPLE.test(String(it.icon ?? "")))) notes.push(`scene ${i + 1} shows a person, a face, a hand or an animal (icon) — never people or animals`);
+    if (x.text && x.text.to - x.text.from + 1 > checks.shown) notes.push(`scene ${i + 1}'s on-screen words are ${x.text.to - x.text.from + 1} — show only its hook (at most ${checks.shown} words)`);
+    // (always: the renderer and honesty)
+    if (items.some((it) => it.kind === "icon" && !String(it.icon ?? "").trim())) notes.push(`scene ${i + 1} has an icon with no icon name`);
+    const said = JSON.stringify(items);
+    if (PLACEHOLDER.test(said)) notes.push(`scene ${i + 1} shows placeholder data (${said.match(PLACEHOLDER)?.[0]}) — write rows specific to this product`);
+  });
+  return notes;
+}
+
 // Is the story told as its shape says? (what the scenes show, checked in code)
 const PRODUCT = new Set(["device", "screenshot", "card", "chart", "logo", "stat", "compare", "flow", "steps", "chips"]);
 function shapeNotes(sc: Ideas["scenes"], shape: StoryShape | null | undefined): string[] {
@@ -543,7 +595,7 @@ function shapeNotes(sc: Ideas["scenes"], shape: StoryShape | null | undefined): 
 
 // ── the calls ──────────────────────────────────────────────────────────────
 type Client = Pick<OpenAI, "responses">;
-async function modelOf(client?: Client, level?: string | null, clientModel?: string | null) {
+async function modelOf(client?: Client, level?: string | null, clientModel?: string | null, reasoning?: Reasoning | null) {
   // (a quality level's own model runs through fal, like every text job)
   // (no model chosen on /admin/models: said in the log, and the plan is made by rule)
   const unset = (e: unknown) => (console.warn("Motion Director:", e instanceof Error ? e.message : e), null);
@@ -551,7 +603,8 @@ async function modelOf(client?: Client, level?: string | null, clientModel?: str
   const picked = client ? null : own ?? (await textAi("composer").catch(unset));
   // (a client passed in — "New version", lib/v2 — is named by its own model)
   const model = (client && clientModel) || (picked?.model ?? (client ? "injected" : ""));
-  const quick = (picked ? picked.quick : /(^|\/)(gpt-5|o\d)/.test(model)) ? { reasoning: { effort: "low" as const } } : {};
+  // ("New version": the reasoning chosen for this role; else low on reasoning models, as before)
+  const quick = client && reasoning && reasoning !== "default" ? (reasoning === "none" ? {} : { reasoning: { effort: reasoning } }) : (picked ? picked.quick : /(^|\/)(gpt-5|o\d)/.test(model)) ? { reasoning: { effort: "low" as const } } : {};
   return { ai: client ?? picked?.client ?? null, model, quick };
 }
 // An answer mended before it is checked: a value outside the choices (a size
@@ -658,7 +711,7 @@ function requestOf(input: MotionInput): string {
     k ? `Camera languages that usually suit a ${k.mood} brand: ${Object.entries(LANGUAGE_WEIGHTS[k.mood]).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0)).slice(0, 5).map(([l]) => l).join(", ")}` : "",
     `EARLIER (this brand's videos): ${input.earlier?.length ? input.earlier.map((e) => `"${e.idea}" (${e.language ?? "?"})`).join("; ") : "(none)"}`,
     `SEEN faces: ${input.seen?.display.join(", ") || "(none)"}; SEEN fields: ${input.seen?.field.join(", ") || "(none)"}`,
-    input.prompt === "creative" ? recentText(input.recent) : "",
+    input.prompt === "creative" || typeof input.ruleText === "string" ? recentText(input.recent) : "",
     stylesLine(input.styles),
     `Length: about ${Math.round(seconds)} s, ${input.words.length} words`,
     `NARRATION (index:word), one sentence per line:\n${sentences.join("\n")}`,
@@ -690,7 +743,7 @@ async function ask<T>(ai: Client, body: Record<string, unknown>, deadline: numbe
 export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 130_000): Promise<MotionResult> {
   const t0 = Date.now();
   const fallback = rulePlan(input);
-  const { ai, model, quick } = await modelOf(client, input.model, input.clientModel);
+  const { ai, model, quick } = await modelOf(client, input.model, input.clientModel, input.reasoning);
   const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
   const done = (plan: MotionPlan, problems: string[]): MotionResult => {
     onUsage?.(usage);
@@ -699,7 +752,7 @@ export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage)
   if (!ai || !input.words.length) return done(fallback, ["no model (turned off on /admin/models, or no key) — plan by rule"]);
   const deadline = t0 + budgetMs;
   try {
-    const o = await ask<Answer>(ai, { model, instructions: directionOf(input), input: requestOf(input), text: FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+    const o = await ask<Answer>(ai, { model, instructions: directionOf(input), input: requestOf(input), text: FORMAT, ...quick, ...temperatureFor(model, input.reasoning, input.temperature) }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
     if (!o) return done(fallback, ["no answer — plan by rule"]);
     return done(planOf(o, input, fallback), ideaProblems(o, input.words.length));
   } catch (e) {
@@ -723,8 +776,8 @@ function planOf(o: Answer, input: Pick<MotionInput, "words" | "category" | "know
 // (its answer is most of what a call costs).
 export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 100_000): Promise<MotionResult> {
   const t0 = Date.now();
-  const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative, input.rules !== false, input.match !== false) : [];
-  const { ai, model, quick } = await modelOf(client, input.model, input.clientModel);
+  const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative, input.rules !== false, input.match !== false, input.checks) : [];
+  const { ai, model, quick } = await modelOf(client, input.model, input.clientModel, input.reasoning);
   const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
   const done = (p: MotionPlan, problems: string[]): MotionResult => {
     onUsage?.(usage);
@@ -740,7 +793,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
     if (round > 1 && (!notes.length || deadline - Date.now() < 40_000)) break;
     const request = `${requestOf(input)}\n\nYOUR PLAN (scenes numbered from 1):\n${JSON.stringify(answerOf(best))}\n\nProblems found by our checks on the recorded voice (fix every one):\n${notes.map((a) => `- ${a}`).join("\n")}`;
     try {
-      const fix = await ask<Fixes>(ai, { model, instructions: `${directionOf(input)}\n\n${input.rules === false ? REVIEW_FREE : `${REVIEW}${input.prompt === "creative" ? `\n${CREATIVE_REVIEW}` : ""}`}\n\n${FIXES}`, input: request, text: FIXES_FORMAT, ...quick }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+      const fix = await ask<Fixes>(ai, { model, instructions: `${directionOf(input)}\n\n${typeof input.ruleText === "string" ? `${REVIEW_FREE}${input.ruleText ? " Every scene must also keep the RULES above." : ""}` : input.rules === false ? REVIEW_FREE : `${REVIEW}${input.prompt === "creative" ? `\n${CREATIVE_REVIEW}` : ""}`}\n\n${FIXES}`, input: request, text: FIXES_FORMAT, ...quick, ...temperatureFor(model, input.reasoning, input.temperature) }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
       if (!fix?.fixes.length) {
         log.push(`review ${round}: ${fix ? "no changes" : "no answer"} — the plan is kept`);
         break;
@@ -755,7 +808,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
         log.push(`review ${round}: no scenes — the plan is kept`);
         break;
       }
-      const again = [...ideaProblems(o, input.words.length), ...reviewNotes(revised.ideas, input.words, input, revised.creative, input.rules !== false, input.match !== false)];
+      const again = [...ideaProblems(o, input.words.length), ...reviewNotes(revised.ideas, input.words, input, revised.creative, input.rules !== false, input.match !== false, input.checks)];
       if (again.length > notes.length) {
         log.push(`review ${round} made it worse — the plan is kept`);
         break;

@@ -29,10 +29,29 @@ export type AiConfig = {
   voice: { on: boolean; model: string; template: string; female: string; male: string; choices: VoiceChoice[]; fallback: boolean };
   // USD: per 1M input / output tokens (text), per character (voice)
   prices: Record<string, ModelPrice>;
-  // "New version" only (lib/v2): its text model (through fal's OpenRouter
-  // router) and its Whisper model — no defaults, no fallbacks
-  v2: { text: string; whisper: string };
+  // "New version" only (lib/v2): each role's model (through fal's OpenRouter
+  // router) and reasoning, and its Whisper model — no defaults, no fallbacks
+  v2: { whisper: string; roles: Record<V2Role, V2RoleConfig> };
 };
+
+// "New version": its AI roles (admin → AI models). No brief writer and no
+// Creative Director in it.
+export const V2_ROLES = [
+  { id: "director", label: "Director", help: "Plans every scene of the video." },
+  { id: "review", label: "Director review", help: "Re-checks the plan on the voice's real word times and fixes what our checks find." },
+  { id: "copywriter", label: "Copywriter", help: "Shortens each scene's on-screen words to its 2–6 key words (always words the voice says)." },
+  { id: "reviewer", label: "Reviewer (vision)", help: "Looks at the rendered frames after the render. Off until the Vercel Sandbox is back." },
+] as const;
+export type V2Role = (typeof V2_ROLES)[number]["id"];
+// how hard a model reasons ("default": the model's own; "none": no reasoning asked)
+export const REASONINGS = ["default", "none", "low", "medium", "high"] as const;
+export type Reasoning = (typeof REASONINGS)[number];
+// temperature: null = the model's own (the Director starts at 0.9)
+export type V2RoleConfig = { model: string; reasoning: Reasoning; on: boolean; temperature: number | null };
+// The temperature a call may carry: only where the model takes one — never
+// OpenAI's reasoning models (gpt-5, o-series), never with a reasoning effort asked.
+export const temperatureFor = (model: string, reasoning: Reasoning | null | undefined, t: number | null | undefined) =>
+  typeof t === "number" && Number.isFinite(t) && !/(^|\/)(gpt-5|o\d)/i.test(model) && (!reasoning || reasoning === "default" || reasoning === "none") ? { temperature: t } : {};
 
 // A voice customers can pick on the form (a name of the voice model's).
 export type VoiceChoice = { name: string; gender: "female" | "male"; label: string };
@@ -59,7 +78,7 @@ export function defaultConfig(): AiConfig {
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: true, provider: "", model: "" }])) as AiConfig["tasks"],
     voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     prices: {},
-    v2: { text: "", whisper: "" },
+    v2: { whisper: "", roles: Object.fromEntries(V2_ROLES.map((r) => [r.id, { model: "", reasoning: "default", on: r.id !== "reviewer", temperature: r.id === "director" ? 0.9 : null }])) as AiConfig["v2"]["roles"] },
   };
 }
 
@@ -85,7 +104,21 @@ export function normalizeConfig(raw: unknown): AiConfig {
         .filter(([k]) => k.trim())
         .map(([k, p]) => [k.trim().slice(0, 200), { in: price(p?.in), out: price(p?.out), unit: price(p?.unit) }]),
     ),
-    v2: { text: str(r.v2?.text), whisper: str(r.v2?.whisper) },
+    v2: {
+      whisper: str(r.v2?.whisper),
+      roles: Object.fromEntries(
+        V2_ROLES.map((role) => {
+          const v = ((r.v2?.roles ?? {}) as Record<string, Record<string, unknown> | undefined>)[role.id];
+          // (the Director's model saved before the roles: v2.text)
+          const model = str(v?.model) || (role.id === "director" ? str(r.v2?.text) : "");
+          const reasoning = (REASONINGS as readonly string[]).includes(String(v?.reasoning)) ? (v!.reasoning as Reasoning) : "default";
+          // (the vision reviewer stays off until the Vercel Sandbox is back)
+          const t = v?.temperature;
+          const temperature = t === null ? null : typeof t === "number" && Number.isFinite(t) ? Math.max(0, Math.min(2, t)) : role.id === "director" ? 0.9 : null;
+          return [role.id, { model, reasoning, on: role.id === "reviewer" ? false : bool(v?.on, true), temperature }];
+        }),
+      ) as AiConfig["v2"]["roles"],
+    },
   };
 }
 
@@ -262,6 +295,7 @@ function falResponses(opts: { timeout?: number; maxRetries?: number }) {
             ? { response_format: strict ? { type: "json_schema", json_schema: { name: format.name ?? "output", strict: true, schema: format.schema } } : { type: "json_object" } }
             : {}),
           ...(effort ? { reasoning: { effort } } : {}),
+          ...(typeof body.temperature === "number" ? { temperature: body.temperature } : {}),
         } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         options?.timeout ? { timeout: options.timeout } : undefined,
       );

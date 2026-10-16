@@ -2,16 +2,16 @@ import { resolveIcon } from "../icons";
 import { inspected } from "./inspect";
 import { DISPLAY_FACES, TEXT_FACES, rng } from "./art";
 import { LENSES, autoScript, drawArt } from "./auto";
-import { placeAll, type Problem } from "./layout";
+import { type Fit, layoutFits, placeAll, type Problem } from "./layout";
 import { type Language, type Staging, sceneAt, stageOf, staged } from "./staging";
-import { houseRules, varyLayouts } from "./rules";
+import { type HouseRuleSet, houseRules, varyLayouts } from "./rules";
 import { ALL_STYLES, type StyleRules, type StyleT, inStyle, pickStyle } from "./style";
 import { RECIPES } from "./recipes";
 import { matched } from "./meaning";
 import { withoutTechniques } from "./techniques";
 import type { StoryShape } from "@/lib/studio";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, LOOKS, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
-import type { ArtT, Brand, ComposerPlan, GuideKind, ItemT, JourneyKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
+import type { ArtT, Brand, CameraKind, ComposerPlan, GuideKind, ItemT, JourneyKind, LayoutKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
 
 // Four Composer videos of one narration. With the Director's ideas (its
 // scenes, two or three ways to picture each, and its art directions) each
@@ -141,8 +141,19 @@ export function scriptFromIdeas(ideas: Ideas, v: number, seed: number, words: Wo
   return { art, scenes };
 }
 
-// rules: false — the house rules (rules.ts) are not applied (admin → Settings, "Video rules")
-export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null; size?: [number, number]; rules?: boolean; match?: boolean; techOff?: string[]; styles?: StyleRules | null; avoidStyles?: (StyleT | null)[] };
+// "New version" (admin → Settings, "New version: video rules"): which house
+// rules the Composer keeps, whether layouts vary, and how the video is laid
+// out (fit: its shortest scene, the most words on screen — stored with it).
+export type RuleSet = { house: HouseRuleSet; layoutVariety: boolean; fit: Fit };
+// "New version": the look drawn for this video (lib/v2/variety.ts) — its
+// palette treatment, font pairing, layouts, ways in and camera.
+// `recipe`: the reference it is built from (recipes.ts) — the code's look,
+// never the Director's style.
+export type Variety = { recipe?: string | null; harmony: (typeof HARMONIES)[number]; scheme: "dark" | "light"; display: string; text: string; camera: CameraKind; transitions: TransitionKind[]; layouts: LayoutKind[] };
+
+// rules: false — the house rules (rules.ts) are not applied (admin → Settings, "Video rules");
+// a RuleSet — only the ones it keeps ("New version")
+export type ComposeInput = { words: Word[]; brand: Brand; duration: number; seed: number; ideas?: Ideas | null; avoid?: Partial<Record<keyof ArtT, unknown[]>>; screens?: number; count?: number; avoidStaging?: (Staging | null)[]; creative?: Creative | null; look?: { scheme?: "dark" | "light" | "mixed"; energy?: number } | null; size?: [number, number]; rules?: boolean | RuleSet; variety?: Variety | null; match?: boolean; techOff?: string[]; styles?: StyleRules | null; avoidStyles?: (StyleT | null)[] };
 
 // What the Motion Director decided that the build keeps (lib/studio.ts
 // CreativePlan): the camera language, the scheme, where the story turns and
@@ -153,7 +164,7 @@ export type Creative = { shape?: StoryShape | null; language: Language; journey?
 // scheme, the brand's energy; a motif badge where the story turns and at the
 // hero moment (the AI Director places its own); one dark → light turn; the
 // scenes' compositions varied.
-function shaped(script: ScriptT, creative: Creative | null | undefined, look: ComposeInput["look"], byRule: boolean, seed: number, rules = true): ScriptT {
+function shaped(script: ScriptT, creative: Creative | null | undefined, look: ComposeInput["look"], byRule: boolean, seed: number, rules: boolean | RuleSet = true, layouts?: readonly LayoutKind[]): ScriptT {
   let out: ScriptT = { ...script, art: { ...script.art } };
   const scheme = creative?.scheme ?? look?.scheme;
   if (scheme) out.art.scheme = scheme;
@@ -182,14 +193,44 @@ function shaped(script: ScriptT, creative: Creative | null | undefined, look: Co
     const from = want.map((k) => pool.find((it) => it.kind === k)).find((it) => !!it);
     if (!has && from) out = { ...out, scenes: [{ ...first, layout: first.text ? "center" : "visual", arrange: null, items: [...first.items.filter((it) => it.kind === "badge"), { ...from, id: null, at: first.at, hit: null, size: "l" }] }, ...out.scenes.slice(1)] };
   }
-  return rules ? varyLayouts(houseRules(out, turn), seed) : out;
+  if (rules === true) return varyLayouts(houseRules(out, turn), seed);
+  if (rules === false) return out;
+  const kept = houseRules(out, turn, rules.house);
+  return rules.layoutVariety ? varyLayouts(kept, seed, layouts) : layouts ? inLayouts(kept, layouts) : kept;
+}
+
+// Every scene with things in one of the allowed layouts (the first that fits,
+// taken in turn; a scene none fits keeps its own).
+function inLayouts(script: ScriptT, allowed: readonly LayoutKind[]): ScriptT {
+  return {
+    ...script,
+    scenes: script.scenes.map((s, i) => {
+      const things = s.items.filter((it) => !["badge", "shape", "cursor"].includes(it.kind)).length;
+      if (!things || allowed.includes(s.layout)) return s;
+      const pick = [...allowed.slice(i % allowed.length), ...allowed.slice(0, i % allowed.length)].find((l) => l !== "type" && layoutFits(l, s.items, !!s.text));
+      return pick ? { ...s, layout: pick, arrange: null } : s;
+    }),
+  };
+}
+
+// The look drawn for a "New version" video, over the style: its palette
+// treatment and background, its font pairing, its camera, and its ways in.
+export function withVariety(sc: ScriptT, v: Variety): ScriptT {
+  const face = DISPLAY_FACES.find((f) => f.slug === v.display);
+  // (dark or light follows the style's ground — the Director is told the
+  // look's, and chooses its ground to match; set here only without a style)
+  const art: ArtT = { ...sc.art, harmony: v.harmony, ...(sc.art.style ? {} : { scheme: v.scheme }), display: v.display, text: v.text, camera: v.camera, weight: face?.fixed ?? sc.art.weight, ...(face?.upper ? { case: "upper" as const } : {}) };
+  return {
+    art,
+    scenes: sc.scenes.map((s, i) => ({ ...s, enter: v.transitions.includes(s.enter) ? s.enter : v.transitions[i % v.transitions.length], camera: s.camera && s.camera !== v.camera ? v.camera : s.camera })),
+  };
 }
 
 // A video as stored: its script and seed (laid out again on the voice's words
 // when shown) and how it is staged (staging.ts; older videos: cuts).
-export type StoredComposition = { script: ScriptT; seed: number; source: ComposerPlan["source"]; staging?: Staging | null };
+export type StoredComposition = { script: ScriptT; seed: number; source: ComposerPlan["source"]; staging?: Staging | null; fit?: Fit };
 
-export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look, size, rules = true, match = true, techOff = [], styles = ALL_STYLES, avoidStyles = [] }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
+export function composeVariants({ words, brand, duration, seed, ideas, avoid, screens = 0, count = 4, avoidStaging = [], creative, look, size, rules = true, variety = null, match = true, techOff = [], styles = ALL_STYLES, avoidStyles = [] }: ComposeInput): { plans: ComposerPlan[]; videos: StoredComposition[]; problems: string[] } {
   const problems: string[] = [];
   const plans: ComposerPlan[] = [];
   const videos: StoredComposition[] = [];
@@ -202,8 +243,10 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
   let matchNotes: string[] = [];
   const built = (sc: ScriptT, s: number, asked: unknown) => {
     let out = sc;
+    // ("New version": its drawn recipe, not the Director's style)
+    const forced = variety?.recipe ? RECIPES.find((r) => r.id === variety.recipe) : null;
     if (styles) {
-      const { style, recipe } = pickStyle(asked, s, RECIPES, made, avoidStyles, styles);
+      const { style, recipe } = forced ? pickStyle(null, s, [forced], made, avoidStyles, { ...styles, director: false, recipes: null }) : pickStyle(asked, s, RECIPES, made, avoidStyles, styles);
       made.push(style);
       out = inStyle(sc, style, s, recipe);
     } else out = { ...sc, art: { ...sc.art, look: null, style: null } };
@@ -212,20 +255,22 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
       out = m.script;
       matchNotes = m.problems;
     }
+    if (variety) out = withVariety(out, variety);
     return fitScript(withoutTechniques(out, techOff));
   };
+  const fit: Fit | undefined = typeof rules === "object" ? rules.fit : undefined;
   for (let v = 0; v < count; v++) {
     const s = (seed + v * 104729) >>> 0;
     // each video avoids the faces, fields and schemes of the ones before it
     const avoidNow: Partial<Record<keyof ArtT, unknown[]>> = { display: [...(used.display ?? [])], field: [...(used.field ?? [])], key: [...(used.key ?? [])], surface: [...(used.surface ?? [])], hue: [...(used.hue ?? [])] };
     let script: ScriptT = ideas?.scenes.length ? scriptFromIdeas(ideas, v, s, words, brand, avoidNow) : autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens });
     const asked = ideas?.arts.length ? ideas.arts[v % ideas.arts.length]?.style : null;
-    script = built(shaped(script, creative, look, !ideas?.scenes.length, s, rules), s, asked);
-    let placed = placeAll(script, words, duration, brand, s, screens, ideas ? "director" : "auto", size);
+    script = built(shaped(script, creative, look, !ideas?.scenes.length, s, rules, variety?.layouts), s, asked);
+    let placed = placeAll(script, words, duration, brand, s, screens, ideas ? "director" : "auto", size, fit);
     if (ideas && tooBroken(placed.problems, placed.plan)) {
       problems.push(`video ${v + 1}: the Director's scenes did not lay out (${placed.problems.slice(0, 3).map((p) => p.what).join("; ")}) — composed by the Composer instead`);
-      script = built(shaped(autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens }), creative, look, true, s, rules), s, asked);
-      placed = placeAll(script, words, duration, brand, s, screens, "auto", size);
+      script = built(shaped(autoScript({ words, brand, seed: s, lens: LENSES[v % LENSES.length], avoid: avoidNow, screens }), creative, look, true, s, rules, variety?.layouts), s, asked);
+      placed = placeAll(script, words, duration, brand, s, screens, "auto", size, fit);
     }
     placed.problems.forEach((p) => problems.push(`video ${v + 1}, scene ${p.scene + 1}: ${p.what}`));
     matchNotes.forEach((p) => problems.push(`video ${v + 1}, ${p}`));
@@ -239,7 +284,7 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
     const qa = inspected(staged(placed.plan, staging));
     qa.left.forEach((f) => problems.push(`video ${v + 1}, scene ${f.scene + 1}: ${f.what}`));
     plans.push(qa.plan);
-    videos.push({ script, seed: s, source: placed.plan.source, staging });
+    videos.push({ script, seed: s, source: placed.plan.source, staging, ...(fit ? { fit } : {}) });
   }
   return { plans, videos, problems };
 }
