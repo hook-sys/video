@@ -188,7 +188,12 @@ const overlap = (a: Box, b: Box) => {
   return w > 0 && h > 0 ? (w * h) / Math.min(a.w * a.h, b.w * b.h) : 0;
 };
 
-export type SceneInput = { scene: SceneT; index: number; from: number; to: number; words: Word[]; wordFrom: number; wordTo: number; art: ArtT; seed: number; prev: PlacedScene | null; screens: number };
+export type SceneInput = { scene: SceneT; index: number; from: number; to: number; words: Word[]; wordFrom: number; wordTo: number; art: ArtT; seed: number; prev: PlacedScene | null; screens: number; shown?: number };
+// How a video is laid out when it differs from the house's: its shortest
+// scene (frames; MIN_SCENE) and the most words on screen (SHOWN). Stored with
+// a "New version" video (StoredComposition.fit) so it is laid out the same
+// whenever it is shown or rendered.
+export type Fit = { minScene?: number; shown?: number };
 
 // The layouts that compose the words with the things (not side by side):
 // inline — an icon beside the words (and the other things beside them);
@@ -339,7 +344,7 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   let tto = s.text ? Math.min(p.wordTo, Math.max(s.text.from, s.text.to)) : -1;
   // (a key may be a phrase: "empty slots" lights both words)
   const keys = new Set((s.text?.key ?? []).flatMap((k) => k.split(/\s+/)).map(norm).filter(Boolean));
-  if (s.text && tto >= tfrom) [tfrom, tto] = highlightOf(words, tfrom, tto, keys);
+  if (s.text && tto >= tfrom) [tfrom, tto] = highlightOf(words, tfrom, tto, keys, p.shown);
   // (a stop the voice's timing gives as a word of its own is not shown)
   // a scene of icons, each with its word: the icons' words are the words
   // (no headline beside them saying it again)
@@ -532,7 +537,7 @@ const weightOf = (s: SceneT) => s.items.filter((it) => !isAccent(it)).reduce((a,
 // Scenes held at least MIN_SCENE: a scene too short to be seen becomes one
 // with its neighbour — the stronger picture is kept, with the words of both
 // (the highlight is chosen from them), the things of the other dropped.
-export function paced(scenes: SceneT[], frame: (word: number) => number, duration: number): SceneT[] {
+export function paced(scenes: SceneT[], frame: (word: number) => number, duration: number, min = MIN_SCENE): SceneT[] {
   const out: SceneT[] = scenes.map((s) => ({ ...s, items: [...s.items] }));
   const join = (a: SceneT, b: SceneT): SceneT => {
     const keep = weightOf(b) > weightOf(a) ? b : a;
@@ -544,7 +549,7 @@ export function paced(scenes: SceneT[], frame: (word: number) => number, duratio
   for (let guard = 0; guard < 200 && out.length > 1; guard++) {
     // the shortest scene first
     let i = -1;
-    for (let k = 0; k < out.length; k++) if (len(k) < MIN_SCENE && (i < 0 || len(k) < len(i))) i = k;
+    for (let k = 0; k < out.length; k++) if (len(k) < min && (i < 0 || len(k) < len(i))) i = k;
     if (i < 0) break;
     // with the shorter of its neighbours (the last scene with the one before)
     const j = i === 0 ? 1 : i === out.length - 1 ? i - 1 : len(i - 1) <= len(i + 1) ? i - 1 : i + 1;
@@ -557,14 +562,14 @@ export function paced(scenes: SceneT[], frame: (word: number) => number, duratio
 
 // A script on the voice's words → the film's plan (never throws).
 // `size`: the frame (frame.ts — 16:9 unless given).
-export function placeAll(script: ScriptT, words: Word[], duration: number, brand: Brand, seed: number, screens = 0, source: ComposerPlan["source"] = "director", size: [number, number] = [1920, 1080]): { plan: ComposerPlan; problems: Problem[] } {
+export function placeAll(script: ScriptT, words: Word[], duration: number, brand: Brand, seed: number, screens = 0, source: ComposerPlan["source"] = "director", size: [number, number] = [1920, 1080], fit: Fit = {}): { plan: ComposerPlan; problems: Problem[] } {
   setFrame(...size);
   const problems: Problem[] = [];
   const nW = words.length;
   const frame = (i: number) => Math.round((words[Math.max(0, Math.min(nW - 1, i))]?.start ?? 0) * FPS);
   // scenes in spoken order, each held long enough to be seen (paced)
   const scenes = [...script.scenes].map((s) => ({ ...s, at: Math.max(0, Math.min(nW - 1, s.at)) })).sort((a, b) => a.at - b.at);
-  const kept = paced(scenes, frame, duration);
+  const kept = paced(scenes, frame, duration, fit.minScene ?? MIN_SCENE);
   const placed: PlacedScene[] = [];
   // one background for the whole video (never turning dark ↔ light)
   const dark = script.art.scheme !== "light";
@@ -573,7 +578,7 @@ export function placeAll(script: ScriptT, words: Word[], duration: number, brand
     const to = i < kept.length - 1 ? Math.max(from + 30, frame(kept[i + 1].at) - LEAD) : duration;
     const wordTo = i < kept.length - 1 ? kept[i + 1].at - 1 : nW - 1;
     const sceneSeed = (seed + i * 7919) >>> 0;
-    const input: SceneInput = { scene: s, index: i, from, to, words, wordFrom: s.at, wordTo, art: script.art, seed: sceneSeed, prev: placed[i - 1] ?? null, screens };
+    const input: SceneInput = { scene: s, index: i, from, to, words, wordFrom: s.at, wordTo, art: script.art, seed: sceneSeed, prev: placed[i - 1] ?? null, screens, shown: fit.shown };
     let best = placeScene(input);
     if (best.problems.length) {
       for (const layout of [s.layout, ...RETRY.filter((l) => l !== s.layout)]) {

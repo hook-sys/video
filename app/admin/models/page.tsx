@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
-import { SETTING_KEY, TEXT_TASKS, normalizeConfig, voiceChoicesText } from "@/lib/ai/models";
+import { REASONINGS, SETTING_KEY, TEXT_TASKS, V2_ROLES, normalizeConfig, voiceChoicesText } from "@/lib/ai/models";
 import { Badge, Card, Notice, PageHeader, btnPrimary, input } from "../_components/ui";
 import { daysAgo, usd } from "../_components/format";
 import { saveAiModels } from "./actions";
@@ -164,16 +164,34 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
             </div>
           </Card>
 
-          <Card title={nv ? "Director & Whisper" : "New version (when it is on)"}>
+          <Card title={nv ? "New version: roles & Whisper" : "New version (when it is on)"}>
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">
-                Used only by videos made with <b className="text-zinc-300">New version</b> on (admin → Settings). The Director always runs through fal&apos;s OpenRouter router; the voice uses the Voice card above (its model and names only). Nothing falls back: a missing model stops the video with an error and its credits go back.
+                Used only by videos made with <b className="text-zinc-300">New version</b> on (admin → Settings). Every role runs through fal&apos;s OpenRouter router with its own model and reasoning; the voice uses the Voice card above (its model and names only). Nothing falls back: a missing model stops the video with an error and its credits go back. Reasoning: <i>default</i> = the model&apos;s own; <i>none</i> = none asked.
               </p>
-              {nv && !c.v2.text && <p className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-2 text-xs text-amber-200">No Director model yet: new videos stop with an error until one is set here.</p>}
-              <label className="flex flex-col gap-1">
-                <span className="text-zinc-400">Director model, on fal&apos;s OpenRouter router (the one model for every video)</span>
-                <input name="v2_text" list="text-models" defaultValue={c.v2.text} placeholder="e.g. google/gemini-2.5-flash" className={input} />
-              </label>
+              {V2_ROLES.map((r) => {
+                const v = c.v2.roles[r.id];
+                const locked = r.id === "reviewer";
+                return (
+                  <div key={r.id} className={`flex flex-col gap-2 rounded-lg border border-white/[0.06] p-3 ${locked ? "opacity-60" : ""}`}>
+                    <p className="font-medium text-white">
+                      {r.label} {locked && <span className="ml-1 text-xs font-normal text-amber-300">off until the Vercel Sandbox is back</span>}
+                    </p>
+                    <p className="text-xs text-zinc-500">{r.help}</p>
+                    {nv && !locked && !v.model && <p className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-2 text-xs text-amber-200">No model yet: new videos stop with an error until one is set.</p>}
+                    <div className="grid gap-2 md:grid-cols-[1fr_150px]">
+                      <input name={`v2_${r.id}_model`} list="text-models" defaultValue={v.model} placeholder={locked ? "e.g. a vision model" : "e.g. google/gemini-2.5-flash"} className={input} />
+                      <select name={`v2_${r.id}_reasoning`} defaultValue={v.reasoning} className={input}>
+                        {REASONINGS.map((x) => (
+                          <option key={x} value={x}>
+                            reasoning: {x}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                );
+              })}
               <label className="flex flex-col gap-1">
                 <span className="text-zinc-400">Whisper model (times the voice; transcribes an uploaded voice)</span>
                 <input name="v2_whisper" defaultValue={c.v2.whisper} placeholder="e.g. fal-ai/whisper" className={input} />
@@ -207,7 +225,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
 
       {editable && (
         <Card title="Test a model">
-          <ModelTest defaults={{ text: nv ? { provider: "fal", model: c.v2.text } : { provider: c.text.provider, model: c.text.model }, voice: { model: c.voice.model, template: c.voice.template } }} />
+          <ModelTest defaults={{ text: nv ? { provider: "fal", model: c.v2.roles.director.model } : { provider: c.text.provider, model: c.text.model }, voice: { model: c.voice.model, template: c.voice.template } }} />
         </Card>
       )}
 

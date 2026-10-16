@@ -8,7 +8,7 @@ import { getSettings } from "@/lib/app-settings";
 import { iconFor } from "@/lib/ai/motion-director";
 import { inspected } from "@/components/video/composer/inspect";
 import { frameOf } from "@/components/video/composer/frame";
-import { placeAll } from "@/components/video/composer/layout";
+import { type Fit, placeAll } from "@/components/video/composer/layout";
 import { type Staging, staged } from "@/components/video/composer/staging";
 import { composeVariants } from "@/components/video/composer/variants";
 import { pieceToWord, remapScript, scriptWords } from "@/components/video/composer/words";
@@ -34,7 +34,7 @@ export const RENDER_PROJECT_COLUMNS = "id, user_id, format, duration_seconds, br
 // What the studio shows beside the video: what its Motion Director decided.
 export type ComposerAbout = { idea: string | null; mood: string | null; language: string | null; score: number | null };
 export type ComposerView = { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[]; about?: ComposerAbout };
-type StoredComposer = { videos?: { script: unknown; seed: number; source: ComposerPlan["source"]; staging?: Staging | null }[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] };
+type StoredComposer = { videos?: { script: unknown; seed: number; source: ComposerPlan["source"]; staging?: Staging | null; fit?: Fit }[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] };
 
 // The project's Composer videos laid out on its voice, with the customer's
 // brand inputs and signed URLs (the voice, the logo, the screenshots).
@@ -93,7 +93,7 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
     // (an icon name the library lacks: the nearest one it has)
     for (const scene of sc.data.scenes) for (const it of scene.items) if (it.icon || it.kind === "icon") it.icon = iconFor(it.icon, it.title);
     try {
-      const { plan } = placeAll(toWord ? remapScript(sc.data, toWord) : sc.data, shown, duration, brand, v.seed, screenshotUrls.length, v.source, size);
+      const { plan } = placeAll(toWord ? remapScript(sc.data, toWord) : sc.data, shown, duration, brand, v.seed, screenshotUrls.length, v.source, size, v.fit ?? {});
       // (staged as it was chosen: a journey, depth, a recap…)
       // (the Frame Inspector's mends, as when it was made)
       return [inspected(staged(plan, v.staging)).plan];

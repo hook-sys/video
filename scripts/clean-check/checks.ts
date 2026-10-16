@@ -35,7 +35,11 @@ import { SETTINGS } from "@/lib/app-settings";
 import { engineOf } from "@/lib/new-version";
 import { ownedPath } from "@/lib/projects";
 import { v2DetailsOf } from "@/lib/v2/form";
-import { v2DirectorModel, v2Text, v2VoiceName } from "@/lib/v2/models";
+import { v2DirectorModel, v2Role, v2VoiceName } from "@/lib/v2/models";
+import { V2_RULES, V2_RULES_MASTER, V2_SHOWN, v2RuleKey, v2RulesOf } from "@/lib/v2/rules";
+import { drawLook, lookOf, lookText } from "@/lib/v2/variety";
+import { copywrite } from "@/lib/v2/copywriter";
+import { withVariety } from "@/components/video/composer/variants";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -473,9 +477,10 @@ export async function runChecks(): Promise<Check[]> {
     add("each video keeps its version (only engine v2 is v2)", engines.join(",") === "v2,v2,v1,v1,v1,v1,v1", engines.join(","));
     const d = v2DetailsOf({ engine: "v2", voice: { source: "upload", name: null, path: "u/p/voice/upload.mp3" } });
     add("a v2 video's details read back", d?.voice.source === "upload" && d.voice.path === "u/p/voice/upload.mp3" && v2DetailsOf({ category: "finance" }) === null && v2DetailsOf({ engine: "v2" })?.voice.source === "script", JSON.stringify(d));
-    const cfg = normalizeConfig({ v2: { text: " google/gemini-2.5-flash ", whisper: "fal-ai/whisper" } });
-    add("its models are only what the admin saved (none by default)", defaultConfig().v2.text === "" && defaultConfig().v2.whisper === "" && cfg.v2.text === "google/gemini-2.5-flash" && cfg.v2.whisper === "fal-ai/whisper" && normalizeConfig({}).v2.text === "", JSON.stringify(cfg.v2));
-    const missing = await v2Text({}, normalizeConfig({ text: { model: "google/gemini-2.5-flash" } })).then(() => "no error", (e: Error) => e.message);
+    const cfg = normalizeConfig({ v2: { text: " google/gemini-2.5-flash ", whisper: "fal-ai/whisper", roles: { review: { model: "openai/gpt-5", reasoning: "high" }, copywriter: { model: "x/y", reasoning: "loud" }, reviewer: { model: "v/v", on: true } } } });
+    const d0 = defaultConfig().v2;
+    add("its roles' models are only what the admin saved (none by default; the vision reviewer stays off)", Object.values(d0.roles).every((r) => r.model === "" && r.reasoning === "default") && d0.whisper === "" && !d0.roles.reviewer.on && cfg.v2.roles.director.model === "google/gemini-2.5-flash" && cfg.v2.roles.review.reasoning === "high" && cfg.v2.roles.copywriter.reasoning === "default" && !cfg.v2.roles.reviewer.on && cfg.v2.whisper === "fal-ai/whisper", JSON.stringify(cfg.v2.roles));
+    const missing = await v2Role("director", {}, normalizeConfig({ text: { model: "google/gemini-2.5-flash" } })).then(() => "no error", (e: Error) => e.message);
     add("no Director model set: a clear error, no fallback (not even the old main model)", /No Director model is set for the new version/.test(missing), missing);
     const empty = ["", "  ", null, undefined].map((m) => {
       try {
@@ -487,9 +492,10 @@ export async function runChecks(): Promise<Check[]> {
     add("an empty Director model is an error, never OPENAI_MODEL / gpt-5-mini", empty.every((m) => /Director has no model/.test(m)) && v2DirectorModel(" google/gemini-2.5-flash ") === "google/gemini-2.5-flash", empty[0]);
     const key = process.env.FAL_KEY;
     process.env.FAL_KEY = "test";
-    const picked = await v2Text({}, normalizeConfig({ v2: { text: "anthropic/claude-opus-5.5" } })).catch(() => null);
+    const picked = await v2Role("review", {}, normalizeConfig({ v2: { roles: { review: { model: "anthropic/claude-opus-5.5", reasoning: "medium" } } } })).catch(() => null);
+    const noCopy = await v2Role("copywriter", {}, normalizeConfig({ v2: { roles: { director: { model: "a/b" } } } })).then(() => "no error", (e: Error) => e.message);
     process.env.FAL_KEY = key;
-    add("the Director model runs through fal's OpenRouter router", picked?.provider === "fal" && picked.model === "anthropic/claude-opus-5.5", `${picked?.provider} ${picked?.model}`);
+    add("each role runs its own model through fal's OpenRouter router, with its reasoning; a role without one is an error", picked?.provider === "fal" && picked.model === "anthropic/claude-opus-5.5" && picked.reasoning === "medium" && /No Copywriter model is set/.test(noCopy), `${picked?.provider} ${picked?.model} ${picked?.reasoning} · ${noCopy}`);
     const voice = { ...defaultConfig().voice, model: "fal-ai/elevenlabs/tts/turbo-v2.5", female: "", male: "Brian", choices: parseVoiceChoices("Sarah, female, Warm") };
     const noFemale = (() => {
       try {
@@ -507,6 +513,58 @@ export async function runChecks(): Promise<Check[]> {
     const used: string[] = [];
     const r = await directMotion({ name: "Flowly", color: "#6a5bff", cta: "Start", words: FLOWLY.words.slice(0, 20), seed: 1, clientModel: "google/gemini-2.5-flash" }, (x) => used.push(x.model), failing, 5_000);
     add("a failed Director is reported as such (the new version then fails and refunds)", r.plan.source === "rule" && used[0] === "google/gemini-2.5-flash" && r.problems.some((x) => /model call failed/.test(x)), `${r.plan.source} · ${used.join(",")} · ${r.problems[0]}`);
+  }
+
+  section = "New version: video rules, roles, variety";
+  {
+    type ComposerScriptT = import("@/components/video/composer/types").ScriptT;
+    const BOOKWELL_ART = composeVariants({ words: BOOKWELL.words, brand: BOOKWELL.brand, duration: 900, seed: 3, count: 1 }).videos[0].script.art;
+    const def = v2RulesOf({});
+    const want = { story: true, frame: true, motion: true, no_people: true, never_list: true, max_items: true, entries: false, one_background: false, calm_background: false, layout_variety: true, min_scene: false, taste: true };
+    add("the rules start as agreed (8 on, 4 off)", JSON.stringify(def.on) === JSON.stringify(want), JSON.stringify(def.on));
+    const off = v2RulesOf({ [V2_RULES_MASTER]: false, [v2RuleKey("story")]: true });
+    add("the master switch off turns every rule off", Object.values(off.on).every((x) => !x) && !off.ruleSet.house.maxItems && !off.ruleSet.layoutVariety && !off.checks.noPeople, JSON.stringify(off.on));
+    const one = v2RulesOf({ [v2RuleKey("taste")]: false, [v2RuleKey("entries")]: true });
+    add("each switch on its own", !one.on.taste && one.on.entries && one.on.story && !one.ruleSet.house.noIconCardMix && one.ruleSet.house.entries, JSON.stringify(one.on));
+    const t = def.text("Never show a stock photo");
+    const offText = off.text("Never show a stock photo");
+    add("on: in the Director's instructions; off: not; honesty always", t.includes("STORY:") && t.includes("TASTE:") && !t.includes("3 kinds of way") && !t.includes("No busy backgrounds") && t.includes("stock photo") && t.includes("no music") && !offText.includes("STORY:") && !offText.includes("stock photo") && offText.includes("never placeholder data"), `${t.split("\n").length} lines on · ${offText.split("\n").length} off`);
+    add("scene length: off follows the voice (1.5 s), on keeps 3 s", def.ruleSet.fit.minScene === 45 && def.checks.minSeconds === 1.5 && t.includes("1.5 s") && v2RulesOf({ [v2RuleKey("min_scene")]: true }).ruleSet.fit.minScene === 84 && def.ruleSet.fit.shown === V2_SHOWN, `${def.ruleSet.fit.minScene} / ${v2RulesOf({ [v2RuleKey("min_scene")]: true }).ruleSet.fit.minScene} frames`);
+    add("every rule has its switch in admin → Settings (shown only with the new version)", V2_RULES.every((r) => SETTINGS.some((x) => x.key === v2RuleKey(r.id) && x.newOnly && x.fallback === r.on)) && SETTINGS.some((x) => x.key === V2_RULES_MASTER && x.newOnly), `${V2_RULES.length} + master`);
+    // kept in code: 2–3 things, icons and cards never together
+    const busy: ComposerScriptT = { art: BOOKWELL_ART, scenes: [{ at: 0, text: null, kicker: null, layout: "center", arrange: null, ratio: null, dark: null, camera: null, enter: "fade", items: [{ kind: "card", at: 0, hit: null, variant: "list" }, { kind: "icon", at: 0, hit: null, icon: "calendar" }, { kind: "icon", at: 0, hit: null, icon: "bell" }, { kind: "icon", at: 0, hit: null, icon: "star" }, { kind: "chips", at: 0, hit: null }] }] } as unknown as ComposerScriptT;
+    const kinds = (sc: ComposerScriptT) => sc.scenes[0].items.map((it) => it.kind).join(",");
+    const free = houseRules(busy, null, { maxItems: false, entries: false, oneBackground: false, calmBackground: false, noIconCardMix: false });
+    const kept = houseRules(busy, null, def.ruleSet.house);
+    add("rules off are not kept in code; on are (2–3 things, no icons beside a card)", kinds(free) === "card,icon,icon,icon,chips" && kinds(kept) === "card,chips", `${kinds(free)} → ${kinds(kept)}`);
+    // the look: a fresh one, unlike the last five; kept in code
+    const recent = [1, 2, 3, 4, 5].map((s) => drawLook(s * 7919, []));
+    const look = drawLook(424242, recent);
+    add("a fresh look, unlike the last five (fonts, palette, camera)", !recent.some((r) => r.display === look.display) && !recent.some((r) => r.harmony === look.harmony && r.scheme === look.scheme) && look.transitions.length === 3 && look.layouts.length >= 4 && lookOf(JSON.parse(JSON.stringify(look)))?.seed === 424242 && lookOf({ seed: 1 }) === null, `${look.display}/${look.text} ${look.harmony}-${look.scheme} ${look.camera} · ${look.transitions.join(",")} · ${look.layouts.join(",")}`);
+    const styled = withVariety({ art: { ...BOOKWELL_ART, style: null }, scenes: [{ ...busy.scenes[0], enter: "flip" }] } as unknown as ComposerScriptT, look);
+    add("the look is kept in code (faces, palette, camera, ways in) and told to the Director", styled.art.display === look.display && styled.art.text === look.text && styled.art.harmony === look.harmony && styled.art.camera === look.camera && look.transitions.includes(styled.scenes[0].enter) && lookText(look).includes(look.display), `${styled.art.display} ${styled.scenes[0].enter}`);
+    // laid out with the video's own fit: up to 6 words on screen
+    const fw = "Every invoice gets paid on time now".split(" ").map((text, i) => ({ text, start: i * 0.5, end: i * 0.5 + 0.4 }));
+    const one6: ComposerScriptT = { art: BOOKWELL_ART, scenes: [{ at: 0, text: { from: 0, to: 5, size: "l", reveal: "rise", align: null, key: null }, kicker: null, layout: "type", arrange: null, ratio: null, dark: null, camera: null, enter: "fade", items: [] }] } as unknown as ComposerScriptT;
+    const shownOf = (fit?: { shown?: number }) => placeAll(one6, fw, 120, BOOKWELL.brand, 7, 0, "director", [1920, 1080], fit).plan.scenes[0].text?.words.length ?? 0;
+    add("a new-version video shows up to 6 words (the old version 4)", shownOf() <= 4 && shownOf({ shown: 6 }) === 6, `${shownOf()} → ${shownOf({ shown: 6 })}`);
+    // the Copywriter: words of the scene only, 2–6 of them
+    const cw = "Your support inbox is full every single day. Flowly answers every ticket for you".split(" ").map((text, i) => ({ text, start: i * 0.4, end: i * 0.4 + 0.35 }));
+    const plan = { arts: [], scenes: [{ at: 0, text: { from: 0, to: 7 }, options: [{ items: [] }] }, { at: 8, text: { from: 8, to: 14 }, options: [{ items: [] }] }] };
+    const fake = (scenes: unknown) => ({ client: { responses: { parse: async () => ({ output_parsed: { scenes }, usage: { input_tokens: 10, output_tokens: 5 } }) } }, model: "x/copy", provider: "fal", quick: false, reasoning: "default" }) as unknown as Parameters<typeof copywrite>[2];
+    const good = await copywrite(plan as never, cw, fake([{ scene: 1, from: 1, to: 3, key: ["inbox"] }, { scene: 2, from: 3, to: 5, key: [] }]), () => {});
+    add("the Copywriter keeps 2–6 of the scene's own words (else the Director's stay, said)", good.ideas.scenes[0].text?.from === 1 && good.ideas.scenes[0].text?.to === 3 && good.ideas.scenes[1].text?.from === 8 && good.problems.length === 1, `${JSON.stringify(good.ideas.scenes.map((x) => x.text))} · ${good.problems[0]}`);
+    const broken = { ...fake([]), client: { responses: { parse: async () => { throw new Error("down"); } } } } as unknown as Parameters<typeof copywrite>[2];
+    const failed = await copywrite(plan as never, cw, broken, () => {}).then(() => "no error", (e: Error) => e.message);
+    add("a Copywriter that fails fails the video (no fallback)", /Copywriter \(x\/copy\) failed/.test(failed), failed);
+    // the Director (new version): its rules only — none of the old version's
+    const seen: { instructions?: string; reasoning?: unknown }[] = [];
+    const spy = { responses: { parse: async (body: { instructions?: string; reasoning?: unknown }) => { seen.push(body); throw new Error("stop"); } } } as unknown as Parameters<typeof directMotion>[2];
+    await directMotion({ name: "Flowly", color: "#6a5bff", cta: "Start", words: FLOWLY.words.slice(0, 30), seed: 1, clientModel: "x/director", reasoning: "high", rules: false, ruleText: def.text(null), checks: def.checks }, () => {}, spy, 20_000);
+    await directMotion({ name: "Flowly", color: "#6a5bff", cta: "Start", words: FLOWLY.words.slice(0, 30), seed: 1, clientModel: "x/old" }, () => {}, spy, 20_000);
+    const [v2i, v1i] = [seen[0]?.instructions ?? "", seen[1]?.instructions ?? ""];
+    add("the new version's Director gets its rules, not the old version's (the old version unchanged)", v2i.includes("RULES (this video keeps them)") && !v2i.includes("HOUSE RULES") && !v2i.includes("Mix icons and cards") && v2i.includes("2 to 6 words") && !v2i.includes("ONE background for the whole video, never changing") && v1i.includes("HOUSE RULES") && v1i.includes("Mix icons and cards"), `${v2i.length} / ${v1i.length} chars`);
+    add("each role's reasoning reaches its model", JSON.stringify(seen[0]?.reasoning) === JSON.stringify({ effort: "high" }), JSON.stringify(seen[0]?.reasoning));
   }
 
   section = "covered elsewhere";

@@ -15,13 +15,14 @@ const bare = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}%$€£৳]/gu,
 const NUMBER = /\d|^(one|two|three|four|five|six|seven|eight|nine|ten|twice|half|hundred|thousand)$/;
 
 // [first, last] word index of the highlight inside [from, to].
-export function highlightOf(words: Word[], from: number, to: number, keys: Set<string>): [number, number] {
+// `max`: at most this many words (SHOWN; a "New version" video stores its own).
+export function highlightOf(words: Word[], from: number, to: number, keys: Set<string>, max = SHOWN): [number, number] {
   // (a few words in one sentence are shown as they are)
-  if (to - from + 1 <= SHOWN && !words.slice(from, to).some((w) => STOP.test(w.text))) return [from, to];
-  let best: [number, number] = [from, from + SHOWN - 1];
+  if (to - from + 1 <= max && !words.slice(from, to).some((w) => STOP.test(w.text))) return [from, to];
+  let best: [number, number] = [from, from + max - 1];
   let bestScore = -Infinity;
   for (let a = from; a <= to; a++) {
-    for (let len = 2; len <= SHOWN && a + len - 1 <= to; len++) {
+    for (let len = 2; len <= max && a + len - 1 <= to; len++) {
       const b = a + len - 1;
       const ws = words.slice(a, b + 1).map((w) => w.text);
       const plain = ws.map(bare);

@@ -1,5 +1,5 @@
 import "server-only";
-import { type AiConfig, type TextAi, getAiConfig, textClient } from "@/lib/ai/models";
+import { type AiConfig, type Reasoning, type TextAi, type V2Role, V2_ROLES, getAiConfig, textClient } from "@/lib/ai/models";
 import { buildInput, falRun, heardWords } from "@/lib/ai/fal";
 import { retimeScript, type WordTiming } from "@/lib/voice-timing";
 
@@ -9,12 +9,15 @@ import { retimeScript, type WordTiming } from "@/lib/voice-timing";
 
 const SET_IT = "A super admin must choose it on /admin/models.";
 
-// The Director's model, through fal's OpenRouter router: only "New version →
-// Director model" on /admin/models (one level: no quality level's own model).
-export async function v2Text(opts: { timeout?: number; maxRetries?: number } = {}, config?: AiConfig): Promise<TextAi> {
-  const model = (config ?? (await getAiConfig())).v2.text.trim();
-  if (!model) throw new Error(`No Director model is set for the new version. ${SET_IT}`);
-  return textClient("fal", model, false, opts, false);
+// A role's model (Director, Director review, Copywriter…), through fal's
+// OpenRouter router, with the reasoning chosen for it: only what is set on
+// /admin/models under "New version" (one level: no quality level's model).
+export type RoleAi = TextAi & { reasoning: Reasoning };
+export async function v2Role(role: V2Role, opts: { timeout?: number; maxRetries?: number } = {}, config?: AiConfig): Promise<RoleAi> {
+  const c = (config ?? (await getAiConfig())).v2.roles[role];
+  const label = V2_ROLES.find((r) => r.id === role)?.label ?? role;
+  if (!c.model.trim()) throw new Error(`No ${label} model is set for the new version. ${SET_IT}`);
+  return { ...textClient("fal", c.model.trim(), false, opts, false), reasoning: c.reasoning };
 }
 
 // The Director's model, checked right before each call: an empty one would
