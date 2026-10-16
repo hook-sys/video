@@ -91,9 +91,11 @@ const stir = (x: number) => {
 };
 
 // The ways between the scenes. `asked`: each scene's way in as the Director
-// chose it (kept, within the energy); null: the code's choice. At
-// least the energy's share of the changes is continuous where an icon or a
-// window joins the two scenes (the hero moment's first); never a cut.
+// chose it — a continuous one is a suggestion (the video's seed keeps part
+// of them and places the rest elsewhere), a plain one is kept where the
+// energy has it; null: the code's choice. About the energy's share of the
+// changes is continuous where an icon or a window joins the two scenes;
+// never a cut.
 export function flowStaging(plan: ComposerPlan, seed: number, energy: Energy, { hero = null, asked = [], continuous = true, cursor = true, depth = true }: { hero?: number | null; asked?: (TransitionKind | null)[]; continuous?: boolean; cursor?: boolean; depth?: boolean } = {}): Staging {
   const R = rng(stir(seed ^ 0x2545f491) || 1);
   const e = ENERGY[energy];
@@ -133,21 +135,26 @@ export function flowStaging(plan: ComposerPlan, seed: number, energy: Energy, { 
     return e.plain[0];
   };
   // the share of continuous ways: about the energy's (calm 30 %, medium 40 %), at least half when lively
-  const target = Math.ceil((n - 1) * e.share);
-  const most = energy === "lively" ? n - 1 : target;
-  const count = () => links.filter((l) => l && CONTINUOUS.has(l)).length;
-  // the Director's continuous ways first (the hero moment's, its morphs, then in order), up to the energy's share
-  const wants = Array.from({ length: n - 1 }, (_, k) => k + 1).map((i) => ({ i, want: asked[i] ? ASKED[asked[i]!] : undefined }));
-  const rank = (x: { i: number; want?: LinkKind }) => (x.i === hero ? 0 : x.want === "morph" ? 1 : 2);
-  for (const x of wants.filter((w) => w.want && CONTINUOUS.has(w.want)).sort((a, b) => rank(a) - rank(b) || a.i - b.i)) if (count() < most) anyCont(x.i, x.want);
-  for (const x of wants) if (!links[x.i] && x.want && !CONTINUOUS.has(x.want)) links[x.i] = nextPlain(x.i, x.want);
-  // then the code's, the hero moment first, where they can be
-  const order = [hero, ...R.shuffle(Array.from({ length: n - 1 }, (_, k) => k + 1))].filter((i, k, xs): i is number => i != null && i >= 1 && i < n && xs.indexOf(i) === k);
-  for (const i of order) {
-    if (count() >= target) break;
-    if (links[i]) continue;
-    anyCont(i, i === hero ? "dive" : R.pick(["morph", "dive", "reveal"] as LinkKind[]));
+  const changes = Array.from({ length: n - 1 }, (_, k) => k + 1);
+  const eligible = continuous ? changes.filter((i) => !!morphPair(sc[i - 1], sc[i]) || diveWindow(sc[i - 1], sc[i]) != null || revealWindow(sc[i]) != null) : [];
+  const target = Math.min(eligible.length, Math.ceil((n - 1) * e.share) + (energy === "lively" ? R.int(0, 1) : 0));
+  const want = (i: number) => (asked[i] ? ASKED[asked[i]!] : undefined);
+  // the Director's continuous ways are suggestions: each video keeps a seeded
+  // part of them (never all of two or more) and places the rest of its share
+  // at other scene changes an icon or a window can join — so two videos of
+  // one plan never join the same scenes the same way
+  const suggested = R.shuffle(eligible.filter((i) => CONTINUOUS.has(want(i) as LinkKind)));
+  const keep = suggested.length ? Math.max(1, Math.min(target, suggested.length - (suggested.length > 1 ? 1 : 0), Math.round(target * R.range(0.3, 0.7)))) : 0;
+  const kept = suggested.slice(0, keep);
+  const extra = [...R.shuffle(eligible.filter((i) => !suggested.includes(i))), ...suggested.slice(keep)];
+  const kinds: LinkKind[] = ["morph", "dive", "reveal"];
+  for (const i of kept) anyCont(i, want(i));
+  for (const i of extra) {
+    if (links.filter((l) => l && CONTINUOUS.has(l)).length >= target) break;
+    anyCont(i, R.pick(kinds));
   }
+  // the Director's other ways in, where the energy has them
+  for (const i of changes) if (!links[i] && want(i) && !CONTINUOUS.has(want(i)!)) links[i] = nextPlain(i, want(i));
   for (let i = 1; i < n; i++) if (!links[i]) links[i] = nextPlain(i);
   const flow: Flow = { energy, pairs, cursor, depth };
   return { family: "depth", language: "depth", journey: null, link: "fade", links, guide: null, recap: false, hero: hero ?? null, flow };
