@@ -105,7 +105,7 @@ export async function runPipelineV2(projectId: string, userId: string) {
     const tierId: TierId = (TIER_IDS as readonly string[]).includes(project.quality) ? (project.quality as TierId) : "standard";
     // every model this video needs is checked before anything is spent:
     // its roles (admin → AI models, "New version") and Whisper
-    const [director, review, copywriter] = await Promise.all([v2Role("director", { timeout: 120_000 }), v2Role("review", { timeout: 120_000 }), v2Role("copywriter", { timeout: 60_000 })]);
+    const [director, review, copywriter] = await Promise.all([v2Role("director", { timeout: DIRECTOR_MS }), v2Role("review", { timeout: 120_000 }), v2Role("copywriter", { timeout: 60_000 })]);
     await v2Whisper(ai);
     // its rules (admin → Settings, "New version: video rules") and its look
     // (a fresh seed, unlike this customer's last five; kept with the project)
@@ -116,13 +116,15 @@ export async function runPipelineV2(projectId: string, userId: string) {
       project = { ...project, brand_color: hueColour(look.hue) };
       await update({ brand_color: project.brand_color });
     }
-    const roles: Roles = { director, review, copywriter, rules, look };
+    const roles: Roles = { director, review, copywriter, rules, look, left };
     if (v2.voice.source === "script" && !ai.voice.model) throw new Error("No voice model is set for the new version. A super admin must choose it on /admin/models.");
 
     // The Director plans from the script while the voice is made (a
     // recording: once its words are heard); it reviews on the voice's times.
     const stored = (project.brief as { composer?: unknown } | null)?.composer;
-    const budget = () => Math.max(30_000, Math.min(130_000, left() - 120_000));
+    // (the Director takes up to ~170 s — it runs while the voice is made —
+    // leaving ~95 s for the review, the Copywriter, the layout and the frame check)
+    const budget = () => Math.max(30_000, Math.min(DIRECTOR_MS, left() - 95_000));
     const own = v2.voice.source === "script" ? project.direction.trim() : "";
     const planning = own && !stored ? planV2(admin, projectId, userId, project, own, readingPace(own), roles, settings, budget()) : null;
     planning?.catch(() => {});
@@ -211,7 +213,9 @@ async function voiceOf(admin: Admin, projectId: string, userId: string, project:
 
 // the script's words at a reading pace (before the voice exists)
 const readingPace = (script: string) => script.split(/\s+/).filter(Boolean).map((text, i) => ({ text, start: i * 0.4, end: i * 0.4 + 0.35 }));
-type Roles = { director: RoleAi; review: RoleAi; copywriter: RoleAi; rules: V2Rules; look: V2Look };
+type Roles = { director: RoleAi; review: RoleAi; copywriter: RoleAi; rules: V2Rules; look: V2Look; left: () => number };
+// the Director's time: two calls of ~110–130 s timed out at 120 s (Oct 16)
+const DIRECTOR_MS = 170_000;
 
 // This video's look: the one kept with it (a retry), else one drawn from a
 // fresh seed unlike the customer's last five "New version" looks — kept with
@@ -292,11 +296,12 @@ async function buildV2(admin: Admin, projectId: string, userId: string, project:
   const started = Date.now();
   try {
     v2DirectorModel(input.clientModel);
-    const reviewed = await reviewMotion(directed.plan, input, (u) => usage.push(u), review.client, 90_000);
+    // (the review and the Copywriter share what the 300 s leave)
+    const reviewed = await reviewMotion(directed.plan, input, (u) => usage.push(u), review.client, Math.max(20_000, Math.min(90_000, roles.left() - 45_000)));
     const plan = reviewed.plan;
     if (plan.source !== "ai" || !plan.ideas) throw new Error(`The Director review (${review.model}) lost the plan.`);
     // the Copywriter: every scene's on-screen words down to its 2–6 key words
-    const copied = await copywrite(plan.ideas, words, copywriter, (u) => usage.push(u));
+    const copied = await copywrite(plan.ideas, words, copywriter, (u) => usage.push(u), Math.max(15_000, Math.min(60_000, roles.left() - 25_000)));
     const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: look.seed, ideas: copied.ideas, count: 1, avoid: { display: past.seen.display, field: past.seen.field.slice(0, 3) }, screens: 0, avoidStaging: past.seenStaging, rules: rules.ruleSet, variety: look, match: input.match !== false, techOff: techOffOf(settings as Parameters<typeof techOffOf>[0]), styles, avoidStyles: past.avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
     const video = set.videos[0];
     if (!video || video.source !== "director") throw new Error("The Motion Director's scenes could not be laid out.");
@@ -316,5 +321,5 @@ async function priceV2(admin: Admin, projectId: string, userId: string, model: s
   const cost = usage.reduce((a, u) => a + usageCost(ai, u, (i, o) => openaiCost(u.model, i, o)), 0);
   const [input_tokens, output_tokens] = [usage.reduce((a, u) => a + u.inputTokens, 0), usage.reduce((a, u) => a + u.outputTokens, 0)];
   if (input_tokens || output_tokens)
-    await recordCost(admin, { project_id: projectId, user_id: userId, operation: "openai_brief", model, quantity: input_tokens + output_tokens, estimated_cost_usd: cost, metadata: { kind: "motion_director", engine: "v2", input_tokens, output_tokens, latency_ms: Date.now() - started } });
+    await recordCost(admin, { project_id: projectId, user_id: userId, operation: "openai_brief", model, quantity: input_tokens + output_tokens, estimated_cost_usd: cost, metadata: { kind: "motion_director", engine: "v2", input_tokens, output_tokens, latency_ms: Date.now() - started, ...(usage.some((u) => u.estimated) ? { estimated: true, note: "a call failed or timed out: its input is counted from its length, its output is unknown (the provider may bill more)" } : {}) } });
 }

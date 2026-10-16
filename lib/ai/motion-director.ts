@@ -2,7 +2,7 @@ import "server-only";
 import type OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
-import type { BriefUsage } from "@/lib/ai/product-brief";
+import { type BriefUsage, estimateInput } from "@/lib/ai/product-brief";
 import { type Reasoning, countUsage, temperatureFor, textAi, textClient } from "@/lib/ai/models";
 import { HOUSE_RULES, extraRules } from "@/lib/ai/house-rules";
 import { DISPLAY_FACES, TEXT_FACES } from "@/components/video/composer/art";
@@ -64,13 +64,17 @@ const STYLE_LINES = Object.entries(STYLE_NOTES).map(([k, v]) => `- ${k}: ${v}`).
 // (the references as short lines: a starting point, never a copy)
 const REFERENCE_LINES = RECIPES.filter((r) => r.id.startsWith("ref-")).map((r) => `- ${r.from}: ${r.note}`).join("\n");
 
-const ART_PART = `4. ART — exactly 1 "art" in "arts", the one visual identity that suits THIS brand.
-First its STYLE — the parts the whole video is drawn in, each chosen on its own (thousands of combinations: never a fixed look). Build it for THIS brand, THIS story and the customer's direction, and unlike RECENT (another ground and most parts different):
+const STYLE_BLOCK = `First its STYLE — the parts the whole video is drawn in, each chosen on its own (thousands of combinations: never a fixed look). Build it for THIS brand, THIS story and the customer's direction, and unlike RECENT (another ground and most parts different):
 ${STYLE_LINES}
 A ground sets dark or light: staging.scheme must match it (black, night, deep, dusk, plate: dark; bright, tint, paper, white: light). Dark glass, glow cards and glow backdrops only on dark grounds; a soft-shadowed white card never on a pale ground.
 The reference promos we learn from (a style may start from one and change it; never copy one whole):
 ${REFERENCE_LINES}
-{ style { ground, backdrop, texture, shift, card, panel, icon, accent, size, cuts, rhythm, tilt (0–10), ghost (true|false), frame (true|false), confetti (true|false) }, name (2–3 words), hue 0–360 (close to the brand colour unless another serves the story better), harmony mono|analogous|complement|split|triad, field ${FIELDS.join("|")}, overlay none|grain|particles|sheen|vignette|lines, surface glass|solid|outline|soft|tinted|ink, radius 0–40, display (headline face) one of: ${DISPLAY_FACES.map((f) => f.slug).join(", ")}, text (UI face) one of: ${TEXT_FACES.map((f) => f.slug).join(", ")}, weight 500–850, case sentence|upper|lower, tracking -0.05..0.02, key color|pill|underline|gradient|box|outline|italic|glow, motion soft|snappy|springy|glide, pace 0.85–1.25, camera drift|push|pull|tilt|float|orbit|rise|macro, icons tile|round|bare|duotone|outline|glass, energy 0.2–0.85 }.
+`;
+// ("New version": the style is built in code from the video's drawn look)
+const V2_STYLE_BLOCK = `First its STYLE: it is built in code from THIS VIDEO'S LOOK (its reference, ground, cuts and rhythm) — answer "style" with short valid values; they are not used.
+`;
+const ART_PART = `4. ART — exactly 1 "art" in "arts", the one visual identity that suits THIS brand.
+${STYLE_BLOCK}{ style { ground, backdrop, texture, shift, card, panel, icon, accent, size, cuts, rhythm, tilt (0–10), ghost (true|false), frame (true|false), confetti (true|false) }, name (2–3 words), hue 0–360 (close to the brand colour unless another serves the story better), harmony mono|analogous|complement|split|triad, field ${FIELDS.join("|")}, overlay none|grain|particles|sheen|vignette|lines, surface glass|solid|outline|soft|tinted|ink, radius 0–40, display (headline face) one of: ${DISPLAY_FACES.map((f) => f.slug).join(", ")}, text (UI face) one of: ${TEXT_FACES.map((f) => f.slug).join(", ")}, weight 500–850, case sentence|upper|lower, tracking -0.05..0.02, key color|pill|underline|gradient|box|outline|italic|glow, motion soft|snappy|springy|glide, pace 0.85–1.25, camera drift|push|pull|tilt|float|orbit|rise|macro, icons tile|round|bare|duotone|outline|glass, energy 0.2–0.85 }.
 Taste: condensed faces (oswald, bebas-neue, anton, big-shoulders-display) only in upper case; serif faces with sentence case and italic/underline/color keys; wide faces (unbounded, krona-one, dela-gothic-one) with smaller sizes. AVOID the faces and fields listed under SEEN (this customer has seen them).`;
 
 const SCENES_PART = `5. SCENES — the narration is final; its words are given numbered (index:word). You decide every scene — nothing is a template.
@@ -198,7 +202,8 @@ const HOOK_WORDS = `ONLY the scene's HOOK on screen as kinetic type — 1 to ${S
 const v2Direction = (input: Pick<MotionInput, "prompt" | "match" | "shapes" | "motion" | "ruleText">) =>
   `${instructionsOf({ ...input, rules: false })
     .replace(SCHEME_LINE, `- scheme: dark|light — the video's background, as THIS VIDEO'S LOOK gives it.`)
-    .replace(HOOK_WORDS, "ONLY the scene's HOOK on screen as kinetic type — 2 to 6 words")}${input.ruleText ? `\n\n${input.ruleText}` : ""}`;
+    .replace(HOOK_WORDS, "ONLY the scene's HOOK on screen as kinetic type — 2 to 6 words")
+    .replace(STYLE_BLOCK, V2_STYLE_BLOCK)}\n\nANSWER COMPACTLY: only the fields asked, short values, no prose, no fields the format does not ask for.${input.ruleText ? `\n\n${input.ruleText}` : ""}`;
 
 // ── What this customer has already seen (their last videos, any brand), for
 // the Creative Director: one line per video and what keeps coming back.
@@ -751,11 +756,15 @@ export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage)
   };
   if (!ai || !input.words.length) return done(fallback, ["no model (turned off on /admin/models, or no key) — plan by rule"]);
   const deadline = t0 + budgetMs;
+  const [instructions, request] = [directionOf(input), requestOf(input)];
   try {
-    const o = await ask<Answer>(ai, { model, instructions: directionOf(input), input: requestOf(input), text: FORMAT, ...quick, ...temperatureFor(model, input.reasoning, input.temperature) }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
+    const o = await ask<Answer>(ai, { model, instructions, input: request, text: FORMAT, ...quick, ...temperatureFor(model, input.reasoning, input.temperature) }, deadline, (u) => countUsage(usage, u as Parameters<typeof countUsage>[1]));
     if (!o) return done(fallback, ["no answer — plan by rule"]);
     return done(planOf(o, input, fallback), ideaProblems(o, input.words.length));
   } catch (e) {
+    // ("New version": a failed or timed-out call is still priced, from its input)
+    // (none when it was never sent: no time was left)
+    if (typeof input.ruleText === "string" && !/no time left/.test(String(e))) estimateInput(usage, instructions, request, JSON.stringify(FORMAT.format.schema ?? {}));
     return done(fallback, [`model call failed: ${e instanceof Error ? e.message : String(e)} — plan by rule`]);
   }
 }
@@ -816,6 +825,7 @@ export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage
       best = revised;
       notes = again;
     } catch (e) {
+      if (typeof input.ruleText === "string" && !/no time left/.test(String(e))) estimateInput(usage, directionOf(input), request);
       log.push(`review ${round} failed: ${e instanceof Error ? e.message : String(e)}`);
       break;
     }
