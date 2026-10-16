@@ -170,9 +170,20 @@ export type JourneyKind = (typeof JOURNEYS)[number];
 // forward through the scenes.
 // Or the camera alone: a whip pan, the canvas turning a quarter round a
 // corner, or the scene flipping over like a card with the next on its back.
-export const LINKS = ["line", "carry", "lead", "word", "dive", "reveal", "tunnel", "whip", "turn", "flip"] as const;
+// "New version" (flow.ts) adds its own ways between two scenes on their own
+// backgrounds: an icon morphing into the next scene's icon, a slide, a mask
+// wipe, a cross-fade, a cut.
+export const LINKS = ["line", "carry", "lead", "word", "dive", "reveal", "tunnel", "whip", "turn", "flip", "morph", "slide", "wipe", "fade", "cut"] as const;
 export type LinkKind = (typeof LINKS)[number];
 export const GUIDES = ["plane", "cursor", "orb"] as const;
+// "New version": a video's energy (drawn per video) — its springs, its pace,
+// its ways between scenes and how much its camera moves (flow.ts).
+export const ENERGIES = ["calm", "medium", "lively"] as const;
+export type Energy = (typeof ENERGIES)[number];
+// pairs[i]: the things the way into scene i joins — [the last scene's thing,
+// this scene's thing] (an icon morphing, a window to go into or come out of; -1 none)
+// (cursor: the big cursor; depth: parallax — off with their rules)
+export type Flow = { energy: Energy; pairs: ([number, number] | null)[]; cursor?: boolean; depth?: boolean };
 export type GuideKind = (typeof GUIDES)[number];
 export type ComposerPlan = {
   v: 1;
@@ -199,6 +210,9 @@ export type ComposerPlan = {
   sfx?: boolean;
   // the scene the hero moment is in (staging.ts): a style's confetti bursts there
   hero?: number | null;
+  // "New version": every scene on its own background, its own camera move,
+  // joined by flow.ts's ways (film.tsx Depth)
+  flow?: Flow | null;
 };
 // (`qa`: the frame check's probe on — probe.tsx; never in a video a customer sees)
 export type ComposerProps = { plan: ComposerPlan; audioUrl?: string | null; webAudio?: boolean; bare?: boolean; qa?: boolean };

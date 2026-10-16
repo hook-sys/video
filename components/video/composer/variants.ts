@@ -9,9 +9,11 @@ import { ALL_STYLES, type StyleRules, type StyleT, inStyle, pickStyle } from "./
 import { RECIPES } from "./recipes";
 import { matched } from "./meaning";
 import { withoutTechniques } from "./techniques";
+import { ENERGY, flowStaging } from "./flow";
+import { groundIsDark } from "./style";
 import type { StoryShape } from "@/lib/studio";
 import { ARRANGES, CAMERAS, CARD_VARIANTS, CHART_VARIANTS, DEVICE_VARIANTS, ENTERS, FIELDS, FLOW_VARIANTS, HARMONIES, ICON_STYLES, ITEM_KINDS, KEYS, LAYOUTS, MOTIONS, OVERLAYS, REVEALS, SCHEMES, LOOKS, SHAPE_VARIANTS, SURFACES, TRANSITIONS } from "./types";
-import type { ArtT, Brand, CameraKind, ComposerPlan, GuideKind, ItemT, JourneyKind, LayoutKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
+import type { ArtT, Brand, CameraKind, ComposerPlan, Energy, GuideKind, ItemT, JourneyKind, KeyStyle, LayoutKind, Reveal, RowT, SceneT, ScriptT, TransitionKind, Word } from "./types";
 
 // Four Composer videos of one narration. With the Director's ideas (its
 // scenes, two or three ways to picture each, and its art directions) each
@@ -149,7 +151,12 @@ export type RuleSet = { house: HouseRuleSet; layoutVariety: boolean; fit: Fit };
 // palette treatment, font pairing, layouts, ways in and camera.
 // `recipe`: the reference it is built from (recipes.ts) — the code's look,
 // never the Director's style.
-export type Variety = { recipe?: string | null; harmony: (typeof HARMONIES)[number]; scheme: "dark" | "light"; display: string; text: string; camera: CameraKind; transitions: TransitionKind[]; layouts: LayoutKind[] };
+// `flow`: the premium motion (flow.ts) — the video's energy, a camera move
+// of its own for every scene (from `cameras`), the keyword's highlight,
+// depth (glass and soft shadows, parallax), the big cursor, and the
+// continuous ways between scenes; each part off with its rule.
+export type FlowLook = { energy: Energy; cameras: CameraKind[] | null; key: KeyStyle | null; depth: boolean; cursor: boolean; continuous: boolean };
+export type Variety = { recipe?: string | null; harmony: (typeof HARMONIES)[number]; scheme: "dark" | "light"; display: string; text: string; camera: CameraKind; transitions: TransitionKind[]; layouts: LayoutKind[]; flow?: FlowLook | null };
 
 // rules: false — the house rules (rules.ts) are not applied (admin → Settings, "Video rules");
 // a RuleSet — only the ones it keeps ("New version")
@@ -215,15 +222,47 @@ function inLayouts(script: ScriptT, allowed: readonly LayoutKind[]): ScriptT {
 
 // The look drawn for a "New version" video, over the style: its palette
 // treatment and background, its font pairing, its camera, and its ways in.
-export function withVariety(sc: ScriptT, v: Variety): ScriptT {
+export function withVariety(sc: ScriptT, v: Variety, seed = 1): ScriptT {
   const face = DISPLAY_FACES.find((f) => f.slug === v.display);
   // (dark or light follows the style's ground — the Director is told the
   // look's, and chooses its ground to match; set here only without a style)
   const art: ArtT = { ...sc.art, harmony: v.harmony, ...(sc.art.style ? {} : { scheme: v.scheme }), display: v.display, text: v.text, camera: v.camera, weight: face?.fixed ?? sc.art.weight, ...(face?.upper ? { case: "upper" as const } : {}) };
+  if (v.flow) return withFlow({ ...sc, art }, v.flow, seed);
   return {
     art,
     scenes: sc.scenes.map((s, i) => ({ ...s, enter: v.transitions.includes(s.enter) ? s.enter : v.transitions[i % v.transitions.length], camera: s.camera && s.camera !== v.camera ? v.camera : s.camera })),
   };
+}
+
+// The premium motion over the look (flow.ts): the energy's springs and pace;
+// every scene its own slow camera move (the Director's where the energy has
+// it, never the same twice in a row, never still); the keyword lit in the
+// brand colour or on a pill; the brand colour and one harmonious accent;
+// glass or softly lifted cards. The ways between scenes are staged later
+// (each scene's own way in is kept: the Director's choice).
+function withFlow(sc: ScriptT, fl: FlowLook, seed: number): ScriptT {
+  const e = ENERGY[fl.energy];
+  const R = rng((seed ^ 0x68e31da4) >>> 0 || 1);
+  const style = sc.art.style;
+  const dark = style ? groundIsDark(style.ground) : sc.art.scheme !== "light";
+  const art: ArtT = {
+    ...sc.art,
+    motion: e.motion,
+    pace: e.pace,
+    energy: e.level,
+    ...(fl.key ? { key: fl.key } : {}),
+    ...(fl.depth ? { surface: "glass" as const } : {}),
+    style: style ? { ...style, accent: "brand", ...(fl.depth ? { card: dark ? "glass" : style.card === "glass" || style.card === "lifted" ? style.card : "lifted" } : {}) } : style,
+  };
+  const pool = fl.cameras?.length ? fl.cameras : null;
+  let prev: CameraKind | null = null;
+  const scenes = sc.scenes.map((s) => {
+    let camera: CameraKind = pool ? (s.camera && pool.includes(s.camera) && s.camera !== prev ? s.camera : R.pick(pool.filter((c) => c !== prev))) : art.camera;
+    if (camera === "still") camera = "drift";
+    prev = camera;
+    return { ...s, camera };
+  });
+  return { art, scenes };
 }
 
 // A video as stored: its script and seed (laid out again on the voice's words
@@ -248,14 +287,15 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
     if (styles) {
       const { style, recipe } = forced ? pickStyle(null, s, [forced], made, avoidStyles, { ...styles, director: false, recipes: null }) : pickStyle(asked, s, RECIPES, made, avoidStyles, styles);
       made.push(style);
-      out = inStyle(sc, style, s, recipe);
+      // ("New version": the recipe's giant type never takes the Director's things away — only a kinetic-type story is told in words alone)
+      out = inStyle(sc, variety?.flow && style.size === "giant" && creative?.shape !== "kinetic-type" ? { ...style, size: "big" } : style, s, recipe);
     } else out = { ...sc, art: { ...sc.art, look: null, style: null } };
     if (match) {
       const m = matched(out, words);
       out = m.script;
       matchNotes = m.problems;
     }
-    if (variety) out = withVariety(out, variety);
+    if (variety) out = withVariety(out, variety, s);
     return fitScript(withoutTechniques(out, techOff));
   };
   const fit: Fit | undefined = typeof rules === "object" ? rules.fit : undefined;
@@ -279,7 +319,8 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
     // unlike the ones before it), its signature move at the hero moment
     const heroWord = creative?.hero != null ? words[Math.max(0, Math.min(words.length - 1, creative.hero))] : null;
     const direction = creative ? { language: creative.language, journey: creative.journey, guide: creative.guide, recap: creative.recap, hero: heroWord ? sceneAt(placed.plan, Math.round(heroWord.start * 30)) : null } : null;
-    const staging = stageOf(placed.plan, s, [...avoidStaging, ...videos.map((x) => x.staging ?? null)], direction);
+    // ("New version": its own flow — flow.ts — the Director's ways in kept where it chose them)
+    const staging = variety?.flow ? flowStaging(placed.plan, s, variety.flow.energy, { hero: direction?.hero ?? null, asked: askedOf(placed.plan, ideas, words), continuous: variety.flow.continuous, cursor: variety.flow.cursor, depth: variety.flow.depth }) : stageOf(placed.plan, s, [...avoidStaging, ...videos.map((x) => x.staging ?? null)], direction);
     // the Frame Inspector: what a viewer would see wrong, mended; the rest reported (for the review and the score)
     const qa = inspected(staged(placed.plan, staging));
     qa.left.forEach((f) => problems.push(`video ${v + 1}, scene ${f.scene + 1}: ${f.what}`));
@@ -289,6 +330,17 @@ export function composeVariants({ words, brand, duration, seed, ideas, avoid, sc
   return { plans, videos, problems };
 }
 const tooBroken = (p: Problem[], plan: ComposerPlan) => plan.scenes.length < 2 || p.length > Math.max(2, plan.scenes.length / 3);
+
+// The way into each scene the Director chose (each laid-out scene matched to
+// the Director's scene that starts nearest it; null: its choice is the code's).
+function askedOf(plan: ComposerPlan, ideas: Ideas | null | undefined, words: Word[]): (TransitionKind | null)[] {
+  if (!ideas?.scenes.length) return plan.scenes.map(() => null);
+  const at = ideas.scenes.map((x) => ({ f: Math.round((words[Math.max(0, Math.min(words.length - 1, x.at))]?.start ?? 0) * 30), asked: oneOf(x.enter, TRANSITIONS) }));
+  return plan.scenes.map((s) => {
+    const near = at.reduce((b, x) => (Math.abs(x.f - s.from) < Math.abs(b.f - s.from) ? x : b), at[0]);
+    return Math.abs(near.f - s.from) < 45 ? near.asked : null;
+  });
+}
 
 // A script within the stored schema's limits (long words cut, extra rows dropped).
 export function fitScript(sc: ScriptT): ScriptT {

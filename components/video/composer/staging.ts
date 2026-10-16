@@ -1,6 +1,7 @@
 import { rng } from "./art";
 import { isAccent } from "./layout";
-import { STILL_BACKGROUND, type ComposerPlan, type GuideKind, type JourneyKind, type LinkKind, type PlacedScene } from "./types";
+import { flowed } from "./flow";
+import { STILL_BACKGROUND, type ComposerPlan, type Flow, type GuideKind, type JourneyKind, type LinkKind, type PlacedScene } from "./types";
 
 // How a video is staged. A studio's rule: ONE camera language for the whole
 // video — variety comes from one video to the next, never inside one — and
@@ -43,6 +44,8 @@ export type Staging = {
   recap: boolean;
   // the scene the hero moment is in (its way in is the signature move)
   hero?: number | null;
+  // "New version": its energy and the things its ways join (flow.ts)
+  flow?: Flow | null;
 };
 export type Family = "cuts" | "path" | "structure" | "scroll" | "depth" | "camera";
 export const stagingName = (s: Staging | null | undefined) => (s ? s.language ?? [s.family, s.journey, s.link].filter(Boolean).join(":") : "cuts");
@@ -128,6 +131,7 @@ export const withRecap = (plan: ComposerPlan): ComposerPlan => (plan.recap ? pla
 // The plan as staged (and its recap's seconds added).
 export function staged(given: ComposerPlan, s: Staging | null | undefined): ComposerPlan {
   const plan = s?.hero != null ? { ...given, hero: s.hero } : given;
+  if (s?.flow) return flowed(plan, s);
   if (!s || s.family === "cuts" || STILL_BACKGROUND) return plan;
   // (a video staged in whip pans before they were left out: the line instead)
   if (s.language === "whip") s = { ...s, language: "line", family: "path", link: "line", links: null, journey: s.journey ?? "right" };

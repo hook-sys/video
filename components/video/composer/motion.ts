@@ -25,10 +25,12 @@ const CFG: Record<ArtT["motion"], SpringCfg> = {
   springy: { damping: 11, stiffness: 140, mass: 0.9 },
   glide: { damping: 200, stiffness: 60, mass: 1.6 },
 };
-export function moverOf(art: Pick<ArtT, "motion" | "pace">): Mover {
+// ("New version": the video's energy sets the spring and a 50–100 ms stagger — flow.ts)
+export function moverOf(art: Pick<ArtT, "motion" | "pace">, energy?: { spring: SpringCfg; stagger: number } | null): Mover {
   const p = art.pace || 1;
   const base = { soft: 22, snappy: 16, springy: 26, glide: 30 }[art.motion] ?? 22;
   const stagger = { soft: 4, snappy: 3, springy: 4, glide: 6 }[art.motion] ?? 4;
+  if (energy) return { cfg: energy.spring, dur: Math.round(base / p), stagger: energy.stagger, ease: SOFT };
   return { cfg: CFG[art.motion] ?? CFG.soft, dur: Math.round(base / p), stagger: Math.round(stagger / p), ease: SOFT };
 }
 // 0 → 1 from `at` on the art's spring (a springy one passes 1 and settles)
@@ -119,8 +121,15 @@ export function sceneOut(kind: TransitionKind, k: number): CSSProperties {
   }
 }
 
-// The camera on a scene's things over the scene (p 0 → 1).
-export function cameraOf(kind: string, p: number, f: number, energy: number): string {
+// The camera on a scene's things over the scene (p 0 → 1). `depth`: how
+// near the layer is ("New version" parallax: the background less, the
+// things in front more — 1 is the scene itself).
+export function cameraOf(kind: string, p: number, f: number, energy: number, depth = 1): string {
+  if (depth !== 1) return cameraOf(kind, p, f, energy).replace(/(translate[XY]?|rotate|rotateZ|skewY|scale)\(([^)]*)\)/g, (m, fn: string, args: string) => `${fn}(${args.split(",").map((a) => {
+    const v = parseFloat(a);
+    const unit = a.trim().replace(/^-?[\d.]+/, "");
+    return `${(fn === "scale" ? 1 + (v - 1) * depth : v * depth).toFixed(fn === "scale" ? 5 : 3)}${unit}`;
+  }).join(", ")})`);
   const e = 0.5 + energy;
   // (a hand-held drift — Remotion's noise: never the same loop twice)
   const breathe = `translate(${(noise2D("cam-x", f / 70, 0) * 7 * e).toFixed(1)}px, ${(noise2D("cam-y", 0, f / 85) * 5 * e).toFixed(1)}px)`;

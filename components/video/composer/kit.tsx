@@ -7,7 +7,8 @@ import type { ArtT, Brand } from "./types";
 
 // What every Composer part draws with: the frame, the scene's palette, the
 // art direction, its motion and faces, and the brand.
-export type Ctx = { f: number; pal: Pal; art: ArtT; m: Mover; display: string; text: string; brand: Brand; screens: string[] };
+// (noGlyph: an icon's glyph left out while it morphs into another — film.tsx)
+export type Ctx = { f: number; pal: Pal; art: ArtT; m: Mover; display: string; text: string; brand: Brand; screens: string[]; noGlyph?: boolean };
 export const CtxC = createContext<Ctx | null>(null);
 export const useCtx = () => useContext(CtxC)!;
 
@@ -19,7 +20,8 @@ export const kIn = (c: Ctx, at: number, dur?: number) => enterK(c.m, c.f, at, du
 export const show = (k: number, dy = 18): CSSProperties => ({ opacity: clamp01(k * 1.5), transform: `translateY(${(1 - k) * dy}px)` });
 
 // An icon in the art's icon style.
-export function Glyph({ c, name, size, tone = "accent", k = 1 }: { c: Ctx; name: string | null | undefined; size: number; tone?: "accent" | "panel" | "fill2"; k?: number }) {
+// (path: a morph's line drawn instead of the icon — film.tsx)
+export function Glyph({ c, name, size, tone = "accent", k = 1, path }: { c: Ctx; name: string | null | undefined; size: number; tone?: "accent" | "panel" | "fill2"; k?: number; path?: string | null }) {
   const icon = iconName(name);
   const { pal } = c;
   // one premium look for every icon: a tile (square or round) or glass — the
@@ -29,7 +31,7 @@ export function Glyph({ c, name, size, tone = "accent", k = 1 }: { c: Ctx; name:
   const r = Math.min(size * 0.32, art.radius * 0.7 + 6);
   const box = (bg: string, color: string, extra?: CSSProperties) => (
     <div style={{ width: size, height: size, flexShrink: 0, borderRadius: art.icons === "round" ? 9999 : r, background: bg, display: "flex", alignItems: "center", justifyContent: "center", ...extra }}>
-      <Icon name={icon} size={size * 0.52} color={color} strokeWidth={2.3} draw={k} />
+      <Icon name={icon} size={size * 0.52} color={color} strokeWidth={2.3} draw={k} path={path} />
     </div>
   );
   const onPanel = tone === "panel";
@@ -42,7 +44,7 @@ export function Glyph({ c, name, size, tone = "accent", k = 1 }: { c: Ctx; name:
       case "ink": return box(onPanel ? pal.panelInk : pal.ink, onPanel ? pal.panel : pal.bg, sq);
       case "outline": return box("transparent", onPanel ? pal.panelInk : pal.accent, { border: `2px solid ${onPanel ? pal.panelLine : pal.accent}`, ...sq });
       case "glow": return box(pal.panel, pal.accent, { border: `2px solid ${pal.accent}`, boxShadow: `0 0 ${size * 0.35}px ${pal.glow}66`, ...sq });
-      case "bare": return <Icon name={icon} size={size * 0.86} color={onPanel ? pal.panelInk : pal.accent} strokeWidth={2} draw={k} />;
+      case "bare": return <Icon name={icon} size={size * 0.86} color={onPanel ? pal.panelInk : pal.accent} strokeWidth={2} draw={k} path={path} />;
       case "gradient": return box(`linear-gradient(140deg, ${fill}, ${pal.fill2})`, pal.onFill, { boxShadow: pal.dark ? `0 ${size * 0.14}px ${size * 0.4}px rgba(0,0,0,0.4)` : `0 ${size * 0.1}px ${size * 0.3}px ${fill}44`, ...sq });
     }
   }
@@ -50,7 +52,7 @@ export function Glyph({ c, name, size, tone = "accent", k = 1 }: { c: Ctx; name:
   if (pal.dark && !onPanel && art.icons !== "tile" && art.icons !== "round" && art.icons !== "bare")
     return box("rgba(255,255,255,0.94)", fill, { border: "1.5px solid #ffffff", boxShadow: `0 ${size * 0.12}px ${size * 0.4}px ${pal.shadow}` });
   switch (art.icons) {
-    case "bare": return <Icon name={icon} size={size * 0.86} color={onPanel ? pal.accent : pal.accent} strokeWidth={2} draw={k} />;
+    case "bare": return <Icon name={icon} size={size * 0.86} color={onPanel ? pal.accent : pal.accent} strokeWidth={2} draw={k} path={path} />;
     case "outline": return box("transparent", onPanel ? pal.panelInk : pal.accent, { border: `2px solid ${onPanel ? pal.panelLine : pal.accent}` });
     case "duotone": return box(onPanel ? pal.panelSoft : `${fill}22`, fill, { border: `1.5px solid ${fill}33` });
     case "glass": return box(onPanel ? pal.panelSoft : "rgba(255,255,255,0.92)", pal.fill, { border: "1.5px solid rgba(255,255,255,1)", boxShadow: `0 10px 30px ${pal.shadow}` });

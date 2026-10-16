@@ -514,7 +514,7 @@ export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; 
   const duration = Math.round(((words[words.length - 1]?.end ?? 0) + 1) * 30);
   const set = composeVariants({ words, brand: { ...brand, url: brand.url ?? "", tagline: "", icon: null }, duration, seed: 1, ideas, count: 1, creative, rules: checks ? checks.rules : rules, match });
   notes.push(...set.problems.map((p) => p.replace(/^video 1, /, "")));
-  if (checks) return [...new Set([...notes, ...v2Notes(ideas, words, checks), ...shapeNotes(ideas.scenes, creative?.shape)])].slice(0, 20);
+  if (checks) return [...new Set([...notes, ...v2Notes(ideas, words, checks, creative?.shape), ...shapeNotes(ideas.scenes, creative?.shape)])].slice(0, 20);
   if (!rules) {
     ideas.scenes.forEach((x, i) => {
       const items = x.options[0]?.items ?? [];
@@ -554,7 +554,8 @@ export function reviewNotes(ideas: Ideas, words: Word[], brand: { name: string; 
 export type V2Checks = { rules: RuleSet; noPeople: boolean; minSeconds: number; shown: number };
 const PEOPLE = /^(user|users|user-[a-z-]+|users-[a-z-]+|person-[a-z-]+|contact|contact-round|baby|smile|smile-plus|laugh|frown|meh|annoyed|angry|hand|hand-[a-z-]+|hands|thumbs-up|thumbs-down|dog|cat|bird|fish|rabbit|squirrel|turtle|rat|snail|bug|paw-print|footprints)$/;
 const CARDLIKE = new Set(["card", "device", "screenshot"]);
-function v2Notes(ideas: Ideas, words: Word[], checks: V2Checks): string[] {
+// (a kinetic-type story may set its words-only scenes one after another)
+function v2Notes(ideas: Ideas, words: Word[], checks: V2Checks, shape?: StoryShape | null): string[] {
   const notes: string[] = [];
   const sc = ideas.scenes;
   const layoutOf = (i: number) => sc[i]?.options[0]?.layout ?? "";
@@ -566,10 +567,12 @@ function v2Notes(ideas: Ideas, words: Word[], checks: V2Checks): string[] {
     const main = items.filter((it) => it.kind !== "badge" && it.kind !== "shape" && it.kind !== "cursor");
     const layout = layoutOf(i);
     if (layout && i < sc.length - 1) used.set(layout, (used.get(layout) ?? 0) + 1);
-    if (checks.rules.layoutVariety && i > 0 && layout && layout === layoutOf(i - 1)) notes.push(`scenes ${i}–${i + 1} use the ${layout} layout twice in a row — never the same layout twice in a row`);
-    if (checks.rules.layoutVariety && layout && (used.get(layout) ?? 0) === 3) notes.push(`the ${layout} layout is used more than twice — at most twice per video`);
+    const typed = shape === "kinetic-type" && layout === "type";
+    if (checks.rules.layoutVariety && i > 0 && layout && !typed && layout === layoutOf(i - 1)) notes.push(`scenes ${i}–${i + 1} use the ${layout} layout twice in a row — never the same layout twice in a row`);
+    if (checks.rules.layoutVariety && layout && !typed && (used.get(layout) ?? 0) === 3) notes.push(`the ${layout} layout is used more than twice — at most twice per video`);
     if (i < sc.length - 1 && secs < checks.minSeconds) notes.push(`scene ${i + 1} lasts ${secs.toFixed(1)} s — too short to be seen: join it with its neighbour (every scene at least ${checks.minSeconds} s)`);
-    if (checks.rules.house.maxItems && main.length > 3) notes.push(`scene ${i + 1} is crowded (${main.length} things) — at most 2–3 things`);
+    const most = checks.rules.house.maxCount ?? 3;
+    if (checks.rules.house.maxItems && main.length > most) notes.push(`scene ${i + 1} is crowded (${main.length} things) — ${most > 3 ? "one hero and at most 3–4 beside it (a list or a row is one)" : "at most 2–3 things"}`);
     if (checks.rules.house.noIconCardMix && items.some((it) => CARDLIKE.has(String(it.kind))) && items.some((it) => it.kind === "icon")) notes.push(`scene ${i + 1} mixes icons and a card — never icons and cards in one scene`);
     if (checks.noPeople && items.some((it) => PEOPLE.test(String(it.icon ?? "")))) notes.push(`scene ${i + 1} shows a person, a face, a hand or an animal (icon) — never people or animals`);
     if (x.text && x.text.to - x.text.from + 1 > checks.shown) notes.push(`scene ${i + 1}'s on-screen words are ${x.text.to - x.text.from + 1} — show only its hook (at most ${checks.shown} words)`);

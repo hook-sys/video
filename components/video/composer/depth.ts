@@ -2,6 +2,7 @@ import type { P } from "./journey";
 import { H, W } from "./frame";
 import { isAccent } from "./layout";
 import { clamp01, mix, ramp } from "./motion";
+import { glyphRect, windowFit } from "./flow";
 import type { Box, ComposerPlan, PlacedItem } from "./types";
 
 // Depth: one scene leads into the next by going deeper, not sideways.
@@ -18,13 +19,16 @@ import type { Box, ComposerPlan, PlacedItem } from "./types";
 type Move = { start: number; dur: number };
 // (and flip: the scene turns over like a card, the next scene on its back —
 // each scene a card of its own, so it lives here with the others)
-export const DEPTHS = ["dive", "reveal", "tunnel", "flip"] as const;
+// ("New version" adds its own — flow.ts: an icon morphing into the next
+// scene's, a slide, a mask wipe, a cross-fade, a cut)
+export const DEPTHS = ["dive", "reveal", "tunnel", "flip", "morph", "slide", "wipe", "fade", "cut"] as const;
 export type DepthKind = (typeof DEPTHS)[number];
 export const isDepth = (k: string | null | undefined): k is DepthKind => !!k && (DEPTHS as readonly string[]).includes(k);
 
 // c: the window's middle (on the outer scene's frame); s: the inner scene's
 // size in it (1 = the whole frame); item: the thing that is the window.
-export type DepthHop = { kind: DepthKind; c: P; s: number; item: number };
+// (item2: the next scene's icon a morph becomes)
+export type DepthHop = { kind: DepthKind; c: P; s: number; item: number; item2?: number };
 
 const area = (b: Box) => b.w * b.h;
 const MAX_ZOOM = 0.018;
@@ -32,6 +36,7 @@ const MAX_ZOOM = 0.018;
 const fit = (b: Box) => Math.min((b.w * 0.86) / W, (b.h * 0.8) / H);
 
 export function depthHops(plan: ComposerPlan, mv: Move[]): { plan: ComposerPlan; hops: (DepthHop | null)[] } {
+  if (plan.flow) return flowHops(plan, mv);
   const scenes = plan.scenes.map((s) => ({ ...s, items: [...s.items] }));
   const hops = plan.scenes.map((B, i): DepthHop | null => {
     if (!i) return null;
@@ -99,4 +104,37 @@ export function tunnelAt(u: number): { outS: number; outO: number; inS: number; 
   const outS = 1 / Math.max(0.2, 1 - u * 0.75);
   const inS = 1 / (1 + (1 - u) * 3.2);
   return { outS, outO: 1 - clamp01((u - 0.22) / 0.36), inS, inO: clamp01((u - 0.28) / 0.34) };
+}
+
+// "New version" (flow.ts): the ways its staging chose, with the things they
+// join. What the camera goes into (or comes out of), and the icon a morph
+// becomes, are there whole when the way starts.
+function flowHops(plan: ComposerPlan, mv: Move[]): { plan: ComposerPlan; hops: (DepthHop | null)[] } {
+  const scenes = plan.scenes.map((s) => ({ ...s, items: [...s.items] }));
+  const mid = { x: W / 2, y: H / 2 };
+  const hops = plan.scenes.map((B, i): DepthHop | null => {
+    if (!i) return null;
+    const A = plan.scenes[i - 1];
+    const kind = (plan.links?.[i] ?? "fade") as DepthKind;
+    const pair = plan.flow?.pairs[i] ?? null;
+    const lift = mv[i].start;
+    if (kind === "morph" && pair && A.items[pair[0]] && B.items[pair[1]]) {
+      scenes[i].items[pair[1]] = { ...B.items[pair[1]], at: Math.min(B.items[pair[1]].at, lift - 30) };
+      return { kind, c: mid, s: 1, item: pair[0], item2: pair[1] };
+    }
+    if (kind === "dive" && pair && A.items[pair[0]]) {
+      const g = glyphRect(A.items[pair[0]]);
+      scenes[i].items = scenes[i].items.map((it) => (it.at <= B.from + 24 ? { ...it, at: Math.min(it.at, lift - 20) } : it));
+      return { kind, c: { x: g.x, y: g.y }, s: windowFit(g, W, H), item: pair[0] };
+    }
+    if (kind === "reveal" && pair && B.items[pair[1]]) {
+      const g = glyphRect(B.items[pair[1]]);
+      scenes[i].items[pair[1]] = { ...B.items[pair[1]], at: Math.min(B.items[pair[1]].at, lift - 30) };
+      return { kind, c: { x: g.x, y: g.y }, s: windowFit(g, W, H), item: pair[1] };
+    }
+    // (a slide or a wipe uncovers the next scene as it is: its first things already there)
+    if (kind === "slide" || kind === "wipe") scenes[i].items = scenes[i].items.map((it) => (it.at <= B.from + 24 ? { ...it, at: Math.min(it.at, lift - 12) } : it));
+    return { kind: kind === "morph" || kind === "dive" || kind === "reveal" ? "fade" : kind, c: mid, s: 1, item: -1 };
+  });
+  return { plan: { ...plan, scenes }, hops };
 }

@@ -22,6 +22,13 @@ export const resolveIcon = (name: unknown): string | null => {
   return key ? (livingStandIn(key) ?? key) : null;
 };
 export const isIconName = (name: unknown): name is IconName => resolveIcon(name) !== null;
+// An icon's line path (its solid dots aside), for a morph from one to another.
+export const iconPath = (name: unknown): string | null => {
+  const key = resolveIcon(name);
+  if (!key) return null;
+  const data = DATA[key];
+  return typeof data === "string" ? data : data[0];
+};
 
 export type IconProps = {
   name: string;
@@ -34,12 +41,14 @@ export type IconProps = {
   style?: CSSProperties;
   // Fill the outline's closed shapes too (duotone illustrations).
   fill?: string;
+  // a line path drawn instead of the icon's own (a morph between two icons)
+  path?: string | null;
 };
 
-export function Icon({ name, size = 24, color = "currentColor", strokeWidth = 2, draw = 1, style, fill }: IconProps) {
+export function Icon({ name, size = 24, color = "currentColor", strokeWidth = 2, draw = 1, style, fill, path }: IconProps) {
   const key = resolveIcon(name);
-  if (!key) return null;
-  const data = DATA[key];
+  if (!key && !path) return null;
+  const data = path ? path : DATA[key!];
   const [stroke, dots] = typeof data === "string" ? [data, ""] : data;
   const t = Math.min(1, Math.max(0, draw));
   return (

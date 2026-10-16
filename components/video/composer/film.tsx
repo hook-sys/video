@@ -4,7 +4,7 @@ import { Audio as MediaAudio } from "@remotion/media";
 import { DISPLAY_FACES, TEXT_FACES, faceOf, familyOf, fontUrl, palette, rng } from "./art";
 import { type Anchor, Field } from "./field";
 import { ItemBody, baseSize } from "./items";
-import { type Ctx, CtxC } from "./kit";
+import { type Ctx, CtxC, Glyph, kIn } from "./kit";
 import { isAccent } from "./layout";
 import { IN_OUT, TRANSITION_FRAMES, cameraOf, clamp01, enterK, enterStyle, mix, moverOf, ramp, sceneIn, sceneOut } from "./motion";
 import { Headline } from "./text";
@@ -16,6 +16,8 @@ import { type Cam, JourneyField, Roads, arriving, cameraAt, moves, recapped, sta
 import { PAGE, Structure, scrollAt } from "./structure";
 import { type Links, Travellers, linksOf } from "./links";
 import { depthHops, hopAt, innerTransform, isDepth, outerTransform, tunnelAt, zoomAt } from "./depth";
+import { ENERGY, flowMoves, glyphRect } from "./flow";
+import { morphPath } from "./morph";
 import { measureText } from "@remotion/layout-utils";
 import { STILL_BACKGROUND, type ComposerProps, type EnterKind, type ItemKind, type PlacedItem, type PlacedScene, type TextBlock } from "./types";
 import { H, W, setFrame } from "./frame";
@@ -121,7 +123,7 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, qa, screens = [] 
   const display = faceOf(art.display);
   const textFace = faceOf(art.text, TEXT_FACES);
   useFaces([display.slug, textFace.slug]);
-  const m = useMemo(() => moverOf(art), [art]);
+  const m = useMemo(() => moverOf(art, plan.flow ? ENERGY[plan.flow.energy] : null), [art, plan.flow]);
   const pals = useMemo(() => ({ dark: palette(art, true), light: palette(art, false) }), [art]);
   const scenes = plan.scenes;
   const anchors = useMemo(() => scenes.map(anchorOf), [scenes]);
@@ -319,20 +321,77 @@ function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv
 type DepthProps = Omit<SceneProps, "i" | "journey"> & { bare?: boolean; sceneField: (i: number) => ReactNode };
 function Depth(props: DepthProps) {
   const f = useCurrentFrame();
-  const mv = useMemo(() => moves(props.plan), [props.plan]);
+  // ("New version": its own ways, timed by its energy — flow.ts)
+  const flow = !!props.plan.flow;
+  const mv = useMemo(() => (props.plan.flow ? flowMoves(props.plan) : moves(props.plan)), [props.plan]);
   const { plan, hops } = useMemo(() => depthHops(arriving(props.plan, mv), mv), [props.plan, mv]);
   const { seg, raw, u } = hopAt(f, mv);
-  const all = { start: -1, end: plan.duration + 1 };
-  const layer = (i: number, style: CSSProperties, field = true, frame?: CSSProperties) => (
+  const deep = flow && plan.flow?.depth !== false;
+  const all = { start: -1, end: plan.duration + 1, camera: flow, depth: deep };
+  // (in the "New version" each scene's background moves with its camera, slower than its things: parallax)
+  const fieldOf = (i: number) => {
+    if (!deep) return props.sceneField(i);
+    const sc = plan.scenes[i];
+    const p = clamp01((f - sc.from) / Math.max(1, sc.to - sc.from));
+    return <AbsoluteFill style={{ transform: `${cameraOf(sc.camera, p, f, plan.art.energy, 0.35)} scale(1.05)` }}>{props.sceneField(i)}</AbsoluteFill>;
+  };
+  const layer = (i: number, style: CSSProperties, field = true, frame?: CSSProperties, noGlyph?: number) => (
     <AbsoluteFill key={i} style={{ transformOrigin: "0 0", ...style }}>
       <AbsoluteFill style={{ overflow: "hidden", ...frame }}>
-        {field && props.sceneField(i)}
-        {!props.bare && <SceneBody {...props} plan={plan} i={i} journey={all} />}
+        {field && fieldOf(i)}
+        {!props.bare && <SceneBody {...props} plan={plan} i={i} journey={noGlyph != null ? { ...all, noGlyph: (j) => j === noGlyph } : all} />}
       </AbsoluteFill>
     </AbsoluteFill>
   );
   const h = hops[seg];
   if (!seg || raw >= 1 || !h) return layer(seg, {});
+  if (flow && (h.kind === "cut" || h.kind === "fade" || h.kind === "slide" || h.kind === "wipe" || h.kind === "morph")) {
+    const A = seg - 1, B = seg;
+    if (h.kind === "cut") return layer(raw < 0.5 ? A : B, {});
+    // (a cross-fade: the backgrounds mix, the last scene's things are gone before the next one's come — two headlines never sit on each other)
+    if (h.kind === "fade") return <>{fieldOf(A)}<AbsoluteFill style={{ opacity: u }}>{fieldOf(B)}</AbsoluteFill>{layer(A, { opacity: 1 - clamp01(u / 0.5) }, false)}{layer(B, { opacity: clamp01((u - 0.45) / 0.55) }, false)}</>;
+    if (h.kind === "slide") {
+      // the next scene slides in over the last, which drifts back the other way (one in three goes up)
+      const up = (plan.seed + seg) % 3 === 0;
+      const move = (px: number) => (up ? `translateY(${px.toFixed(1)}px)` : `translateX(${px.toFixed(1)}px)`);
+      const d = up ? H : W;
+      return <>{layer(A, { transform: move(-d * 0.28 * u) })}{layer(B, { transform: move(d * (1 - u)), boxShadow: `0 0 ${(80 * Math.sin(raw * Math.PI)).toFixed(0)}px rgba(0,0,0,0.35)` })}</>;
+    }
+    if (h.kind === "wipe") {
+      // a mask wipe: a slanted edge crosses the frame, the next scene behind it
+      const x = mix(-0.2 * W, 1.2 * W, u);
+      const slant = 0.12 * W;
+      const clip = `polygon(0px 0px, ${(x + slant).toFixed(0)}px 0px, ${x.toFixed(0)}px ${H}px, 0px ${H}px)`;
+      return <>{layer(A, { transform: `scale(${(1 - 0.03 * u).toFixed(4)})`, transformOrigin: "50% 50%" })}{layer(B, { clipPath: clip, WebkitClipPath: clip, transform: `translateX(${(50 * (1 - u)).toFixed(1)}px)` })}</>;
+    }
+    // morph: the last scene's icon becomes this scene's hero icon (the same
+    // tile, its line moving from one icon to the other, travelling to its
+    // place); the rest of the two scenes cross-fade, background first
+    const a = plan.scenes[A].items[h.item], b = plan.scenes[B].items[h.item2 ?? -1];
+    if (!a || !b) return <>{layer(A, {})}{layer(B, { opacity: u })}</>;
+    const ga = glyphRect(a), gb = glyphRect(b);
+    const t = u;
+    const box = { x: mix(ga.x, gb.x, t), y: mix(ga.y, gb.y, t), w: mix(ga.w, gb.w, t) };
+    const path = morphPath(a.icon ?? "", b.icon ?? "", t);
+    const ctx = (i: number): Ctx => ({ f, pal: plan.scenes[i].dark ? props.pals.dark : props.pals.light, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens });
+    const over = clamp01(raw / 0.06) * (1 - clamp01((raw - 0.94) / 0.06));
+    const glyph = (i: number, o: number) => (o <= 0.01 ? null : (
+      <div style={{ position: "absolute", left: box.x - 100, top: box.y - 100, width: 200, height: 200, transform: `scale(${(box.w / 200).toFixed(4)}) rotate(${(Math.sin(t * Math.PI) * 6).toFixed(2)}deg)`, opacity: o * over, zIndex: 30 }}>
+        {path ? <Glyph c={ctx(i)} name={t < 0.5 ? a.icon : b.icon} size={200} path={path} /> : <Glyph c={ctx(i)} name={i === A ? a.icon : b.icon} size={200} />}
+      </div>
+    ));
+    const same = plan.scenes[A].dark === plan.scenes[B].dark;
+    return (
+      <>
+        {fieldOf(A)}
+        <AbsoluteFill style={{ opacity: clamp01(u * 1.4) }}>{fieldOf(B)}</AbsoluteFill>
+        {layer(A, { opacity: 1 - clamp01(u / 0.5) }, false, undefined, raw > 0.06 ? h.item : undefined)}
+        {layer(B, { opacity: clamp01((u - 0.45) / 0.55) }, false, undefined, raw < 0.94 ? h.item2 : undefined)}
+        {glyph(A, same || !path ? (path ? 1 : 1 - t) : 1 - t)}
+        {(!same || !path) && glyph(B, t)}
+      </>
+    );
+  }
   // (no motion-blur trail here: on the scaled layers the download draws it as a grey ghost)
   const blur = (node: ReactNode) => node;
   if (h.kind === "flip") {
@@ -473,7 +532,8 @@ function Warp({ f, k, travel, color }: { f: number; k: number; travel: number; c
   );
 }
 
-type SceneProps = { journey?: { start: number; end: number; hidden?: (item: number) => boolean; hiddenWord?: (wi: number) => boolean; dim?: number }; i: number; plan: ComposerProps["plan"]; pals: { dark: ReturnType<typeof palette>; light: ReturnType<typeof palette> }; m: ReturnType<typeof moverOf>; display: string; textFamily: string; screens: string[]; texts: (TextBlock | null)[]; D: (i: number) => number; field: (dark: boolean) => ReactNode };
+// (journey.camera: the "New version" — the scene keeps its own camera move on its layer; noGlyph: an icon whose glyph is morphing)
+type SceneProps = { journey?: { start: number; end: number; hidden?: (item: number) => boolean; hiddenWord?: (wi: number) => boolean; dim?: number; camera?: boolean; depth?: boolean; noGlyph?: (item: number) => boolean }; i: number; plan: ComposerProps["plan"]; pals: { dark: ReturnType<typeof palette>; light: ReturnType<typeof palette> }; m: ReturnType<typeof moverOf>; display: string; textFamily: string; screens: string[]; texts: (TextBlock | null)[]; D: (i: number) => number; field: (dark: boolean) => ReactNode };
 
 // A scene; during a fast way in or out it leaves a short trail (Remotion's
 // motion blur as layers — it renders the same in the browser's download).
@@ -541,26 +601,38 @@ function SceneBody(props: SceneProps) {
   const outStyle = kout > 0 && !pout ? sceneOut(next.enter, kout) : undefined;
   const inStyle = kin < 1 && !pin ? sceneIn(sc.enter, kin, o) : undefined;
   const p = clamp01((f - sc.from) / Math.max(1, sc.to - sc.from));
-  // (on a journey the travelling camera is the movement; the scene keeps only its breathing, flat)
-  const cam = cameraOf(J ? "still" : sc.camera, p, f, art.energy);
+  // (on a journey the travelling camera is the movement; the scene keeps only its breathing, flat —
+  // the "New version" keeps every scene's own move, its things in front moving more: parallax)
+  const own = !J || !!J.camera;
+  const cam = cameraOf(own ? sc.camera : "still", p, f, art.energy);
+  const parallax = !!J?.camera && !!J.depth;
+  const cOf = (it: PlacedItem): Ctx => (J?.noGlyph?.(sc.items.indexOf(it)) ? { ...c, noGlyph: true } : c);
+  const flowCursor = (it: PlacedItem) => !!plan.flow && it.kind === "cursor";
   // things that travel on into the next scene leave this one as it goes
   const travels = (it: PlacedItem) => !J && !!(it.id && next?.items.some((q) => q.id === it.id && q.from)) && f >= next.from - 2;
-  const sorted = [...sc.items].sort((x, y) => x.z - y.z);
+  const sorted = [...sc.items].sort((x, y) => x.z - y.z).filter((it) => !flowCursor(it));
   const still = J ? sorted.filter((it) => !J.hidden?.(sc.items.indexOf(it))) : sorted.filter((it) => !it.from);
   const moving = J ? [] : sorted.filter((it) => it.from);
+  const front = still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={cOf(it)} it={it} idx={j + 10} si={i} />);
   let body = (
     <AbsoluteFill style={inStyle}>
       <AbsoluteFill style={J ? undefined : { perspective: 1800, perspectiveOrigin: "50% 45%" }}>
-        <AbsoluteFill style={{ transform: cam, transformStyle: J ? undefined : "preserve-3d", transformOrigin: !J && sc.camera === "macro" ? `${Math.round(o.x)}px ${Math.round(o.y)}px` : undefined }}>
+        <AbsoluteFill style={{ transform: cam, transformStyle: J ? undefined : "preserve-3d", transformOrigin: own && sc.camera === "macro" ? `${Math.round(o.x)}px ${Math.round(o.y)}px` : undefined }}>
           <CtxC.Provider value={c}>
-            {!J && ghostOf(!!pal.style?.ghost, sc, texts[i]) && <Ghost c={c} word={ghostOf(!!pal.style?.ghost, sc, texts[i])!} p={p} dir={i % 2 ? -1 : 1} />}
-            {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={c} it={it} idx={j} si={i} />)}
+            {own && ghostOf(!!pal.style?.ghost, sc, texts[i]) && <Ghost c={c} word={ghostOf(!!pal.style?.ghost, sc, texts[i])!} p={p} dir={i % 2 ? -1 : 1} />}
+            {still.filter((it) => it.z < 2 && !travels(it)).map((it, j) => <Thing key={`b${j}`} c={cOf(it)} it={it} idx={j} si={i} />)}
             {texts[i] && <Headline c={c} tb={texts[i]!} plate={sc.layout === "over" || sc.layout === "caption"} hide={J?.hiddenWord} out={J?.dim} si={i} />}
-            {still.filter((it) => it.z >= 2 && !travels(it)).map((it, j) => <Thing key={`f${j}`} c={c} it={it} idx={j + 10} si={i} />)}
-            {!J && pal.style?.frame && mainOf(sc) && <DesignFrame c={c} it={mainOf(sc)!} />}
-            {!J && pal.style?.confetti && plan.hero === i && <Confetti c={c} at={sc.from + 10} o={o} />}
+            {!parallax && front}
+            {own && pal.style?.frame && mainOf(sc) && <DesignFrame c={c} it={mainOf(sc)!} />}
+            {own && pal.style?.confetti && plan.hero === i && <Confetti c={c} at={sc.from + 10} o={o} />}
+            {plan.flow && sc.items.filter((it) => it.kind === "cursor").map((it, j) => <BigCursor key={`k${j}`} c={c} it={it} />)}
           </CtxC.Provider>
         </AbsoluteFill>
+        {parallax && (
+          <AbsoluteFill style={{ transform: cameraOf(sc.camera, p, f, art.energy, 1.3), transformOrigin: sc.camera === "macro" ? `${Math.round(o.x)}px ${Math.round(o.y)}px` : undefined }}>
+            <CtxC.Provider value={c}>{front}</CtxC.Provider>
+          </AbsoluteFill>
+        )}
       </AbsoluteFill>
     </AbsoluteFill>
   );
@@ -586,6 +658,30 @@ function SceneBody(props: SceneProps) {
         {moving.filter((it) => !travels(it)).map((it, j) => <Thing key={`m${j}`} c={c} it={it} idx={j + 20} si={i} travel={{ from: it.from!, start, dur: 22 }} />)}
       </CtxC.Provider>
     </AbsoluteFill>
+  );
+}
+
+// The "New version"'s big cursor (flow.ts withCursor): it glides in on a
+// slight arc to the thing the voice is talking about, clicks it (a press and
+// a ring), rests a moment and drifts off.
+function BigCursor({ c, it }: { c: Ctx; it: PlacedItem }) {
+  const click = it.hit ?? it.at + 30;
+  if (c.f < it.at - 1 || c.f > click + 46) return null;
+  const from = it.from ?? it.box;
+  const tIn = IN_OUT(ramp(c.f, it.at, Math.max(8, click - 6 - it.at)));
+  const tOut = IN_OUT(ramp(c.f, click + 26, 18));
+  const x = mix(from.x, it.box.x, tIn) + tOut * 80;
+  const y = mix(from.y, it.box.y, tIn) - Math.sin(tIn * Math.PI) * 46 + tOut * 60;
+  const press = clamp01(kIn(c, click - 3, 4) - kIn(c, click + 3, 8));
+  const ring = c.f >= click ? clamp01((c.f - click) / 18) : 0;
+  const ink = c.pal.dark ? "#ffffff" : "#111111";
+  return (
+    <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, pointerEvents: "none", zIndex: 50, opacity: clamp01((c.f - it.at) / 6) * (1 - tOut) }}>
+      {ring > 0 && ring < 1 && <div style={{ position: "absolute", left: it.box.x - 46, top: it.box.y - 46, width: 92, height: 92, borderRadius: 99, border: `4px solid ${c.pal.accent}`, transform: `scale(${mix(0.3, 1.6, ring).toFixed(3)})`, opacity: 1 - ring }} />}
+      <svg width={110} height={110} viewBox="0 0 24 24" style={{ position: "absolute", left: x - 26, top: y - 16, transform: `scale(${(1 - press * 0.16).toFixed(3)})`, transformOrigin: "24% 14%", filter: `drop-shadow(0 8px 14px rgba(0,0,0,${c.pal.dark ? 0.55 : 0.28}))` }}>
+        <path d="M5 3 L19 12 L12 13.5 L9 20 Z" fill={ink} stroke={c.pal.dark ? "#111" : "#fff"} strokeWidth={1.3} strokeLinejoin="round" />
+      </svg>
+    </div>
   );
 }
 

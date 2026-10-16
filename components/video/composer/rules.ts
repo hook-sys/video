@@ -18,7 +18,8 @@ const CALM_FIELDS = ["aurora", "mesh", "spot", "waves", "dots", "discs"] as cons
 
 // Which house rules are kept (the old version: all of them; "New version":
 // admin → Settings, "New version: video rules").
-export type HouseRuleSet = { maxItems: boolean; entries: boolean; oneBackground: boolean; calmBackground: boolean; noIconCardMix: boolean };
+// (maxCount: the most things a scene keeps — 3, or the "New version"'s one hero and up to 4 beside it)
+export type HouseRuleSet = { maxItems: boolean; entries: boolean; oneBackground: boolean; calmBackground: boolean; noIconCardMix: boolean; maxCount?: number };
 export const ALL_HOUSE_RULES: HouseRuleSet = { maxItems: true, entries: true, oneBackground: true, calmBackground: true, noIconCardMix: false };
 const CARDLIKE = new Set(["card", "device", "screenshot"]);
 
@@ -28,10 +29,11 @@ export function houseRules(script: ScriptT, turn?: number | null, keep: HouseRul
   const scenes = script.scenes.map((s) => {
     // (taste: icons and a card are never in one scene — the card stays)
     if (keep.noIconCardMix && s.items.some((it) => CARDLIKE.has(it.kind)) && s.items.some((it) => it.kind === "icon")) s = { ...s, items: s.items.filter((it) => it.kind !== "icon") };
-    if (!keep.maxItems || s.items.filter((it) => !isAccent(it)).length <= 3) return s;
-    // keep the first three (the Director's order is its order of importance)
+    const most = keep.maxCount ?? 3;
+    if (!keep.maxItems || s.items.filter((it) => !isAccent(it)).length <= most) return s;
+    // keep the first ones (the Director's order is its order of importance)
     let kept = 0;
-    return { ...s, items: s.items.filter((it) => isAccent(it) || kept++ < 3) };
+    return { ...s, items: s.items.filter((it) => isAccent(it) || kept++ < most) };
   });
   // at most 3 kinds of way in: the rarer ones become the most used
   const counts = new Map<TransitionKind, number>();
