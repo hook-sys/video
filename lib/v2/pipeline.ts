@@ -24,7 +24,7 @@ import { RECIPES } from "@/components/video/composer/recipes";
 import { techOffOf } from "@/components/video/composer/techniques";
 import { scriptWords } from "@/components/video/composer/words";
 import { v2DetailsOf, type V2Details } from "@/lib/v2/form";
-import { v2Speak, v2Text, v2TimeScript, v2Transcribe, v2Whisper } from "@/lib/v2/models";
+import { v2DirectorModel, v2Speak, v2Text, v2TimeScript, v2Transcribe, v2Whisper } from "@/lib/v2/models";
 
 // "New version" (admin → Settings): one simple path, no fallbacks.
 //   1. the voice: our voice reads the script (timed by the admin's Whisper),
@@ -237,6 +237,8 @@ async function planV2(admin: Admin, projectId: string, userId: string, project: 
   };
   const started = Date.now();
   try {
+    // (never OPENAI_MODEL / gpt-5-mini: no model is an error)
+    v2DirectorModel(input.clientModel);
     const directed = await directMotion(input, (u) => usage.push(u), text.client, budgetMs);
     if (directed.plan.source !== "ai" || !directed.plan.ideas) throw new Error(`The Motion Director (${text.model}) gave no plan: ${directed.problems[0] ?? "no answer"}`);
     return { input, directed, past, styles };
@@ -255,6 +257,7 @@ async function buildV2(admin: Admin, projectId: string, userId: string, project:
   const input: MotionInput = { ...planned.input, words, name: brand.name, cta: brand.cta };
   const started = Date.now();
   try {
+    v2DirectorModel(input.clientModel);
     const reviewed = await reviewMotion(directed.plan, input, (u) => usage.push(u), text.client, 90_000);
     const plan = reviewed.plan;
     if (plan.source !== "ai" || !plan.ideas) throw new Error(`The Motion Director's review (${text.model}) lost the plan.`);

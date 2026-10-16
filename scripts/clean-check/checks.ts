@@ -35,7 +35,7 @@ import { SETTINGS } from "@/lib/app-settings";
 import { engineOf } from "@/lib/new-version";
 import { ownedPath } from "@/lib/projects";
 import { v2DetailsOf } from "@/lib/v2/form";
-import { v2Text, v2VoiceName } from "@/lib/v2/models";
+import { v2DirectorModel, v2Text, v2VoiceName } from "@/lib/v2/models";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -472,6 +472,14 @@ export async function runChecks(): Promise<Check[]> {
     add("its models are only what the admin saved (none by default)", defaultConfig().v2.text === "" && defaultConfig().v2.whisper === "" && cfg.v2.text === "google/gemini-2.5-flash" && cfg.v2.whisper === "fal-ai/whisper" && normalizeConfig({}).v2.text === "", JSON.stringify(cfg.v2));
     const missing = await v2Text(null).then(() => "no error", (e: Error) => e.message);
     add("no text model set: a clear error, no fallback", /No text model is set for the new version/.test(missing), missing);
+    const empty = ["", "  ", null, undefined].map((m) => {
+      try {
+        return v2DirectorModel(m);
+      } catch (e) {
+        return (e as Error).message;
+      }
+    });
+    add("an empty Director model is an error, never OPENAI_MODEL / gpt-5-mini", empty.every((m) => /Director has no model/.test(m)) && v2DirectorModel(" google/gemini-2.5-flash ") === "google/gemini-2.5-flash", empty[0]);
     const key = process.env.FAL_KEY;
     process.env.FAL_KEY = "test";
     const picked = await v2Text("anthropic/claude-opus-5.5").catch(() => null);

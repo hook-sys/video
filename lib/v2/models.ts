@@ -17,6 +17,14 @@ export async function v2Text(tierModel?: string | null, opts: { timeout?: number
   return textClient("fal", model, false, opts, false);
 }
 
+// The Director's model, checked right before each call: an empty one would
+// make lib/ai/motion-director.ts fall back to OPENAI_MODEL / gpt-5-mini.
+export function v2DirectorModel(model: unknown): string {
+  const m = typeof model === "string" ? model.trim() : "";
+  if (!m) throw new Error(`The new version's Director has no model. ${SET_IT}`);
+  return m;
+}
+
 export async function v2Whisper(config?: AiConfig): Promise<string> {
   const model = (config ?? (await getAiConfig())).v2.whisper;
   if (!model) throw new Error(`No Whisper model is set for the new version. ${SET_IT}`);
