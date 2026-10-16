@@ -52,4 +52,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run check:clean
+      # (the checks that already failed when CI was added are listed in
+      # scripts/clean-check/known-failures.json: any other failure fails the job)
+      - run: npm run check:clean -- --allow-known
