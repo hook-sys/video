@@ -7,7 +7,7 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage({ searchParams }: PageProps<"/admin/settings">) {
   const { saved } = await searchParams;
-  await requireAdmin("settings");
+  const { role } = await requireAdmin("settings");
   const values = await getSettings();
   // (general settings first, then each group under its heading, in order)
   const groups: [string, typeof SETTINGS][] = [];
@@ -30,13 +30,13 @@ export default async function SettingsPage({ searchParams }: PageProps<"/admin/s
               {list.map((s) => (
               <div key={s.key} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 md:flex-row md:items-center md:justify-between">
                 <div className="max-w-xl">
-                  <p className="font-medium text-white">{s.label}</p>
+                  <p className="font-medium text-white">{s.label}{s.superAdmin && <span className="ml-2 text-xs font-normal text-zinc-500">super admin only</span>}</p>
                   <p className="mt-0.5 text-sm text-zinc-500">{s.help}</p>
                 </div>
                 <div className="md:w-80">
                   {s.type === "bool" ? (
                     <label className="flex cursor-pointer items-center gap-3 md:justify-end">
-                      <input type="checkbox" name={s.key} defaultChecked={values[s.key] === true} className="peer sr-only" />
+                      <input type="checkbox" name={s.key} defaultChecked={values[s.key] === true} disabled={s.superAdmin && role !== "super_admin"} className="peer sr-only" />
                       <span className="relative h-6 w-11 rounded-full bg-zinc-700 transition after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition peer-checked:bg-[#0a66d6] peer-checked:after:translate-x-5" />
                     </label>
                   ) : (

@@ -15,9 +15,12 @@ export type SettingDef = {
   fallback: boolean | string | number;
   // (shown under its own heading; none: the general settings)
   group?: string;
+  // only a super admin may change it (others see it, greyed out)
+  superAdmin?: boolean;
 };
 
 export const SETTINGS: SettingDef[] = [
+  { key: "feature_new_version", label: "New version", help: "The new, simpler video maker (lib/v2): script or the customer's own voice recording, logo, voice, format, name and call to action — no website or screenshots. Models only from AI models (no fallbacks), one Director path, a failed Director refunds instead of composing by rule. Each video keeps the version it was made with. Off: everything works exactly as before. Super admin only.", type: "bool", fallback: false, superAdmin: true },
   { key: "signups_enabled", label: "New sign-ups", help: "When off, the sign-up form refuses new accounts.", type: "bool", fallback: true },
   { key: "email_verification", label: "Email verification", help: "When on, a new account must confirm its email (a link is sent) before it can sign in. When off, it is ready at once.", type: "bool", fallback: false },
   { key: "require_approval", label: "Approve new accounts", help: "When on, a new account can look around and fill in a video but has no credits until the team approves it on Users (its welcome credits come then), and can't buy credits before. Accounts the team adds are approved already.", type: "bool", fallback: true },

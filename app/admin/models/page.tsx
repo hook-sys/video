@@ -138,6 +138,22 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
             </div>
           </Card>
 
+          <Card title="New version (when it is on)">
+            <div className="flex flex-col gap-3 text-sm">
+              <p className="text-zinc-500">
+                Used only by videos made with <b className="text-zinc-300">New version</b> on (admin → Settings). Text always runs through fal&apos;s OpenRouter router; the voice uses the Voice card above (its model and names only). Nothing falls back: a missing model stops the video with an error and its credits go back.
+              </p>
+              <label className="flex flex-col gap-1">
+                <span className="text-zinc-400">Text model (the Director), on fal&apos;s OpenRouter router — a quality level&apos;s own Director model (admin → Billing) wins</span>
+                <input name="v2_text" list="text-models" defaultValue={c.v2.text} placeholder="e.g. google/gemini-2.5-flash" className={input} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-zinc-400">Whisper model (times the voice; transcribes an uploaded voice)</span>
+                <input name="v2_whisper" defaultValue={c.v2.whisper} placeholder="e.g. fal-ai/whisper" className={input} />
+              </label>
+            </div>
+          </Card>
+
           <Card title="Prices (USD)">
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">For the cost of each video. Text: per 1M input / output tokens. Voice: per character. Copy them from the model&apos;s page on fal. A model without a price here uses the old environment pricing.</p>

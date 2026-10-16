@@ -8,6 +8,8 @@ import { TIER_IDS, balanceOf, getBilling, grantSignupCredits, hasPaid } from "@/
 import { getSettings } from "@/lib/app-settings";
 import { formAskOf } from "@/lib/project-form";
 import { CreateProjectForm, type Level, type Prefill } from "./create-project-form";
+import { CreateProjectFormV2 } from "./create-project-form-v2";
+import { newVersionOn } from "@/lib/new-version";
 
 export const metadata: Metadata = { title: "New video" };
 
@@ -53,7 +55,11 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
         <p className="mb-6 rounded-2xl border border-amber-500/25 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">Your account is waiting for approval. You can look around and fill in your video now — your welcome credits arrive as soon as it&apos;s approved.</p>
       )}
       {/* (only welcome credits so far: a script short enough for them) */}
+      {(await newVersionOn()) ? (
+        <CreateProjectFormV2 prefill={prefill} voices={voices} levels={levels} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} />
+      ) : (
       <CreateProjectForm prefill={prefill} voices={voices} levels={levels} minSeconds={billing.minSeconds} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} ask={ask} />
+      )}
     </AppShell>
   );
 }

@@ -127,6 +127,10 @@ export const SCREENSHOT_TYPES: Record<string, string> = {
 // screenshots at `${userId}/${projectId}/logo.${ext}`. SVG is not accepted
 // (it can carry scripts); a transparent PNG works best.
 export const LOGO_MAX_BYTES = 2 * 1024 * 1024;
+// A stored file of this project's own (`<user>/<project>/…`): a path from a
+// row a customer can write is never signed unless it is.
+export const ownedPath = (path: unknown, userId?: string | null, projectId?: string | null): path is string =>
+  typeof path === "string" && !!userId && !!projectId && path.startsWith(`${userId}/${projectId}/`) && !path.split("/").includes("..");
 export const LOGO_FILE_PREFIX = "logo.";
 export const logoPath = (userId: string, projectId: string, ext: string) => `${userId}/${projectId}/${LOGO_FILE_PREFIX}${ext}`;
 

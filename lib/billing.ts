@@ -84,7 +84,21 @@ async function held(projectId: string) {
   return -(data ?? []).filter((r) => r.kind === "video" || r.kind === "refund" || r.kind === "adjust").reduce((a, r) => a + r.delta, 0);
 }
 
+// One refund or settle at a time per project: project_credit_settle (the
+// database) locks the project's row, reads what it holds from the ledger and
+// changes it in one transaction, so two at once can't return credits twice.
+// It returns what the project held before; null when the function is not in
+// the database yet (migration 20261016000035), and the code below runs as before.
+async function settleLocked(projectId: string, userId: string, due: number, kind: "refund" | "adjust", note: string): Promise<number | null> {
+  const { data, error } = await createAdminClient().rpc("project_credit_settle", { p_project: projectId, p_user: userId, p_due: Math.max(0, Math.round(due)), p_kind: kind, p_note: note });
+  if (!error) return Number(data) || 0;
+  if (error.code === "PGRST202" || /could not find the function/i.test(error.message)) return null;
+  throw new Error(error.message);
+}
+
 export async function refundVideo(projectId: string, userId: string, why = "Video failed — credits returned") {
+  const locked = await settleLocked(projectId, userId, 0, "refund", why);
+  if (locked !== null) return Math.max(0, locked);
   const credits = await held(projectId);
   if (credits <= 0) return 0;
   await changeCredits(userId, credits, "refund", { project: projectId, note: why });
@@ -96,6 +110,8 @@ export async function refundVideo(projectId: string, userId: string, why = "Vide
 export async function settleVideo(projectId: string, userId: string, tier: TierId, seconds: number) {
   const billing = await getBilling();
   const due = creditsFor(billing, tier, seconds);
+  const locked = await settleLocked(projectId, userId, due, "adjust", `Real length ${Math.ceil(seconds)} s`);
+  if (locked !== null) return locked <= 0 || locked === due ? locked : due;
   const now = await held(projectId);
   if (now <= 0 || due === now) return now;
   await changeCredits(userId, now - due, "adjust", { project: projectId, note: `Real length ${Math.ceil(seconds)} s`, allowNegative: true });
