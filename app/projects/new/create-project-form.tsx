@@ -26,7 +26,7 @@ type VoiceOption = { name: string; gender: "female" | "male"; label: string };
 
 // The brand's colour, read from its icon: the most common colourful shade
 // (a black, white or grey icon gives the house blue).
-async function colourOf(url: string): Promise<string> {
+export async function colourOf(url: string): Promise<string> {
   const img = new Image();
   img.src = url;
   await img.decode();
@@ -379,7 +379,7 @@ export function CreateProjectForm({ prefill, voices = [], levels = [], minSecond
   );
 }
 
-function Step({ n, title, sub, children }: { n: number; title: string; sub?: string; children: React.ReactNode }) {
+export function Step({ n, title, sub, children }: { n: number; title: string; sub?: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-4 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06] sm:p-6">
       <div className="flex items-start gap-3">
@@ -394,7 +394,7 @@ function Step({ n, title, sub, children }: { n: number; title: string; sub?: str
   );
 }
 
-function Field({ title, children }: { title: string; children: React.ReactNode }) {
+export function Field({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
       <span className={label}>{title}</span>
@@ -403,7 +403,7 @@ function Field({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Upload({ title, text, sub, preview, children }: { title: string; text: string; sub: string; preview?: React.ReactNode; children: React.ReactNode }) {
+export function Upload({ title, text, sub, preview, children }: { title: string; text: string; sub: string; preview?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
       <span className={label}>{title}</span>
@@ -433,7 +433,7 @@ function Chips<T extends string>({ name, options, defaultValue, format = String 
 
 // The voice: English only; five women's and five men's voices (the ones
 // offered on /admin/models, with what each suits), each with a sample.
-function VoicePicker({ voices, initial }: { voices: VoiceOption[]; initial?: string }) {
+export function VoicePicker({ voices, initial }: { voices: VoiceOption[]; initial?: string }) {
   const list = (voices.length ? voices : VOICE_LIBRARY.map((v) => ({ name: v.name, gender: v.gender, label: "" }))).map((v) => ({ ...v, info: voiceInfo(v.name) }));
   const first = list.find((v) => v.name === initial) ?? list.find((v) => v.gender === "female") ?? list[0];
   const [gender, setGender] = useState<"female" | "male">(first?.gender ?? "female");

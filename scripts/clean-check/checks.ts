@@ -31,6 +31,11 @@ import { type ProbeSample, checkFrames, framesToCheck } from "@/components/video
 import type { ComposerPlan } from "@/components/video/composer/types";
 import { creditsFor, normalizeBilling, pickable, withCoupon } from "@/lib/billing-config";
 import { resolveIcon } from "@/components/video/icons";
+import { SETTINGS } from "@/lib/app-settings";
+import { engineOf } from "@/lib/new-version";
+import { ownedPath } from "@/lib/projects";
+import { v2DetailsOf } from "@/lib/v2/form";
+import { v2DirectorModel, v2Text, v2VoiceName } from "@/lib/v2/models";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -453,6 +458,50 @@ export async function runChecks(): Promise<Check[]> {
     add("pieces of words become the script's words", shown.map((w) => w.text).join(" ") === "Your support inbox is full. No more angry users." && shown[1].start >= 0.15 && shown[1].start <= 0.25, shown.map((w) => `${w.text}@${w.start.toFixed(2)}`).join(" "));
     const to = pieceToWord(pieces, shown);
     add("older videos on pieces move onto the words", to(0) === 0 && to(1) === 1 && to(3) === 2 && to(8) === 5 && to(11) === 7 && to(12) === 8, [0, 1, 3, 8, 11, 12].map(to).join(","));
+  }
+
+  section = "New version (admin → Settings)";
+  {
+    const nv = SETTINGS.find((x) => x.key === "feature_new_version");
+    add("the switch is off unless a super admin turns it on", !!nv && nv.fallback === false && nv.superAdmin === true && nv.type === "bool", nv ? `fallback ${nv.fallback} · super admin only ${nv.superAdmin}` : "missing");
+    const engines = [engineOf({ engine: "v2" }), engineOf({ engine: "v2", voice: {} }), engineOf(null), engineOf({}), engineOf({ engine: "v1" }), engineOf("v2"), engineOf({ category: "finance" })];
+    add("each video keeps its version (only engine v2 is v2)", engines.join(",") === "v2,v2,v1,v1,v1,v1,v1", engines.join(","));
+    const d = v2DetailsOf({ engine: "v2", voice: { source: "upload", name: null, path: "u/p/voice/upload.mp3" } });
+    add("a v2 video's details read back", d?.voice.source === "upload" && d.voice.path === "u/p/voice/upload.mp3" && v2DetailsOf({ category: "finance" }) === null && v2DetailsOf({ engine: "v2" })?.voice.source === "script", JSON.stringify(d));
+    const cfg = normalizeConfig({ v2: { text: " google/gemini-2.5-flash ", whisper: "fal-ai/whisper" } });
+    add("its models are only what the admin saved (none by default)", defaultConfig().v2.text === "" && defaultConfig().v2.whisper === "" && cfg.v2.text === "google/gemini-2.5-flash" && cfg.v2.whisper === "fal-ai/whisper" && normalizeConfig({}).v2.text === "", JSON.stringify(cfg.v2));
+    const missing = await v2Text(null).then(() => "no error", (e: Error) => e.message);
+    add("no text model set: a clear error, no fallback", /No text model is set for the new version/.test(missing), missing);
+    const empty = ["", "  ", null, undefined].map((m) => {
+      try {
+        return v2DirectorModel(m);
+      } catch (e) {
+        return (e as Error).message;
+      }
+    });
+    add("an empty Director model is an error, never OPENAI_MODEL / gpt-5-mini", empty.every((m) => /Director has no model/.test(m)) && v2DirectorModel(" google/gemini-2.5-flash ") === "google/gemini-2.5-flash", empty[0]);
+    const key = process.env.FAL_KEY;
+    process.env.FAL_KEY = "test";
+    const picked = await v2Text("anthropic/claude-opus-5.5").catch(() => null);
+    process.env.FAL_KEY = key;
+    add("the level's model runs through fal's OpenRouter router", picked?.provider === "fal" && picked.model === "anthropic/claude-opus-5.5", `${picked?.provider} ${picked?.model}`);
+    const voice = { ...defaultConfig().voice, model: "fal-ai/elevenlabs/tts/turbo-v2.5", female: "", male: "Brian", choices: parseVoiceChoices("Sarah, female, Warm") };
+    const noFemale = (() => {
+      try {
+        return v2VoiceName({ ...voice, choices: [] }, "female");
+      } catch (e) {
+        return (e as Error).message;
+      }
+    })();
+    add("the voice is the customer's pick, else the admin's name for that gender", v2VoiceName(voice, "male", "Aria") === "Aria" && v2VoiceName(voice, "male") === "Brian" && v2VoiceName(voice, "female") === "Sarah" && /No female voice name is set/.test(noFemale), noFemale);
+    const u = "11111111-1111-1111-1111-111111111111", p = "22222222-2222-2222-2222-222222222222";
+    const owned = [ownedPath(`${u}/${p}/voice/narration.mp3`, u, p), ownedPath(`99999999-9999-9999-9999-999999999999/${p}/x.png`, u, p), ownedPath(`${u}/33333333-3333-3333-3333-333333333333/x.png`, u, p), ownedPath(`${u}/${p}/../other/x.png`, u, p), ownedPath(null, u, p), ownedPath(`${u}/${p}/x.png`, undefined, p)];
+    add("only this project's own files are signed", owned.join(",") === "true,false,false,false,false,false", owned.join(","));
+    // an injected client (the new version's) is priced as its own model, never gpt-5-mini
+    const failing = { responses: { parse: async () => { throw new Error("down"); } } } as unknown as Parameters<typeof directMotion>[2];
+    const used: string[] = [];
+    const r = await directMotion({ name: "Flowly", color: "#6a5bff", cta: "Start", words: FLOWLY.words.slice(0, 20), seed: 1, clientModel: "google/gemini-2.5-flash" }, (x) => used.push(x.model), failing, 5_000);
+    add("a failed Director is reported as such (the new version then fails and refunds)", r.plan.source === "rule" && used[0] === "google/gemini-2.5-flash" && r.problems.some((x) => /model call failed/.test(x)), `${r.plan.source} · ${used.join(",")} · ${r.problems[0]}`);
   }
 
   section = "covered elsewhere";

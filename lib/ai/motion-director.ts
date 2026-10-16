@@ -331,6 +331,9 @@ export type MotionInput = {
   seed: number;
   // the model for this video's quality level (lib/billing: empty = the one on /admin/models)
   model?: string | null;
+  // the model of a client passed in (directMotion / reviewMotion's `client`;
+  // "New version" passes its own, lib/v2)
+  clientModel?: string | null;
   // which instructions direct it (admin → Settings, "Creative Director"), and
   // for the creative one what this customer has already seen
   prompt?: DirectorPrompt;
@@ -540,11 +543,11 @@ function shapeNotes(sc: Ideas["scenes"], shape: StoryShape | null | undefined): 
 
 // ── the calls ──────────────────────────────────────────────────────────────
 type Client = Pick<OpenAI, "responses">;
-async function modelOf(client?: Client, level?: string | null) {
+async function modelOf(client?: Client, level?: string | null, clientModel?: string | null) {
   // (a quality level's own model runs through fal, like every text job)
   const own = !client && level ? await textAi("composer").then((t) => (t ? textClient("fal", level, false) : null)).catch(() => null) : null;
   const picked = client ? null : own ?? (await textAi("composer").catch(() => null));
-  const model = picked?.model ?? (process.env.OPENAI_MODEL || "gpt-5-mini");
+  const model = (client && clientModel) || (picked?.model ?? (process.env.OPENAI_MODEL || "gpt-5-mini"));
   const quick = (picked ? picked.quick : /(^|\/)(gpt-5|o\d)/.test(model)) ? { reasoning: { effort: "low" as const } } : {};
   return { ai: client ?? picked?.client ?? null, model, quick };
 }
@@ -684,7 +687,7 @@ async function ask<T>(ai: Client, body: Record<string, unknown>, deadline: numbe
 export async function directMotion(input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 130_000): Promise<MotionResult> {
   const t0 = Date.now();
   const fallback = rulePlan(input);
-  const { ai, model, quick } = await modelOf(client, input.model);
+  const { ai, model, quick } = await modelOf(client, input.model, input.clientModel);
   const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
   const done = (plan: MotionPlan, problems: string[]): MotionResult => {
     onUsage?.(usage);
@@ -718,7 +721,7 @@ function planOf(o: Answer, input: Pick<MotionInput, "words" | "category" | "know
 export async function reviewMotion(plan: MotionPlan, input: MotionInput, onUsage?: (u: BriefUsage) => void, client?: Client, budgetMs = 100_000): Promise<MotionResult> {
   const t0 = Date.now();
   const asked = plan.ideas ? reviewNotes(plan.ideas, input.words, input, plan.creative, input.rules !== false, input.match !== false) : [];
-  const { ai, model, quick } = await modelOf(client, input.model);
+  const { ai, model, quick } = await modelOf(client, input.model, input.clientModel);
   const usage: BriefUsage = { model, inputTokens: 0, outputTokens: 0 };
   const done = (p: MotionPlan, problems: string[]): MotionResult => {
     onUsage?.(usage);

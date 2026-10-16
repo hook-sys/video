@@ -29,6 +29,9 @@ export type AiConfig = {
   voice: { on: boolean; model: string; template: string; female: string; male: string; choices: VoiceChoice[]; fallback: boolean };
   // USD: per 1M input / output tokens (text), per character (voice)
   prices: Record<string, ModelPrice>;
+  // "New version" only (lib/v2): its text model (through fal's OpenRouter
+  // router) and its Whisper model — no defaults, no fallbacks
+  v2: { text: string; whisper: string };
 };
 
 // A voice customers can pick on the form (a name of the voice model's).
@@ -56,6 +59,7 @@ export function defaultConfig(): AiConfig {
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: true, provider: "", model: "" }])) as AiConfig["tasks"],
     voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     prices: {},
+    v2: { text: "", whisper: "" },
   };
 }
 
@@ -81,6 +85,7 @@ export function normalizeConfig(raw: unknown): AiConfig {
         .filter(([k]) => k.trim())
         .map(([k, p]) => [k.trim().slice(0, 200), { in: price(p?.in), out: price(p?.out), unit: price(p?.unit) }]),
     ),
+    v2: { text: str(r.v2?.text), whisper: str(r.v2?.whisper) },
   };
 }
 

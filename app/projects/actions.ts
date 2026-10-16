@@ -46,21 +46,22 @@ import { getAiConfig, unitCost, usageCost } from "@/lib/ai/models";
 import { COMPOSE_MESSAGE, NEEDS_SCREENSHOTS_MESSAGE, OWN_SCRIPT_MESSAGE, type PipelineStep } from "@/lib/pipeline";
 import { generateVoice as generateFalVoice, timeWords } from "@/lib/ai/fal";
 import { estimateWords, parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { type MotionInput, type MotionResult, type PastLook, directMotion, pastLookOf, reviewMotion } from "@/lib/ai/motion-director";
+import { type MotionInput, type MotionResult, directMotion, reviewMotion } from "@/lib/ai/motion-director";
 import { ruleBrief } from "@/lib/rule-brief";
 import { detailsFrom, parseDetails } from "@/lib/project-details";
 import { scorePlan } from "@/components/video/composer/score";
-import { type BrandProfile, type CreativePlan } from "@/lib/studio";
 import { frameOf } from "@/components/video/composer/frame";
-import { type StoredComposition, composeVariants } from "@/components/video/composer/variants";
-import { type StyleT, styleOf, styleRulesOf } from "@/components/video/composer/style";
+import { composeVariants } from "@/components/video/composer/variants";
+import { styleRulesOf } from "@/components/video/composer/style";
 import { RECIPES } from "@/components/video/composer/recipes";
 import { techOffOf } from "@/components/video/composer/techniques";
 import { scriptWords } from "@/components/video/composer/words";
-import { neverList } from "@/lib/video-rules";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
+import { type Past, brandOf, loadNeverList, pastOf } from "@/lib/director-context";
+import { engineOf } from "@/lib/new-version";
+import { runPipelineV2 } from "@/lib/v2/pipeline";
 import { checkProjectFrames, prepareFrameCheck } from "@/lib/frame-check";
 import { collectServerRender, renderWithin, startServerRender } from "@/lib/render-server";
 import { TIER_IDS, type TierId, balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, pickable, refundVideo, settleVideo } from "@/lib/billing";
@@ -178,7 +179,8 @@ export async function createProject(
 
   // A voice from the list on /admin/models (else the gender's default voice).
   const chosenVoice = (await getAiConfig()).voice.choices.find((c) => c.name === String(formData.get("voice_name") ?? ""));
-  const { data, error } = await supabase
+  // (written by the server: customers can't insert or update projects themselves)
+  const { data, error } = await createAdminClient()
     .from("projects")
     .insert({
       user_id: user.id,
@@ -302,7 +304,8 @@ export async function generateBrief(projectId: string) {
       .eq("project_id", projectId)
       .order("created_at"),
   ]);
-  if (!project) return;
+  // ("New version" videos: their pipeline writes the brief)
+  if (!project || engineOf(project.details) === "v2") return;
 
   // Brief fields are system-managed: users can't write them, so write via the
   // admin client, scoped to the project ownership verified above.
@@ -399,46 +402,7 @@ export async function generateBrief(projectId: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
-// The Director's NEVER list: built-in rules plus the active `video_rules`
-// rows (admin → Video rules). Never blocks a video.
-async function loadNeverList(admin: ReturnType<typeof createAdminClient>) {
-  try {
-    const { data } = await admin.from("video_rules").select("id, never").eq("active", true).limit(50);
-    return neverList(data ?? []);
-  } catch {
-    return neverList();
-  }
-}
-
-
-// What the Motion Director is given: the brand, the script, the website, and
-// what this customer has had before (the next video is unlike those).
-type Past = { seen: { display: string[]; field: string[] }; seenStaging: (NonNullable<StoredComposition["staging"]> | null)[]; recent: { staging: NonNullable<StoredComposition["staging"]> | null; display: string | null }[]; avoidStyles?: (StyleT | null)[] };
 type MotionDirection = { input: MotionInput; result: MotionResult; past: Past; usage: BriefUsage[] };
-
-async function pastOf(admin: ReturnType<typeof createAdminClient>, projectId: string, userId: string, name: string) {
-  const { data: past } = await admin.from("projects").select("brand_name, composer:brief->composer").eq("user_id", userId).neq("id", projectId).order("created_at", { ascending: false }).limit(20);
-  const rows = (past ?? []).map((p) => ({ brand: (p.brand_name ?? "").trim().toLowerCase(), composer: p.composer as { profile?: BrandProfile; creative?: CreativePlan; videos?: StoredComposition[] } | null }));
-  const same = rows.filter((p) => p.brand === name.toLowerCase());
-  const known = same.map((p) => p.composer?.profile).find((x): x is BrandProfile => !!x?.category) ?? null;
-  const earlier = same.flatMap((p) => (p.composer?.creative ? [{ idea: p.composer.creative.idea, language: p.composer.videos?.at(-1)?.staging?.language ?? p.composer.creative.language }] : [])).slice(0, 6);
-  const pastVideos = rows.slice(0, 12).flatMap((p) => p.composer?.videos ?? []);
-  const seenArts = pastVideos.map((v) => (v.script as { art?: { display?: string; field?: string } } | undefined)?.art ?? {});
-  const seen = { display: [...new Set(seenArts.map((x) => x.display).filter((x): x is string => !!x))].slice(0, 12), field: [...new Set(seenArts.map((x) => x.field).filter((x): x is string => !!x))].slice(0, 6) };
-  // how this customer's last videos were staged (the next is staged otherwise)
-  const seenStaging = pastVideos.map((v) => v.staging ?? null).slice(0, 8).reverse();
-  const recent = pastVideos.slice(0, 8).map((v) => ({ staging: v.staging ?? null, display: (v.script as { art?: { display?: string } } | undefined)?.art?.display ?? null }));
-  // (for the Creative Director: how their last videos looked, any brand)
-  const looks = rows.slice(0, 12).flatMap((p) => (p.composer?.videos ?? []).map((v) => pastLookOf(v, p.composer?.creative?.shape))).filter((x): x is PastLook => !!x).slice(0, 6);
-  // the styles (composer/style.ts) of their last three videos: the next is unlike them
-  const avoidStyles = pastVideos.slice(0, 3).map((v) => styleOf((v.script as { art?: Parameters<typeof styleOf>[0] } | undefined)?.art));
-  return { known, earlier, looks, past: { seen, seenStaging, recent, avoidStyles } };
-}
-
-const brandOf = (project: { brand_name?: string | null; brand_color?: string | null; call_to_action?: string | null; website_url?: string | null }, brief: { product_name?: string; cta?: string } | null) => {
-  const host = (project.website_url ?? "").replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "");
-  return { name: project.brand_name?.trim() || brief?.product_name || "Your product", color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || brief?.cta || "Get started", url: host, icon: null };
-};
 
 // The Motion Director plans the whole video from the script: it needs no
 // voice, so it works while the voice is made.
@@ -618,10 +582,11 @@ export async function generateVoice(projectId: string) {
   // RLS: only returns the project if this user owns it.
   const { data: project } = await supabase
     .from("projects")
-    .select("brief, brief_status, direction, advanced_direction, voice_language, voice_style, voice_gender, voice_result")
+    .select("brief, brief_status, direction, advanced_direction, voice_language, voice_style, voice_gender, voice_result, details")
     .eq("id", projectId)
     .maybeSingle();
-  if (!project) return;
+  // ("New version" videos: their pipeline makes the voice)
+  if (!project || engineOf(project.details) === "v2") return;
 
   const admin = createAdminClient();
   const voiceUpdate = (fields: Record<string, unknown>) =>
@@ -761,6 +726,10 @@ async function claimPipeline(projectId: string, userId: string) {
  * in the browser (composer-studio.tsx): there is no server render.
  */
 async function runPipeline(projectId: string, userId: string) {
+  // each video keeps the version it was made with: "New version" videos
+  // (admin → Settings) run their own pipeline (lib/v2/pipeline.ts)
+  const { data: made } = await createAdminClient().from("projects").select("details").eq("id", projectId).maybeSingle();
+  if (engineOf(made?.details) === "v2") return runPipelineV2(projectId, userId);
   // (the function this runs in stops at 300 s: the frame check gets what is left)
   const started = Date.now();
   const left = () => 285_000 - (Date.now() - started);

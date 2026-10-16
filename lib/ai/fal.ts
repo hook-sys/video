@@ -26,7 +26,7 @@ const WORD_TIMING_TIMEOUT_MS = 120_000;
 // Input shape differs per Fal model, so it is configured, not guessed.
 // FAL_VOICE_INPUT_TEMPLATE is JSON with {{text}}, {{language}}, {{style}}, {{gender}}, {{voice}} placeholders,
 // e.g. {"text":"{{text}}","language":"{{language}}"}. Defaults to {"text":"{{text}}"}.
-function buildInput(templateJson: string, values: Record<string, string>): Record<string, unknown> {
+export function buildInput(templateJson: string, values: Record<string, string>): Record<string, unknown> {
   const template = JSON.parse(templateJson);
   const fill = (v: unknown): unknown =>
     typeof v === "string"
@@ -142,7 +142,15 @@ export async function generateVoice({
 // (lib/voice-timing.ts retimeScript). Null when nothing usable came back.
 export const WORD_TIMING_MODEL = "fal-ai/whisper";
 export async function timeWords(audioUrl: string, script: string): Promise<{ words: WordTiming[]; requestId: string; model: string; seconds: number } | null> {
-  const result = await falClient().subscribe(WORD_TIMING_MODEL, {
+  const { heard, requestId } = await heardWords(WORD_TIMING_MODEL, audioUrl);
+  const words = retimeScript(script, heard);
+  return words ? { words, requestId, model: WORD_TIMING_MODEL, seconds: heard.length ? heard[heard.length - 1].end : 0 } : null;
+}
+
+// What a Whisper model hears, word by word (a chunk of several words shares
+// its time evenly). Used by timeWords and by "New version" (lib/v2).
+export async function heardWords(model: string, audioUrl: string): Promise<{ heard: WordTiming[]; requestId: string }> {
+  const result = await falClient().subscribe(model, {
     input: { audio_url: audioUrl, task: "transcribe", chunk_level: "word" },
     // a minute of speech took Whisper over 55 s (queue included)
     abortSignal: AbortSignal.timeout(WORD_TIMING_TIMEOUT_MS),
@@ -159,13 +167,12 @@ export async function timeWords(audioUrl: string, script: string): Promise<{ wor
     const stop = Number.isFinite(end) && end >= start ? end : start + 0.3 * parts.length;
     parts.forEach((t, i) => heard.push({ text: t, start: start + ((stop - start) * i) / parts.length, end: start + ((stop - start) * (i + 1)) / parts.length }));
   }
-  const words = retimeScript(script, heard);
-  return words ? { words, requestId: result.requestId, model: WORD_TIMING_MODEL, seconds: heard.length ? heard[heard.length - 1].end : 0 } : null;
+  return { heard, requestId: result.requestId };
 }
 
 // One fal call that returns media; errors carry fal's reason (which input
 // field it rejected), not just "Unprocessable Entity".
-async function falRun(model: string, input: Record<string, unknown>, kind: "audio") {
+export async function falRun(model: string, input: Record<string, unknown>, kind: "audio") {
   try {
     const result = await falClient().subscribe(model, { input, abortSignal: AbortSignal.timeout(kind === "audio" ? VOICE_TIMEOUT_MS : TIMEOUT_MS) });
     const url = findMediaUrl(result.data, kind);

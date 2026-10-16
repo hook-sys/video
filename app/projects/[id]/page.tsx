@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { SCREENSHOTS_BUCKET, VIDEOS_BUCKET, voiceChoiceOf } from "@/lib/projects";
+import { SCREENSHOTS_BUCKET, VIDEOS_BUCKET, ownedPath, voiceChoiceOf } from "@/lib/projects";
 import { getSettings } from "@/lib/app-settings";
 import { MOOD_CHOICES, USE_LABEL } from "@/lib/project-details";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
@@ -36,12 +36,14 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   const dev = !!user && (await canUseDevTools(supabase, user.id));
   const admin = user ? (await userAccess(supabase, user.id)).admin : false;
 
-  const { data: screenshots } = await supabase
+  const { data: shotRows } = await supabase
     .from("project_screenshots")
     .select("storage_path, original_filename")
     .eq("project_id", id)
     .order("created_at");
-  const { data: signed } = screenshots?.length
+  // (only this project's own files are signed)
+  const screenshots = (shotRows ?? []).filter((s) => ownedPath(s.storage_path, project.user_id, id));
+  const { data: signed } = screenshots.length
     ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(
         screenshots.map((s) => s.storage_path),
         3600,
@@ -55,15 +57,15 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const { data: captureShot } = capture?.screenshot_path
-    ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrl(capture.screenshot_path, 3600)
+  const { data: captureShot } = ownedPath(capture?.screenshot_path, project.user_id, id)
+    ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrl(capture!.screenshot_path!, 3600)
     : { data: null };
 
   const { data: voiceAudio } =
-    project.voice_status === "completed" && project.voice_result?.storagePath
+    project.voice_status === "completed" && ownedPath(project.voice_result?.storagePath, project.user_id, id)
       ? await supabase.storage
           .from(AUDIO_BUCKET)
-          .createSignedUrl(project.voice_result.storagePath, 3600)
+          .createSignedUrl(project.voice_result!.storagePath!, 3600)
       : { data: null };
 
   const costs = dev ? await getProjectCostSummary(supabase, id, project.duration_seconds) : null;

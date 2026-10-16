@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ProductBrief } from "@/lib/ai/product-brief";
-import { LOGO_FILE_PREFIX, SCREENSHOTS_BUCKET, lockedVoiceScript, seedFrom } from "@/lib/projects";
+import { LOGO_FILE_PREFIX, SCREENSHOTS_BUCKET, lockedVoiceScript, ownedPath, seedFrom } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
 import { getSettings } from "@/lib/app-settings";
@@ -47,8 +47,9 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
   const script = brief.success ? brief.data.script : lockedVoiceScript(project.direction);
   if (!script) problems.push("Write the script first.");
 
-  // Stored narration only; never regenerated here.
-  const voicePath = project.voice_status === "completed" ? project.voice_result?.storagePath : undefined;
+  // Stored narration only; never regenerated here. (only this project's own file)
+  const narration = project.voice_status === "completed" ? project.voice_result?.storagePath : undefined;
+  const voicePath = ownedPath(narration, project.user_id, project.id) ? narration : undefined;
   const { data: voice } = voicePath ? await supabase.storage.from(AUDIO_BUCKET).createSignedUrl(voicePath, expiresIn) : { data: null };
   if (!voice?.signedUrl) problems.push("Generate the voice first.");
   const wordTimings = project.voice_status === "completed" ? parseWordTimings(project.voice_result?.timing?.words) : null;
@@ -67,7 +68,8 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
       supabase.from("project_screenshots").select("storage_path").eq("project_id", project.id).order("created_at"),
     ]);
     const logoFile = files?.find((f) => f.name.startsWith(LOGO_FILE_PREFIX));
-    const paths = [...(logoFile ? [`${folder}/${logoFile.name}`] : []), ...(shots ?? []).map((x) => x.storage_path as string)];
+    // (a screenshot row's path is only signed when it is this project's own file)
+    const paths = [...(logoFile ? [`${folder}/${logoFile.name}`] : []), ...(shots ?? []).map((x) => x.storage_path).filter((p) => ownedPath(p, project.user_id, project.id))];
     const { data: signed } = paths.length ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(paths, expiresIn) : { data: [] };
     const urls = (signed ?? []).map((x) => x.signedUrl || undefined);
     if (logoFile) logoUrl = urls.shift();

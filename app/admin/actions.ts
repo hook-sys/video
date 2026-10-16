@@ -201,7 +201,8 @@ export async function saveSettings(formData: FormData) {
   const s = await requireAdmin("settings");
   const { data: before } = await s.db.from("app_settings").select("key, value");
   const old = Object.fromEntries((before ?? []).map((r) => [r.key, r.value]));
-  const rows = SETTINGS.map((def) => {
+  // (a super-admin-only setting keeps its value when anyone else saves the page)
+  const rows = SETTINGS.filter((def) => !def.superAdmin || s.role === "super_admin").map((def) => {
     const raw = formData.get(def.key);
     const value =
       def.type === "bool" ? raw === "on" : def.type === "number" ? Math.max(0, Math.round(Number(raw) || 0)) : String(raw ?? "").trim().slice(0, 300);
