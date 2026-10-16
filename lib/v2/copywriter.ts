@@ -2,7 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { countUsage, temperatureFor } from "@/lib/ai/models";
-import type { BriefUsage } from "@/lib/ai/product-brief";
+import { type BriefUsage, estimateInput } from "@/lib/ai/product-brief";
 import type { Ideas } from "@/components/video/composer/variants";
 import type { Word } from "@/components/video/composer/types";
 import type { RoleAi } from "@/lib/v2/models";
@@ -49,6 +49,7 @@ export async function copywrite(ideas: Ideas, words: Word[], ai: RoleAi, onUsage
     });
     return { ideas: { ...ideas, scenes }, problems };
   } catch (e) {
+    estimateInput(usage, INSTRUCTIONS, input);
     throw new Error(`The Copywriter (${ai.model}) failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e)}`);
   } finally {
     onUsage(usage);

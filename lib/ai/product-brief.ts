@@ -69,7 +69,15 @@ export const stripSceneLabels = (text: string) =>
 
 // reportedUsd: what the provider said its calls cost (fal does); the tokens of
 // calls it reported no cost for are priced from /admin/models.
-export type BriefUsage = { model: string; inputTokens: number; outputTokens: number; reportedUsd?: number; unreportedIn?: number; unreportedOut?: number };
+// estimated: a call that failed or timed out ("New version") — its input
+// counted from its length, its output unknown (the provider may still bill it)
+export type BriefUsage = { model: string; inputTokens: number; outputTokens: number; reportedUsd?: number; unreportedIn?: number; unreportedOut?: number; estimated?: boolean };
+// (about 4 characters a token)
+export const estimateInput = (u: BriefUsage, ...texts: string[]) => {
+  if (u.inputTokens || u.outputTokens) return;
+  u.inputTokens = Math.round(texts.reduce((a, t) => a + t.length, 0) / 4);
+  u.estimated = true;
+};
 
 export async function generateProductBrief(input: BriefInput, onUsage?: (usage: BriefUsage) => void): Promise<ProductBrief> {
   // the model chosen on /admin/models
