@@ -4,7 +4,7 @@
 // and prints what a viewer would see wrong (words covered, things on each
 // other, cut off by the edge, an empty screen). No AI, no cost.
 //
-//   npm run check:frames -- <project id or its first 8 letters> [more ids]
+//   npm run check:frames -- <project id (the full UUID)> [more ids]
 //   npm run check:frames -- --plan plan.json        (a plan from a file)
 //
 //   --stills <folder>   a picture of each finding (and one per scene)
