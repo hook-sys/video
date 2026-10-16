@@ -2,9 +2,9 @@ import OpenAI from "openai";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 
 // Which AI model does each job, and whether the job runs at all — chosen by a
-// super admin on /admin/models (app_settings key "ai_models"). Nothing stored
-// yet means the environment's models, so behaviour only changes when an admin
-// saves something.
+// super admin on /admin/models (app_settings key "ai_models"). Text models
+// come only from there: with none chosen, a text job fails with a clear error
+// (never a model picked in code or the environment).
 //
 // Text jobs run through fal (its OpenAI-compatible OpenRouter endpoint: GPT,
 // Gemini, Claude, Llama … by name, e.g. "google/gemini-2.5-flash") or OpenAI
@@ -55,7 +55,7 @@ export const FAL_LLM_URL = "https://fal.run/openrouter/router/openai/v1";
 
 export function defaultConfig(): AiConfig {
   return {
-    text: { provider: "openai", model: process.env.OPENAI_MODEL || "gpt-5-mini", backup: false, openaiDirect: false },
+    text: { provider: "openai", model: "", backup: false, openaiDirect: false },
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: true, provider: "", model: "" }])) as AiConfig["tasks"],
     voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
     prices: {},
@@ -166,7 +166,8 @@ export async function textAi(task: TextTask, opts: { timeout?: number; maxRetrie
   // A job moved to the other provider without its own model: the main model,
   // named the way that provider names it ("openai/gpt-5-mini" on fal).
   const main = config.text.model;
-  const model = t.model || (prov === config.text.provider ? main : prov === "fal" ? (main.includes("/") ? main : `openai/${main}`) : main.replace(/^openai\//, ""));
+  const model = t.model || (!main ? "" : prov === config.text.provider ? main : prov === "fal" ? (main.includes("/") ? main : `openai/${main}`) : main.replace(/^openai\//, ""));
+  if (!model) throw new Error(`No AI model is set for "${TEXT_TASKS.find((x) => x.id === task)?.label ?? task}". A super admin must choose one on /admin/models.`);
   return textClient(prov, model, config.text.backup, opts, config.text.openaiDirect);
 }
 
@@ -181,8 +182,9 @@ export function textClient(prov: Provider, model: string, backupOn: boolean, opt
   }
   if (!process.env.FAL_KEY) throw new Error("FAL_KEY is not configured.");
   const fal = falResponses(opts);
-  const backup = backupOn && process.env.OPENAI_API_KEY ? new OpenAI({ timeout: opts.timeout, maxRetries: 0 }) : null;
-  const fallbackModel = process.env.OPENAI_MODEL || "gpt-5-mini";
+  // (the backup runs the job's own model on OpenAI: only an OpenAI model can have one)
+  const fallbackModel = /^(openai\/)?(gpt|o\d)/.test(model) ? model.replace(/^openai\//, "") : "";
+  const backup = backupOn && fallbackModel && process.env.OPENAI_API_KEY ? new OpenAI({ timeout: opts.timeout, maxRetries: 0 }) : null;
   const viaBackup = (body: Parameters<OpenAI["responses"]["parse"]>[0], options?: { timeout?: number }) =>
     backup!.responses.parse({ ...body, model: fallbackModel, ...(reasoning(fallbackModel) ? { reasoning: { effort: "low" } } : { reasoning: undefined }) } as typeof body, options);
   const client: ResponsesClient = {

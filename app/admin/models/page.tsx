@@ -41,7 +41,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
     byModel.set(k, m);
   }
   const usage = [...byModel.entries()].sort((a, b) => b[1].cost - a[1].cost);
-  const env = { text: process.env.OPENAI_MODEL || "gpt-5-mini", voice: process.env.FAL_VOICE_MODEL || "—" };
+  const env = { voice: process.env.FAL_VOICE_MODEL || "—" };
   const keys = { fal: !!process.env.FAL_KEY, openai: !!process.env.OPENAI_API_KEY };
   const priceRows = [...Object.entries(c.prices), ...Array.from({ length: 4 }, () => ["", {}] as const)];
 
@@ -65,7 +65,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
           <Card title="Main model">
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">
-                On <b className="text-zinc-300">fal</b>, models are named like <code>google/gemini-2.5-flash</code> or <code>openai/gpt-5-mini</code> (fal&apos;s OpenRouter list). On <b className="text-zinc-300">OpenAI</b>, like <code>gpt-5-mini</code>. Environment default: <code>{env.text}</code> on OpenAI.
+                On <b className="text-zinc-300">fal</b>, models are named like <code>google/gemini-2.5-flash</code> or <code>openai/gpt-5-mini</code> (fal&apos;s OpenRouter list). On <b className="text-zinc-300">OpenAI</b>, like <code>gpt-5-mini</code>. Required: with no model here, text jobs stop with an error (there is no built-in default).
               </p>
               <div className="grid gap-2 md:grid-cols-[150px_1fr]">
                 <select name="text_provider" defaultValue={c.text.provider} className={input}>
@@ -80,7 +80,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
               </label>
               <label className="flex items-center gap-3 text-zinc-300">
                 <Toggle name="text_backup" on={c.text.backup} />
-                Backup: when a fal call fails, try once on OpenAI ({env.text}) — only while OpenAI direct is on
+                Backup: when a fal call fails, try once on OpenAI with the same model (OpenAI models only) — only while OpenAI direct is on
               </label>
             </div>
           </Card>

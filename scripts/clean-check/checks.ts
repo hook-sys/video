@@ -7,7 +7,7 @@ import { FPS, STILL_BACKGROUND } from "@/components/video/composer/types";
 import http from "node:http";
 import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
-import { countUsage, defaultConfig, normalizeConfig, parseVoiceChoices, textClient, textCost, usageCost } from "@/lib/ai/models";
+import { countUsage, defaultConfig, normalizeConfig, parseVoiceChoices, textAi, textClient, textCost, usageCost } from "@/lib/ai/models";
 import { ruleBrief } from "@/lib/rule-brief";
 import { RECAP, stageOf, staged, stagingName } from "@/components/video/composer/staging";
 import { ruleCreative, ruleProfile, sentencesOf } from "@/lib/studio";
@@ -45,9 +45,11 @@ export async function runChecks(): Promise<Check[]> {
   const add = (name: string, ok: boolean, detail: string) => checks.push({ section, name, ok, detail });
   section = "AI models (/admin/models)";
   {
-    // Nothing saved: the environment's models, every job on.
+    // Nothing saved: no text model (only a super admin chooses one), every job on.
     const d = normalizeConfig(null);
-    add("nothing saved keeps today's models", JSON.stringify(d) === JSON.stringify(defaultConfig()) && d.text.provider === "openai" && Object.values(d.tasks).every((t) => t.on) && d.voice.on, `${d.text.provider} ${d.text.model}`);
+    add("nothing saved: no text model, every job on", JSON.stringify(d) === JSON.stringify(defaultConfig()) && d.text.model === "" && Object.values(d.tasks).every((t) => t.on) && d.voice.on, `${d.text.provider} "${d.text.model}"`);
+    const why = await textAi("brief").then(() => "no error", (e: unknown) => (e instanceof Error ? e.message : String(e)));
+    add("no model chosen: a text job stops with a clear error", /No AI model is set for "Script & brief"\. A super admin must choose one on \/admin\/models\./.test(why), why);
     add("the brief can't be turned off", normalizeConfig({ tasks: { brief: { on: false }, composer: { on: false } } }).tasks.brief.on && !normalizeConfig({ tasks: { composer: { on: false } } }).tasks.composer.on, "brief stays on");
     const cfg = normalizeConfig({ prices: { "google/gemini-2.5-flash": { in: 0.3, out: 2.5 } } });
     add("a model's own price is used for its cost", Math.abs(textCost(cfg, "google/gemini-2.5-flash", 1e6, 1e6, () => -1) - 2.8) < 1e-9 && textCost(cfg, "other", 1, 1, () => -1) === -1, "0.30 in + 2.50 out per 1M");
