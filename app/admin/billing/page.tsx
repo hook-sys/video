@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { TIER_IDS, creditsFor, getBilling } from "@/lib/billing";
 import { stripeReady } from "@/lib/stripe";
+import { getSettings } from "@/lib/app-settings";
 import { saveBilling } from "../actions";
 import { Badge, Card, Notice, PageHeader, Stat, Table, btnPrimary, input, td } from "../_components/ui";
 import { ago, daysAgo, usd } from "../_components/format";
@@ -15,6 +16,8 @@ export default async function BillingPage({ searchParams }: PageProps<"/admin/bi
   const { error, saved } = await searchParams;
   const { db } = await requireAdmin("billing");
   const billing = await getBilling();
+  // "New version" on: one level (Standard's price); the rest is hidden, its values kept
+  const nv = (await getSettings()).feature_new_version === true;
   const since = daysAgo(30);
   const [{ data: payments }, { data: recent }, { data: balances }] = await Promise.all([
     db.from("payments").select("id, user_id, usd, list_usd, credits, bonus, status, created_at, paid_at, coupon_id").order("created_at", { ascending: false }).limit(50),
@@ -47,10 +50,29 @@ export default async function BillingPage({ searchParams }: PageProps<"/admin/bi
       </div>
 
       <form action={saveBilling} className="flex flex-col gap-4">
-        <Card title="Quality levels" action={<span className={small}>1 credit = $0.01 · charged per second of video</span>}>
+        <Card title={nv ? "Price per video" : "Quality levels"} action={<span className={small}>1 credit = $0.01 · charged per second of video</span>}>
           <div className="grid gap-4 lg:grid-cols-3">
             {TIER_IDS.map((id) => {
               const t = billing.tiers[id];
+              if (nv)
+                return (
+                  <div key={id} className={id === "standard" ? "flex flex-col gap-3 rounded-xl border border-white/[0.07] p-4 text-sm" : "hidden"}>
+                    {id === "standard" && (
+                      <>
+                        <p className={small}>New version is on: one level for every video (the Director is set on AI models). The other levels come back, as they were, when New version is turned off.</p>
+                        <label className={label}><span className={small}>Credits / second</span><input name={`${id}_rate`} type="number" min={0} step="0.1" defaultValue={t.perSecond} className={input} /></label>
+                        <p className={small}>30 s video = {creditsFor(billing, id, 30)} credits (${(creditsFor(billing, id, 30) / 100).toFixed(2)})</p>
+                      </>
+                    )}
+                    {id !== "standard" && <input type="hidden" name={`${id}_rate`} value={t.perSecond} />}
+                    <input type="hidden" name={`${id}_name`} value={t.name} />
+                    <input type="hidden" name={`${id}_blurb`} value={t.blurb} />
+                    <input type="hidden" name={`${id}_badge`} value={t.badge} />
+                    <input type="hidden" name={`${id}_model`} value={t.model} />
+                    {id !== "standard" && <input type="hidden" name={`${id}_status`} value={t.status} />}
+                    {t.paidOnly && <input type="hidden" name={`${id}_paid`} value="on" />}
+                  </div>
+                );
               return (
                 <div key={id} className="flex flex-col gap-3 rounded-xl border border-white/[0.07] p-4 text-sm">
                   <div className="flex items-center justify-between">

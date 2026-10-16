@@ -9,11 +9,11 @@ import { retimeScript, type WordTiming } from "@/lib/voice-timing";
 
 const SET_IT = "A super admin must choose it on /admin/models.";
 
-// The text model (the Motion Director), through fal's OpenRouter router: the
-// video's quality level's own model (/admin/billing), else "New version: text model".
-export async function v2Text(tierModel?: string | null, opts: { timeout?: number; maxRetries?: number } = {}): Promise<TextAi> {
-  const model = tierModel?.trim() || (await getAiConfig()).v2.text;
-  if (!model) throw new Error(`No text model is set for the new version. ${SET_IT}`);
+// The Director's model, through fal's OpenRouter router: only "New version →
+// Director model" on /admin/models (one level: no quality level's own model).
+export async function v2Text(opts: { timeout?: number; maxRetries?: number } = {}, config?: AiConfig): Promise<TextAi> {
+  const model = (config ?? (await getAiConfig())).v2.text.trim();
+  if (!model) throw new Error(`No Director model is set for the new version. ${SET_IT}`);
   return textClient("fal", model, false, opts, false);
 }
 

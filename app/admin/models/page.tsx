@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/admin";
+import { getSettings } from "@/lib/app-settings";
 import { SETTING_KEY, TEXT_TASKS, normalizeConfig, voiceChoicesText } from "@/lib/ai/models";
 import { Badge, Card, Notice, PageHeader, btnPrimary, input } from "../_components/ui";
 import { daysAgo, usd } from "../_components/format";
@@ -30,6 +31,8 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
     s.db.from("cost_events").select("project_id, operation, model, estimated_cost_usd").gte("created_at", daysAgo(7)).in("operation", ["openai_brief", "fal_voice", "fal_image"]).limit(20000),
   ]);
   const c = normalizeConfig(row?.value);
+  // "New version" on: only what it uses is shown (the rest keeps its values)
+  const nv = (await getSettings()).feature_new_version === true;
   // What each model cost over the last 7 days (as recorded), per video.
   const byModel = new Map<string, { op: string; cost: number; videos: Set<string>; calls: number }>();
   for (const e of events ?? []) {
@@ -48,6 +51,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
   return (
     <>
       <PageHeader title="AI models" sub="Which model does each job, and which jobs run. Applies to new videos within ~15 s; written to the audit log." />
+      {nv && <Notice>New version is on: only its models are shown — the Director, the voice and Whisper. The old version&apos;s models are hidden and kept as they were.</Notice>}
       {typeof saved === "string" && <Notice>{saved === "0" ? "Nothing changed." : "Saved. New videos use these models."}</Notice>}
       {typeof error === "string" && <Notice tone="warn">{error}</Notice>}
       {!editable && <Notice tone="warn">Only a super admin can change these.</Notice>}
@@ -62,58 +66,78 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
 
       <form action={saveAiModels} className="flex flex-col gap-4">
         <fieldset disabled={!editable} className="flex flex-col gap-4">
-          <Card title="Main model">
-            <div className="flex flex-col gap-3 text-sm">
-              <p className="text-zinc-500">
-                On <b className="text-zinc-300">fal</b>, models are named like <code>google/gemini-2.5-flash</code> or <code>openai/gpt-5-mini</code> (fal&apos;s OpenRouter list). On <b className="text-zinc-300">OpenAI</b>, like <code>gpt-5-mini</code>. Required: with no model here, text jobs stop with an error (there is no built-in default).
-              </p>
-              <div className="grid gap-2 md:grid-cols-[150px_1fr]">
-                <select name="text_provider" defaultValue={c.text.provider} className={input}>
-                  <option value="fal">fal</option>
-                  <option value="openai">OpenAI (direct)</option>
-                </select>
-                <input name="text_model" list="text-models" defaultValue={c.text.model} className={input} />
+          {nv ? (
+            // the old version's models: hidden while New version is on, their values kept
+            <>
+              <input type="hidden" name="text_provider" value={c.text.provider} />
+              <input type="hidden" name="text_model" value={c.text.model} />
+              {c.text.openaiDirect && <input type="hidden" name="text_openai_direct" value="on" />}
+              {c.text.backup && <input type="hidden" name="text_backup" value="on" />}
+              {TEXT_TASKS.map((t) => (
+                <span key={t.id} hidden>
+                  {c.tasks[t.id].on && <input type="hidden" name={`task_${t.id}_on`} value="on" />}
+                  <input type="hidden" name={`task_${t.id}_provider`} value={c.tasks[t.id].provider} />
+                  <input type="hidden" name={`task_${t.id}_model`} value={c.tasks[t.id].model} />
+                </span>
+              ))}
+            </>
+          ) : (
+            <>
+            <Card title="Main model">
+              <div className="flex flex-col gap-3 text-sm">
+                <p className="text-zinc-500">
+                  On <b className="text-zinc-300">fal</b>, models are named like <code>google/gemini-2.5-flash</code> or <code>openai/gpt-5-mini</code> (fal&apos;s OpenRouter list). On <b className="text-zinc-300">OpenAI</b>, like <code>gpt-5-mini</code>. Required: with no model here, text jobs stop with an error (there is no built-in default).
+                </p>
+                <div className="grid gap-2 md:grid-cols-[150px_1fr]">
+                  <select name="text_provider" defaultValue={c.text.provider} className={input}>
+                    <option value="fal">fal</option>
+                    <option value="openai">OpenAI (direct)</option>
+                  </select>
+                  <input name="text_model" list="text-models" defaultValue={c.text.model} className={input} />
+                </div>
+                <label className="flex items-center gap-3 text-zinc-300">
+                  <Toggle name="text_openai_direct" on={c.text.openaiDirect} />
+                  OpenAI direct (a separate OpenAI bill). Off: nothing is sent to OpenAI directly — an &quot;OpenAI&quot; job runs the same model through fal (openai/…).
+                </label>
+                <label className="flex items-center gap-3 text-zinc-300">
+                  <Toggle name="text_backup" on={c.text.backup} />
+                  Backup: when a fal call fails, try once on OpenAI with the same model (OpenAI models only) — only while OpenAI direct is on
+                </label>
               </div>
-              <label className="flex items-center gap-3 text-zinc-300">
-                <Toggle name="text_openai_direct" on={c.text.openaiDirect} />
-                OpenAI direct (a separate OpenAI bill). Off: nothing is sent to OpenAI directly — an &quot;OpenAI&quot; job runs the same model through fal (openai/…).
-              </label>
-              <label className="flex items-center gap-3 text-zinc-300">
-                <Toggle name="text_backup" on={c.text.backup} />
-                Backup: when a fal call fails, try once on OpenAI with the same model (OpenAI models only) — only while OpenAI direct is on
-              </label>
-            </div>
-          </Card>
+            </Card>
 
-          <Card title="Directors">
-            <div className="divide-y divide-white/[0.05]">
-              {TEXT_TASKS.map((t) => {
-                const v = c.tasks[t.id];
-                return (
-                  <div key={t.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 md:flex-row md:items-center">
-                    <div className="flex flex-1 items-start gap-3">
-                      <Toggle name={`task_${t.id}_on`} on={v.on} disabled={!t.canOff} />
-                      {!t.canOff && <input type="hidden" name={`task_${t.id}_on`} value="on" />}
-                      <div>
-                        <p className="font-medium text-white">{t.label}</p>
-                        <p className="mt-0.5 max-w-xl text-sm text-zinc-500">{t.help}</p>
+            <Card title="Directors">
+              <div className="divide-y divide-white/[0.05]">
+                {TEXT_TASKS.map((t) => {
+                  const v = c.tasks[t.id];
+                  return (
+                    <div key={t.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 md:flex-row md:items-center">
+                      <div className="flex flex-1 items-start gap-3">
+                        <Toggle name={`task_${t.id}_on`} on={v.on} disabled={!t.canOff} />
+                        {!t.canOff && <input type="hidden" name={`task_${t.id}_on`} value="on" />}
+                        <div>
+                          <p className="font-medium text-white">{t.label}</p>
+                          <p className="mt-0.5 max-w-xl text-sm text-zinc-500">{t.help}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2 md:w-[440px] md:flex-row">
+                        <select name={`task_${t.id}_provider`} defaultValue={v.provider} className={select}>
+                          <option value="">Main provider</option>
+                          <option value="fal">fal</option>
+                          <option value="openai">OpenAI</option>
+                        </select>
+                        <input name={`task_${t.id}_model`} list="text-models" defaultValue={v.model} placeholder="Main model" className={input} />
                       </div>
                     </div>
-                    <div className="flex flex-col gap-2 md:w-[440px] md:flex-row">
-                      <select name={`task_${t.id}_provider`} defaultValue={v.provider} className={select}>
-                        <option value="">Main provider</option>
-                        <option value="fal">fal</option>
-                        <option value="openai">OpenAI</option>
-                      </select>
-                      <input name={`task_${t.id}_model`} list="text-models" defaultValue={v.model} placeholder="Main model" className={input} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
+                  );
+                })}
+              </div>
+            </Card>
 
-          <Card title="Voice (fal)" action={<Toggle name="voice_on" on={c.voice.on} />}>
+            </>
+          )}
+
+          <Card title="Voice (fal)" action={nv ? (c.voice.on ? <input type="hidden" name="voice_on" value="on" /> : null) : <Toggle name="voice_on" on={c.voice.on} />}>
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">Off: videos have no voice; the visuals follow the script at an even reading pace. Empty fields use the environment (model <code>{env.voice}</code>).</p>
               <input name="voice_model" list="voice-models" defaultValue={c.voice.model} placeholder="Model, e.g. fal-ai/elevenlabs/tts/turbo-v2.5" className={input} />
@@ -125,10 +149,12 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
               {c.voice.model && (!c.voice.female || !c.voice.male) && !(["female", "male"] as const).every((g) => c.voice[g] || c.voice.choices.some((v) => v.gender === g)) && (
                 <p className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-2 text-xs text-amber-200">Set both a female and a male voice name for this model (or list both genders below): a video in the missing gender can&apos;t be voiced.</p>
               )}
+              {nv ? (c.voice.fallback && <input type="hidden" name="voice_fallback" value="on" />) : (
               <label className="flex items-center gap-3 text-zinc-300">
                 <Toggle name="voice_fallback" on={c.voice.fallback} />
                 Backup: when this model fails, use the environment&apos;s voice ({env.voice}) — both are charged
               </label>
+              )}
               <label className="flex flex-col gap-1.5">
                 <span className="text-zinc-300">Voices customers can pick</span>
                 <textarea name="voice_choices" rows={4} defaultValue={voiceChoicesText(c.voice.choices)} placeholder={"One per line: name, female or male, a short description\nKore, female, Warm and clear\nPuck, male, Upbeat"} className={`${input} font-mono text-xs`} />
@@ -138,13 +164,14 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
             </div>
           </Card>
 
-          <Card title="New version (when it is on)">
+          <Card title={nv ? "Director & Whisper" : "New version (when it is on)"}>
             <div className="flex flex-col gap-3 text-sm">
               <p className="text-zinc-500">
-                Used only by videos made with <b className="text-zinc-300">New version</b> on (admin → Settings). Text always runs through fal&apos;s OpenRouter router; the voice uses the Voice card above (its model and names only). Nothing falls back: a missing model stops the video with an error and its credits go back.
+                Used only by videos made with <b className="text-zinc-300">New version</b> on (admin → Settings). The Director always runs through fal&apos;s OpenRouter router; the voice uses the Voice card above (its model and names only). Nothing falls back: a missing model stops the video with an error and its credits go back.
               </p>
+              {nv && !c.v2.text && <p className="rounded-lg border border-amber-400/20 bg-amber-500/5 p-2 text-xs text-amber-200">No Director model yet: new videos stop with an error until one is set here.</p>}
               <label className="flex flex-col gap-1">
-                <span className="text-zinc-400">Text model (the Director), on fal&apos;s OpenRouter router — a quality level&apos;s own Director model (admin → Billing) wins</span>
+                <span className="text-zinc-400">Director model, on fal&apos;s OpenRouter router (the one model for every video)</span>
                 <input name="v2_text" list="text-models" defaultValue={c.v2.text} placeholder="e.g. google/gemini-2.5-flash" className={input} />
               </label>
               <label className="flex flex-col gap-1">
@@ -180,7 +207,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
 
       {editable && (
         <Card title="Test a model">
-          <ModelTest defaults={{ text: { provider: c.text.provider, model: c.text.model }, voice: { model: c.voice.model, template: c.voice.template } }} />
+          <ModelTest defaults={{ text: nv ? { provider: "fal", model: c.v2.text } : { provider: c.text.provider, model: c.text.model }, voice: { model: c.voice.model, template: c.voice.template } }} />
         </Card>
       )}
 
