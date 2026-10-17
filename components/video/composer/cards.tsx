@@ -260,19 +260,23 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
   },
   table: ({ c, it }) => {
     const rows = rowsOf(it, [D("Acme Co", "$2,400", "Paid"), D("Northwind", "$1,150", "Due"), D("Globex", "$860", "Paid")]).slice(0, 5);
+    // ("New version": its columns named for what they hold, each as wide as its longest cell, one line each)
+    const [name, detail, status] = it.cols?.head ?? ["NAME", "AMOUNT", "STATUS"];
+    const mw = it.cols ? it.cols.meta : 150, tw = it.cols ? it.cols.tag : 110;
+    const one: CSSProperties = it.cols ? { whiteSpace: "nowrap" } : {};
     return (
       <>
         <Head c={c} it={it} />
         <div style={{ display: "flex", padding: "10px 30px", fontSize: 17, fontWeight: 700, color: c.pal.panelSub, letterSpacing: "0.05em", background: c.pal.panelSoft }}>
-          <span style={{ flex: 1 }}>NAME</span><span style={{ width: 150 }}>AMOUNT</span><span style={{ width: 110, textAlign: "right" }}>STATUS</span>
+          <span style={{ flex: 1 }}>{name}</span>{mw > 0 && <span style={{ width: mw }}>{detail}</span>}{tw > 0 && <span style={{ width: tw, textAlign: "right" }}>{status}</span>}
         </div>
         {rows.map((r, i) => {
           const k = kIn(c, rowAt(it, i, rows.length, c));
           return (
             <div key={i} style={{ ...show(k, 10), display: "flex", alignItems: "center", height: 76, padding: "0 30px", ...rowLine(c), fontSize: 23 }}>
-              <span style={{ flex: 1, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</span>
-              <span style={{ width: 150, fontWeight: 650 }}>{r.meta}</span>
-              <span style={{ width: 110, textAlign: "right" }}>{r.tag && <Tag c={c} tone={toneOf(r.tag)}>{r.tag}</Tag>}</span>
+              <span style={{ flex: 1, minWidth: 0, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.title}</span>
+              {mw > 0 && <span style={{ width: mw, flexShrink: 0, fontWeight: 650, ...one }}>{r.meta}</span>}
+              {tw > 0 && <span style={{ width: tw, flexShrink: 0, textAlign: "right" }}>{r.tag && <Tag c={c} tone={toneOf(r.tag)}>{r.tag}</Tag>}</span>}
             </div>
           );
         })}

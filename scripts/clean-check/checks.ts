@@ -26,6 +26,7 @@ import { MotionModel, iconFor, answerOf, directMotion, ideaProblems, mendAnswer,
 import { livingStandIn } from "@/components/video/icons/living";
 import { pieceToWord, scriptWords } from "@/components/video/composer/words";
 import { sfxOf } from "@/components/video/composer/sfx";
+import { tidied } from "@/components/video/composer/tidy";
 import { inspect, inspected } from "@/components/video/composer/inspect";
 import { type ProbeSample, checkFrames, framesToCheck } from "@/components/video/composer/frame-check";
 import type { ComposerPlan } from "@/components/video/composer/types";
@@ -640,6 +641,16 @@ export async function runChecks(): Promise<Check[]> {
       const cursors = pm.scenes.flatMap((sc) => sc.items.filter((it) => it.kind === "cursor").map((it) => ({ it, target: sc.items.find((q) => q.kind !== "cursor" && q.hit === it.hit) })));
       const off = composeWith("medium", { ...rules.flow, cursor: false }).plan;
       add("the big cursor: once a chapter, it clicks the scene's main thing and the click is that thing's moment; off with its rule", cursors.length >= 1 && cursors.length <= Math.ceil((pm.scenes.length - 2) / 3) + 1 && cursors.every((c) => !!c.target && c.it.from && c.it.hit != null) && !off.scenes.some((sc) => sc.items.some((it) => it.kind === "cursor")), `${cursors.length} click(s) · off: ${off.scenes.flatMap((sc) => sc.items).filter((it) => it.kind === "cursor").length}`);
+      // no eyebrow labels, never the same words twice on one screen, tables only with short cells under fitting names
+      const sc1 = pm.scenes.find((sc) => sc.text) ?? pm.scenes[0];
+      const said = sc1.text ? sc1.text.words.map((w) => w.t).join(" ") : "Book online";
+      const thing = pm.scenes.flatMap((sc) => sc.items).find((it) => it.kind !== "cursor")!;
+      const R3 = (t: string, meta: string | null, tag: string | null) => ({ title: t, meta, tag, icon: null });
+      const card = (title: string, rows: ReturnType<typeof R3>[]) => ({ ...thing, kind: "card" as const, variant: "table", title, rows, cols: null });
+      const messy = tidied({ ...pm, scenes: [{ ...sc1, text: sc1.text ? { ...sc1.text, kicker: "Step 1" } : null, items: [card("Invoices", [R3("Acme Co", "$2,400", "Paid"), R3("Northwind", "$1,150", "Due")]), card("Orders", [R3("Order #4092 Silk Weave", "Fabric stage verified", "Active"), R3("Order #4093 Heavy Denim", "Production line in progress", "Running")]), card("Visits", [R3("Ann Lee", "In 3 days", "Booked"), R3("Bo Chen", "Tomorrow", "New")]), { ...thing, kind: "icon" as const, title: said, rows: null }, { ...thing, kind: "icon" as const, title: "Invoices", rows: null }] }] });
+      const [money, long, dated, echo, twin] = messy.scenes[0].items;
+      const noKicker = runs.every((x) => x.plan.scenes.every((sc) => !sc.text?.kicker)) && !messy.scenes[0].text?.kicker;
+      add("no eyebrow labels, never the same words twice on one screen, a table only with 1–3-word cells under names that say what they hold (else a list)", noKicker && echo.title === "" && twin.title === "" && money.cols?.head.join(",") === "NAME,AMOUNT,STATUS" && dated.cols?.head[1] === "DATE" && long.variant === "list" && !long.cols, `${money.cols?.head.join("/")} · ${dated.cols?.head.join("/")} · long rows → ${long.variant}`);
       const mv = flowMoves(pm);
       const sx = sfxOf({ ...pm, sfx: true });
       const way = (i: number) => (pm.links ?? [])[i];

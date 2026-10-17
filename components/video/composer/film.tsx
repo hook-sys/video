@@ -200,6 +200,10 @@ export function ComposerFilm({ plan, audioUrl, webAudio, bare, qa, screens = [] 
   );
 }
 
+// "New version": how far each layer's camera moves (× the scene's own move):
+// the background least, the things in front most — parallax you can see
+const FLOW_CAMERA = { field: 0.9, scene: 2, front: 2.7 };
+
 // A journey: one canvas, each scene in its own place on it, the camera
 // travelling between them along the line it draws (see journey.tsx). While it
 // travels the whole view leaves a short trail.
@@ -333,7 +337,7 @@ function Depth(props: DepthProps) {
     if (!deep) return props.sceneField(i);
     const sc = plan.scenes[i];
     const p = clamp01((f - sc.from) / Math.max(1, sc.to - sc.from));
-    return <AbsoluteFill style={{ transform: `${cameraOf(sc.camera, p, f, plan.art.energy, 0.35)} scale(1.05)` }}>{props.sceneField(i)}</AbsoluteFill>;
+    return <AbsoluteFill style={{ transform: `${cameraOf(sc.camera, p, f, plan.art.energy, FLOW_CAMERA.field)} scale(1.08)` }}>{props.sceneField(i)}</AbsoluteFill>;
   };
   const layer = (i: number, style: CSSProperties, field = true, frame?: CSSProperties, noGlyph?: number) => (
     <AbsoluteFill key={i} style={{ transformOrigin: "0 0", ...style }}>
@@ -604,7 +608,8 @@ function SceneBody(props: SceneProps) {
   // (on a journey the travelling camera is the movement; the scene keeps only its breathing, flat —
   // the "New version" keeps every scene's own move, its things in front moving more: parallax)
   const own = !J || !!J.camera;
-  const cam = cameraOf(own ? sc.camera : "still", p, f, art.energy);
+  // ("New version": a move you can see — the reference films' camera — its things in front moving more)
+  const cam = cameraOf(own ? sc.camera : "still", p, f, art.energy, J?.camera ? FLOW_CAMERA.scene : 1);
   const parallax = !!J?.camera && !!J.depth;
   const cOf = (it: PlacedItem): Ctx => (J?.noGlyph?.(sc.items.indexOf(it)) ? { ...c, noGlyph: true } : c);
   const flowCursor = (it: PlacedItem) => !!plan.flow && it.kind === "cursor";
@@ -629,7 +634,7 @@ function SceneBody(props: SceneProps) {
           </CtxC.Provider>
         </AbsoluteFill>
         {parallax && (
-          <AbsoluteFill style={{ transform: cameraOf(sc.camera, p, f, art.energy, 1.3), transformOrigin: sc.camera === "macro" ? `${Math.round(o.x)}px ${Math.round(o.y)}px` : undefined }}>
+          <AbsoluteFill style={{ transform: cameraOf(sc.camera, p, f, art.energy, FLOW_CAMERA.front), transformOrigin: sc.camera === "macro" ? `${Math.round(o.x)}px ${Math.round(o.y)}px` : undefined }}>
             <CtxC.Provider value={c}>{front}</CtxC.Provider>
           </AbsoluteFill>
         )}
@@ -666,10 +671,10 @@ function SceneBody(props: SceneProps) {
 // a ring), rests a moment and drifts off.
 function BigCursor({ c, it }: { c: Ctx; it: PlacedItem }) {
   const click = it.hit ?? it.at + 30;
-  if (c.f < it.at - 1 || c.f > click + 46) return null;
+  if (c.f < it.at - 1 || c.f > click + 62) return null;
   const from = it.from ?? it.box;
   const tIn = IN_OUT(ramp(c.f, it.at, Math.max(8, click - 6 - it.at)));
-  const tOut = IN_OUT(ramp(c.f, click + 26, 18));
+  const tOut = IN_OUT(ramp(c.f, click + 40, 20));
   const x = mix(from.x, it.box.x, tIn) + tOut * 80;
   const y = mix(from.y, it.box.y, tIn) - Math.sin(tIn * Math.PI) * 46 + tOut * 60;
   const press = clamp01(kIn(c, click - 3, 4) - kIn(c, click + 3, 8));
@@ -678,9 +683,13 @@ function BigCursor({ c, it }: { c: Ctx; it: PlacedItem }) {
   return (
     <div style={{ position: "absolute", left: 0, top: 0, width: W, height: H, pointerEvents: "none", zIndex: 50, opacity: clamp01((c.f - it.at) / 6) * (1 - tOut) }}>
       {ring > 0 && ring < 1 && <div style={{ position: "absolute", left: it.box.x - 46, top: it.box.y - 46, width: 92, height: 92, borderRadius: 99, border: `4px solid ${c.pal.accent}`, transform: `scale(${mix(0.3, 1.6, ring).toFixed(3)})`, opacity: 1 - ring }} />}
-      <svg width={110} height={110} viewBox="0 0 24 24" style={{ position: "absolute", left: x - 26, top: y - 16, transform: `scale(${(1 - press * 0.16).toFixed(3)})`, transformOrigin: "24% 14%", filter: `drop-shadow(0 8px 14px rgba(0,0,0,${c.pal.dark ? 0.55 : 0.28}))` }}>
-        <path d="M5 3 L19 12 L12 13.5 L9 20 Z" fill={ink} stroke={c.pal.dark ? "#111" : "#fff"} strokeWidth={1.3} strokeLinejoin="round" />
-      </svg>
+      {/* (its shadow drawn as a shape, not a CSS filter: the browser download draws it too) */}
+      <div style={{ position: "absolute", left: x - 31, top: y - 18, width: 132, height: 132, transform: `scale(${(1 - press * 0.16).toFixed(3)})`, transformOrigin: "24% 14%" }}>
+        <svg width={132} height={132} viewBox="0 0 24 24">
+          <path d="M5.9 4.4 L19.9 13.4 L12.9 14.9 L9.9 21.4 Z" fill={c.pal.dark ? "#000000" : "#000000"} fillOpacity={c.pal.dark ? 0.5 : 0.22} />
+          <path d="M5 3 L19 12 L12 13.5 L9 20 Z" fill={ink} stroke={c.pal.dark ? "#111111" : "#ffffff"} strokeWidth={1.3} strokeLinejoin="round" />
+        </svg>
+      </div>
     </div>
   );
 }

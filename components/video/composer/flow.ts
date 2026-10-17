@@ -1,6 +1,7 @@
 import { rng } from "./art";
 import { isAccent } from "./layout";
 import { baseSize } from "./sizes";
+import { tidied } from "./tidy";
 import type { Staging } from "./staging";
 import type { Box, CameraKind, ComposerPlan, Energy, Flow, LinkKind, PlacedItem, PlacedScene, TransitionKind } from "./types";
 
@@ -30,10 +31,11 @@ export type EnergySpec = {
   plain: LinkKind[];
 };
 export const ENERGY: Record<Energy, EnergySpec> = {
-  // (damping ratios ≈ 0.9, 0.7, 0.55: a settle, never an excessive bounce)
-  calm: { motion: "snappy", pace: 0.85, level: 0.25, hop: 30, share: 0.3, stagger: 3, spring: { damping: 20, stiffness: 120, mass: 1 }, cameras: ["drift", "push", "pull", "rise", "float"], plain: ["fade", "slide", "wipe"] },
-  medium: { motion: "snappy", pace: 1, level: 0.5, hop: 24, share: 0.4, stagger: 3, spring: { damping: 17, stiffness: 170, mass: 0.85 }, cameras: ["drift", "push", "pull", "rise", "orbit", "float"], plain: ["slide", "wipe", "fade"] },
-  lively: { motion: "springy", pace: 1.15, level: 0.75, hop: 18, share: 0.5, stagger: 2, spring: { damping: 14, stiffness: 210, mass: 0.8 }, cameras: ["push", "drift", "orbit", "tilt", "rise", "pull", "macro"], plain: ["slide", "wipe", "tunnel"] },
+  // (damping ratios ≈ 0.73, 0.62, 0.5: a visible settle, never an excessive bounce;
+  // no plain fade — a slide or a mask wipe, as the reference films)
+  calm: { motion: "snappy", pace: 0.9, level: 0.4, hop: 28, share: 0.3, stagger: 3, spring: { damping: 16, stiffness: 120, mass: 1 }, cameras: ["drift", "push", "pull", "rise", "float"], plain: ["slide", "wipe"] },
+  medium: { motion: "snappy", pace: 1, level: 0.55, hop: 22, share: 0.4, stagger: 3, spring: { damping: 15, stiffness: 170, mass: 0.85 }, cameras: ["drift", "push", "pull", "rise", "orbit", "float"], plain: ["slide", "wipe"] },
+  lively: { motion: "springy", pace: 1.15, level: 0.75, hop: 18, share: 0.5, stagger: 2, spring: { damping: 13, stiffness: 210, mass: 0.8 }, cameras: ["push", "drift", "orbit", "tilt", "rise", "pull", "macro"], plain: ["slide", "wipe", "tunnel"] },
 };
 export const CONTINUOUS = new Set<LinkKind>(["morph", "dive", "reveal"]);
 // how fast a zoom through a window may grow (×e per this many frames⁻¹)
@@ -137,7 +139,8 @@ export function flowStaging(plan: ComposerPlan, seed: number, energy: Energy, { 
   // the share of continuous ways: about the energy's (calm 30 %, medium 40 %), at least half when lively
   const changes = Array.from({ length: n - 1 }, (_, k) => k + 1);
   const eligible = continuous ? changes.filter((i) => !!morphPair(sc[i - 1], sc[i]) || diveWindow(sc[i - 1], sc[i]) != null || revealWindow(sc[i]) != null) : [];
-  const target = Math.min(eligible.length, Math.ceil((n - 1) * e.share) + (energy === "lively" ? R.int(0, 1) : 0));
+  // (a short video still gets two: three or more changes never have fewer than 2 continuous ways)
+  const target = Math.min(eligible.length, Math.max(n - 1 >= 3 ? 2 : 0, Math.ceil((n - 1) * e.share) + (energy === "lively" ? R.int(0, 1) : 0)));
   const want = (i: number) => (asked[i] ? ASKED[asked[i]!] : undefined);
   // the Director's continuous ways are suggestions: each video keeps a seeded
   // part of them (never all of two or more) and places the rest of its share
@@ -199,7 +202,10 @@ export function flowed(plan: ComposerPlan, s: Staging): ComposerPlan {
     });
     return { ...sc, items };
   });
-  const out: ComposerPlan = { ...plan, scenes, journey: null, link: s.link, links: s.links, guide: null, recap: false, flow, ...(s.hero != null ? { hero: s.hero } : {}) };
+  // (a plain fade is no longer one of its ways: a video staged with one slides there instead — never a dip to the background)
+  const links = s.links?.map((l) => (l === "fade" ? "slide" : l)) ?? null;
+  // (no eyebrow labels, never the same words twice on one screen, tables only with short cells)
+  const out: ComposerPlan = tidied({ ...plan, scenes, journey: null, link: s.link, links, guide: null, recap: false, flow, ...(s.hero != null ? { hero: s.hero } : {}) });
   return flow.cursor === false ? out : withCursor(out);
 }
 
@@ -232,7 +238,7 @@ export function withCursor(plan: ComposerPlan): ComposerPlan {
     const to = { x: g.x + g.w * (it.kind === "icon" ? 0.18 : 0.22), y: g.y + g.h * (it.kind === "icon" ? 0.2 : 0.18) };
     const side = to.x < W / 2 ? 1 : -1;
     const from = { x: Math.max(60, Math.min(W - 60, to.x + side * R.range(260, 420))), y: Math.max(60, Math.min(H - 60, to.y + R.range(180, 300))) };
-    sc.items.push({ kind: "cursor", at: click - 34, hit: click, box: { x: to.x, y: to.y, w: 120, h: 120 }, from: { x: from.x, y: from.y, w: 120, h: 120 }, scale: 1, z: 9 } as PlacedItem);
+    sc.items.push({ kind: "cursor", at: click - 40, hit: click, box: { x: to.x, y: to.y, w: 120, h: 120 }, from: { x: from.x, y: from.y, w: 120, h: 120 }, scale: 1, z: 9 } as PlacedItem);
   }
   return { ...plan, scenes };
 }
