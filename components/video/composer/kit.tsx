@@ -8,7 +8,7 @@ import type { ArtT, Brand } from "./types";
 // What every Composer part draws with: the frame, the scene's palette, the
 // art direction, its motion and faces, and the brand.
 // (noGlyph: an icon's glyph left out while it morphs into another — film.tsx)
-export type Ctx = { f: number; pal: Pal; art: ArtT; m: Mover; display: string; text: string; brand: Brand; screens: string[]; noGlyph?: boolean };
+export type Ctx = { f: number; pal: Pal; art: ArtT; m: Mover; display: string; text: string; brand: Brand; screens: string[]; noGlyph?: boolean; v2?: boolean };
 export const CtxC = createContext<Ctx | null>(null);
 export const useCtx = () => useContext(CtxC)!;
 
