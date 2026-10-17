@@ -45,7 +45,7 @@ function Ground({ look, f, i }: { look: Look; f: number; i: number }) {
   return (
     <AbsoluteFill style={{ background: look.bg }}>
       <AbsoluteFill style={{ background: `radial-gradient(1200px 900px at ${x.toFixed(1)}% ${y.toFixed(1)}%, ${look.glow}, transparent 70%)` }} />
-      <AbsoluteFill style={{ background: `radial-gradient(900px 700px at ${(100 - x).toFixed(1)}% ${(95 - y).toFixed(1)}%, ${tint(look.accent, look.dark ? 0.1 : 0.08)}, transparent 70%)` }} />
+      <AbsoluteFill style={{ background: `radial-gradient(900px 700px at ${(100 - x).toFixed(1)}% ${(95 - y).toFixed(1)}%, ${tint(look.accent, look.dark ? 0.07 : 0.05)}, transparent 70%)` }} />
     </AbsoluteFill>
   );
 }

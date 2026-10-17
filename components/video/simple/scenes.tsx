@@ -69,12 +69,19 @@ function Statement({ c }: { c: C }) {
       </Side>
     );
   }
-  // the words on a block of the accent, wiped in
-  const wipe = ease(clamp01((c.f - c.s.from - 2) / 16));
-  const bw = W - 2 * pad, bh = Math.round(H * (tall(c) ? 0.5 : 0.56));
+  // the lines come in from alternate sides, the key word in the accent
+  const fit = fitWords(c.s.words.map((w) => w.t), c.look.display, { width: W - 2 * pad, lines: c.g.shape === "wide" ? 3 : 4, max: Math.round(190 * c.g.u), min: 70 });
   return (
-    <div style={center({ left: pad, top: (H - bh) / 2, width: bw, height: bh, borderRadius: 40 * c.g.u, background: c.look.accent, clipPath: `inset(0 ${((1 - wipe) * 100).toFixed(2)}% 0 0 round ${40 * c.g.u}px)`, boxShadow: `0 40px 120px ${tint(c.look.accent, 0.3)}` })}>
-      <Words c={{ ...c, look: { ...c.look, accent: c.look.onAccent } }} width={bw - 140} lines={c.g.shape === "wide" ? 2 : 4} max={Math.round(180 * c.g.u)} min={60} color={c.look.onAccent} />
+    <div style={center({ left: pad, top: 0, width: W - 2 * pad, height: H, flexDirection: "column" })}>
+      {fit.lines.map((line, li) => {
+        const k = springAt(c, Math.min(...line.map((i) => c.s.words[i].at)) - 4);
+        const from = (li % 2 ? 1 : -1) * W * 0.4;
+        return (
+          <div key={li} style={{ ...display(c, fit.size, { fontWeight: 800, lineHeight: 1.06 }), display: "flex", gap: `0 ${(fit.size * 0.26).toFixed(0)}px`, opacity: clamp01(k * 1.6), transform: `translateX(${((1 - k) * from).toFixed(1)}px)` }}>
+            {line.map((i) => <span key={i} style={{ color: c.s.words[i].key ? c.look.accent : undefined }}>{c.s.words[i].t}</span>)}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -262,7 +269,7 @@ function Feature({ c }: { c: C }) {
                   <Glyph c={c} name={it.icon ?? c.s.icon} size={72} card />
                   <One style={{ fontSize: 50, fontWeight: 600, flex: 1 }} fit={580} face={c.look.text}>{it.text}</One>
                   <div style={{ width: 52, height: 52, borderRadius: 99, border: `3px solid ${lit ? c.look.panelAccent : c.look.line}`, background: lit ? c.look.panelAccent : undefined, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {lit && <Icon name="check" size={32} color={c.look.panelAccent === c.look.accent ? c.look.onAccent : "#ffffff"} strokeWidth={3} />}
+                    {lit && <Icon name="check" size={32} color={c.look.onPanelAccent} strokeWidth={3} />}
                   </div>
                 </div>
               );
@@ -317,7 +324,7 @@ function Feature({ c }: { c: C }) {
           {c.f < doneAt + 20 && Math.floor(c.f / 8) % 2 === 0 && <span style={{ display: "inline-block", width: 4, height: 54, marginLeft: 4, verticalAlign: "middle", background: c.look.panelAccent }} />}
         </div>
         <div style={{ width: 84, height: 84, borderRadius: 99, background: c.look.panelAccent, display: "flex", alignItems: "center", justifyContent: "center", transform: `scale(${(1 - 0.12 * clamp01(1 - Math.abs(c.f - doneAt) / 5)).toFixed(3)})` }}>
-          <Icon name="arrow-right" size={44} color={c.look.panelAccent === c.look.accent ? c.look.onAccent : "#ffffff"} strokeWidth={2.6} />
+          <Icon name="arrow-right" size={44} color={c.look.onPanelAccent} strokeWidth={2.6} />
         </div>
       </div>
       {results.map((it, i) => {
@@ -445,7 +452,7 @@ function Steps({ c }: { c: C }) {
               <div key={i} style={{ height: rowH, display: "flex", alignItems: "center", gap: 28, borderTop: i ? `1.5px solid ${c.look.line}` : undefined, ...rise(k, 30) }}>
                 <div style={{ width: 64, height: 64, borderRadius: 99, border: `4px solid ${tick > 0.5 ? c.look.panelAccent : c.look.line}`, background: tint(c.look.panelAccent, tick), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <svg width={36} height={36} viewBox="0 0 24 24">
-                    <path d="M5 12.5 L10 17.5 L19 7" fill="none" stroke={c.look.panelAccent === c.look.accent ? c.look.onAccent : "#ffffff"} strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - tick} />
+                    <path d="M5 12.5 L10 17.5 L19 7" fill="none" stroke={c.look.onPanelAccent} strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - tick} />
                   </svg>
                 </div>
                 <One style={{ fontSize: 54, fontWeight: 600, flex: 1 }} fit={640} face={c.look.text}>{it.text}</One>
@@ -540,12 +547,12 @@ function Cta({ c }: { c: C }) {
   const half = wide ? { left: c.s.left ? 0 : W / 2, top: 0, width: W / 2, height: H } : { left: 0, top: 0, width: W, height: H * 0.44 };
   const rest = wide ? { left: c.s.left ? W / 2 + 80 : 100, top: 0, width: W / 2 - 180, height: H } : { left: pad, top: H * 0.46, width: W - 2 * pad, height: H * 0.54 };
   const wipe = ease(clamp01((c.f - c.s.from) / 18));
-  const onA = c.look.onAccent;
+  const onA = c.look.onFill;
   return (
     <>
-      <div style={center({ ...half, background: c.look.accent, flexDirection: "column", gap: 30 * u, clipPath: wide ? `inset(0 ${c.s.left ? (1 - wipe) * 100 : 0}% 0 ${c.s.left ? 0 : (1 - wipe) * 100}%)` : `inset(0 0 ${(1 - wipe) * 100}% 0)` })}>
+      <div style={center({ ...half, background: c.look.fill, flexDirection: "column", gap: 30 * u, clipPath: wide ? `inset(0 ${c.s.left ? (1 - wipe) * 100 : 0}% 0 ${c.s.left ? 0 : (1 - wipe) * 100}%)` : `inset(0 0 ${(1 - wipe) * 100}% 0)` })}>
         <div style={{ ...pop(springAt(c, c.s.from + 10)) }}>
-          <Mark c={{ ...c, look: { ...c.look, accent: onA, onAccent: c.look.accent } }} size={Math.round(180 * u)} />
+          <Mark c={{ ...c, look: { ...c.look, accent: onA, onAccent: c.look.fill } }} size={Math.round(180 * u)} />
         </div>
         <div style={display(c, Math.round(fitWords([c.brand.name], c.look.display, { width: half.width - 120, lines: 1, max: 110 * u, min: 44 }).size), { color: onA })}>{c.brand.name}</div>
       </div>

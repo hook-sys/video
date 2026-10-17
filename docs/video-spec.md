@@ -29,8 +29,11 @@ asked. The same script made twice gives two visibly different videos.
    things spring in and settle (a visible settle, never a bounce).
 6. **Scenes flow.** A slide, a zoom through, or a mask wipe — one family per
    video, never a dip to black.
-7. **One brand colour + neutrals.** Dark, light or brand-filled ground; the
-   colour only on the keyword, buttons and glows.
+7. **One brand colour + neutrals.** Dark, light or brand-filled ground. The
+   colour is the brand's exact colour (only made lighter or darker where it
+   would not read, never another hue), on the keyword, the icons, the buttons
+   and glows. Nothing is drawn behind or under the words (no underline, no
+   marker, no block).
 8. **The story arc.** Hook → problem → reveal → features → proof → the ask.
    The last scene is always the brand and the call to action.
 9. **Honest.** No number the voice does not say; no invented feature, customer
@@ -57,8 +60,8 @@ cut off. There is no layout solver and no repair pass.
 
 | Template | Played for | A | B | C |
 |---|---|---|---|---|
-| statement | hook, any | giant words | words + a big icon | words on an accent block |
-| kinetic | hook, problem | one word at a time, then the line | typed into a prompt bar | a marker sweeps behind the key word |
+| statement | hook, any | giant words | words + a big icon | lines sliding in from alternate sides |
+| kinetic | hook, problem | one word at a time, then the line | typed into a prompt bar | the key word grows in as it is said |
 | trouble | problem | tiles struck out | alert cards piling up | the pains struck through |
 | compare | problem → solution | the mess, then one tidy card | a slider wipes before into after | a switch turns every cross to a tick |
 | reveal | solution | the mark lands with a ring | things fly into the mark | things orbit the mark |
@@ -90,5 +93,5 @@ template order.
 - Phase 1: the engine behind the admin switch "Simple engine" (New version
   only, super admin), the template gallery, side-by-side tests.
 - Phase 2 (done): 12 templates × 3 variants, 9:16 and 1:1, word effects
-  (one word at a time, typing, strike, marker).
+  (one word at a time, typing, strike, the key word growing in).
 - Phase 3: when it wins, the old Composer is removed.

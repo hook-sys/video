@@ -22,7 +22,7 @@ export const springAt = (c: C, at: number, slow = 1) => {
 export const stagger = (c: C) => SPRINGS[c.pace].stagger;
 // a hex colour at an alpha
 export function tint(hex: string, a: number): string {
-  if (!hex.startsWith("#")) return hex;
+  if (!/^#[0-9a-f]{6}/i.test(hex)) return hex;
   const n = parseInt(hex.slice(1, 7), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
@@ -30,10 +30,10 @@ export function tint(hex: string, a: number): string {
 export const rise = (k: number, by = 60): CSSProperties => ({ opacity: clamp01(k * 1.6), transform: `translateY(${((1 - k) * by).toFixed(1)}px)` });
 export const pop = (k: number): CSSProperties => ({ opacity: clamp01(k * 1.8), transform: `scale(${(0.6 + 0.4 * k).toFixed(4)})` });
 
-// The voice's words in their place: each as it is said, the key one lit —
-// underlined, or with an effect: struck through (what goes away), typed
-// letter by letter, or a marker sweeping behind the key word.
-export type Effect = "strike" | "type" | "marker";
+// The voice's words in their place: each as it is said, the key one in the
+// accent colour (nothing behind or under it) — or with an effect: struck
+// through (what goes away), typed letter by letter, or the key word growing in.
+export type Effect = "strike" | "type" | "pop";
 export function Words({ c, width, lines, max, min, align = "center", color, effect, style }: { c: C; width: number; lines: number; max: number; min?: number; align?: "left" | "center" | "right"; color?: string; effect?: Effect; style?: CSSProperties }) {
   const { look } = c;
   const words = c.s.words;
@@ -60,12 +60,11 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
                 </span>
               );
             }
+            const grow = effect === "pop" && w.key ? springAt(c, w.at + 2, 0.8) : 1;
             return (
-              <span key={i} style={{ display: "inline-block", position: "relative", ...rise(k, fit.size * 0.45), color: lit ? (effect === "marker" ? look.onAccent : look.accent) : undefined, zIndex: 0 }}>
-                {effect === "marker" && w.key && <span style={{ position: "absolute", left: -fit.size * 0.08, right: -fit.size * 0.08, top: "8%", bottom: "4%", background: look.accent, borderRadius: fit.size * 0.12, zIndex: -1, clipPath: `inset(0 ${((1 - ease(after)) * 100).toFixed(1)}% 0 0)` }} />}
+              <span key={i} style={{ display: "inline-block", position: "relative", ...rise(k, fit.size * 0.45), color: lit ? look.accent : undefined, ...(effect === "pop" && w.key ? { transform: `${rise(k, fit.size * 0.45).transform} scale(${(1.35 - 0.35 * grow).toFixed(4)})` } : {}) }}>
                 {w.t}
                 {effect === "strike" && <span style={{ position: "absolute", left: -fit.size * 0.04, top: "52%", height: Math.max(6, fit.size * 0.08), width: `calc(${(ease(after) * 100).toFixed(1)}% + ${(ease(after) * fit.size * 0.08).toFixed(1)}px)`, background: look.bad, borderRadius: 99 }} />}
-                {lit && !effect && <span style={{ position: "absolute", left: 0, bottom: fit.size * 0.02, height: Math.max(6, fit.size * 0.07), width: `${(ease(after) * 100).toFixed(1)}%`, background: tint(look.accent, 0.35), borderRadius: 99 }} />}
               </span>
             );
           })}
@@ -75,21 +74,22 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
   );
 }
 
-// An icon on a tile (solid: on the accent)
-// (on a card: the card's accent)
+// An icon on a tile, one way everywhere: the accent's icon on a soft tile of
+// the same colour (on a card: the card's accent), or solid — the accent tile.
 export function Glyph({ c, name, size, solid = false, card = false, style }: { c: C; name: string; size: number; solid?: boolean; card?: boolean; style?: CSSProperties }) {
   const { look } = c;
   const accent = card ? look.panelAccent : look.accent;
-  const on = card && accent !== look.accent ? "#ffffff" : look.onAccent;
+  const on = card ? look.onPanelAccent : look.onAccent;
   return (
-    <div style={{ width: size, height: size, borderRadius: size * 0.28, background: solid ? accent : tint(accent, look.dark && !card ? 0.16 : 0.12), border: solid ? undefined : `1.5px solid ${tint(accent, 0.3)}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: solid ? `0 ${size * 0.15}px ${size * 0.4}px ${tint(accent, 0.35)}` : undefined, ...style }}>
-      <Icon name={name} size={size * 0.52} color={solid ? on : accent} strokeWidth={2} />
+    <div style={{ width: size, height: size, borderRadius: size * 0.28, background: solid ? accent : tint(accent, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: solid ? `0 ${(size * 0.12).toFixed(0)}px ${(size * 0.3).toFixed(0)}px ${tint(accent, 0.28)}` : undefined, ...style }}>
+      <Icon name={name} size={size * 0.5} color={solid ? on : accent} strokeWidth={2} />
     </div>
   );
 }
 
 // a card's surface
-export const panel = (c: C, radius = 30): CSSProperties => ({ background: c.look.panel, border: `1.5px solid ${c.look.line}`, borderRadius: radius, boxShadow: `0 40px 100px ${c.look.shadow}`, color: c.look.panelInk, fontFamily: familyOf(c.look.text) });
+// (a thin border and a layered, soft shadow; on a dark ground: glass)
+export const panel = (c: C, radius = 30): CSSProperties => ({ background: c.look.panelFill, border: `1px solid ${c.look.line}`, borderRadius: radius, boxShadow: `0 1px 2px ${c.look.shadow}, 0 18px 50px ${c.look.shadow}`, color: c.look.panelInk, fontFamily: familyOf(c.look.text) });
 
 // The brand's mark: its logo, else its initial on the accent
 export function Mark({ c, size }: { c: C; size: number }) {

@@ -12,7 +12,7 @@ import type { Item, Scene, TemplateId } from "./types";
 
 const tall = (c: C) => c.g.shape !== "wide";
 const things = (c: C): Item[] => (c.s.items.length ? c.s.items : [{ text: c.s.words.map((w) => w.t).join(" "), icon: c.s.icon }]);
-const onPanel = (c: C) => (c.look.panelAccent === c.look.accent ? c.look.onAccent : "#ffffff");
+const onPanel = (c: C) => (c.look.onPanelAccent);
 
 // ── compare: the mess before, the order after ─────────────────────────────
 function Compare({ c }: { c: C }) {
@@ -195,8 +195,8 @@ function Kinetic({ c }: { c: C }) {
       </div>
     );
   }
-  // big words, the key one with a marker sweeping behind it
-  return <WordsIn c={c} box={box} place="center" effect="marker" />;
+  // big words, the key one growing in as it is said
+  return <WordsIn c={c} box={box} place="center" effect="pop" />;
 }
 
 // ── messages: the product talking ─────────────────────────────────────────
@@ -300,10 +300,10 @@ function Bento({ c }: { c: C }) {
   const tile = (it: Item, i: number, w: number, h: number, big: boolean) => {
     const k = springAt(c, itemAt(c, i, n));
     return (
-      <div style={{ width: w, height: h, ...panel(c, 34), padding: 40, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between", background: big ? c.look.panelAccent : c.look.panel, color: big ? onPanel(c) : c.look.panelInk, ...rise(k, 50) }}>
+      <div style={{ width: w, height: h, ...panel(c, 34), padding: 40, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between", background: big ? c.look.fill : c.look.panel, color: big ? c.look.onFill : c.look.panelInk, ...rise(k, 50) }}>
         {big ? (
-          <div style={center({ position: "relative", width: 110, height: 110, borderRadius: 30, background: tint(onPanel(c), 0.18) })}>
-            <Icon name={it.icon ?? c.s.icon} size={64} color={onPanel(c)} strokeWidth={2.2} />
+          <div style={center({ position: "relative", width: 110, height: 110, borderRadius: 30, background: tint(c.look.onFill, 0.18) })}>
+            <Icon name={it.icon ?? c.s.icon} size={64} color={c.look.onFill} strokeWidth={2.2} />
           </div>
         ) : (
           <Glyph c={c} name={it.icon ?? c.s.icon} size={big ? 110 : 92} card />
