@@ -23,6 +23,7 @@ import { STILL_BACKGROUND, type ComposerProps, type EnterKind, type ItemKind, ty
 import { H, W, setFrame } from "./frame";
 import { SoundEffects } from "./sfx";
 import { QaProbe, qaMark } from "./probe";
+import { heroNode } from "./heroes/view";
 
 // A Composer film: the Director's scenes on the voice's words. Every scene
 // is its own composition; one field of light runs under all of them and
@@ -604,6 +605,14 @@ function SceneBody(props: SceneProps) {
   const pout = J || !next ? null : presentationOf(next.enter, next.seed);
   const outStyle = kout > 0 && !pout ? sceneOut(next.enter, kout) : undefined;
   const inStyle = kin < 1 && !pin ? sceneIn(sc.enter, kin, o) : undefined;
+  const hero = heroNode(sc.hero, sc.camera, c, plan.words, sc.from, last ? plan.duration : sc.to, i);
+  if (hero) {
+    return (
+      <AbsoluteFill style={outStyle}>
+        <AbsoluteFill style={inStyle}>{hero}</AbsoluteFill>
+      </AbsoluteFill>
+    );
+  }
   const p = clamp01((f - sc.from) / Math.max(1, sc.to - sc.from));
   // (on a journey the travelling camera is the movement; the scene keeps only its breathing, flat —
   // the "New version" keeps every scene's own move, its things in front moving more: parallax)

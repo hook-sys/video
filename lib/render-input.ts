@@ -13,6 +13,7 @@ import { type Staging, staged } from "@/components/video/composer/staging";
 import { composeVariants } from "@/components/video/composer/variants";
 import { pieceToWord, remapScript, scriptWords } from "@/components/video/composer/words";
 import { Script as ComposerScript, type ComposerPlan } from "@/components/video/composer/types";
+import { logoReachNote } from "@/components/video/composer/heroes/slots";
 
 export type RenderProject = {
   id?: string;
@@ -111,6 +112,8 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
     plans.push(...composeVariants({ words: shown, brand, duration, seed, count: 1, screens: screenshotUrls.length, size }).plans);
   }
   for (const p of plans) p.sfx = sfx;
+  const logoNote = logoReachNote(!!logoUrl, plans.flatMap((p) => p.scenes));
+  if (logoNote) problems.push(logoNote);
 
   // what the Motion Director decided (the idea, the camera language) and the code's score
   const sc = stored as { creative?: { idea?: string; language?: string }; profile?: { mood?: string; category?: string }; score?: { total?: number }; judge?: { best?: number; scores?: { candidate: number; total: number }[]; rule?: { total: number }[] } } | undefined;
