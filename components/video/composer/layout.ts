@@ -516,7 +516,7 @@ export function placeScene(p: SceneInput): { placed: PlacedScene; problems: stri
   }
   const camera = s.camera ?? art.camera;
   return {
-    placed: { from, to, dark: false, camera, enter: s.enter, layout, arrange: kind, text: tb, items: placed, seed: p.seed },
+    placed: { from, to, dark: false, camera, enter: s.enter, layout, arrange: kind, text: tb, items: placed, seed: p.seed, ...(s.hero ? { hero: s.hero } : {}) },
     problems,
   };
 }
@@ -541,7 +541,7 @@ const weightOf = (s: SceneT) => s.items.filter((it) => !isAccent(it)).reduce((a,
 export function paced(scenes: SceneT[], frame: (word: number) => number, duration: number, min = MIN_SCENE): SceneT[] {
   const out: SceneT[] = scenes.map((s) => ({ ...s, items: [...s.items] }));
   const join = (a: SceneT, b: SceneT): SceneT => {
-    const keep = weightOf(b) > weightOf(a) ? b : a;
+    const keep = a.hero && !b.hero ? a : b.hero && !a.hero ? b : weightOf(b) > weightOf(a) ? b : a;
     const texts = [a.text, b.text].filter((t): t is NonNullable<SceneT["text"]> => !!t);
     const text = texts.length ? { ...(keep.text ?? texts[0]), from: Math.min(...texts.map((t) => t.from)), to: Math.max(...texts.map((t) => t.to)), key: [...new Set(texts.flatMap((t) => t.key ?? []))].slice(0, 3) } : null;
     return { ...keep, at: a.at, text, kicker: keep.kicker ?? a.kicker ?? b.kicker ?? null };

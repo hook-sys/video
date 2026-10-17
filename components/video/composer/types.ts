@@ -27,6 +27,9 @@ export const CASES = ["sentence", "upper", "lower"] as const;
 export const MOTIONS = ["soft", "snappy", "springy", "glide"] as const;
 // (macro: a slow push deep into the scene's main thing — ref 22)
 export const CAMERAS = ["still", "drift", "push", "pull", "tilt", "float", "orbit", "rise", "macro"] as const;
+// Hero scenes (v2). The first two are drawn; the rest are reserved so a
+// stored script that names one still parses. See composer/heroes/.
+export const HERO_IDS = ["logo_end", "growth_chart", "problem_stack", "search_result", "icon_morph", "team_together", "security_shield"] as const;
 export const ICON_STYLES = ["tile", "round", "bare", "duotone", "outline", "glass"] as const;
 // The look: the visual family of the whole video — it sets the background,
 // the cards, the type, the colour and the rhythm together (art.ts, field.tsx,
@@ -94,6 +97,13 @@ export const Item = z.object({
   size: n(z.enum(SIZES)),
   tilt: n(z.number().min(-20).max(20)),
 });
+// Optional v2 hero. When it is set the film draws heroes/<id> and ignores
+// this scene's items and words. v1 scripts omit it.
+export const Hero = z.object({
+  id: z.enum(HERO_IDS),
+  variant: z.number().int().min(0),
+  slots: z.record(z.string(), z.unknown()),
+});
 export const Scene = z.object({
   at: z.number().int(), // the word the scene starts on
   text: n(z.object({ from: z.number().int(), to: z.number().int(), size: z.enum(["s", "m", "l", "xl"]), reveal: z.enum(REVEALS), align: n(z.enum(["left", "center", "right"])), key: n(z.array(z.string().max(30)).max(4)) })),
@@ -105,6 +115,7 @@ export const Scene = z.object({
   camera: n(z.enum(CAMERAS)),
   enter: z.enum(TRANSITIONS),
   items: z.array(Item).max(7),
+  hero: n(Hero),
 });
 export const Art = z.object({
   name: z.string().max(40),
@@ -136,6 +147,8 @@ export const Script = z.object({ art: Art, scenes: z.array(Scene).min(1).max(24)
 export type RowT = z.infer<typeof Row>;
 export type ItemT = z.infer<typeof Item>;
 export type SceneT = z.infer<typeof Scene>;
+export type HeroT = z.infer<typeof Hero>;
+export type HeroId = (typeof HERO_IDS)[number];
 export type ArtT = z.infer<typeof Art>;
 export type ScriptT = z.infer<typeof Script>;
 
@@ -159,6 +172,8 @@ export type PlacedScene = {
   text: TextBlock | null;
   items: PlacedItem[];
   seed: number;
+  // v2 hero, already on the script (slots checked when the scene is drawn)
+  hero?: HeroT | null;
 };
 // (the last four are structures: a timeline, a mind map, a wall of tiles, a
 // web page that scrolls — see structure.tsx)

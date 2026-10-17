@@ -50,6 +50,10 @@ import { groundIsDark } from "@/components/video/composer/style";
 import { RECIPES } from "@/components/video/composer/recipes";
 import { copywrite } from "@/lib/v2/copywriter";
 import { withVariety } from "@/components/video/composer/variants";
+import { setFrame } from "@/components/video/composer/frame";
+import { cam2d, containCam, mapPoint } from "@/components/video/composer/fake2d";
+import { withHeroes } from "@/components/video/composer/heroes/pick";
+import { countSpoken, cutWords, logoReachNote, numberSlot, resolveHero, textSlot } from "@/components/video/composer/heroes/slots";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -680,6 +684,48 @@ export async function runChecks(): Promise<Check[]> {
       add("UI pieces: the script's own words (the things it names), never a number the voice does not say (an unsaid dashboard becomes a list, a counter its spoken number)", PIECES.length === 7 && pieceOf({ kind: "card", variant: "kpi" }) === "dashboard" && s1[0].variant === "list" && !JSON.stringify(s1).includes("48,210") && (s1[1].rows ?? []).map((r) => r.title).join("/") === "Invoice/Payment/Dashboard" && s2[0].value === "Search any client" && s3[0].value === "3x" && s3[1].variant === "area" && s3[1].value == null, pieceLine);
       add("UI pieces on with their rule (new version only)", rules.flow.pieces && !v2RulesOf({ [v2RuleKey("ui_pieces")]: false }).flow.pieces && rules.text("").includes("UI PIECES"), String(rules.flow.pieces));
     }
+  }
+
+  section = "v2 hero scenes";
+  {
+    add("text over the limit is cut on a whole word, else dropped", cutWords("Results grow faster today", 16) === "Results grow" && cutWords("Supercalifragilistic", 8) === null && cutWords("3x", 6) === "3x", `${cutWords("Results grow faster today", 16)}`);
+    const twice = numberSlot({ value: "2", word: 0 }, [{ text: "twice", start: 0, end: 0.2 }]);
+    const three = numberSlot({ value: "3x", word: 0 }, [{ text: "3x", start: 0, end: 0.2 }]);
+    const bn = numberSlot({ value: "৩০", word: 1, unit: "pcs" }, [{ text: "lot", start: 0, end: 0.2 }, { text: "৩০", start: 0.3, end: 0.5 }]);
+    const missingWord = numberSlot({ value: "3x" }, [{ text: "3x", start: 0, end: 0.2 }]);
+    add("a counter only when that spoken word contains the number (Bengali digits kept, 'twice' is not 2)", !twice && three?.value === "3x" && bn?.value === "৩০" && bn?.unit === "pcs" && !missingWord && countSpoken("৩০", 1) === "৩০" && countSpoken("3x", 0) === "0x", `${three?.value} · ${countSpoken("৩০", 0.5)}`);
+    const voice = [{ text: "Results", start: 0, end: 0.2 }, { text: "grow", start: 0.3, end: 0.5 }, { text: "faster", start: 0.6, end: 0.8 }];
+    const cut = textSlot({ text: "ignored", words: [0, 2] }, voice, 12);
+    add("a text slot with word indexes is taken from those words, then cut", cut?.text === "Results grow" && cut.from === 0, cut?.text ?? "");
+    setFrame(1920, 1080);
+    const box = { x: 140, y: 90, w: 1640, h: 900 };
+    const kinds = ["drift", "push", "pull", "tilt", "orbit", "rise", "float", "macro"];
+    const cropped = kinds.flatMap((kind) => [0, 0.35, 0.7, 1].flatMap((p) => {
+      const cam = containCam(cam2d(kind, p, 48, 0.9), box, 24);
+      return [[box.x, box.y], [box.x + box.w, box.y], [box.x, box.y + box.h], [box.x + box.w, box.y + box.h]].filter(([x, y]) => {
+        const [nx, ny] = mapPoint(x, y, cam);
+        return nx < 24 || ny < 24 || nx > 1896 || ny > 1056;
+      }).map(() => kind);
+    }));
+    add("the 2D camera keeps a text box inside the frame", cropped.length === 0, cropped.slice(0, 4).join(", ") || "contained");
+    const hw = ["Results", "grow", "3x", "faster", "hello", "boost", "৩০", "increase", "10", "Try", "Bookwell"].map((text, i) => ({ text, start: i * 0.4, end: i * 0.4 + 0.3 }));
+    const sc = (at: number, from: number, to: number) => ({ at, text: { from, to, size: "l" as const, reveal: "rise" as const, align: null, key: null }, kicker: null, layout: "center" as const, arrange: null, ratio: null, dark: null, camera: "drift" as const, enter: "wipe" as const, items: [] });
+    const host = composeVariants({ words: BOOKWELL.words, brand: BOOKWELL.brand, duration: 400, seed: 4, count: 1 }).videos[0].script;
+    const brand = { ...BOOKWELL.brand, icon: null as string | null, tagline: "Your whole clinic in one simple app", cta: "Book a free demo" };
+    const made = withHeroes({ ...host, scenes: [sc(0, 0, 3), sc(4, 4, 4), sc(5, 5, 6), sc(7, 7, 8), sc(9, 9, 10)] }, hw, brand, 11);
+    const ids = made.script.scenes.map((s) => s.hero?.id ?? "-");
+    const chart = made.script.scenes[0].hero;
+    const bnChart = made.script.scenes[2].hero;
+    const noLogo = resolveHero(made.script.scenes.at(-1)?.hero, hw, brand);
+    const withLogo = resolveHero(made.script.scenes.at(-1)?.hero, hw, { ...brand, icon: "https://cdn.example/logo.png" });
+    const dropped = resolveHero(chart, hw.map((w) => (w.text === "3x" ? { ...w, text: "three" } : w)), { ...brand, icon: "x" });
+    const valueOf = (slots: { value?: unknown } | undefined) => (slots?.value as { value?: string } | undefined)?.value ?? "";
+    add("heroes: growth where the voice grows or counts, never twice in a row, at most twice, logo on the last scene", ids.join(",") === "growth_chart,-,growth_chart,-,logo_end" && valueOf(chart?.slots) === "3x" && valueOf(bnChart?.slots) === "৩০" && made.script.scenes[3].hero == null, ids.join(","));
+    const logoLine = withLogo != null && noLogo == null && withLogo.slots.brandName === "Bookwell" && withLogo.exit === "none";
+    add("logo_end uses the uploaded logo and the real brand name; without a logo the scene stays kinetic", logoLine && logoReachNote(false, made.script.scenes) != null && logoReachNote(true, made.script.scenes) == null, withLogo?.slots.brandName ?? "none");
+    add("a growth counter is dropped when the spoken word no longer contains it; the label remains", dropped?.id === "growth_chart" && !dropped.slots.value && !!dropped.slots.metricLabel && dropped.exit === "zoom-in", dropped?.slots.value ? "kept" : "dropped");
+    const plain = composeVariants({ words: hw, brand: BOOKWELL.brand, duration: 200, seed: 4, count: 1 }).plans[0];
+    add("v1 output has no hero field", plain.scenes.every((s) => !s.hero) && !plain.flow, plain.scenes.map((s) => s.hero?.id ?? "-").join(","));
   }
 
   section = "covered elsewhere";

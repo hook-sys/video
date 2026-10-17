@@ -33,6 +33,13 @@ export function sfxOf(plan: ComposerPlan): Sfx[] {
     if (i > 0 && !mv) all.push({ at: s.from, name: "whoosh", volume: 0.2, rank: 2 });
     if (i > 0 && mv && way !== "fade" && way !== "cut") all.push({ at: Math.max(0, mv[i].start + 2), name: "whoosh", volume: way === "morph" ? 0.16 : 0.22, rank: 2 });
     if (mv) for (const it of s.items) if (it.kind === "cursor" && it.hit != null) all.push({ at: it.hit, name: "click", volume: 0.42, rank: 5 });
+    if (s.hero?.id === "logo_end") all.push({ at: Math.min(s.to - 12, s.from + 8), name: "reveal", volume: 0.34, rank: 4 });
+    if (s.hero?.id === "growth_chart") all.push({ at: Math.min(s.to - 12, s.from + 4), name: "whoosh", volume: 0.18, rank: 2 });
+    const spoken = s.hero?.id === "growth_chart" ? s.hero.slots.value : null;
+    if (spoken && typeof spoken === "object" && spoken && "word" in spoken && typeof spoken.word === "number") {
+      const w = plan.words[spoken.word];
+      if (w) all.push({ at: Math.min(s.to - 12, Math.round(w.start * 30)), name: "subtle_impact", volume: 0.34, rank: 4 });
+    }
     for (const it of s.items) {
       const k = ofKind(it.kind);
       if (k && !(isAccent(it) && it.kind !== "badge")) all.push({ at: Math.max(0, it.at), ...k });

@@ -29,6 +29,7 @@ import { type RoleAi, v2DirectorModel, v2Role, v2Speak, v2TimeScript, v2Transcri
 import { type V2Rules, v2DirectorOf, v2RulesOf } from "@/lib/v2/rules";
 import { type V2Look, drawLook, freshSeed, hueColour, lookOf, lookText, varietyOf } from "@/lib/v2/variety";
 import { copywrite } from "@/lib/v2/copywriter";
+import { withHeroes } from "@/components/video/composer/heroes/pick";
 
 // "New version" (admin → Settings): one simple path, no fallbacks.
 //   1. the voice: our voice reads the script (timed by the admin's Whisper),
@@ -306,6 +307,9 @@ async function buildV2(admin: Admin, projectId: string, userId: string, project:
     const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: look.seed, ideas: copied.ideas, count: 1, avoid: { display: past.seen.display, field: past.seen.field.slice(0, 3) }, screens: 0, avoidStaging: past.seenStaging, rules: rules.ruleSet, variety: varietyOf(look, rules.flow, techOffOf(settings as Parameters<typeof techOffOf>[0]).includes("camera:macro")), match: input.match !== false, techOff: techOffOf(settings as Parameters<typeof techOffOf>[0]), styles, avoidStyles: past.avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
     const video = set.videos[0];
     if (!video || video.source !== "director") throw new Error("The Motion Director's scenes could not be laid out.");
+    const heroed = withHeroes(video.script, words, brand, look.seed);
+    video.script = heroed.script;
+    if (heroed.notes.length) console.info("composer heroes:", heroed.notes.join(" · "));
     const score = scorePlan(set.plans[0], video.script, { staging: video.staging, motif: plan.creative.motif, heroScene: video.staging?.hero ?? null, recent: past.recent, problems: set.problems.length });
     const problems = [...directed.problems, ...reviewed.problems, ...copied.problems, ...set.problems].slice(0, 20);
     console.info("composer (new version):", { projectId, director: roles.director.model, review: review.model, copywriter: copywriter.model, look: `${look.display}/${look.text} ${look.harmony} ${look.energy ?? "medium"}`, scenes: plan.ideas.scenes.length, score: score.total, problems: problems.slice(0, 8) });
