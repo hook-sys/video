@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { renderProgress, startRender } from "@/app/projects/actions";
+import { freshV2Logo } from "@/app/projects/v2-actions";
 import { Player } from "@remotion/player";
 import { ComposerFilm } from "@/components/video/composer/film";
 import type { ComposerPlan, ComposerProps } from "@/components/video/composer/types";
@@ -80,6 +81,23 @@ export function ComposerStudio({ projectId, file, rendering = false, autoStart =
   const [error, setError] = useState<string>();
   const abort = useRef<AbortController | null>(null);
   const plan = plans[selected];
+  // A new-version preview whose page load found no icon tries once more.
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!plan.flow || !projectId || plan.brand.icon) return;
+    let stop = false;
+    freshV2Logo(projectId)
+      .then((r) => {
+        if (stop) return;
+        if (r.url) setLogoUrl(r.url);
+        else console.warn("v2 logo:", r.reason ?? "no logo url");
+      })
+      .catch((e: unknown) => console.warn("v2 logo:", e instanceof Error ? e.message : String(e)));
+    return () => {
+      stop = true;
+    };
+  }, [plan.flow, projectId, plan.brand.icon]);
+  const shown = plan.flow && !plan.brand.icon && logoUrl ? { ...plan, brand: { ...plan.brand, icon: logoUrl } } : plan;
 
   const download = async () => {
     setError(undefined);
@@ -89,7 +107,14 @@ export function ComposerStudio({ projectId, file, rendering = false, autoStart =
       setBusy(true);
       setProgress(0);
       const file = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "video"}${selected ? `-v${selected + 1}` : ""}.mp4`;
-      await renderToFile({ props: { plan, audioUrl, screens }, file, signal: controller.signal, onProgress: setProgress });
+      // New version: sign the icon again at render time. The old version uses the page's plan as it is.
+      let film = plan;
+      if (plan.flow && projectId) {
+        const fresh = await freshV2Logo(projectId).catch((e: unknown) => ({ url: null as string | null, reason: e instanceof Error ? e.message : String(e) }));
+        if (fresh.url) film = { ...plan, brand: { ...plan.brand, icon: fresh.url } };
+        else console.warn("v2 logo:", fresh.reason ?? "no fresh logo url");
+      }
+      await renderToFile({ props: { plan: film, audioUrl, screens }, file, signal: controller.signal, onProgress: setProgress });
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -104,9 +129,9 @@ export function ComposerStudio({ projectId, file, rendering = false, autoStart =
         <section className="flex min-w-0 flex-col gap-3">
           <div className="overflow-hidden rounded-2xl bg-black shadow-xl shadow-black/15 ring-1 ring-black/10">
             <Player
-              key={`${selected}:${plan.seed}:${plan.w ?? 1920}`}
+              key={`${selected}:${plan.seed}:${plan.w ?? 1920}${logoUrl ? ":logo" : ""}`}
               component={ComposerFilm}
-              inputProps={{ plan, audioUrl, screens } satisfies Props}
+              inputProps={{ plan: shown, audioUrl, screens } satisfies Props}
               durationInFrames={Math.max(1, plan.duration)}
               fps={30}
               compositionWidth={sizeOf(plan)[0]}
