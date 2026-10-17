@@ -1,6 +1,7 @@
 import { rng } from "./art";
 import { isAccent } from "./layout";
 import { baseSize } from "./sizes";
+import { tidied } from "./tidy";
 import type { Staging } from "./staging";
 import type { Box, CameraKind, ComposerPlan, Energy, Flow, LinkKind, PlacedItem, PlacedScene, TransitionKind } from "./types";
 
@@ -203,7 +204,8 @@ export function flowed(plan: ComposerPlan, s: Staging): ComposerPlan {
   });
   // (a plain fade is no longer one of its ways: a video staged with one slides there instead — never a dip to the background)
   const links = s.links?.map((l) => (l === "fade" ? "slide" : l)) ?? null;
-  const out: ComposerPlan = { ...plan, scenes, journey: null, link: s.link, links, guide: null, recap: false, flow, ...(s.hero != null ? { hero: s.hero } : {}) };
+  // (no eyebrow labels, never the same words twice on one screen, tables only with short cells)
+  const out: ComposerPlan = tidied({ ...plan, scenes, journey: null, link: s.link, links, guide: null, recap: false, flow, ...(s.hero != null ? { hero: s.hero } : {}) });
   return flow.cursor === false ? out : withCursor(out);
 }
 

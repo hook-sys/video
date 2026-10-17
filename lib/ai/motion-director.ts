@@ -77,10 +77,11 @@ const ART_PART = `4. ART — exactly 1 "art" in "arts", the one visual identity 
 ${STYLE_BLOCK}{ style { ground, backdrop, texture, shift, card, panel, icon, accent, size, cuts, rhythm, tilt (0–10), ghost (true|false), frame (true|false), confetti (true|false) }, name (2–3 words), hue 0–360 (close to the brand colour unless another serves the story better), harmony mono|analogous|complement|split|triad, field ${FIELDS.join("|")}, overlay none|grain|particles|sheen|vignette|lines, surface glass|solid|outline|soft|tinted|ink, radius 0–40, display (headline face) one of: ${DISPLAY_FACES.map((f) => f.slug).join(", ")}, text (UI face) one of: ${TEXT_FACES.map((f) => f.slug).join(", ")}, weight 500–850, case sentence|upper|lower, tracking -0.05..0.02, key color|pill|underline|gradient|box|outline|italic|glow, motion soft|snappy|springy|glide, pace 0.85–1.25, camera drift|push|pull|tilt|float|orbit|rise|macro, icons tile|round|bare|duotone|outline|glass, energy 0.2–0.85 }.
 Taste: condensed faces (oswald, bebas-neue, anton, big-shoulders-display) only in upper case; serif faces with sentence case and italic/underline/color keys; wide faces (unbounded, krona-one, dela-gothic-one) with smaller sizes. AVOID the faces and fields listed under SEEN (this customer has seen them).`;
 
+const KICKER_LINE = `- "kicker": optional 1–3 word eyebrow above the text ("Step 1", the product's name, "Before") or null.`;
 const SCENES_PART = `5. SCENES — the narration is final; its words are given numbered (index:word). You decide every scene — nothing is a template.
 - A scene starts on a word ("at": the index of its first word) and lasts until the next scene. Scenes follow the narration in order and cover it all; the first starts at 0. EVERY scene is at least 3 seconds of speech (about 8 words or more) so the viewer can see it: a short sentence or question ("Why should you?") joins the sentence before or after it. 15 s → 3–5 scenes, 30 s → 6–8, 60 s → 10–14.
 - "text": ONLY the scene's HOOK on screen as kinetic type — 1 to ${SHOWN} words that NAME what the scene shows ("Ringing phone", "Empty slots", "Book online", "50% off"), never the sentence the voice says: { from, to } word indexes inside the scene; "size" l|xl (big: few words); "key": 1–2 of its words to light up (exact words). A scene of icons, each with its own word (title), needs no text: null.
-- "kicker": optional 1–3 word eyebrow above the text ("Step 1", the product's name, "Before") or null.
+${KICKER_LINE}
 - "options": exactly ONE — the best way to picture the scene: { layout, arrange, items }, picturing THAT scene's words literally.
 LAYOUTS: center (text above things), top (text band on top, big things below), bottom, split-left (text left, things right), split-right, corner, type (only big kinetic text; no things except a badge), visual (things fill the frame, text as a caption), over (text on a glass plate over a big picture — a screenshot, a phone, a logo or a big icon; never over a card, list, table, flow or anything with words of its own).
 COMPOSED LAYOUTS (the words composed WITH the things — use them often): inline (an icon beside the words on one line — needs an icon item), label (the words as the label on top of a card, a phone or a chart), caption (one screenshot or phone fills the frame, the words a small caption on a plate in a corner — never over a card with words), around (the words in the middle, 2–4 small things around them), between (the words between two things, one left, one right).
@@ -199,11 +200,14 @@ const directionOf = (input: Pick<MotionInput, "prompt" | "rules" | "never" | "ma
 // that are on, honesty always) — and its look decides dark or light.
 const SCHEME_LINE = `- scheme: dark|light — ONE background for the whole video, never changing (the only place dark or light is decided; never mixed).`;
 const HOOK_WORDS = `ONLY the scene's HOOK on screen as kinetic type — 1 to ${SHOWN} words`;
+// (no eyebrow labels; the same words never twice on one screen; a table only with short cells)
+const V2_KICKER_LINE = `- "kicker": always null (no eyebrow labels). Never the same words twice on one screen: a thing's title or a row never repeats the scene's text or another thing's title. A table card only when every cell is 1–3 words and its columns say what they hold; longer rows: a list card.`;
 const v2Direction = (input: Pick<MotionInput, "prompt" | "match" | "shapes" | "motion" | "ruleText">) =>
   `${instructionsOf({ ...input, rules: false })
     .replace(SCHEME_LINE, `- scheme: dark|light — the video's background, as THIS VIDEO'S LOOK gives it.`)
     .replace(HOOK_WORDS, "ONLY the scene's HOOK on screen as kinetic type — 2 to 6 words")
-    .replace(STYLE_BLOCK, V2_STYLE_BLOCK)}\n\nANSWER COMPACTLY: only the fields asked, short values, no prose, no fields the format does not ask for.${input.ruleText ? `\n\n${input.ruleText}` : ""}`;
+    .replace(STYLE_BLOCK, V2_STYLE_BLOCK)
+    .replace(KICKER_LINE, V2_KICKER_LINE)}\n\nANSWER COMPACTLY: only the fields asked, short values, no prose, no fields the format does not ask for.${input.ruleText ? `\n\n${input.ruleText}` : ""}`;
 
 // ── What this customer has already seen (their last videos, any brand), for
 // the Creative Director: one line per video and what keeps coming back.

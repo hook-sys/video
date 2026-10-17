@@ -92,6 +92,8 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
     if (!sc.success) return [];
     // (an icon name the library lacks: the nearest one it has)
     for (const scene of sc.data.scenes) for (const it of scene.items) if (it.icon || it.kind === "icon") it.icon = iconFor(it.icon, it.title);
+    // ("New version": no eyebrow label over the words — a video made with one is laid out without it)
+    if (v.staging?.flow) for (const scene of sc.data.scenes) scene.kicker = null;
     try {
       const { plan } = placeAll(toWord ? remapScript(sc.data, toWord) : sc.data, shown, duration, brand, v.seed, screenshotUrls.length, v.source, size, v.fit ?? {});
       // (staged as it was chosen: a journey, depth, a recap…)

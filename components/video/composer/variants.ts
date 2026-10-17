@@ -266,7 +266,8 @@ function withFlow(sc: ScriptT, fl: FlowLook, seed: number): ScriptT {
     let camera: CameraKind = pool ? (s.camera && pool.includes(s.camera) && s.camera !== prev ? s.camera : R.pick(pool.filter((c) => c !== prev))) : art.camera;
     if (camera === "still") camera = "drift";
     prev = camera;
-    return { ...s, camera };
+    // (no eyebrow label over the words)
+    return { ...s, camera, kicker: null };
   });
   return { art, scenes };
 }
