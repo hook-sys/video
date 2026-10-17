@@ -258,7 +258,11 @@ function withFlow(sc: ScriptT, fl: FlowLook, seed: number): ScriptT {
   };
   const pool = fl.cameras?.length ? fl.cameras : null;
   let prev: CameraKind | null = null;
-  const scenes = sc.scenes.map((s) => {
+  // (a scene's one thing is its hero: big — the product's UI owns the frame)
+  const solo = (s: SceneT) => s.items.filter((it) => !["badge", "shape", "cursor"].includes(it.kind));
+  const scenes = sc.scenes.map((s0) => {
+    const one = solo(s0);
+    const s = one.length === 1 && one[0].kind !== "button" && one[0].kind !== "logo" && one[0].size !== "l" ? { ...s0, items: s0.items.map((it) => (it === one[0] ? { ...it, size: "l" as const } : it)) } : s0;
     let camera: CameraKind = pool ? (s.camera && pool.includes(s.camera) && s.camera !== prev ? s.camera : R.pick(pool.filter((c) => c !== prev))) : art.camera;
     if (camera === "still") camera = "drift";
     prev = camera;

@@ -128,7 +128,8 @@ export function cameraOf(kind: string, p: number, f: number, energy: number, dep
   if (depth !== 1) return cameraOf(kind, p, f, energy).replace(/(translate[XY]?|rotate|rotateZ|skewY|scale)\(([^)]*)\)/g, (m, fn: string, args: string) => `${fn}(${args.split(",").map((a) => {
     const v = parseFloat(a);
     const unit = a.trim().replace(/^-?[\d.]+/, "");
-    return `${(fn === "scale" ? 1 + (v - 1) * depth : v * depth).toFixed(fn === "scale" ? 5 : 3)}${unit}`;
+    // (a scale never pushes in past 1.25 or out past 0.9, whatever the layer)
+    return `${(fn === "scale" ? Math.max(0.9, Math.min(1.25, 1 + (v - 1) * depth)) : v * depth).toFixed(fn === "scale" ? 5 : 3)}${unit}`;
   }).join(", ")})`);
   const e = 0.5 + energy;
   // (a hand-held drift — Remotion's noise: never the same loop twice)
