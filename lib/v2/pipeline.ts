@@ -121,8 +121,8 @@ export async function runPipelineV2(projectId: string, userId: string) {
       await update({ brand_color: project.brand_color });
     }
     const roles: Roles = { director, review, copywriter, rules, look, left };
-    // ("Simple engine", admin → Settings: its templates are 16:9 for now — other frames stay with the Composer)
-    const simple = settings.feature_simple_engine === true && (project.format ?? "16:9") === "16:9";
+    // ("Simple engine", admin → Settings: every frame — 16:9, 9:16, 1:1)
+    const simple = settings.feature_simple_engine === true;
     if (v2.voice.source === "script" && !ai.voice.model) throw new Error("No voice model is set for the new version. A super admin must choose it on /admin/models.");
 
     // The Director plans from the script while the voice is made (a

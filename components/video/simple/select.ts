@@ -1,6 +1,6 @@
 import { rng } from "../composer/art";
 import { framesOf } from "./beats";
-import { type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type SimplePlan, TYPE_PAIRS, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
+import { type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
 
 // The selector: each beat's template and variant, and the video's theme —
 // drawn from a seed, never the same template twice in a row, and unlike
@@ -10,14 +10,15 @@ import { type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, 
 // things — tiles, steps, chips — only when the beat has them): the same
 // script drawn again tells a beat another way
 function choices(r: Reading): [TemplateId, number][] {
-  const many = r.items.length >= 2;
+  const many = r.items.length >= 2, three = r.items.length >= 3;
+  const only = (xs: [TemplateId, number, boolean?][]) => xs.filter(([, , ok]) => ok !== false).map(([t, w]) => [t, w] as [TemplateId, number]);
   switch (r.intent) {
-    case "hook": return many ? [["statement", 0.6], ["trouble", 0.4]] : [["statement", 1]];
-    case "problem": return many ? [["trouble", 0.65], ["statement", 0.35]] : [["statement", 1]];
-    case "solution": return many ? [["reveal", 0.6], ["feature", 0.2], ["statement", 0.2]] : [["reveal", 0.7], ["statement", 0.3]];
-    case "feature": return many ? [["feature", 0.55], ["steps", 0.2], ["statement", 0.25]] : [["statement", 1]];
-    case "proof": return r.number ? [["stat", 1]] : many ? [["feature", 0.6], ["statement", 0.4]] : [["statement", 1]];
-    case "steps": return many ? [["steps", 0.7], ["feature", 0.3]] : [["statement", 1]];
+    case "hook": return only([["statement", 0.4], ["kinetic", 0.35], ["trouble", 0.25, many]]);
+    case "problem": return only([["trouble", 0.45, many], ["compare", 0.2, many], ["kinetic", 0.2], ["statement", 0.15]]);
+    case "solution": return only([["reveal", 0.5], ["compare", 0.2, many], ["bento", 0.15, three], ["statement", 0.15]]);
+    case "feature": return many ? only([["feature", 0.35], ["messages", 0.2], ["bento", 0.2, three], ["chart", 0.1], ["statement", 0.15]]) : [["statement", 0.6], ["kinetic", 0.4]];
+    case "proof": return r.number ? [["stat", 0.75], ["chart", 0.25]] : only([["chart", 0.45], ["bento", 0.2, three], ["statement", 0.35]]);
+    case "steps": return many ? only([["steps", 0.7], ["bento", 0.3, three]]) : [["statement", 1]];
     case "cta": return [["cta", 1]];
   }
 }
@@ -51,6 +52,8 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // (a variant that needs things only when there are some)
     let variant = R.int(0, VARIANTS - 1);
     if (template === "reveal" && r.items.length < 2) variant = 0;
+    // (bars of the things only when there are some)
+    if (template === "chart" && variant === 2 && r.items.length < 2) variant = R.int(0, 1);
     const shown = words.slice(r.show[0], r.show[1] + 1);
     // (the words come in as they are said — never later than half a second into the scene: no empty start)
     const late = Math.max(0, Math.round((shown[0]?.start ?? 0) * FPS) - (frames[i].from + 15));
@@ -65,7 +68,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       number: r.number,
     };
   });
-  const print = [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${s.template[0]}${s.variant}`).join("")].join("|");
+  const print = [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${TEMPLATES.indexOf(s.template).toString(36)}${s.variant}`).join("")].join("|");
   return { engine: "simple", v: 1, duration, seed, brand, theme, scenes, print };
 }
 

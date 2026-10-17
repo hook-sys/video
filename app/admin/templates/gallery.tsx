@@ -7,7 +7,9 @@ import { galleryPlan } from "@/components/video/simple/gallery";
 import { GROUNDS, PACES, TEMPLATES, TYPE_PAIRS, type Theme, WAYS } from "@/components/video/simple/types";
 import { Card } from "../_components/ui";
 
-const LABEL: Record<string, string> = { statement: "Statement — hook, any beat", trouble: "Trouble — the problem", reveal: "Reveal — the product arrives", feature: "Feature — the UI doing it", stat: "Stat — a number said", steps: "Steps — how it works", cta: "The ask — always last" };
+const LABEL: Record<string, string> = { statement: "Statement — hook, any beat", kinetic: "Kinetic — the words as the show", trouble: "Trouble — the problem", compare: "Compare — before → after", reveal: "Reveal — the product arrives", feature: "Feature — the UI doing it", messages: "Messages — the product talking", bento: "Bento — what it brings", stat: "Stat — a number said", chart: "Chart — it grows", steps: "Steps — how it works", cta: "The ask — always last" };
+const FRAMES = { "16:9": [1920, 1080], "9:16": [1080, 1920], "1:1": [1080, 1080] } as const;
+type Frame = keyof typeof FRAMES;
 
 function Pick<T extends string | number>({ label, value, list, show, set }: { label: string; value: T; list: readonly T[]; show?: (v: T) => string; set: (v: T) => void }) {
   return (
@@ -24,24 +26,27 @@ function Pick<T extends string | number>({ label, value, list, show, set }: { la
 
 export function TemplateGallery() {
   const [theme, setTheme] = useState<Theme>({ ground: "dark", type: 0, way: "slide", pace: "calm" });
+  const [frame, setFrame] = useState<Frame>("16:9");
+  const [w, h] = FRAMES[frame];
   const set = <K extends keyof Theme>(k: K) => (v: Theme[K]) => setTheme((t) => ({ ...t, [k]: v }));
-  const plans = useMemo(() => TEMPLATES.map((t) => ({ t, plan: galleryPlan(theme, t) })), [theme]);
+  const plans = useMemo(() => TEMPLATES.map((t) => ({ t, plan: galleryPlan(theme, t, [w, h]) })), [theme, w, h]);
   return (
     <div className="flex flex-col gap-4">
       <Card>
         <div className="flex flex-col gap-3">
+          <Pick label="Frame" value={frame} list={Object.keys(FRAMES) as Frame[]} set={setFrame} />
           <Pick label="Ground" value={theme.ground} list={GROUNDS} set={set("ground")} />
           <Pick label="Type" value={theme.type} list={TYPE_PAIRS.map((_, i) => i)} show={(i) => TYPE_PAIRS[i][0]} set={set("type")} />
           <Pick label="Between" value={theme.way} list={WAYS} set={set("way")} />
           <Pick label="Pace" value={theme.pace} list={PACES} set={set("pace")} />
         </div>
       </Card>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={`grid gap-4 ${frame === "16:9" ? "lg:grid-cols-2" : "md:grid-cols-2 xl:grid-cols-3"}`}>
         {plans.map(({ t, plan }) => (
           <Card key={t} title={LABEL[t] ?? t}>
-            <p className="mb-2 text-xs text-zinc-500">Variant A, then variant B (3 s each)</p>
+            <p className="mb-2 text-xs text-zinc-500">Variants A, B and C (3 s each)</p>
             <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
-              <Player component={SimpleFilm} inputProps={{ plan }} durationInFrames={plan.duration} fps={30} compositionWidth={1920} compositionHeight={1080} controls loop autoPlay style={{ width: "100%", aspectRatio: "16 / 9" }} />
+              <Player key={frame} component={SimpleFilm} inputProps={{ plan }} durationInFrames={plan.duration} fps={30} compositionWidth={w} compositionHeight={h} controls loop autoPlay style={{ width: "100%", maxHeight: "70vh", aspectRatio: `${w} / ${h}` }} />
             </div>
           </Card>
         ))}

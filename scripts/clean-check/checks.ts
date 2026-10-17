@@ -32,6 +32,7 @@ import { guessReadings } from "@/components/video/simple/guess";
 import { differs, planOf } from "@/components/video/simple/select";
 import { galleryPlan } from "@/components/video/simple/gallery";
 import { fitWords } from "@/components/video/simple/fit";
+import { geoOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/composer/art";
 import { TEMPLATES, VARIANTS } from "@/components/video/simple/types";
 import { inspect, inspected } from "@/components/video/composer/inspect";
@@ -714,6 +715,16 @@ export async function runChecks(): Promise<Check[]> {
     add("the same script four times: four videos unlike each other in at least 3 of ground, type, transitions, pace and template order", plans.every((p, i) => plans.slice(0, i).every((q) => differs(p.print, q.print) >= 3)), prints.join(" · "));
     const g = galleryPlan({ ground: "dark", type: 0, way: "slide", pace: "calm" });
     add("every template has its variants in the gallery", TEMPLATES.every((x) => g.scenes.filter((s) => s.template === x).length === VARIANTS), `${g.scenes.length} scenes`);
+    // every frame: the places inside it, the words' place and the hero's apart
+    const inside = (b: { left: number; top: number; width: number; height: number }, W: number, H: number) => b.left >= 0 && b.top >= 0 && b.left + b.width <= W && b.top + b.height <= H;
+    const apart = (a: { left: number; top: number; width: number; height: number }, b: typeof a) => a.left + a.width <= b.left || b.left + b.width <= a.left || a.top + a.height <= b.top || b.top + b.height <= a.top;
+    const frames = ([[1920, 1080], [1080, 1920], [1080, 1080]] as const).map(([W, H]) => {
+      const g = geoOf(W, H);
+      const sp = [splitOf(g, true), splitOf(g, false)], st = stackOf(g);
+      return { shape: g.shape, ok: sp.every((x) => inside(x.words, W, H) && inside(x.hero, W, H) && apart(x.words, x.hero)) && inside(st.words, W, H) && inside(st.body, W, H) && apart(st.words, st.body) };
+    });
+    const tallPlan = planOf({ words: sw, beats, readings, brand, seed: 21, duration: durationOf(sw), size: [1080, 1920] });
+    add("every frame (16:9, 9:16, 1:1): the words' place and the hero's inside it and apart; a 9:16 plan keeps its frame", frames.every((x) => x.ok) && tallPlan.w === 1080 && tallPlan.h === 1920, frames.map((x) => `${x.shape} ${x.ok ? "ok" : "bad"}`).join(" · "));
     // the words fit their place: at most the lines allowed, every line inside it
     const face = faceOf("plus-jakarta-sans");
     const fitted = fitWords("Your invoices finally pay themselves automatically".split(" "), face, { width: 680, lines: 3, max: 120, min: 60 });
