@@ -1,6 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ProductBrief } from "@/lib/ai/product-brief";
+import { LOGO_URL_SECONDS, signLogo } from "@/lib/logo-lookup";
+import { engineOf } from "@/lib/new-version";
 import { LOGO_FILE_PREFIX, SCREENSHOTS_BUCKET, lockedVoiceScript, ownedPath, seedFrom } from "@/lib/projects";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
@@ -27,9 +29,10 @@ export type RenderProject = {
   voice_result: { storagePath?: string; timing?: { words?: WordTiming[] } | null } | null;
   direction?: string;
   website_url?: string | null;
+  details?: unknown;
 };
 
-export const RENDER_PROJECT_COLUMNS = "id, user_id, format, duration_seconds, brand_name, brand_color, call_to_action, brief, voice_status, voice_result, direction, website_url";
+export const RENDER_PROJECT_COLUMNS = "id, user_id, format, duration_seconds, brand_name, brand_color, call_to_action, brief, voice_status, voice_result, direction, website_url, details";
 
 // What the studio shows beside the video: what its Motion Director decided.
 export type ComposerAbout = { idea: string | null; mood: string | null; language: string | null; score: number | null };
@@ -63,17 +66,31 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
   let screenshotUrls: string[] = [];
   if (project.id && project.user_id) {
     const folder = `${project.user_id}/${project.id}`;
-    const [{ data: files }, { data: shots }] = await Promise.all([
-      supabase.storage.from(SCREENSHOTS_BUCKET).list(folder, { search: LOGO_FILE_PREFIX }),
-      supabase.from("project_screenshots").select("storage_path").eq("project_id", project.id).order("created_at"),
-    ]);
-    const logoFile = files?.find((f) => f.name.startsWith(LOGO_FILE_PREFIX));
-    // (a screenshot row's path is only signed when it is this project's own file)
-    const paths = [...(logoFile ? [`${folder}/${logoFile.name}`] : []), ...(shots ?? []).map((x) => x.storage_path).filter((p) => ownedPath(p, project.user_id, project.id))];
-    const { data: signed } = paths.length ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(paths, expiresIn) : { data: [] };
-    const urls = (signed ?? []).map((x) => x.signedUrl || undefined);
-    if (logoFile) logoUrl = urls.shift();
-    screenshotUrls = urls.filter((u): u is string => !!u);
+    const shotsQuery = supabase.from("project_screenshots").select("storage_path").eq("project_id", project.id).order("created_at");
+    // New version only. The old version keeps the list below, unchanged.
+    const v2 = engineOf(project.details) === "v2" || !!((project.brief as { composer?: StoredComposer } | null)?.composer?.videos ?? []).some((v) => v.staging?.flow);
+    if (v2) {
+      const [{ url }, { data: shots }] = await Promise.all([
+        signLogo(supabase, project.user_id, project.id, Math.max(expiresIn, LOGO_URL_SECONDS)),
+        shotsQuery,
+      ]);
+      logoUrl = url ?? undefined;
+      const paths = (shots ?? []).map((x) => x.storage_path).filter((p) => ownedPath(p, project.user_id, project.id));
+      const { data: signed } = paths.length ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(paths, expiresIn) : { data: [] };
+      screenshotUrls = (signed ?? []).map((x) => x.signedUrl).filter((u): u is string => !!u);
+    } else {
+      const [{ data: files }, { data: shots }] = await Promise.all([
+        supabase.storage.from(SCREENSHOTS_BUCKET).list(folder, { search: LOGO_FILE_PREFIX }),
+        shotsQuery,
+      ]);
+      const logoFile = files?.find((f) => f.name.startsWith(LOGO_FILE_PREFIX));
+      // (a screenshot row's path is only signed when it is this project's own file)
+      const paths = [...(logoFile ? [`${folder}/${logoFile.name}`] : []), ...(shots ?? []).map((x) => x.storage_path).filter((p) => ownedPath(p, project.user_id, project.id))];
+      const { data: signed } = paths.length ? await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrls(paths, expiresIn) : { data: [] };
+      const urls = (signed ?? []).map((x) => x.signedUrl || undefined);
+      if (logoFile) logoUrl = urls.shift();
+      screenshotUrls = urls.filter((u): u is string => !!u);
+    }
   }
 
   const size = frameOf(project.format);

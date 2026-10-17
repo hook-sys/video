@@ -1,5 +1,5 @@
-import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
-import { Img } from "remotion";
+import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Img, continueRender, delayRender, useRemotionEnvironment } from "remotion";
 import { Icon, resolveIcon } from "../icons";
 import { type Pal, surfaceStyle } from "./art";
 import { type Mover, clamp01, enterK, mix } from "./motion";
@@ -8,7 +8,7 @@ import type { ArtT, Brand } from "./types";
 // What every Composer part draws with: the frame, the scene's palette, the
 // art direction, its motion and faces, and the brand.
 // (noGlyph: an icon's glyph left out while it morphs into another — film.tsx)
-export type Ctx = { f: number; pal: Pal; art: ArtT; m: Mover; display: string; text: string; brand: Brand; screens: string[]; noGlyph?: boolean };
+export type Ctx = { f: number; pal: Pal; art: ArtT; m: Mover; display: string; text: string; brand: Brand; screens: string[]; noGlyph?: boolean; v2?: boolean };
 export const CtxC = createContext<Ctx | null>(null);
 export const useCtx = () => useContext(CtxC)!;
 
@@ -89,13 +89,83 @@ export const toneOf = (tag: string | null | undefined): "accent" | "good" | "war
 };
 
 // The brand's mark: the uploaded icon, else a tile with its initial.
-export function Mark({ c, size, k = 1 }: { c: Ctx; size: number; k?: number }) {
-  if (c.brand.icon) return <Img src={c.brand.icon} style={{ width: size, height: size, objectFit: "contain", opacity: clamp01(k * 1.5) }} />;
+const letterOf = (name: string) => (name.trim()[0] ?? "B").toUpperCase();
+const loggedLogo = new Set<string>();
+const logLogo = (why: string, src?: string | null) => {
+  const where = src ? src.replace(/\?.*$/, "").slice(-96) : "";
+  const line = where ? `${why} (${where})` : why;
+  if (loggedLogo.has(line)) return;
+  loggedLogo.add(line);
+  console.warn("v2 logo: letter fallback —", line);
+};
+
+function Letter({ c, size, k }: { c: Ctx; size: number; k: number }) {
   return (
     <div style={{ width: size, height: size, borderRadius: Math.min(size * 0.3, c.art.radius + 8), background: `linear-gradient(140deg, ${c.pal.fill}, ${c.pal.fill2})`, display: "flex", alignItems: "center", justifyContent: "center", color: c.pal.onFill, fontFamily: c.display, fontWeight: 800, fontSize: size * 0.56, boxShadow: `0 ${size * 0.16}px ${size * 0.45}px ${c.pal.fill}55`, transform: `scale(${mix(0.6, 1, clamp01(k))}) rotate(${(1 - clamp01(k)) * -12}deg)`, opacity: clamp01(k * 2) }}>
-      {(c.brand.name.trim()[0] ?? "B").toUpperCase()}
+      {letterOf(c.brand.name)}
     </div>
   );
+}
+
+// New version: hold the frame until the icon has pixels. The letter is only
+// for a video with no icon, or one whose icon never arrives. The old version
+// stays on Remotion's Img below.
+const LOGO_WAIT_MS = 8_000;
+function V2Mark({ c, size, k }: { c: Ctx; size: number; k: number }) {
+  const src = c.brand.icon || "";
+  const { isClientSideRendering } = useRemotionEnvironment();
+  const [dead, setDead] = useState<string | null>(null);
+  const ref = useRef<HTMLImageElement>(null);
+  useLayoutEffect(() => {
+    if (!src || dead) return;
+    const el = ref.current;
+    if (!el) return;
+    const handle = delayRender("Loading logo", { timeoutInMilliseconds: LOGO_WAIT_MS + 4_000 });
+    let settled = false;
+    let timer = 0;
+    const settle = (fail: string | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      if (fail) {
+        logLogo(fail, src);
+        setDead(fail);
+      }
+      // After the letter (or the decoded image) has been painted.
+      requestAnimationFrame(() => continueRender(handle));
+    };
+    timer = window.setTimeout(() => settle("image did not load within 8s"), LOGO_WAIT_MS);
+    const ok = () => settle(el.naturalWidth > 0 ? null : "image has no pixels");
+    const bad = () => settle("image request failed (missing file, expired link, or blocked by CORS)");
+    if (el.complete && el.naturalWidth > 0) ok();
+    else if (el.complete) bad();
+    else {
+      el.addEventListener("load", ok);
+      el.addEventListener("error", bad);
+    }
+    return () => {
+      window.clearTimeout(timer);
+      el.removeEventListener("load", ok);
+      el.removeEventListener("error", bad);
+      if (!settled) {
+        settled = true;
+        continueRender(handle);
+      }
+    };
+  }, [src, dead]);
+  if (!src || dead) {
+    if (!src) logLogo("no logo url on this video");
+    return <Letter c={c} size={size} k={k} />;
+  }
+  // next/image does not wait on Remotion's delayRender, so the frame would be captured empty.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img ref={ref} src={src} alt="" crossOrigin={isClientSideRendering ? "anonymous" : undefined} style={{ width: size, height: size, objectFit: "contain", opacity: clamp01(k * 1.5) }} />;
+}
+
+export function Mark({ c, size, k = 1 }: { c: Ctx; size: number; k?: number }) {
+  if (c.v2) return <V2Mark c={c} size={size} k={k ?? 1} />;
+  if (c.brand.icon) return <Img src={c.brand.icon} style={{ width: size, height: size, objectFit: "contain", opacity: clamp01(k * 1.5) }} />;
+  return <Letter c={c} size={size} k={k} />;
 }
 
 // The numeric part of "$12,480" / "98%" / "3x", counted from 0 at `k`.

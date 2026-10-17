@@ -254,7 +254,7 @@ function RecapCard(props: JourneyProps) {
   if (veil <= 0) return null;
   const last = plan.scenes[plan.scenes.length - 1];
   const pal = last.dark ? props.pals.dark : props.pals.light;
-  const c: Ctx = { f, pal, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens };
+  const c: Ctx = { f, pal, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens, v2: !!plan.flow };
   const logo: PlacedItem = { kind: "logo", at, hit: null, sub: plan.brand.url || null, box: { x: W / 2, y: H / 2 - 70, w: Math.min(760, W * 0.7), h: 0 }, scale: 1, z: 1 };
   const button: PlacedItem = { kind: "button", at: at + 14, hit: at + 44, title: plan.brand.cta, box: { x: W / 2, y: H / 2 + 160, w: Math.min(560, W * 0.52), h: 0 }, scale: 1, z: 1 };
   const draw = (it: PlacedItem) => {
@@ -284,7 +284,7 @@ function JourneyWorld(props: JourneyProps & { st: { x: number; y: number }[]; mv
   const cam = props.camOf(f);
   const n = plan.scenes.length;
   const tiles = plan.journey === "tiles";
-  const ctxOf = (i: number): Ctx => ({ f, pal: plan.scenes[i].dark ? props.pals.dark : props.pals.light, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens });
+  const ctxOf = (i: number): Ctx => ({ f, pal: plan.scenes[i].dark ? props.pals.dark : props.pals.light, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens, v2: !!plan.flow });
   // a scene stays where it is on the canvas once the camera has set off
   // towards it; it is drawn while it is in view
   const inView = (i: number) => {
@@ -377,7 +377,7 @@ function Depth(props: DepthProps) {
     const t = u;
     const box = { x: mix(ga.x, gb.x, t), y: mix(ga.y, gb.y, t), w: mix(ga.w, gb.w, t) };
     const path = morphPath(a.icon ?? "", b.icon ?? "", t);
-    const ctx = (i: number): Ctx => ({ f, pal: plan.scenes[i].dark ? props.pals.dark : props.pals.light, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens });
+    const ctx = (i: number): Ctx => ({ f, pal: plan.scenes[i].dark ? props.pals.dark : props.pals.light, art: plan.art, m: props.m, display: props.display, text: props.textFamily, brand: plan.brand, screens: props.screens, v2: !!plan.flow });
     const over = clamp01(raw / 0.06) * (1 - clamp01((raw - 0.94) / 0.06));
     const glyph = (i: number, o: number) => (o <= 0.01 ? null : (
       <div style={{ position: "absolute", left: box.x - 100, top: box.y - 100, width: 200, height: 200, transform: `scale(${(box.w / 200).toFixed(4)}) rotate(${(Math.sin(t * Math.PI) * 6).toFixed(2)}deg)`, opacity: o * over, zIndex: 30 }}>
@@ -598,7 +598,7 @@ function SceneBody(props: SceneProps) {
   const kin = J ? 1 : i ? IN_OUT(ramp(f, start, dIn)) : 1;
   const kout = J ? 0 : last ? 0 : IN_OUT(ramp(f, outAt, dOut));
   const pal = sc.dark ? pals.dark : pals.light;
-  const c: Ctx = { f, pal, art, m, display, text: textFamily, brand, screens };
+  const c: Ctx = { f, pal, art, m, display, text: textFamily, brand, screens, v2: !!plan.flow };
   const o = sc.items.find((q) => !isAccent(q))?.box ?? sc.text?.box ?? { x: W / 2, y: H / 2 };
   const pin = J ? null : presentationOf(sc.enter, sc.seed);
   const pout = J || !next ? null : presentationOf(next.enter, next.seed);

@@ -34,6 +34,7 @@ import { creditsFor, normalizeBilling, pickable, withCoupon } from "@/lib/billin
 import { resolveIcon } from "@/components/video/icons";
 import { SETTINGS } from "@/lib/app-settings";
 import { engineOf } from "@/lib/new-version";
+import { findLogoPath } from "@/lib/logo-lookup";
 import { ownedPath } from "@/lib/projects";
 import { v2DetailsOf } from "@/lib/v2/form";
 import { v2DirectorModel, v2Role, v2VoiceName } from "@/lib/v2/models";
@@ -679,6 +680,29 @@ export async function runChecks(): Promise<Check[]> {
       const pieceLine = pp.scenes.map((x) => x.items.map((it) => `${it.kind}:${it.variant ?? ""}${it.value ? `=${it.value}` : ""}[${(it.rows ?? []).map((r) => r.title).join("/")}]`).join(" ")).join(" · ");
       add("UI pieces: the script's own words (the things it names), never a number the voice does not say (an unsaid dashboard becomes a list, a counter its spoken number)", PIECES.length === 7 && pieceOf({ kind: "card", variant: "kpi" }) === "dashboard" && s1[0].variant === "list" && !JSON.stringify(s1).includes("48,210") && (s1[1].rows ?? []).map((r) => r.title).join("/") === "Invoice/Payment/Dashboard" && s2[0].value === "Search any client" && s3[0].value === "3x" && s3[1].variant === "area" && s3[1].value == null, pieceLine);
       add("UI pieces on with their rule (new version only)", rules.flow.pieces && !v2RulesOf({ [v2RuleKey("ui_pieces")]: false }).flow.pieces && rules.text("").includes("UI PIECES"), String(rules.flow.pieces));
+      // the uploaded icon: found however it was stored, and a miss says why
+      const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+      const pid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+      const root = `${uid}/${pid}`;
+      const storeOf = (files: Record<string, { name: string; id: string | null }[]>, exists: Record<string, boolean | null> = {}) => ({
+        exists: async (path: string) => (path in exists ? exists[path] : false),
+        list: async (folder: string, search?: string) => {
+          const rows = files[folder];
+          if (!rows) return { entries: null, error: "missing folder" };
+          return { entries: search ? rows.filter((r) => r.name.toLowerCase().startsWith(search.toLowerCase())) : rows };
+        },
+      });
+      const png = await findLogoPath(storeOf({}, { [`${root}/logo.png`]: true }), uid, pid);
+      const jpeg = await findLogoPath(storeOf({}, { [`${root}/logo.jpeg`]: true }), uid, pid);
+      const cased = await findLogoPath(storeOf({ [root]: [{ name: "logo.jpg", id: "a" }, { name: "Logo.PNG", id: "b" }, { name: "shot.png", id: "c" }] }), uid, pid);
+      const nested = await findLogoPath(storeOf({ [root]: [{ name: "old", id: null }, { name: "notes.txt", id: "d" }], [`${root}/old`]: [{ name: "logo.webp", id: "e" }] }), uid, pid);
+      const notALogo = await findLogoPath(storeOf({ [root]: [{ name: "logo.png", id: null }, { name: "icon.png", id: "f" }] }), uid, pid);
+      const down = await findLogoPath({ exists: async () => null, list: async () => ({ entries: null, error: "storage down" }) }, uid, pid);
+      add(
+        "a new-version logo is the uploaded file (any case, jpeg or webp, one folder down); a miss says why",
+        png.path === `${root}/logo.png` && jpeg.path === `${root}/logo.jpeg` && cased.path === `${root}/Logo.PNG` && nested.path === `${root}/old/logo.webp` && !notALogo.path && /no logo/.test(notALogo.reason ?? "") && /storage down/.test(down.reason ?? ""),
+        [png.path, jpeg.path, cased.path, nested.path, notALogo.reason, down.reason].join(" · "),
+      );
     }
   }
 

@@ -9,7 +9,8 @@ import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
 import { balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, refundVideo } from "@/lib/billing";
-import { newVersionOn } from "@/lib/new-version";
+import { LOGO_URL_SECONDS, signLogo } from "@/lib/logo-lookup";
+import { engineOf, newVersionOn } from "@/lib/new-version";
 import { V2_VOICE_TYPES, type V2Details } from "@/lib/v2/form";
 import { startPipelineV2 } from "@/lib/v2/pipeline";
 
@@ -177,4 +178,21 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
 
   await startPipelineV2(data.id, user.id);
   redirect(`/projects/${data.id}`);
+}
+
+// A new signed icon URL for the preview and the browser render. The page
+// signs one when it loads; this signs another when that one is missing or
+// when the download starts, so a link cannot expire mid-render.
+export async function freshV2Logo(projectId: string): Promise<{ url: string | null; reason: string | null }> {
+  if (!projectId) return { url: null, reason: "no project" };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { url: null, reason: "not signed in" };
+  const { data: project } = await supabase.from("projects").select("id, user_id, details, brief").eq("id", projectId).eq("user_id", user.id).maybeSingle();
+  if (!project?.user_id) return { url: null, reason: "project not found" };
+  const flow = !!((project.brief as { composer?: { videos?: { staging?: { flow?: unknown } | null }[] } } | null)?.composer?.videos ?? []).some((v) => v.staging?.flow);
+  if (engineOf(project.details) !== "v2" && !flow) return { url: null, reason: "not a new-version video" };
+  return signLogo(supabase, project.user_id, project.id, LOGO_URL_SECONDS);
 }
