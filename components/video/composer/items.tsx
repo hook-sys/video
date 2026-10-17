@@ -8,6 +8,7 @@ import { Radial, Tiles } from "./radial";
 import { makePolygon, makeSpark, makeStar } from "@remotion/shapes";
 import { noise2D } from "@remotion/noise";
 import { Connector, drawn, smoothPath } from "./paths";
+import { stepLabel } from "./honest";
 import { type Ctx, Glyph, Initial, Mark, Tick, countUp, kIn, show, surf } from "./kit";
 import { emWidth, faceOf } from "./art";
 import { clamp01, mix } from "./motion";
@@ -95,7 +96,7 @@ function Chips({ c, it, w }: P) {
 }
 
 function Stat({ c, it, w, h }: P) {
-  const v = it.value ?? "3x";
+  const v = it.value ?? (c.v2 ? "" : "3x");
   const k = kIn(c, it.at + 2, it.hit != null ? Math.max(12, it.hit - it.at) : 36);
   const up = !/^-|less|down|fewer/i.test(`${it.icon ?? ""} ${it.sub ?? ""}`);
   return (
@@ -131,7 +132,7 @@ function Chart({ c, it, w, h }: P) {
           <div style={{ padding: "40px 32px" }}>
             {vals.slice(0, 4).map((x, i) => (
               <div key={i} style={{ marginBottom: 26 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 20, color: pal.panelSub, fontWeight: 600, marginBottom: 8 }}><span>{it.rows?.[i]?.title ?? ""}</span><span>{Math.round((x / max) * 100 * draw)}%</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 20, color: pal.panelSub, fontWeight: 600, marginBottom: 8 }}><span>{it.rows?.[i]?.title ?? ""}</span>{!c.v2 && <span>{Math.round((x / max) * 100 * draw)}%</span>}</div>
                 <div style={{ height: 18, borderRadius: 99, background: pal.panelSoft }}><div style={{ height: "100%", width: `${(x / max) * 100 * clamp01(draw * 1.2 - i * 0.1)}%`, borderRadius: 99, background: `linear-gradient(90deg, ${pal.fill}, ${pal.fill2})` }} /></div>
               </div>
             ))}
@@ -154,7 +155,7 @@ function Chart({ c, it, w, h }: P) {
           })}
         </svg>
         <div style={{ position: "absolute", textAlign: "center" }}>
-          <div style={{ fontFamily: c.display, fontSize: 92, fontWeight: 800, color: pal.panelInk, letterSpacing: "-0.04em" }}>{it.value ? countUp(it.value, draw) : `${Math.round(pct * 100 * draw)}%`}</div>
+          <div style={{ fontFamily: c.display, fontSize: 92, fontWeight: 800, color: pal.panelInk, letterSpacing: "-0.04em" }}>{it.value ? countUp(it.value, draw) : c.v2 ? "" : `${Math.round(pct * 100 * draw)}%`}</div>
           {it.title && <div style={{ fontSize: 24, color: pal.panelSub, fontWeight: 600 }}>{it.title}</div>}
         </div>
       </div>
@@ -217,7 +218,7 @@ function Device({ c, it, w, h, shot }: P & { shot?: boolean }) {
       <div style={{ width: sw, height: sh, background: pal.panel, display: "flex", flexDirection: "column", overflow: "hidden", fontFamily: c.text }}>
         {top > 0 && (
           <div style={{ height: top, display: "flex", alignItems: "flex-end", justifyContent: "space-between", padding: "0 34px 8px", fontSize: 20, fontWeight: 700, color: pal.panelInk, boxSizing: "border-box" }}>
-            <span>9:41</span>
+            {!c.v2 && <span>9:41</span>}
             <span style={{ display: "flex", gap: 6 }}><Icon name="signal" size={20} color={pal.panelInk} /><Icon name="wifi" size={20} color={pal.panelInk} /><Icon name="battery-full" size={22} color={pal.panelInk} /></span>
           </div>
         )}
@@ -439,10 +440,11 @@ function Steps({ c, it, w, h }: P) {
         const at = stepAt(c, it, i, rows.length);
         const k = kIn(c, at);
         const lit = it.hit != null ? (c.f >= stepAt(c, it, i, rows.length) + 8 ? 1 : 0) : 1;
+        const n = stepLabel(i, c.v2);
         return (
           <div key={i} style={{ ...show(k, 30), flex: 1, ...surf(c, 0.8), padding: 28, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 16, outline: lit && i === rows.length - 1 ? `3px solid ${c.pal.fill}` : undefined }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontFamily: c.display, fontSize: 64, fontWeight: 800, color: c.pal.fill, letterSpacing: "-0.04em" }}>{String(i + 1).padStart(2, "0")}</div>
+              {n ? <div style={{ fontFamily: c.display, fontSize: 64, fontWeight: 800, color: c.pal.fill, letterSpacing: "-0.04em" }}>{n}</div> : <div style={{ width: 48, height: 10, borderRadius: 99, background: c.pal.fill }} />}
               <Glyph c={c} name={r.icon} size={58} tone="panel" />
             </div>
             <div style={{ fontFamily: c.text, fontSize: 30, fontWeight: 700, color: c.pal.panelInk, lineHeight: 1.15 }}>{r.title}</div>

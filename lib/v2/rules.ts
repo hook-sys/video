@@ -42,7 +42,7 @@ export const V2_RULES = [
 export type V2RuleId = (typeof V2_RULES)[number]["id"];
 export const v2RuleKey = (id: V2RuleId) => `v2_rule_${id}`;
 
-const ALWAYS = "ALWAYS: never show a number or claim the voice does not say; UI rows specific to THIS product, never placeholder data; no music (sound effects only on what is seen: a whoosh, a pop, a click); the video lasts as long as the voice plus a 2–3 s logo ending.";
+const ALWAYS = "ALWAYS: never show a number the voice does not say — no code, quantity, unit, ratio, amount, time or percentage. A digit is allowed only when that same number is spoken (12,000 = twelve thousand, 3 = three; a ratio only when both numbers are said together). UI rows name this product in words, never placeholder data; no music (sound effects only on what is seen: a whoosh, a pop, a click); the video lasts as long as the voice plus a 2–3 s logo ending.";
 const PHRASE_SCENES = "Scene length follows the voice: a scene is one spoken phrase, at least 1.5 s.";
 // the shortest scene (frames, 30 fps) and the most words on screen
 const PHRASE_MIN = 45;

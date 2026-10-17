@@ -202,12 +202,16 @@ const SCHEME_LINE = `- scheme: dark|light — ONE background for the whole video
 const HOOK_WORDS = `ONLY the scene's HOOK on screen as kinetic type — 1 to ${SHOWN} words`;
 // (no eyebrow labels; the same words never twice on one screen; a table only with short cells)
 const V2_KICKER_LINE = `- "kicker": always null (no eyebrow labels). Never the same words twice on one screen: a thing's title or a row never repeats the scene's text or another thing's title. A table card only when every cell is 1–3 words and its columns say what they hold; longer rows: a list card.`;
+// (the old version still allows sample figures in UI rows; the new version does not)
+const SAMPLE_NUMBERS = `- Never write on screen a number or claim the narration does not make (UI rows may carry realistic sample data).`;
+const V2_NUMBERS = `- Never write a number on screen unless the narration says that number. No invented digits: no order codes (#TX-842), no quantities (12,000, 8 lines), no units (150D, 30s), no ratios (3/3), no amounts (24,500), no percentages, no times and no line numbers. A digit is allowed only when that same number is spoken — 12,000 if the voice says "12,000" or "twelve thousand", 3 if the voice says "three". A ratio only when both numbers are said together. Rows name real things in words and carry a number only when the voice says it. No placeholder or sample data.`;
 const v2Direction = (input: Pick<MotionInput, "prompt" | "match" | "shapes" | "motion" | "ruleText">) =>
   `${instructionsOf({ ...input, rules: false })
     .replace(SCHEME_LINE, `- scheme: dark|light — the video's background, as THIS VIDEO'S LOOK gives it.`)
     .replace(HOOK_WORDS, "ONLY the scene's HOOK on screen as kinetic type — 2 to 6 words")
     .replace(STYLE_BLOCK, V2_STYLE_BLOCK)
-    .replace(KICKER_LINE, V2_KICKER_LINE)}\n\nANSWER COMPACTLY: only the fields asked, short values, no prose, no fields the format does not ask for.${input.ruleText ? `\n\n${input.ruleText}` : ""}`;
+    .replace(KICKER_LINE, V2_KICKER_LINE)
+    .replace(SAMPLE_NUMBERS, V2_NUMBERS)}\n\nANSWER COMPACTLY: only the fields asked, short values, no prose, no fields the format does not ask for.${input.ruleText ? `\n\n${input.ruleText}` : ""}`;
 
 // ── What this customer has already seen (their last videos, any brand), for
 // the Creative Director: one line per video and what keeps coming back.

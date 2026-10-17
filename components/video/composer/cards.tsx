@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Icon } from "../icons";
 import { type Ctx, Glyph, Initial, Tag, Tick, countUp, iconName, kIn, show, surf, toneOf } from "./kit";
 import { clamp01, mix } from "./motion";
+import { countLabel } from "./honest";
 import type { PlacedItem, RowT } from "./types";
 
 // The product's UI, drawn: a card shows what the words say (a list of
@@ -12,7 +13,7 @@ import type { PlacedItem, RowT } from "./types";
 export { CARD_W, cardHeight } from "./sizes";
 
 type Props = { c: Ctx; it: PlacedItem; w: number; h: number };
-const rowsOf = (it: PlacedItem, fallback: RowT[]) => (it.rows?.length ? it.rows : fallback).slice(0, 6);
+const rowsOf = (c: Ctx, it: PlacedItem, fallback: RowT[]) => (it.rows?.length ? it.rows : c.v2 ? [D("Details")] : fallback).slice(0, 6);
 const D = (t: string, meta?: string, tag?: string, icon?: string): RowT => ({ title: t, meta: meta ?? null, tag: tag ?? null, icon: icon ?? null });
 // rows arrive between the card's word and its hit (else one by one after it)
 const rowAt = (it: PlacedItem, i: number, n: number, c: Ctx) => {
@@ -48,7 +49,7 @@ const rowLine = (c: Ctx): CSSProperties => ({ borderTop: `1.5px solid ${c.pal.pa
 
 const CARDS: Record<string, (p: Props) => ReactNode> = {
   list: ({ c, it }) => {
-    const rows = rowsOf(it, [D("New request", "now", "New", "inbox"), D("Weekly report", "2m", "Ready", "file-text"), D("Team update", "1h", "", "bell")]);
+    const rows = rowsOf(c, it, [D("New request", "now", "New", "inbox"), D("Weekly report", "2m", "Ready", "file-text"), D("Team update", "1h", "", "bell")]);
     const hk = hitK(c, it);
     return (
       <>
@@ -69,10 +70,11 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   checklist: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Connect your tools"), D("Invite the team"), D("Go live")]);
+    const rows = rowsOf(c, it, [D("Connect your tools"), D("Invite the team"), D("Go live")]);
+    const label = countLabel(rows.filter((_, i) => c.f >= rowAt(it, i, rows.length, c) + 10).length, rows.length, c.v2);
     return (
       <>
-        <Head c={c} it={it} right={<Tag c={c}>{rows.filter((_, i) => c.f >= rowAt(it, i, rows.length, c) + 10).length}/{rows.length}</Tag>} />
+        <Head c={c} it={it} right={label ? <Tag c={c}>{label}</Tag> : undefined} />
         {rows.map((r, i) => {
           const at = rowAt(it, i, rows.length, c);
           const k = kIn(c, at - 6);
@@ -91,7 +93,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   kpi: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Revenue", "$48,210", "+12%"), D("Active", "1,284", "+8%"), D("Time saved", "6h", "/week"), D("Paid on time", "94%", "+21%")]).slice(0, 4);
+    const rows = rowsOf(c, it, [D("Revenue", "$48,210", "+12%"), D("Active", "1,284", "+8%"), D("Time saved", "6h", "/week"), D("Paid on time", "94%", "+21%")]).slice(0, 4);
     return (
       <>
         <Head c={c} it={it} />
@@ -103,7 +105,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
             return (
               <div key={i} style={{ ...show(k), background: c.pal.panelSoft, borderRadius: Math.max(10, c.art.radius * 0.6), padding: "20px 22px", height: 134, boxSizing: "border-box" }}>
                 <div style={{ fontSize: 19, color: c.pal.panelSub, fontWeight: 600 }}>{r.title}</div>
-                <div style={{ fontSize: 40, fontWeight: 750, letterSpacing: "-0.03em", marginTop: 6, fontFamily: c.display }}>{countUp(r.meta ?? "0", n)}</div>
+                <div style={{ fontSize: 40, fontWeight: 750, letterSpacing: "-0.03em", marginTop: 6, fontFamily: c.display }}>{countUp(r.meta ?? (c.v2 ? "" : "0"), n)}</div>
                 {r.tag && <div style={{ fontSize: 18, fontWeight: 650, color: /^-/.test(r.tag) ? "#e11d48" : c.pal.panelDark ? "#6ee7b7" : "#059669" }}>{r.tag}</div>}
               </div>
             );
@@ -113,7 +115,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   form: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Client", "Acme Studio"), D("Amount", "$2,400"), D("Due", "In 7 days")]).slice(0, 4);
+    const rows = rowsOf(c, it, [D("Client", "Acme Studio"), D("Amount", "$2,400"), D("Due", "In 7 days")]).slice(0, 4);
     const hk = hitK(c, it, 10);
     const press = it.hit == null ? 0 : clamp01(kIn(c, it.hit - 4, 5) - kIn(c, it.hit + 2, 8));
     return (
@@ -143,7 +145,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   chat: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Can you send the report?"), D("Already done — it's in your inbox.", null as unknown as string, "me")]).slice(0, 5);
+    const rows = rowsOf(c, it, [D("Can you send the report?"), D("Already done — it's in your inbox.", null as unknown as string, "me")]).slice(0, 5);
     return (
       <>
         <Head c={c} it={it} right={<div style={{ width: 12, height: 12, borderRadius: 9, background: "#10b981" }} />} />
@@ -169,7 +171,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   notify: ({ c, it }) => {
-    const rows = rowsOf(it, [D(it.title ?? "Payment received", it.sub ?? "just now", "", it.icon ?? "bell")]).slice(0, 3);
+    const rows = rowsOf(c, it, [D(it.title ?? "Payment received", it.sub ?? "just now", "", it.icon ?? "bell")]).slice(0, 3);
     return (
       <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 18, color: c.pal.panelSub, fontWeight: 650, letterSpacing: "0.04em", textTransform: "uppercase", padding: "4px 6px 0" }}>
@@ -193,15 +195,15 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   invoice: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Design work", "$1,800"), D("Hosting", "$240"), D("Support", "$360")]).slice(0, 4);
+    const rows = rowsOf(c, it, [D("Design work", "$1,800"), D("Hosting", "$240"), D("Support", "$360")]).slice(0, 4);
     const hk = hitK(c, it, 12);
-    const total = it.value ?? "$2,400";
+    const total = it.value ?? (c.v2 ? "" : "$2,400");
     return (
       <div style={{ padding: "28px 32px", position: "relative", height: "100%", boxSizing: "border-box" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <div style={{ fontSize: 18, letterSpacing: "0.12em", color: c.pal.panelSub, fontWeight: 700 }}>INVOICE</div>
-            <div style={{ fontSize: 30, fontWeight: 750, marginTop: 4 }}>{it.title ?? "#1042"}</div>
+            <div style={{ fontSize: 30, fontWeight: 750, marginTop: 4 }}>{it.title ?? (c.v2 ? "" : "#1042")}</div>
             {it.sub && <div style={{ fontSize: 19, color: c.pal.panelSub, marginTop: 2 }}>{it.sub}</div>}
           </div>
           <Glyph c={c} name={it.icon ?? "receipt"} size={52} tone="panel" />
@@ -228,7 +230,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   calendar: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Check-up", "9:00"), D("Follow-up", "11:30"), D("New patient", "14:00")]).slice(0, 5);
+    const rows = rowsOf(c, it, [D("Check-up", "9:00"), D("Follow-up", "11:30"), D("New patient", "14:00")]).slice(0, 5);
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
     const hk = hitK(c, it, 12);
     return (
@@ -259,7 +261,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   table: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Acme Co", "$2,400", "Paid"), D("Northwind", "$1,150", "Due"), D("Globex", "$860", "Paid")]).slice(0, 5);
+    const rows = rowsOf(c, it, [D("Acme Co", "$2,400", "Paid"), D("Northwind", "$1,150", "Due"), D("Globex", "$860", "Paid")]).slice(0, 5);
     // ("New version": its columns named for what they hold, each as wide as its longest cell, one line each)
     const [name, detail, status] = it.cols?.head ?? ["NAME", "AMOUNT", "STATUS"];
     const mw = it.cols ? it.cols.meta : 150, tw = it.cols ? it.cols.tag : 110;
@@ -284,7 +286,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   kanban: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Draft brief", "To do"), D("Review", "Doing"), D("Ship it", "Done")]).slice(0, 5);
+    const rows = rowsOf(c, it, [D("Draft brief", "To do"), D("Review", "Doing"), D("Ship it", "Done")]).slice(0, 5);
     const cols = ["To do", "Doing", "Done"];
     const hk = hitK(c, it, 18);
     return (
@@ -311,7 +313,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   toggles: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Auto reminders", null as unknown as string, "on"), D("Sync calendar"), D("Weekly summary")]).slice(0, 5);
+    const rows = rowsOf(c, it, [D("Auto reminders", null as unknown as string, "on"), D("Sync calendar"), D("Weekly summary")]).slice(0, 5);
     return (
       <>
         <Head c={c} it={it} />
@@ -333,7 +335,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   timeline: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Connected", "9:02"), D("Summary written", "9:41"), D("Sent to the team", "9:42")]).slice(0, 5);
+    const rows = rowsOf(c, it, [D("Connected", "9:02"), D("Summary written", "9:41"), D("Sent to the team", "9:42")]).slice(0, 5);
     return (
       <>
         <Head c={c} it={it} />
@@ -356,7 +358,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
   },
   search: ({ c, it }) => {
     const q = it.value ?? it.title ?? "Search";
-    const rows = rowsOf(it, [D("Result one", "Last week", "", "file-text"), D("Result two", "Yesterday", "", "file-text")]).slice(0, 4);
+    const rows = rowsOf(c, it, [D("Result one", "Last week", "", "file-text"), D("Result two", "Yesterday", "", "file-text")]).slice(0, 4);
     const typed = clamp01((c.f - it.at - 6) / Math.max(12, q.length * 1.6));
     return (
       <>
@@ -384,7 +386,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   profile: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Next visit", "Tue 9:00"), D("Plan", "Monthly"), D("Status", "Active", "Active")]).slice(0, 4);
+    const rows = rowsOf(c, it, [D("Next visit", "Tue 9:00"), D("Plan", "Monthly"), D("Status", "Active", "Active")]).slice(0, 4);
     return (
       <div style={{ padding: 30 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
@@ -409,7 +411,7 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
     );
   },
   doc: ({ c, it }) => {
-    const rows = rowsOf(it, [D("Decisions"), D("Action items"), D("Next steps")]).slice(0, 4);
+    const rows = rowsOf(c, it, [D("Decisions"), D("Action items"), D("Next steps")]).slice(0, 4);
     const hk = hitK(c, it, 16);
     return (
       <div style={{ padding: "28px 32px" }}>
@@ -436,13 +438,13 @@ const CARDS: Record<string, (p: Props) => ReactNode> = {
   },
   pay: ({ c, it }) => {
     const hk = hitK(c, it, 14);
-    const amount = it.value ?? "$2,400";
+    const amount = it.value ?? (c.v2 ? "" : "$2,400");
     return (
       <div style={{ padding: 30, display: "flex", flexDirection: "column", gap: 20, height: "100%", boxSizing: "border-box" }}>
         <div style={{ height: 200, borderRadius: Math.max(16, c.art.radius), background: `linear-gradient(135deg, ${c.pal.fill}, ${c.pal.fill2})`, padding: 26, color: c.pal.onFill, position: "relative", overflow: "hidden", boxSizing: "border-box" }}>
           <div style={{ position: "absolute", right: -60, top: -60, width: 220, height: 220, borderRadius: 999, background: "rgba(255,255,255,0.14)" }} />
           <Icon name={iconName(it.icon, "credit-card")} size={40} color={c.pal.onFill} />
-          <div style={{ position: "absolute", left: 26, bottom: 26, fontSize: 24, letterSpacing: "0.18em", fontWeight: 600, opacity: 0.9 }}>•••• 4242</div>
+          <div style={{ position: "absolute", left: 26, bottom: 26, fontSize: 24, letterSpacing: "0.18em", fontWeight: 600, opacity: 0.9 }}>{c.v2 ? "•••• ••••" : "•••• 4242"}</div>
           <div style={{ position: "absolute", right: 26, bottom: 26, fontSize: 20, fontWeight: 700 }}>{it.title ?? c.brand.name}</div>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
