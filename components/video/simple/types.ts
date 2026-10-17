@@ -79,6 +79,8 @@ export type SimplePlan = {
   // what makes it look like itself (kept to keep the next videos unlike it)
   print: string;
   sfx?: boolean;
+  // what the check before playing mended, and what it could not (check.ts)
+  check?: { fixed: string[]; left: string[] };
 };
 
 export const isSimple = (plan: unknown): plan is SimplePlan => !!plan && (plan as { engine?: unknown }).engine === "simple";

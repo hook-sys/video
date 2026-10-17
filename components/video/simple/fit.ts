@@ -4,7 +4,21 @@ import { type Face, emWidth } from "../composer/art";
 // most `lines` lines no wider than the place (a little kept spare: the
 // estimate is rough). Never smaller than `min`; the last resort is that.
 
-export type Fitted = { size: number; lines: number[][] };
+// (ok: false when even the smallest size does not fit its lines and width)
+export type Fitted = { size: number; lines: number[][]; ok: boolean };
+
+// While a plan is checked (check.ts): every fitting made, and whether it fitted.
+export type FitNote = { text: string; ok: boolean; size: number };
+let notes: FitNote[] | null = null;
+export function noting<T>(run: () => T): { out: T; notes: FitNote[] } {
+  notes = [];
+  try {
+    return { out: run(), notes };
+  } finally {
+    notes = null;
+  }
+}
+const noted = (words: string[], f: Fitted): Fitted => (notes?.push({ text: words.join(" "), ok: f.ok, size: f.size }), f);
 
 export function fitWords(words: string[], face: Face, { width, lines: most, max, min = 40, weight = 700 }: { width: number; lines: number; max: number; min?: number; weight?: number }): Fitted {
   const room = width * 0.92;
@@ -27,7 +41,7 @@ export function fitWords(words: string[], face: Face, { width, lines: most, max,
         used += add;
       }
     });
-    if (ok && lines.length <= most) return { size, lines: balanced(em.map((e) => e * size), gap * size, lines.length) };
+    if (ok && lines.length <= most) return noted(words, { size, lines: balanced(em.map((e) => e * size), gap * size, lines.length), ok: true });
   }
   // (the smallest size, as many lines as it takes)
   const lines: number[][] = [];
@@ -42,7 +56,7 @@ export function fitWords(words: string[], face: Face, { width, lines: most, max,
       used += gap * min + w;
     }
   });
-  return { size: min, lines };
+  return noted(words, { size: min, lines, ok: lines.length <= most && em.every((e) => e * min <= room) });
 }
 
 // The same words on the same number of lines, as even as they go (never one

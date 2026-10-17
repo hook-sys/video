@@ -32,6 +32,7 @@ import { copywrite } from "@/lib/v2/copywriter";
 import { readBeats } from "@/lib/simple/brain";
 import { beatsOf } from "@/components/video/simple/beats";
 import { planOf } from "@/components/video/simple/select";
+import { repairPlan } from "@/components/video/simple/check";
 
 // "New version" (admin → Settings): one simple path, no fallbacks.
 //   1. the voice: our voice reads the script (timed by the admin's Whisper),
@@ -334,10 +335,13 @@ async function buildSimple(admin: Admin, projectId: string, userId: string, proj
     const { readings, problems } = await readBeats(words, beats, brand.name, roles.director, (u) => usage.push(u), Math.max(30_000, Math.min(120_000, roles.left() - 30_000)));
     const { data: last } = await admin.from("projects").select("print:brief->composer->simple->>print").eq("user_id", userId).neq("id", projectId).not("brief->composer->simple", "is", null).order("created_at", { ascending: false }).limit(5);
     const recent = (last ?? []).map((p) => p.print as string | null).filter((p): p is string => !!p);
-    const plan = planOf({ words, beats, readings, brand: { name: brand.name, color: brand.color, cta: brand.cta, icon: null }, seed: roles.look.seed, duration: Math.round(project.duration_seconds * 30), recent, size: frameOf(project.format) });
-    console.info("composer (simple engine):", { projectId, model: roles.director.model, beats: beats.length, print: plan.print, problems: problems.slice(0, 6) });
-    await admin.from("direction_library").update({ narration: brief.script, outcome: { stored: true, engine: "simple", language: plan.theme.way, problems: problems.slice(0, 8) }, updated_at: new Date().toISOString() }).eq("project_id", projectId);
-    return { simple: plan, videos: [], indexing: "script" as const, source: "ai" as const, problems, at: new Date().toISOString() };
+    const drawn = planOf({ words, beats, readings, brand: { name: brand.name, color: brand.color, cta: brand.cta, icon: null }, seed: roles.look.seed, duration: Math.round(project.duration_seconds * 30), recent, size: frameOf(project.format) });
+    // (checked and mended by code before it is played: check.ts)
+    const { plan, report } = repairPlan(drawn, readings);
+    const noted = [...problems, ...report.fixed.map((x) => `mended — ${x}`), ...report.left.map((x) => `left — ${x}`)];
+    console.info("composer (simple engine):", { projectId, model: roles.director.model, beats: beats.length, print: plan.print, problems: noted.slice(0, 8) });
+    await admin.from("direction_library").update({ narration: brief.script, outcome: { stored: true, engine: "simple", language: plan.theme.way, problems: noted.slice(0, 12) }, updated_at: new Date().toISOString() }).eq("project_id", projectId);
+    return { simple: plan, videos: [], indexing: "script" as const, source: "ai" as const, problems: noted, at: new Date().toISOString() };
   } finally {
     await priceV2(admin, projectId, userId, roles.director.model, usage, started);
   }

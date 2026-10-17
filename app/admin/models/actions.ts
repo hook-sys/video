@@ -6,7 +6,7 @@ import { z } from "zod";
 import { zodTextFormat } from "openai/helpers/zod";
 import { audit, requireAdmin } from "@/lib/admin";
 import { generateVoice, timeWords } from "@/lib/ai/fal";
-import { type AiConfig, SETTING_KEY, TEXT_TASKS, V2_ROLES, forgetAiConfig, normalizeConfig, textClient, textCost, unitCost } from "@/lib/ai/models";
+import { type AiConfig, REASONINGS, SETTING_KEY, TEXT_TASKS, V2_ROLES, forgetAiConfig, normalizeConfig, textClient, textCost, unitCost } from "@/lib/ai/models";
 
 // /admin/models: which AI model does each job. Super admins only; every save
 // is written to the audit log. Keys are never read back or shown.
@@ -111,5 +111,28 @@ export async function testAiModel(_prev: TestResult | null, formData: FormData):
     return { ok: false, error: "Unknown test." };
   } catch (e) {
     return { ok: false, ms: Date.now() - started, error: (e instanceof Error ? e.message : String(e)).slice(0, 500) };
+  }
+}
+
+// The Director's test set (lib/simple/director-test.ts): every case read by
+// the typed model with the typed reasoning, scored. About ten real calls.
+export type DirectorTestResult = { ok: boolean; error?: string; run?: import("@/lib/simple/director-test").TestRun; cost?: string };
+export async function testDirector(_prev: DirectorTestResult | null, formData: FormData): Promise<DirectorTestResult> {
+  await superAdmin();
+  const model = text(formData, "model");
+  if (!model) return { ok: false, error: "Type a model name." };
+  const reasoning = REASONINGS.find((r) => r === text(formData, "reasoning")) ?? "default";
+  const t = text(formData, "temperature");
+  const temperature = t === "" ? null : Number.isFinite(Number(t)) ? Math.max(0, Math.min(2, Number(t))) : null;
+  const { getAiConfig } = await import("@/lib/ai/models");
+  const { runDirectorTest } = await import("@/lib/simple/director-test");
+  const config = await getAiConfig();
+  try {
+    const ai = { ...textClient("fal", model, false, { timeout: 120_000 }, false), reasoning, temperature };
+    const run = await runDirectorTest(ai);
+    const priced = textCost(config, model, run.inputTokens, run.outputTokens, () => NaN);
+    return { ok: run.cases.some((c) => !c.error), run, cost: Number.isFinite(priced) ? `$${priced.toFixed(4)} (from your prices)` : `${run.inputTokens} in · ${run.outputTokens} out tokens` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message.slice(0, 300) : String(e) };
   }
 }

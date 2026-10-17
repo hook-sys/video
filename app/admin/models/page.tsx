@@ -5,8 +5,11 @@ import { Badge, Card, Notice, PageHeader, btnPrimary, input } from "../_componen
 import { daysAgo, usd } from "../_components/format";
 import { saveAiModels } from "./actions";
 import { ModelTest } from "./model-test";
+import { DirectorTest } from "./director-test";
 
 export const metadata = { title: "AI models" };
+// (the Director test reads 10 scripts: up to a few minutes)
+export const maxDuration = 300;
 
 // Suggestions only: any model name fal (or OpenAI) accepts can be typed.
 const TEXT_MODELS = ["google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "google/gemini-2.5-pro", "openai/gpt-5-mini", "openai/gpt-5-nano", "openai/gpt-5", "anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-4.5", "deepseek/deepseek-chat-v3.1", "qwen/qwen3-235b-a22b", "meta-llama/llama-4-maverick", "gpt-5-mini", "gpt-5-nano"];
@@ -227,6 +230,12 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
       {editable && (
         <Card title="Test a model">
           <ModelTest defaults={{ text: nv ? { provider: "fal", model: c.v2.roles.director.model } : { provider: c.text.provider, model: c.text.model }, voice: { model: c.voice.model, template: c.voice.template } }} />
+        </Card>
+      )}
+
+      {editable && (
+        <Card title="Director test">
+          <DirectorTest defaults={{ model: c.v2.roles.director.model, reasoning: c.v2.roles.director.reasoning, temperature: c.v2.roles.director.temperature }} reasonings={REASONINGS} />
         </Card>
       )}
 

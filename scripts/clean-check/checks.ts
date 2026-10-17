@@ -30,11 +30,13 @@ import { tidied } from "@/components/video/composer/tidy";
 import { beatsOf, durationOf } from "@/components/video/simple/beats";
 import { guessReadings } from "@/components/video/simple/guess";
 import { differs, planOf } from "@/components/video/simple/select";
-import { galleryPlan } from "@/components/video/simple/gallery";
+import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
+import { checkPlan, repairPlan } from "@/components/video/simple/check";
+import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
 import { geoOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/composer/art";
-import { TEMPLATES, VARIANTS } from "@/components/video/simple/types";
+import { GROUNDS, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
 import { inspect, inspected } from "@/components/video/composer/inspect";
 import { type ProbeSample, checkFrames, framesToCheck } from "@/components/video/composer/frame-check";
 import type { ComposerPlan } from "@/components/video/composer/types";
@@ -730,6 +732,24 @@ export async function runChecks(): Promise<Check[]> {
     const fitted = fitWords("Your invoices finally pay themselves automatically".split(" "), face, { width: 680, lines: 3, max: 120, min: 60 });
     const wide = Math.max(...fitted.lines.map((l) => l.reduce((a, i, k) => a + emWidth("Your invoices finally pay themselves automatically".split(" ")[i], face, 700) * fitted.size + (k ? emWidth(" ", face, 700) * 1.15 * fitted.size : 0), 0)));
     add("words fitted to their place: within its lines and its width, the lines even", fitted.lines.length <= 3 && wide <= 680 && fitted.size >= 60, `${fitted.size}px · ${fitted.lines.map((l) => l.length).join("/")} words a line`);
+    // the check before playing (check.ts): every template, variant, frame and ground clean as designed
+    const galleryLeft = ([[1920, 1080], [1080, 1920], [1080, 1080]] as [number, number][]).flatMap((size) => GROUNDS.flatMap((ground) => checkPlan(galleryPlan({ ground, type: 1, way: "slide", pace: "calm" }, undefined, size)).map((x) => `${size.join("x")} ${ground} ${x.kind}`)));
+    add("check before playing: all 36 template variants clean on every frame and ground", galleryLeft.length === 0, galleryLeft.slice(0, 3).join(" · ") || "36 × 3 frames × 3 grounds");
+    // …and what goes wrong is found and mended
+    const bad = sampleScene("feature", 0, 0, 120);
+    bad.items = [{ text: "Extraordinarily complicated reconciliation", icon: "layers" }, { text: "Stock", icon: "no-such-icon" }, { text: "Stock", icon: "boxes" }];
+    const long = sampleScene("statement", 1, 120, 100);
+    long.words = "Internationalization professionalization extraordinarily comprehensively incomprehensibilities".split(" ").map((t, i) => ({ t, at: 124 + i * 6, key: i === 1 }));
+    const broken = { ...galleryPlan({ ground: "dark", type: 0, way: "slide", pace: "calm" }), scenes: [bad, long, sampleScene("cta", 0, 220, 90)], duration: 310 };
+    const kinds = new Set(checkPlan(broken).map((x) => x.kind));
+    const mended = repairPlan(broken, [{ intent: "feature", show: [0, 3], key: 3, icon: "radio", items: bad.items, number: null }, { intent: "hook", show: [0, 4], key: 1, icon: "sheet", items: [], number: null }, { intent: "cta", show: [0, 3], key: 1, icon: "rocket", items: [], number: null }]);
+    add("check before playing: a line too long, a missing icon, a thing twice and words too long are found and mended", ["cut", "icon", "twice", "words"].every((k) => kinds.has(k as never)) && !mended.report.left.length && mended.report.fixed.length === 2 && mended.plan.scenes.at(-1)!.template === "cta" && !!mended.plan.check, mended.report.fixed.map((x) => x.split(" → ")[1]).join(" · "));
+    // the Director's test set (lib/simple/director-test.ts): every good reading inside its beat; right scores high, wrong scores low
+    const setOk = DIRECTOR_CASES.every((c) => { const b = beatsOf(c.words); return b.length === c.beats.length && c.beats.every((g, i) => g.show[0] >= b[i].first && g.show[1] <= b[i].last && g.key.every((k) => k >= g.show[0] && k <= g.show[1])); });
+    const right = DIRECTOR_CASES.map((c) => scoreCase(c, c.beats.map((g) => ({ intent: g.intent[0], show: [g.key[0], Math.min(g.show[1], g.key[0] + 2)] as [number, number], key: g.key[0], icon: null, items: g.items.map((t) => ({ text: t, icon: null })), number: g.number }))));
+    const wrong = DIRECTOR_CASES.map((c) => scoreCase(c, beatsOf(c.words).map((b) => ({ intent: "feature" as const, show: [b.first, b.last] as [number, number], key: null, icon: null, items: [], number: null }))));
+    const avg = (xs: number[]) => Math.round(xs.reduce((a, x) => a + x, 0) / xs.length);
+    add("the Director's test set: 10 scripts, every good reading inside its beat; a right reading scores high, a careless one low", DIRECTOR_CASES.length === 10 && setOk && avg(right) >= 95 && avg(wrong) <= 50, `${DIRECTOR_CASES.reduce((a, c) => a + c.beats.length, 0)} beats · right ${avg(right)} · careless ${avg(wrong)}`);
   }
 
   section = "covered elsewhere";
