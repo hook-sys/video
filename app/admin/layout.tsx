@@ -21,6 +21,7 @@ const PAGE_SECTION: Record<string, Section> = {
   "/admin/content": "content",
   "/admin/settings": "settings",
   "/admin/models": "models",
+  "/admin/templates": "settings",
   "/admin/team": "team",
   "/admin/audit": "audit",
 };

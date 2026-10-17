@@ -8,6 +8,7 @@ import { RENDER_PROJECT_COLUMNS, type RenderProject, buildRenderInput } from "@/
 import { type FrameCheck, PROBE_PREFIX, type ProbeSample, checkFrames, framesToCheck } from "@/components/video/composer/frame-check";
 import { COMPOSER_ID, type ComposerPlan } from "@/components/video/composer/types";
 import { FRAME_SCRIPT } from "./script";
+import { isSimple } from "@/components/video/simple/types";
 
 // The frame check, on the server: the video is opened in a browser in a
 // Vercel Sandbox (Vercel Functions have none), every few frames are laid out
@@ -120,7 +121,8 @@ export async function checkProjectFrames(projectId: string, budgetMs: number): P
   const { composer } = await buildRenderInput(admin, project as RenderProject);
   const plan = composer?.plans[0];
   if (!plan) return null;
-  const result = await frameCheck(plan, budgetMs);
+  // (the simple engine's templates have fixed places: nothing for this check to measure)
+  const result: FrameCheckResult = isSimple(plan) ? { at: new Date().toISOString(), ms: 0, skipped: "the simple engine" } : await frameCheck(plan, budgetMs);
   const { data: fresh } = await admin.from("projects").select("brief").eq("id", projectId).single();
   const brief = (fresh?.brief as { composer?: object } | null) ?? {};
   if (brief.composer) await admin.from("projects").update({ brief: { ...brief, composer: { ...brief.composer, frames: result } } }).eq("id", projectId);

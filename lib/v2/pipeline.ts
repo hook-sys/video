@@ -29,6 +29,9 @@ import { type RoleAi, v2DirectorModel, v2Role, v2Speak, v2TimeScript, v2Transcri
 import { type V2Rules, v2DirectorOf, v2RulesOf } from "@/lib/v2/rules";
 import { type V2Look, drawLook, freshSeed, hueColour, lookOf, lookText, varietyOf } from "@/lib/v2/variety";
 import { copywrite } from "@/lib/v2/copywriter";
+import { readBeats } from "@/lib/simple/brain";
+import { beatsOf } from "@/components/video/simple/beats";
+import { planOf } from "@/components/video/simple/select";
 
 // "New version" (admin → Settings): one simple path, no fallbacks.
 //   1. the voice: our voice reads the script (timed by the admin's Whisper),
@@ -118,6 +121,8 @@ export async function runPipelineV2(projectId: string, userId: string) {
       await update({ brand_color: project.brand_color });
     }
     const roles: Roles = { director, review, copywriter, rules, look, left };
+    // ("Simple engine", admin → Settings: its templates are 16:9 for now — other frames stay with the Composer)
+    const simple = settings.feature_simple_engine === true && (project.format ?? "16:9") === "16:9";
     if (v2.voice.source === "script" && !ai.voice.model) throw new Error("No voice model is set for the new version. A super admin must choose it on /admin/models.");
 
     // The Director plans from the script while the voice is made (a
@@ -127,7 +132,7 @@ export async function runPipelineV2(projectId: string, userId: string) {
     // leaving ~95 s for the review, the Copywriter, the layout and the frame check)
     const budget = () => Math.max(30_000, Math.min(DIRECTOR_MS, left() - 95_000));
     const own = v2.voice.source === "script" ? project.direction.trim() : "";
-    const planning = own && !stored ? planV2(admin, projectId, userId, project, own, readingPace(own), roles, settings, budget()) : null;
+    const planning = own && !stored && !simple ? planV2(admin, projectId, userId, project, own, readingPace(own), roles, settings, budget()) : null;
     planning?.catch(() => {});
 
     // 1. The voice and its words.
@@ -145,8 +150,7 @@ export async function runPipelineV2(projectId: string, userId: string) {
     // 3. The Motion Director's video.
     await enter("visuals");
     if (!stored) {
-      const planned = await (planning ?? planV2(admin, projectId, userId, project, script, words, roles, settings, budget()));
-      const composer = await buildV2(admin, projectId, userId, project, words, brief, roles, settings, planned);
+      const composer = simple ? await buildSimple(admin, projectId, userId, project, words, brief, roles) : await buildV2(admin, projectId, userId, project, words, brief, roles, settings, await (planning ?? planV2(admin, projectId, userId, project, script, words, roles, settings, budget())));
       await update({ brief: { ...brief, composer }, render_status: "idle", render_error: null, video_path: null });
     }
 
@@ -313,6 +317,29 @@ async function buildV2(admin: Admin, projectId: string, userId: string, project:
     return { videos: [video], indexing: "script" as const, source: plan.source, profile: plan.profile, creative: plan.creative, score: { total: score.total, notes: score.notes.slice(0, 6), built: video.source }, changes: [] as { direction: string; at: string; ok: boolean }[], problems, at: new Date().toISOString() };
   } finally {
     await priceV2(admin, projectId, userId, [...new Set(usage.map((u) => u.model))].join(", ") || review.model, usage, started);
+  }
+}
+
+// The simple engine's video (docs/video-spec.md): the voice in beats, one AI
+// call reading them (the Director's model), the templates chosen unlike this
+// customer's last five simple videos. Throws when the reading fails.
+async function buildSimple(admin: Admin, projectId: string, userId: string, project: Project, voice: WordTiming[], brief: ProductBrief, roles: Roles) {
+  const usage: BriefUsage[] = [];
+  const words = scriptWords(brief.script, voice);
+  const brand = brandOf(project, brief);
+  const started = Date.now();
+  try {
+    v2DirectorModel(roles.director.model);
+    const beats = beatsOf(words);
+    const { readings, problems } = await readBeats(words, beats, brand.name, roles.director, (u) => usage.push(u), Math.max(30_000, Math.min(120_000, roles.left() - 30_000)));
+    const { data: last } = await admin.from("projects").select("print:brief->composer->simple->>print").eq("user_id", userId).neq("id", projectId).not("brief->composer->simple", "is", null).order("created_at", { ascending: false }).limit(5);
+    const recent = (last ?? []).map((p) => p.print as string | null).filter((p): p is string => !!p);
+    const plan = planOf({ words, beats, readings, brand: { name: brand.name, color: brand.color, cta: brand.cta, icon: null }, seed: roles.look.seed, duration: Math.round(project.duration_seconds * 30), recent, size: frameOf(project.format) });
+    console.info("composer (simple engine):", { projectId, model: roles.director.model, beats: beats.length, print: plan.print, problems: problems.slice(0, 6) });
+    await admin.from("direction_library").update({ narration: brief.script, outcome: { stored: true, engine: "simple", language: plan.theme.way, problems: problems.slice(0, 8) }, updated_at: new Date().toISOString() }).eq("project_id", projectId);
+    return { simple: plan, videos: [], indexing: "script" as const, source: "ai" as const, problems, at: new Date().toISOString() };
+  } finally {
+    await priceV2(admin, projectId, userId, roles.director.model, usage, started);
   }
 }
 

@@ -23,6 +23,8 @@ import { STILL_BACKGROUND, type ComposerProps, type EnterKind, type ItemKind, ty
 import { H, W, setFrame } from "./frame";
 import { SoundEffects } from "./sfx";
 import { QaProbe, qaMark } from "./probe";
+import { SimpleFilm } from "../simple/film";
+import { isSimple } from "../simple/types";
 
 // A Composer film: the Director's scenes on the voice's words. Every scene
 // is its own composition; one field of light runs under all of them and
@@ -115,7 +117,12 @@ function fitWords(tb: TextBlock, family: string, weight: number, upper: boolean,
   return out;
 }
 
-export function ComposerFilm({ plan, audioUrl, webAudio, bare, qa, screens = [] }: ComposerProps & { screens?: string[] }) {
+// (a video made by the simple engine plays its own film — components/video/simple)
+export function ComposerFilm(props: ComposerProps & { screens?: string[] }) {
+  return isSimple(props.plan) ? <SimpleFilm plan={props.plan} audioUrl={props.audioUrl} webAudio={props.webAudio} /> : <PlannedFilm {...props} />;
+}
+
+function PlannedFilm({ plan, audioUrl, webAudio, bare, qa, screens = [] }: ComposerProps & { screens?: string[] }) {
   // (the frame every part reads — frame.ts)
   setFrame(plan.w ?? 1920, plan.h ?? 1080);
   const f = useCurrentFrame();
