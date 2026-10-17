@@ -1,6 +1,6 @@
 import { type Brand, type Item, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, VARIANTS } from "./types";
 
-// Every template in every variant, on sample words — the template gallery
+// Every template in every variant, on sample words, on any frame — the template gallery
 // (/admin/templates) and the engine's checks. Each sample is 3 s.
 
 const SAMPLE: Record<TemplateId, { words: string; key: number; icon: string; items: Item[]; number?: string }> = {
@@ -11,6 +11,11 @@ const SAMPLE: Record<TemplateId, { words: string; key: number; icon: string; ite
   stat: { words: "Ship orders 3x faster", key: 3, icon: "rocket", items: [], number: "3x" },
   steps: { words: "Up and running in a day", key: 3, icon: "rocket", items: [{ text: "Import orders", icon: "upload" }, { text: "Invite team", icon: "users" }, { text: "Go live", icon: "circle-check" }] },
   cta: { words: "Run your factory, not paperwork.", key: 2, icon: "arrow-right", items: [] },
+  kinetic: { words: "Your factory deserves better", key: 1, icon: "sparkles", items: [] },
+  compare: { words: "Everything in one place", key: 3, icon: "layers", items: [{ text: "Orders", icon: "clipboard-list" }, { text: "Stock", icon: "boxes" }, { text: "Production", icon: "factory" }] },
+  chart: { words: "Watch output grow", key: 2, icon: "trending-up", items: [{ text: "Cutting", icon: "scissors" }, { text: "Sewing", icon: "shirt" }, { text: "Shipping", icon: "truck" }] },
+  messages: { words: "Your team stays in sync", key: 3, icon: "message-circle", items: [{ text: "Order shipped", icon: "truck" }, { text: "Stock updated", icon: "boxes" }, { text: "Line 4 ready", icon: "circle-check" }] },
+  bento: { words: "One app for the floor", key: 1, icon: "layout-grid", items: [{ text: "Live orders", icon: "radio" }, { text: "Stock levels", icon: "boxes" }, { text: "Shift reports", icon: "file-text" }] },
 };
 
 export const GALLERY_BRAND: Brand = { name: "Orin ERP", color: "#1FA77A", cta: "Start today", icon: null };
@@ -22,8 +27,8 @@ export function sampleScene(template: TemplateId, variant: number, from: number,
   return { from, to: from + len, template, variant, left, words: words.map((t, i) => ({ t, at: from + 4 + i * 6, key: i === x.key })), icon: x.icon, items: x.items, number: x.number ?? null };
 }
 
-export function galleryPlan(theme: Theme, only?: TemplateId): SimplePlan {
+export function galleryPlan(theme: Theme, only?: TemplateId, size: [number, number] = [1920, 1080]): SimplePlan {
   const list = (only ? [only] : TEMPLATES).flatMap((t) => Array.from({ length: VARIANTS }, (_, v) => [t, v] as const));
   const scenes = list.map(([t, v], i) => sampleScene(t, v, i * 90, 90, i % 4 < 2));
-  return { engine: "simple", v: 1, duration: scenes.length * 90, w: 1920, h: 1080, seed: 1, brand: GALLERY_BRAND, theme, scenes, print: "gallery", sfx: false };
+  return { engine: "simple", v: 1, duration: scenes.length * 90, w: size[0], h: size[1], seed: 1, brand: GALLERY_BRAND, theme, scenes, print: "gallery", sfx: false };
 }

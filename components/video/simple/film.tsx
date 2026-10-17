@@ -3,7 +3,8 @@ import { AbsoluteFill, Html5Audio, Sequence, continueRender, delayRender, static
 import { Audio as MediaAudio } from "@remotion/media";
 import { type Face, familyOf, fontUrl } from "../composer/art";
 import { type C, clamp01, ease, tint } from "./kit";
-import { TEMPLATE, clickOf } from "./scenes";
+import { TEMPLATE, clickOf } from "./more";
+import { geoOf } from "./geo";
 import { type Look, lookOf } from "./theme";
 import type { Scene, SimplePlan } from "./types";
 
@@ -11,7 +12,6 @@ import type { Scene, SimplePlan } from "./types";
 // moving slowly in (the camera never stops), one way between scenes for the
 // whole video, the voice and a sound on what happens.
 
-const W = 1920;
 // frames a way between scenes takes (half before the cut, half after)
 const T = 18;
 
@@ -45,7 +45,7 @@ function Ground({ look, f, i }: { look: Look; f: number; i: number }) {
   return (
     <AbsoluteFill style={{ background: look.bg }}>
       <AbsoluteFill style={{ background: `radial-gradient(1200px 900px at ${x.toFixed(1)}% ${y.toFixed(1)}%, ${look.glow}, transparent 70%)` }} />
-      <AbsoluteFill style={{ background: `radial-gradient(900px 700px at ${(100 - x).toFixed(1)}% ${(95 - y).toFixed(1)}%, ${tint(look.accent, look.dark ? 0.1 : 0.08)}, transparent 70%)` }} />
+      <AbsoluteFill style={{ background: `radial-gradient(900px 700px at ${(100 - x).toFixed(1)}% ${(95 - y).toFixed(1)}%, ${tint(look.accent, look.dark ? 0.07 : 0.05)}, transparent 70%)` }} />
     </AbsoluteFill>
   );
 }
@@ -57,6 +57,8 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: { plan: SimplePlan; aud
   const { scenes, theme } = plan;
   const n = scenes.length;
   const lively = theme.pace === "lively";
+  const g = useMemo(() => geoOf(plan.w ?? 1920, plan.h ?? 1080), [plan.w, plan.h]);
+  const W = g.W;
   return (
     <AbsoluteFill style={{ background: look.bg, overflow: "hidden", fontFamily: familyOf(look.text) }}>
       {scenes.map((s, i) => {
@@ -75,7 +77,7 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: { plan: SimplePlan; aud
           way = `scale(${(pin < 1 ? 0.82 + 0.18 * pin : 1 + 0.6 * pout).toFixed(4)})`;
           opacity = pin < 1 ? pin : 1 - pout;
         } else if (pin < 1) clip = `inset(0 ${((1 - pin) * 100).toFixed(2)}% 0 0)`;
-        const c: C = { f, s, look, pace: theme.pace, brand: plan.brand };
+        const c: C = { f, s, look, pace: theme.pace, brand: plan.brand, g };
         const Body = TEMPLATE[s.template];
         return (
           <AbsoluteFill key={i} style={{ transform: way || undefined, opacity, clipPath: clip }}>

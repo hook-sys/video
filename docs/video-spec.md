@@ -29,8 +29,11 @@ asked. The same script made twice gives two visibly different videos.
    things spring in and settle (a visible settle, never a bounce).
 6. **Scenes flow.** A slide, a zoom through, or a mask wipe — one family per
    video, never a dip to black.
-7. **One brand colour + neutrals.** Dark, light or brand-filled ground; the
-   colour only on the keyword, buttons and glows.
+7. **One brand colour + neutrals.** Dark, light or brand-filled ground. The
+   colour is the brand's exact colour (only made lighter or darker where it
+   would not read, never another hue), on the keyword, the icons, the buttons
+   and glows. Nothing is drawn behind or under the words (no underline, no
+   marker, no block).
 8. **The story arc.** Hook → problem → reveal → features → proof → the ask.
    The last scene is always the brand and the call to action.
 9. **Honest.** No number the voice does not say; no invented feature, customer
@@ -53,26 +56,34 @@ The AI never chooses layout, colour or style. A template's slots have fixed
 places and sizes; its words are fitted to them, so nothing can overlap or be
 cut off. There is no layout solver and no repair pass.
 
-## Templates (phase 1: 7 × 2)
+## Templates (12 × 3, every frame)
 
-| Template | Intent | Variant A | Variant B |
-|---|---|---|---|
-| statement | hook, any | giant words across the frame | words stacked left, big icon right |
-| trouble | problem | 3 icon tiles struck out | 3 alert cards piling up |
-| reveal | solution | the brand mark lands with a ring | 3 chips fly into the mark |
-| feature | feature | big UI card + cursor ticks a row | phone with notifications |
-| stat | proof (a number said) | giant number counting up | bars growing to the number |
-| steps | steps | 3 numbered steps drawn in a row | a checklist ticking down |
-| cta | the ask (last) | logo + button pressed | big words + button, logo small |
+| Template | Played for | A | B | C |
+|---|---|---|---|---|
+| statement | hook, any | giant words | words + a big icon | lines sliding in from alternate sides |
+| kinetic | hook, problem | one word at a time, then the line | typed into a prompt bar | the key word grows in as it is said |
+| trouble | problem | tiles struck out | alert cards piling up | the pains struck through |
+| compare | problem → solution | the mess, then one tidy card | a slider wipes before into after | a switch turns every cross to a tick |
+| reveal | solution | the mark lands with a ring | things fly into the mark | things orbit the mark |
+| feature | feature | a card, the cursor ticks a row | a phone, notifications | a search typed, results come up |
+| messages | feature | a chat, bubbles with typing dots | an inbox read row by row | toasts on a quiet screen |
+| bento | solution, feature | one big tile and the rest | pills around the words | cards fanning out |
+| stat | proof (a number said) | the number, giant, counting up | bars growing to it | a card: number, arrow, line |
+| chart | proof, feature | a line drawing up | a ring filling | the things as bars |
+| steps | steps | numbered nodes joined by a line | a checklist ticking | cards cascading |
+| cta | the ask (last) | logo, words, button pressed | big words, button, small logo | the brand on a half of its colour |
 
-Every split template also mirrors (hero left or right).
+Every split template also mirrors (hero left or right). On a 9:16 or 1:1
+frame the words go above the hero and rows of things become columns;
+every hero is designed once and scaled into its place (`geo.ts`).
 
 ## Variation (what the viewer sees change)
 
 Per video the selector draws: the template and variant of every beat (never the
 same template twice in a row), the mirror, the ground (dark / light / brand),
 the type pair, the transition family (slide / zoom / wipe) and the pace (calm /
-lively). These make a fingerprint; a new video must differ from the
+lively); each intent has several templates it can be played with, drawn by
+weight. These make a fingerprint; a new video must differ from the
 customer's last five in at least 3 of: ground, type, transitions, pace,
 template order.
 
@@ -81,5 +92,6 @@ template order.
 - Phase 0: this spec; the old version (v1) gets no new features.
 - Phase 1: the engine behind the admin switch "Simple engine" (New version
   only, super admin), the template gallery, side-by-side tests.
-- Phase 2: 12 templates × 3 variants, 9:16, word effects (swap, strike).
+- Phase 2 (done): 12 templates × 3 variants, 9:16 and 1:1, word effects
+  (one word at a time, typing, strike, the key word growing in).
 - Phase 3: when it wins, the old Composer is removed.

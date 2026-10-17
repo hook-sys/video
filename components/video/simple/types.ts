@@ -28,10 +28,10 @@ export type Reading = {
   number: string | null;
 };
 
-export const TEMPLATES = ["statement", "trouble", "reveal", "feature", "stat", "steps", "cta"] as const;
+export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta"] as const;
 export type TemplateId = (typeof TEMPLATES)[number];
-// every template has two designed variants (phase 1)
-export const VARIANTS = 2;
+// every template has three designed variants
+export const VARIANTS = 3;
 
 export const GROUNDS = ["dark", "light", "brand"] as const;
 export type Ground = (typeof GROUNDS)[number];
