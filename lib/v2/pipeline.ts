@@ -11,7 +11,8 @@ import { ruleBrief } from "@/lib/rule-brief";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
 import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
 import { getSettings } from "@/lib/app-settings";
-import { brandOf, loadNeverList, pastOf } from "@/lib/director-context";
+import { brandOf, pastOf } from "@/lib/director-context";
+import { loadV2NeverList } from "@/lib/v2/never";
 import { checkProjectFrames, prepareFrameCheck } from "@/lib/frame-check";
 import { renderWithin } from "@/lib/render-server";
 import { TIER_IDS, type TierId, refundVideo, settleVideo } from "@/lib/billing";
@@ -26,7 +27,7 @@ import { scriptWords } from "@/components/video/composer/words";
 import { v2DetailsOf, type V2Details } from "@/lib/v2/form";
 import { type RoleAi, v2DirectorModel, v2Role, v2Speak, v2TimeScript, v2Transcribe, v2Whisper } from "@/lib/v2/models";
 import { type V2Rules, v2DirectorOf, v2RulesOf } from "@/lib/v2/rules";
-import { type V2Look, drawLook, freshSeed, hueColour, lookOf, lookText } from "@/lib/v2/variety";
+import { type V2Look, drawLook, freshSeed, hueColour, lookOf, lookText, varietyOf } from "@/lib/v2/variety";
 import { copywrite } from "@/lib/v2/copywriter";
 
 // "New version" (admin → Settings): one simple path, no fallbacks.
@@ -238,7 +239,7 @@ async function planV2(admin: Admin, projectId: string, userId: string, project: 
   const usage: BriefUsage[] = [];
   const words = scriptWords(script, voice);
   const brand = { ...brandOf(project, null), url: "" };
-  const [{ known, earlier, looks, past }, never] = await Promise.all([pastOf(admin, projectId, userId, brand.name), loadNeverList(admin)]);
+  const [{ known, earlier, looks, past }, never] = await Promise.all([pastOf(admin, projectId, userId, brand.name), loadV2NeverList(admin)]);
   const styles = styleRulesOf(settings as Parameters<typeof styleRulesOf>[0], RECIPES.map((r) => r.id));
   const input: MotionInput = {
     name: brand.name,
@@ -264,7 +265,7 @@ async function planV2(admin: Admin, projectId: string, userId: string, project: 
     prompt: "classic",
     recent: looks,
     rules: false,
-    ruleText: `${roles.rules.text(never)}\n\n${lookText(roles.look)}`,
+    ruleText: `${roles.rules.text(never)}\n\n${lookText(roles.look, roles.rules.flow)}`,
     checks: roles.rules.checks,
     styles,
     ...v2DirectorOf(settings),
@@ -302,12 +303,12 @@ async function buildV2(admin: Admin, projectId: string, userId: string, project:
     if (plan.source !== "ai" || !plan.ideas) throw new Error(`The Director review (${review.model}) lost the plan.`);
     // the Copywriter: every scene's on-screen words down to its 2–6 key words
     const copied = await copywrite(plan.ideas, words, copywriter, (u) => usage.push(u), Math.max(15_000, Math.min(60_000, roles.left() - 25_000)));
-    const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: look.seed, ideas: copied.ideas, count: 1, avoid: { display: past.seen.display, field: past.seen.field.slice(0, 3) }, screens: 0, avoidStaging: past.seenStaging, rules: rules.ruleSet, variety: look, match: input.match !== false, techOff: techOffOf(settings as Parameters<typeof techOffOf>[0]), styles, avoidStyles: past.avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
+    const set = composeVariants({ words, brand, duration: Math.round(project.duration_seconds * 30), seed: look.seed, ideas: copied.ideas, count: 1, avoid: { display: past.seen.display, field: past.seen.field.slice(0, 3) }, screens: 0, avoidStaging: past.seenStaging, rules: rules.ruleSet, variety: varietyOf(look, rules.flow, techOffOf(settings as Parameters<typeof techOffOf>[0]).includes("camera:macro")), match: input.match !== false, techOff: techOffOf(settings as Parameters<typeof techOffOf>[0]), styles, avoidStyles: past.avoidStyles, creative: plan.creative, look: { scheme: plan.profile.look.scheme, energy: plan.profile.look.energy }, size: frameOf(project.format) });
     const video = set.videos[0];
     if (!video || video.source !== "director") throw new Error("The Motion Director's scenes could not be laid out.");
     const score = scorePlan(set.plans[0], video.script, { staging: video.staging, motif: plan.creative.motif, heroScene: video.staging?.hero ?? null, recent: past.recent, problems: set.problems.length });
     const problems = [...directed.problems, ...reviewed.problems, ...copied.problems, ...set.problems].slice(0, 20);
-    console.info("composer (new version):", { projectId, director: roles.director.model, review: review.model, copywriter: copywriter.model, look: `${look.display}/${look.text} ${look.harmony} ${look.camera}`, scenes: plan.ideas.scenes.length, score: score.total, problems: problems.slice(0, 8) });
+    console.info("composer (new version):", { projectId, director: roles.director.model, review: review.model, copywriter: copywriter.model, look: `${look.display}/${look.text} ${look.harmony} ${look.energy ?? "medium"}`, scenes: plan.ideas.scenes.length, score: score.total, problems: problems.slice(0, 8) });
     await admin.from("direction_library").update({ narration: brief.script, outcome: { stored: true, engine: "composer-v2", language: video.staging?.language ?? "cuts", problems: problems.slice(0, 8) }, updated_at: new Date().toISOString() }).eq("project_id", projectId);
     return { videos: [video], indexing: "script" as const, source: plan.source, profile: plan.profile, creative: plan.creative, score: { total: score.total, notes: score.notes.slice(0, 6), built: video.source }, changes: [] as { direction: string; at: string; ok: boolean }[], problems, at: new Date().toISOString() };
   } finally {

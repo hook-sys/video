@@ -62,6 +62,8 @@ function IconThing({ c, it, w }: P) {
           <div style={{ width: s, height: s, ...surf(c, 0.8, Math.min(s * 0.3, c.art.radius * 0.7 + 10)), borderRadius: c.art.icons === "round" ? 9999 : Math.min(s * 0.3, c.art.radius * 0.7 + 10), display: "flex", alignItems: "center", justifyContent: "center" }}>
             <LivingIcon c={c} name={living} size={s * 0.92} at={it.at} />
           </div>
+        ) : c.noGlyph ? (
+          <div style={{ width: s, height: s }} />
         ) : (
           <Glyph c={c} name={it.icon} size={s} k={kIn(c, it.at, 30)} />
         )}

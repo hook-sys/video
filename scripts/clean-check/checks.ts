@@ -37,7 +37,12 @@ import { ownedPath } from "@/lib/projects";
 import { v2DetailsOf } from "@/lib/v2/form";
 import { v2DirectorModel, v2Role, v2VoiceName } from "@/lib/v2/models";
 import { V2_DIRECTOR, V2_RULES, V2_RULES_MASTER, V2_SHOWN, v2DirectorOf, v2RuleKey, v2RulesOf } from "@/lib/v2/rules";
-import { drawLook, hueColour, lookOf, lookText } from "@/lib/v2/variety";
+import { drawLook, hueColour, lookOf, lookText, varietyOf } from "@/lib/v2/variety";
+import { ENERGY, flowMoves } from "@/components/video/composer/flow";
+import { morphPath } from "@/components/video/composer/morph";
+import { cameraOf, moverOf } from "@/components/video/composer/motion";
+import { v2NeverList } from "@/lib/v2/never";
+import { VIDEO_RULES, neverList } from "@/lib/video-rules";
 import { temperatureFor } from "@/lib/ai/models";
 import { groundIsDark } from "@/components/video/composer/style";
 import { RECIPES } from "@/components/video/composer/recipes";
@@ -523,8 +528,8 @@ export async function runChecks(): Promise<Check[]> {
     type ComposerScriptT = import("@/components/video/composer/types").ScriptT;
     const BOOKWELL_ART = composeVariants({ words: BOOKWELL.words, brand: BOOKWELL.brand, duration: 900, seed: 3, count: 1 }).videos[0].script.art;
     const def = v2RulesOf({});
-    const want = { story: true, frame: true, motion: true, no_people: true, never_list: true, max_items: true, entries: false, one_background: false, calm_background: false, layout_variety: true, min_scene: false, taste: true };
-    add("the rules start as agreed (8 on, 4 off)", JSON.stringify(def.on) === JSON.stringify(want), JSON.stringify(def.on));
+    const want = { story: true, frame: true, motion: true, no_people: true, never_list: true, max_items: true, entries: false, one_background: false, calm_background: false, layout_variety: true, min_scene: false, taste: true, flow: true, camera: true, depth: true, keyword: true, cursor: true };
+    add("the rules start as agreed (13 on, 4 off)", JSON.stringify(def.on) === JSON.stringify(want), JSON.stringify(def.on));
     const off = v2RulesOf({ [V2_RULES_MASTER]: false, [v2RuleKey("story")]: true });
     add("the master switch off turns every rule off", Object.values(off.on).every((x) => !x) && !off.ruleSet.house.maxItems && !off.ruleSet.layoutVariety && !off.checks.noPeople, JSON.stringify(off.on));
     const one = v2RulesOf({ [v2RuleKey("taste")]: false, [v2RuleKey("entries")]: true });
@@ -534,12 +539,13 @@ export async function runChecks(): Promise<Check[]> {
     add("on: in the Director's instructions; off: not; honesty always", t.includes("STORY:") && t.includes("TASTE:") && !t.includes("3 kinds of way") && !t.includes("No busy backgrounds") && t.includes("stock photo") && t.includes("no music") && !offText.includes("STORY:") && !offText.includes("stock photo") && offText.includes("never placeholder data"), `${t.split("\n").length} lines on · ${offText.split("\n").length} off`);
     add("scene length: off follows the voice (1.5 s), on keeps 3 s", def.ruleSet.fit.minScene === 45 && def.checks.minSeconds === 1.5 && t.includes("1.5 s") && v2RulesOf({ [v2RuleKey("min_scene")]: true }).ruleSet.fit.minScene === 84 && def.ruleSet.fit.shown === V2_SHOWN, `${def.ruleSet.fit.minScene} / ${v2RulesOf({ [v2RuleKey("min_scene")]: true }).ruleSet.fit.minScene} frames`);
     add("every rule has its switch in admin → Settings (shown only with the new version)", V2_RULES.every((r) => SETTINGS.some((x) => x.key === v2RuleKey(r.id) && x.newOnly && x.fallback === r.on)) && SETTINGS.some((x) => x.key === V2_RULES_MASTER && x.newOnly), `${V2_RULES.length} + master`);
-    // kept in code: 2–3 things, icons and cards never together
+    // kept in code: one hero and up to 4 beside it; icons and a card may share a scene
     const busy: ComposerScriptT = { art: BOOKWELL_ART, scenes: [{ at: 0, text: null, kicker: null, layout: "center", arrange: null, ratio: null, dark: null, camera: null, enter: "fade", items: [{ kind: "card", at: 0, hit: null, variant: "list" }, { kind: "icon", at: 0, hit: null, icon: "calendar" }, { kind: "icon", at: 0, hit: null, icon: "bell" }, { kind: "icon", at: 0, hit: null, icon: "star" }, { kind: "chips", at: 0, hit: null }] }] } as unknown as ComposerScriptT;
     const kinds = (sc: ComposerScriptT) => sc.scenes[0].items.map((it) => it.kind).join(",");
     const free = houseRules(busy, null, { maxItems: false, entries: false, oneBackground: false, calmBackground: false, noIconCardMix: false });
     const kept = houseRules(busy, null, def.ruleSet.house);
-    add("rules off are not kept in code; on are (2–3 things, no icons beside a card)", kinds(free) === "card,icon,icon,icon,chips" && kinds(kept) === "card,chips", `${kinds(free)} → ${kinds(kept)}`);
+    const six = { ...busy, scenes: [{ ...busy.scenes[0], items: [...busy.scenes[0].items, { kind: "stat", at: 0, hit: null, value: "3x" }] }] } as unknown as ComposerScriptT;
+    add("rules off are not kept in code; on are (one hero + up to 4, icons beside a card allowed)", kinds(free) === "card,icon,icon,icon,chips" && kinds(kept) === "card,icon,icon,icon,chips" && kinds(houseRules(six, null, def.ruleSet.house)) === "card,icon,icon,icon,chips", `${kinds(free)} → ${kinds(kept)} · 6 things → ${kinds(houseRules(six, null, def.ruleSet.house))}`);
     // the look: a fresh one, unlike the last five; kept in code
     const recent = [1, 2, 3, 4, 5].map((s) => drawLook(s * 7919, []));
     const look = drawLook(424242, recent);
@@ -589,6 +595,67 @@ export async function runChecks(): Promise<Check[]> {
     const dirOn = v2DirectorOf({});
     add("story shapes, Director's transitions, visual match: new-version switches, on by default", dirOn.shapes && dirOn.motion && dirOn.match && !v2DirectorOf({ v2_visual_match: false }).match && V2_DIRECTOR.every((d) => SETTINGS.some((x) => x.key === d.key && x.newOnly && x.fallback === true)), JSON.stringify(dirOn));
     add("a logo without colour: a colour from the look's random hue (not #6a5bff)", /^#[0-9A-F]{6}$/.test(hueColour(lk.hue)) && hueColour(0) !== hueColour(180) && hueColour(lk.hue) !== "#6A5BFF" && drawLook(1, []).hue !== drawLook(2, []).hue, `${lk.hue}° → ${hueColour(lk.hue)}`);
+    // ── the premium motion (composer/flow.ts): new version only ──
+    {
+      const fw = Array.from({ length: 48 }, (_, i) => ({ text: `w${i}`, start: i * 0.45, end: i * 0.45 + 0.4 }));
+      const icon = (at: number, name: string, id?: string) => ({ kind: "icon", at, icon: name, title: name, size: "l", ...(id ? { id } : {}) });
+      const ideas: Ideas = { arts: [], scenes: [
+        { at: 0, text: { from: 1, to: 3 }, options: [{ layout: "center", items: [icon(0, "eye-off", "a")] }] },
+        { at: 8, text: { from: 9, to: 11 }, enter: "morph", camera: "orbit", options: [{ layout: "center", items: [icon(8, "lightbulb", "a")] }] },
+        { at: 16, text: { from: 17, to: 19 }, enter: "zoom-in", options: [{ layout: "split-left", items: [{ kind: "card", variant: "list", at: 16, hit: 21, title: "Brief", rows: [{ title: "Scenes" }, { title: "Timing" }, { title: "Motion" }] }] }] },
+        { at: 24, text: { from: 25, to: 27 }, options: [{ layout: "center", items: [icon(24, "timer")] }] },
+        { at: 32, text: { from: 33, to: 35 }, enter: "push-left", options: [{ layout: "center", items: [icon(32, "shuffle")] }] },
+        { at: 40, text: { from: 41, to: 43 }, options: [{ layout: "top", items: [{ kind: "logo", at: 40 }, { kind: "button", at: 41, hit: 46, title: "Try it" }] }] },
+      ] } as unknown as Ideas;
+      const brand = { ...BOOKWELL.brand };
+      const rules = v2RulesOf({});
+      const composeWith = (energy: "calm" | "medium" | "lively", flow = rules.flow) => {
+        const look = { ...drawLook(77, []), energy };
+        const set = composeVariants({ words: fw, brand, duration: 48 * 14, seed: look.seed, ideas, count: 1, rules: rules.ruleSet, variety: varietyOf(look, flow), creative: { language: "cuts", hero: 16 } });
+        const v = set.videos[0];
+        const placed = placeAll(v.script, fw, 48 * 14, brand, v.seed, 0, v.source, [1920, 1080], v.fit ?? {}).plan;
+        return { v, plan: inspected(staged(placed, v.staging)).plan };
+      };
+      const runs = (["calm", "medium", "lively"] as const).map((e) => ({ e, ...composeWith(e) }));
+      const share = (p: ComposerPlan) => (p.links ?? []).slice(1).filter((l) => l === "morph" || l === "dive" || l === "reveal").length / Math.max(1, p.scenes.length - 1);
+      const r = runs.map((x) => `${x.e} ${(p => (p.links ?? []).slice(1).join(","))(x.plan)}`).join(" · ");
+      add("each energy's continuous ways: calm ~30 %, medium ~40 %, lively at least half; never a cut", runs.every((x) => x.plan.flow?.energy === x.e && !(x.plan.links ?? []).includes("cut")) && share(runs[0].plan) >= 0.3 && share(runs[0].plan) <= 0.41 && share(runs[1].plan) >= 0.4 && share(runs[1].plan) <= 0.41 && share(runs[2].plan) >= 0.5, r);
+      const pm = runs[1].plan;
+      // the Director's continuous ways are suggestions: one plan, three seeds → three placements, the energy's share kept
+      const seeded = [77, 4242, 90001, 31337, 55555, 8080].map((sd) => {
+        const look = { ...drawLook(sd, []), energy: "medium" as const };
+        const set = composeVariants({ words: fw, brand, duration: 48 * 14, seed: look.seed, ideas, count: 1, rules: rules.ruleSet, variety: varietyOf(look, rules.flow), creative: { language: "cuts", hero: 16 } });
+        const v = set.videos[0];
+        return inspected(staged(placeAll(v.script, fw, 48 * 14, brand, v.seed, 0, v.source, [1920, 1080], v.fit ?? {}).plan, v.staging)).plan;
+      });
+      const placesOf = (p: ComposerPlan) => (p.links ?? []).map((l, i) => (l === "morph" || l === "dive" || l === "reveal" ? `${i}${l[0]}` : "")).filter(Boolean).join(",");
+      add("continuous ways vary per video from one Director plan (its picks are suggestions; the energy's share kept) — 6 seeds of a 6-scene video, 3+ placements", new Set(seeded.map(placesOf)).size >= 3 && seeded.every((p) => share(p) >= 0.4 && share(p) <= 0.41), seeded.map(placesOf).join(" · "));
+      const morphs = [...runs.map((x) => x.plan), ...seeded].flatMap((p) => (p.links ?? []).map((l, i) => ({ p, l, i })).filter((x) => x.l === "morph"));
+      add("a morph is always the last scene's icon becoming this scene's hero icon (the shared element)", morphs.every(({ p, i }) => { const pr = p.flow?.pairs[i]; const a = pr && p.scenes[i - 1].items[pr[0]], b = pr && p.scenes[i].items[pr[1]]; return !!a && !!b && a.kind === "icon" && b.kind === "icon" && p.scenes[i].items.filter((q) => q.kind !== "badge" && q.kind !== "shape" && q.kind !== "cursor").every((q) => q.box.w * q.box.h <= b.box.w * b.box.h); }), `${morphs.length} morph(s)`);
+      add("never the same layout twice in a row — a scene that must change its layout to fit included (the closing ask aside)", runs.every((x) => x.plan.scenes.every((sc, i) => i === 0 || i === x.plan.scenes.length - 1 || sc.layout !== x.plan.scenes[i - 1].layout)), runs.map((x) => x.plan.scenes.map((sc) => sc.layout).join(",")).join(" · "));
+      const cams = runs.map((x) => x.v.script.scenes.map((sc) => sc.camera));
+      add("every scene its own camera move (never still, never twice in a row; the Director's kept where the energy has it)", cams.every((cs) => cs.every((c, i) => c && c !== "still" && c !== cs[i - 1])) && cams[1][1] === "orbit" && cams[0][1] !== "orbit", cams.map((c) => c.join(",")).join(" · "));
+      add("the energy sets the springs (50–100 ms stagger, a settle, never an excessive bounce) and the keyword is lit in the brand colour or on a pill", runs.every((x) => ["color", "pill"].includes(x.v.script.art.key) && x.v.script.art.motion === ENERGY[x.e].motion) && (["calm", "medium", "lively"] as const).every((e) => { const m = moverOf({ motion: "snappy", pace: 1 }, ENERGY[e]); const z = m.cfg.damping / (2 * Math.sqrt(m.cfg.stiffness * m.cfg.mass)); return m.stagger >= 1.5 && m.stagger <= 3 && z >= 0.5 && z < 1; }), runs.map((x) => `${x.e}: ${x.v.script.art.motion} ${x.v.script.art.key}`).join(" · "));
+      const cursors = pm.scenes.flatMap((sc) => sc.items.filter((it) => it.kind === "cursor").map((it) => ({ it, target: sc.items.find((q) => q.kind !== "cursor" && q.hit === it.hit) })));
+      const off = composeWith("medium", { ...rules.flow, cursor: false }).plan;
+      add("the big cursor: once a chapter, it clicks the scene's main thing and the click is that thing's moment; off with its rule", cursors.length >= 1 && cursors.length <= Math.ceil((pm.scenes.length - 2) / 3) + 1 && cursors.every((c) => !!c.target && c.it.from && c.it.hit != null) && !off.scenes.some((sc) => sc.items.some((it) => it.kind === "cursor")), `${cursors.length} click(s) · off: ${off.scenes.flatMap((sc) => sc.items).filter((it) => it.kind === "cursor").length}`);
+      const mv = flowMoves(pm);
+      const sx = sfxOf({ ...pm, sfx: true });
+      const way = (i: number) => (pm.links ?? [])[i];
+      add("sounds on what is seen: a whoosh as a way moves (none for a fade; a stronger sound at the same moment wins), a click on every cursor click", pm.scenes.every((_, i) => !i || way(i) === "fade" || way(i) === "cut" || sx.some((e) => (e.name === "whoosh" || e.rank > 2) && Math.abs(e.at - (mv[i].start + 2)) <= 9)) && cursors.every((c) => sx.some((e) => e.name === "click" && Math.abs(e.at - (c.it.hit ?? 0)) <= 9)) && !sx.some((e) => /music/.test(e.name)), `${sx.filter((e) => e.name === "whoosh").length} whoosh · ${sx.filter((e) => e.name === "click").length} click`);
+      const dP = morphPath("eye-off", "lightbulb", 0), mP = morphPath("eye-off", "lightbulb", 0.5);
+      add("an icon morphs into another (its strokes resampled, flubber-style)", !!dP && !!mP && dP !== mP && !/NaN/.test(mP) && morphPath("bell", "calendar", 1) !== morphPath("bell", "calendar", 0), `${mP?.length ?? 0} chars mid-morph`);
+      // the old version: none of it
+      const old = composeVariants({ words: fw, brand, duration: 48 * 14, seed: 77, ideas, count: 1 });
+      const oldPlan = inspected(staged(placeAll(old.videos[0].script, fw, 48 * 14, brand, old.videos[0].seed).plan, old.videos[0].staging)).plan;
+      add("the old version is untouched: no flow, no cursor pass, its own springs and camera", !oldPlan.flow && !old.videos[0].staging?.flow && JSON.stringify(moverOf({ motion: "soft", pace: 1 })) === JSON.stringify(moverOf({ motion: "soft", pace: 1 }, null)) && cameraOf("drift", 0.4, 30, 0.5) === cameraOf("drift", 0.4, 30, 0.5, 1), stagingName(old.videos[0].staging));
+      // the never list: the new version's own changes; the old version's untouched
+      const v2 = v2NeverList([]);
+      const v1 = neverList();
+      const v2o = v2NeverList([{ id: "crowded", never: "never crowd (db)", active: true }, { id: "idle", never: "x", active: false }, { id: "team", never: "never team rule", active: true }]);
+      add("the new version's never list: 4 rules left out, 7 changed; a row with a built-in id overrides it for the new version only", v2.includes("panel-wipe") && !/small: a device or screenshot/.test(v2) && !/uploaded screenshots/.test(v2) && !/one calm backdrop/.test(v2) && !/more than 3 kinds of scene transition/.test(v2) && v2.includes("one hero and 3–4 supporting") && v2.includes("springs in") && /uploaded screenshots/.test(v1) && v1 === neverList() && v2o.includes("never crowd (db)") && !v2o.includes("2 seconds pass") && v2o.includes("never team rule") && neverList([{ id: "crowded", never: "never crowd (db)" }]).includes("one hero and at most 2 supporting"), `${v2.split("\n").length} lines (old ${v1.split("\n").length}; built-in ${VIDEO_RULES.length})`);
+      add("the Director is told the energy, a camera per scene and the continuous ways (off: the look's own)", lookText({ ...drawLook(77, []), energy: "lively" }, rules.flow).includes("at least half") && lookText({ ...drawLook(77, []), energy: "lively" }, rules.flow).includes("CAMERA per scene") && !lookText(drawLook(77, [])).includes("WAYS BETWEEN"), "lively");
+    }
   }
 
   section = "covered elsewhere";

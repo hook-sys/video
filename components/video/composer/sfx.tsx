@@ -1,6 +1,7 @@
 import { Html5Audio, Sequence, staticFile } from "remotion";
 import { Audio as MediaAudio } from "@remotion/media";
 import { isAccent } from "./layout";
+import { flowMoves } from "./flow";
 import type { ComposerPlan, ItemKind } from "./types";
 
 // Sound effects (no music): a soft sound on what happens, under the voice —
@@ -25,8 +26,13 @@ const ofKind = (k: ItemKind): Omit<Sfx, "at"> | null =>
 export function sfxOf(plan: ComposerPlan): Sfx[] {
   if (plan.sfx === false) return [];
   const all: Sfx[] = [];
+  // ("New version": a whoosh as a way between scenes moves — none for a fade or a cut — and a click on every cursor click)
+  const mv = plan.flow ? flowMoves(plan) : null;
   plan.scenes.forEach((s, i) => {
-    if (i > 0) all.push({ at: s.from, name: "whoosh", volume: 0.2, rank: 2 });
+    const way = plan.links?.[i];
+    if (i > 0 && !mv) all.push({ at: s.from, name: "whoosh", volume: 0.2, rank: 2 });
+    if (i > 0 && mv && way !== "fade" && way !== "cut") all.push({ at: Math.max(0, mv[i].start + 2), name: "whoosh", volume: way === "morph" ? 0.16 : 0.22, rank: 2 });
+    if (mv) for (const it of s.items) if (it.kind === "cursor" && it.hit != null) all.push({ at: it.hit, name: "click", volume: 0.42, rank: 5 });
     for (const it of s.items) {
       const k = ofKind(it.kind);
       if (k && !(isAccent(it) && it.kind !== "badge")) all.push({ at: Math.max(0, it.at), ...k });
