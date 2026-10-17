@@ -38,6 +38,7 @@ const GROUPS: { title: string; items: { href: string; label: string; icon: keyof
   { title: "System", items: [
     { href: "/admin/settings", label: "Settings", icon: "settings" },
     { href: "/admin/models", label: "AI models", icon: "models" },
+    { href: "/admin/templates", label: "Templates", icon: "content" },
     { href: "/admin/team", label: "Team", icon: "team" },
     { href: "/admin/audit", label: "Audit log", icon: "audit" },
   ] },

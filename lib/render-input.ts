@@ -13,6 +13,7 @@ import { type Staging, staged } from "@/components/video/composer/staging";
 import { composeVariants } from "@/components/video/composer/variants";
 import { pieceToWord, remapScript, scriptWords } from "@/components/video/composer/words";
 import { Script as ComposerScript, type ComposerPlan } from "@/components/video/composer/types";
+import { type SimplePlan, isSimple } from "@/components/video/simple/types";
 
 export type RenderProject = {
   id?: string;
@@ -34,7 +35,7 @@ export const RENDER_PROJECT_COLUMNS = "id, user_id, format, duration_seconds, br
 // What the studio shows beside the video: what its Motion Director decided.
 export type ComposerAbout = { idea: string | null; mood: string | null; language: string | null; score: number | null };
 export type ComposerView = { plans: ComposerPlan[]; screens: string[]; changes: { direction: string; at: string }[]; about?: ComposerAbout };
-type StoredComposer = { videos?: { script: unknown; seed: number; source: ComposerPlan["source"]; staging?: Staging | null; fit?: Fit }[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] };
+type StoredComposer = { simple?: SimplePlan; videos?: { script: unknown; seed: number; source: ComposerPlan["source"]; staging?: Staging | null; fit?: Fit }[]; indexing?: "script"; changes?: { direction: string; at: string; ok: boolean }[] };
 
 // The project's Composer videos laid out on its voice, with the customer's
 // brand inputs and signed URLs (the voice, the logo, the screenshots).
@@ -85,6 +86,11 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
   const brand = { name, color: project.brand_color || "#6a5bff", tagline: "", cta: project.call_to_action?.trim() || (brief.success ? brief.data.cta : "") || "Get started", url: host, icon: logoUrl ?? null };
 
   const stored = (project.brief as { composer?: StoredComposer } | null)?.composer;
+  // the simple engine's video: kept whole, the logo signed now (it plays through the Composer's film)
+  if (isSimple(stored?.simple)) {
+    const plan = { ...stored.simple, brand: { ...stored.simple.brand, icon: logoUrl ?? null }, sfx: (await getSettings()).feature_sfx !== false };
+    return { problems, composer: { plans: [plan as unknown as ComposerPlan], screens: [], changes: [] }, audioUrl };
+  }
   // videos written on the voice's pieces of words (before Oct 8) are moved onto the script's words
   const toWord = stored?.indexing === "script" ? null : pieceToWord(wordTimings, shown);
   const plans = (stored?.videos ?? []).flatMap((v) => {

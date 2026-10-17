@@ -27,6 +27,13 @@ import { livingStandIn } from "@/components/video/icons/living";
 import { pieceToWord, scriptWords } from "@/components/video/composer/words";
 import { sfxOf } from "@/components/video/composer/sfx";
 import { tidied } from "@/components/video/composer/tidy";
+import { beatsOf, durationOf } from "@/components/video/simple/beats";
+import { guessReadings } from "@/components/video/simple/guess";
+import { differs, planOf } from "@/components/video/simple/select";
+import { galleryPlan } from "@/components/video/simple/gallery";
+import { fitWords } from "@/components/video/simple/fit";
+import { emWidth, faceOf } from "@/components/video/composer/art";
+import { TEMPLATES, VARIANTS } from "@/components/video/simple/types";
 import { inspect, inspected } from "@/components/video/composer/inspect";
 import { type ProbeSample, checkFrames, framesToCheck } from "@/components/video/composer/frame-check";
 import type { ComposerPlan } from "@/components/video/composer/types";
@@ -680,6 +687,38 @@ export async function runChecks(): Promise<Check[]> {
       add("UI pieces: the script's own words (the things it names), never a number the voice does not say (an unsaid dashboard becomes a list, a counter its spoken number)", PIECES.length === 7 && pieceOf({ kind: "card", variant: "kpi" }) === "dashboard" && s1[0].variant === "list" && !JSON.stringify(s1).includes("48,210") && (s1[1].rows ?? []).map((r) => r.title).join("/") === "Invoice/Payment/Dashboard" && s2[0].value === "Search any client" && s3[0].value === "3x" && s3[1].variant === "area" && s3[1].value == null, pieceLine);
       add("UI pieces on with their rule (new version only)", rules.flow.pieces && !v2RulesOf({ [v2RuleKey("ui_pieces")]: false }).flow.pieces && rules.text("").includes("UI PIECES"), String(rules.flow.pieces));
     }
+  }
+
+  section = "Simple engine (docs/video-spec.md)";
+  {
+    // a real script on its voice's times (Orin ERP, Oct 17)
+    const said = "Still tracking orders on spreadsheets? Missed deadlines. Lost stock. Endless calls. Orin ERP brings orders, stock and production into one place. See every order live, from fabric to final shipment. Orin ERP. Run your factory, not your paperwork.".split(" ");
+    let t = 0;
+    const sw = said.map((text) => {
+      const w = { text, start: t, end: t + 0.3 };
+      t += /[.?!]$/.test(text) ? 0.75 : 0.36;
+      return w;
+    });
+    const beats = beatsOf(sw);
+    const spans = beats.map((b) => sw[b.last].end - sw[b.first].start);
+    add("the voice in beats: whole sentences, each 2–6.5 s, every word in one", beats.length >= 4 && spans.every((x) => x >= 2 && x <= 6.5) && beats.every((b, i) => b.first === (i ? beats[i - 1].last + 1 : 0)) && beats.at(-1)!.last === sw.length - 1, spans.map((x) => x.toFixed(1)).join(" · "));
+    const readings = guessReadings(sw, beats, "Orin ERP");
+    const brand = { name: "Orin ERP", color: "#1FA77A", cta: "Start today", icon: null };
+    const prints: string[] = [];
+    const plans = [11, 12, 13, 14].map((sd) => {
+      const p = planOf({ words: sw, beats, readings, brand, seed: sd, duration: durationOf(sw), recent: prints });
+      prints.push(p.print);
+      return p;
+    });
+    add("a template per beat, never the same twice in a row, the brand and the ask last", plans.every((p) => p.scenes.length === beats.length && p.scenes.at(-1)!.template === "cta" && p.scenes.every((x, i) => !i || x.template !== p.scenes[i - 1].template || x.template === "statement")), plans.map((p) => p.scenes.map((x) => `${x.template}${x.variant}`).join(",")).join(" · "));
+    add("the same script four times: four videos unlike each other in at least 3 of ground, type, transitions, pace and template order", plans.every((p, i) => plans.slice(0, i).every((q) => differs(p.print, q.print) >= 3)), prints.join(" · "));
+    const g = galleryPlan({ ground: "dark", type: 0, way: "slide", pace: "calm" });
+    add("every template has its variants in the gallery", TEMPLATES.every((x) => g.scenes.filter((s) => s.template === x).length === VARIANTS), `${g.scenes.length} scenes`);
+    // the words fit their place: at most the lines allowed, every line inside it
+    const face = faceOf("plus-jakarta-sans");
+    const fitted = fitWords("Your invoices finally pay themselves automatically".split(" "), face, { width: 680, lines: 3, max: 120, min: 60 });
+    const wide = Math.max(...fitted.lines.map((l) => l.reduce((a, i, k) => a + emWidth("Your invoices finally pay themselves automatically".split(" ")[i], face, 700) * fitted.size + (k ? emWidth(" ", face, 700) * 1.15 * fitted.size : 0), 0)));
+    add("words fitted to their place: within its lines and its width, the lines even", fitted.lines.length <= 3 && wide <= 680 && fitted.size >= 60, `${fitted.size}px · ${fitted.lines.map((l) => l.length).join("/")} words a line`);
   }
 
   section = "covered elsewhere";
