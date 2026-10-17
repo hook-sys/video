@@ -2,6 +2,7 @@ import { extraRules } from "@/lib/ai/house-rules";
 import type { V2Checks } from "@/lib/ai/motion-director";
 import { MIN_SCENE } from "@/components/video/composer/layout";
 import type { RuleSet } from "@/components/video/composer/variants";
+import { piecesText } from "@/components/video/composer/pieces";
 
 // "New version" video rules (admin → Settings, "New version: video rules"):
 // a master switch and one switch per rule. A rule that is on is written into
@@ -35,6 +36,7 @@ export const V2_RULES = [
   { id: "camera", label: "Camera per scene", help: "Every scene its own slow camera move (drift, push, pull, rise, orbit…), never still, never the same twice in a row.", on: true, text: "CAMERA: every scene its own slow move — set camera on every scene (never still, never the same twice in a row)." },
   { id: "depth", label: "Depth", help: "Glass and softly lifted cards, soft shadows; background, things and words on 2–3 layers moving in parallax.", on: true, text: "DEPTH: cards are glass or softly lifted, with soft shadows; the background, the things and the words sit on 2–3 layers that move in parallax." },
   { id: "keyword", label: "Keyword highlight", help: "Every scene's key word lit in the brand colour or on a pill.", on: true, text: "KEYWORD: 1–2 key words per scene (key), lit in the brand colour or on a pill." },
+  { id: "ui_pieces", label: "UI pieces", help: "The product's UI from the piece library — a dashboard card, a growing chart, a list, a search bar being typed, a stack of notifications, a phone, a number counting up — in the brand's colour and the script's own words (never placeholder rows, never a number the voice does not say).", on: true, text: piecesText() },
   { id: "cursor", label: "Big cursor", help: "A big cursor goes to the thing the voice names and clicks it once per chapter (about three scenes); every click changes something on screen.", on: true, text: "CURSOR: a big cursor clicks once a chapter (about three scenes) on the scene's main thing, and its moment (hit) happens on the click — give clickable things (a button, a card, a list) a hit. Never place cursor items yourself." },
 ] as const;
 export type V2RuleId = (typeof V2_RULES)[number]["id"];
@@ -47,7 +49,7 @@ const PHRASE_MIN = 45;
 export const V2_SHOWN = 6;
 
 // flow: which parts of the premium motion are on (composer/flow.ts)
-export type V2Flow = { continuous: boolean; camera: boolean; depth: boolean; keyword: boolean; cursor: boolean };
+export type V2Flow = { continuous: boolean; camera: boolean; depth: boolean; keyword: boolean; cursor: boolean; pieces: boolean };
 export type V2Rules = { on: Record<V2RuleId, boolean>; ruleSet: RuleSet; checks: V2Checks; flow: V2Flow; text: (never: string | null | undefined) => string };
 
 export function v2RulesOf(settings: Record<string, unknown>): V2Rules {
@@ -66,6 +68,6 @@ export function v2RulesOf(settings: Record<string, unknown>): V2Rules {
     const team = on.never_list ? extraRules(never) : "";
     return `RULES (this video keeps them)\n${lines.join("\n")}\n- ${ALWAYS}${team}`;
   };
-  const flow: V2Flow = { continuous: on.flow, camera: on.camera, depth: on.depth, keyword: on.keyword, cursor: on.cursor };
+  const flow: V2Flow = { continuous: on.flow, camera: on.camera, depth: on.depth, keyword: on.keyword, cursor: on.cursor, pieces: on.ui_pieces };
   return { on, ruleSet, checks, flow, text };
 }

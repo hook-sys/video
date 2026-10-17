@@ -40,6 +40,7 @@ import { V2_DIRECTOR, V2_RULES, V2_RULES_MASTER, V2_SHOWN, v2DirectorOf, v2RuleK
 import { drawLook, hueColour, lookOf, lookText, varietyOf } from "@/lib/v2/variety";
 import { ENERGY, flowMoves } from "@/components/video/composer/flow";
 import { morphPath } from "@/components/video/composer/morph";
+import { PIECES, pieceOf, withPieces } from "@/components/video/composer/pieces";
 import { cameraOf, moverOf } from "@/components/video/composer/motion";
 import { v2NeverList } from "@/lib/v2/never";
 import { VIDEO_RULES, neverList } from "@/lib/video-rules";
@@ -528,8 +529,8 @@ export async function runChecks(): Promise<Check[]> {
     type ComposerScriptT = import("@/components/video/composer/types").ScriptT;
     const BOOKWELL_ART = composeVariants({ words: BOOKWELL.words, brand: BOOKWELL.brand, duration: 900, seed: 3, count: 1 }).videos[0].script.art;
     const def = v2RulesOf({});
-    const want = { story: true, frame: true, motion: true, no_people: true, never_list: true, max_items: true, entries: false, one_background: false, calm_background: false, layout_variety: true, min_scene: false, taste: true, flow: true, camera: true, depth: true, keyword: true, cursor: true };
-    add("the rules start as agreed (13 on, 4 off)", JSON.stringify(def.on) === JSON.stringify(want), JSON.stringify(def.on));
+    const want = { story: true, frame: true, motion: true, no_people: true, never_list: true, max_items: true, entries: false, one_background: false, calm_background: false, layout_variety: true, min_scene: false, taste: true, flow: true, camera: true, depth: true, keyword: true, ui_pieces: true, cursor: true };
+    add("the rules start as agreed (14 on, 4 off)", JSON.stringify(def.on) === JSON.stringify(want), JSON.stringify(def.on));
     const off = v2RulesOf({ [V2_RULES_MASTER]: false, [v2RuleKey("story")]: true });
     add("the master switch off turns every rule off", Object.values(off.on).every((x) => !x) && !off.ruleSet.house.maxItems && !off.ruleSet.layoutVariety && !off.checks.noPeople, JSON.stringify(off.on));
     const one = v2RulesOf({ [v2RuleKey("taste")]: false, [v2RuleKey("entries")]: true });
@@ -655,6 +656,18 @@ export async function runChecks(): Promise<Check[]> {
       const v2o = v2NeverList([{ id: "crowded", never: "never crowd (db)", active: true }, { id: "idle", never: "x", active: false }, { id: "team", never: "never team rule", active: true }]);
       add("the new version's never list: 4 rules left out, 7 changed; a row with a built-in id overrides it for the new version only", v2.includes("panel-wipe") && !/small: a device or screenshot/.test(v2) && !/uploaded screenshots/.test(v2) && !/one calm backdrop/.test(v2) && !/more than 3 kinds of scene transition/.test(v2) && v2.includes("one hero and 3–4 supporting") && v2.includes("springs in") && /uploaded screenshots/.test(v1) && v1 === neverList() && v2o.includes("never crowd (db)") && !v2o.includes("2 seconds pass") && v2o.includes("never team rule") && neverList([{ id: "crowded", never: "never crowd (db)" }]).includes("one hero and at most 2 supporting"), `${v2.split("\n").length} lines (old ${v1.split("\n").length}; built-in ${VIDEO_RULES.length})`);
       add("the Director is told the energy, a camera per scene and the continuous ways (off: the look's own)", lookText({ ...drawLook(77, []), energy: "lively" }, rules.flow).includes("at least half") && lookText({ ...drawLook(77, []), energy: "lively" }, rules.flow).includes("CAMERA per scene") && !lookText(drawLook(77, [])).includes("WAYS BETWEEN"), "lively");
+      // the UI piece library: filled from the scene's words; never a number the voice does not say
+      const pw = "Track every invoice and payment in one dashboard. Search any client instantly. Get paid 3x faster".split(" ").map((text, i) => ({ text, start: i * 0.4, end: i * 0.4 + 0.35 }));
+      const ps: ComposerScriptT = { art: BOOKWELL_ART, scenes: [
+        { at: 0, text: null, kicker: null, layout: "center", arrange: null, ratio: null, dark: null, camera: null, enter: "fade", items: [{ kind: "card", variant: "kpi", at: 0, hit: null, rows: [{ title: "Revenue", meta: "$48,210", tag: "+12%" }] }, { kind: "card", variant: "list", at: 0, hit: null, rows: [{ title: "New request" }, { title: "Weekly report" }] }] },
+        { at: 8, text: { from: 8, to: 11, size: "l", reveal: "rise", align: null, key: null }, kicker: null, layout: "center", arrange: null, ratio: null, dark: null, camera: null, enter: "fade", items: [{ kind: "card", variant: "search", at: 8, hit: null }] },
+        { at: 12, text: null, kicker: null, layout: "center", arrange: null, ratio: null, dark: null, camera: null, enter: "fade", items: [{ kind: "stat", at: 12, hit: null, value: "10x" }, { kind: "chart", variant: "bars", at: 12, hit: null, value: "94%" }] },
+      ] } as unknown as ComposerScriptT;
+      const pp = withPieces(ps, pw);
+      const [s1, s2, s3] = pp.scenes.map((x) => x.items);
+      const pieceLine = pp.scenes.map((x) => x.items.map((it) => `${it.kind}:${it.variant ?? ""}${it.value ? `=${it.value}` : ""}[${(it.rows ?? []).map((r) => r.title).join("/")}]`).join(" ")).join(" · ");
+      add("UI pieces: the script's own words (the things it names), never a number the voice does not say (an unsaid dashboard becomes a list, a counter its spoken number)", PIECES.length === 7 && pieceOf({ kind: "card", variant: "kpi" }) === "dashboard" && s1[0].variant === "list" && !JSON.stringify(s1).includes("48,210") && (s1[1].rows ?? []).map((r) => r.title).join("/") === "Invoice/Payment/Dashboard" && s2[0].value === "Search any client" && s3[0].value === "3x" && s3[1].variant === "area" && s3[1].value == null, pieceLine);
+      add("UI pieces on with their rule (new version only)", rules.flow.pieces && !v2RulesOf({ [v2RuleKey("ui_pieces")]: false }).flow.pieces && rules.text("").includes("UI PIECES"), String(rules.flow.pieces));
     }
   }
 
