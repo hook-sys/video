@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { noteHero } from "./fit";
 
 // Where things go on each frame (16:9, 9:16, 1:1). A template is made of a
 // place for the words and a place for its hero (or a group below the words);
@@ -15,14 +16,16 @@ export function geoOf(W: number, H: number): Geo {
   return { W, H, shape, pad: shape === "wide" ? 140 : shape === "tall" ? 80 : 70, u: shape === "wide" ? 1 : shape === "tall" ? 0.86 : 0.74 };
 }
 
-// the words beside a hero (wide: the hero on the left when `left`), or above it
-export function splitOf(g: Geo, left: boolean, hw = 860): { words: Box; hero: Box } {
+// the words beside a hero (wide: the hero on the left when `left`), or above
+// it; `hw`: how wide the hero may be on a wide frame
+export const HERO_W = 1040;
+export function splitOf(g: Geo, left: boolean, hw = HERO_W): { words: Box; hero: Box } {
   const { W, H, pad } = g;
   if (g.shape === "wide") {
-    const gap = 100;
+    const words = W - 2 * pad - hw - GAP;
     return left
-      ? { hero: { left: pad, top: 40, width: hw, height: H - 80 }, words: { left: pad + hw + gap, top: 0, width: W - 2 * pad - hw - gap, height: H } }
-      : { hero: { left: W - pad - hw, top: 40, width: hw, height: H - 80 }, words: { left: pad, top: 0, width: W - 2 * pad - hw - gap - 40, height: H } };
+      ? { hero: { left: pad, top: 0, width: hw, height: H }, words: { left: pad + hw + GAP, top: 0, width: words, height: H } }
+      : { hero: { left: W - pad - hw, top: 0, width: hw, height: H }, words: { left: pad, top: 0, width: words, height: H } };
   }
   if (g.shape === "tall") return { words: { left: pad, top: 170, width: W - 2 * pad, height: 600 }, hero: { left: pad, top: 800, width: W - 2 * pad, height: H - 800 - 110 } };
   return { words: { left: pad, top: 40, width: W - 2 * pad, height: 330 }, hero: { left: pad, top: 390, width: W - 2 * pad, height: H - 390 - 40 } };
@@ -45,48 +48,60 @@ export function wordsFit(g: Geo, place: "side" | "band" | "center", box: Box): W
 }
 
 // The type scale (docs/reference: the promos use few sizes, the same ones
-// throughout): the words alone (HERO), the words beside or above a hero
-// (HEAD), words under a name (SUB), a thing on a card or a tile (ITEM, its
-// title TITLE), a small line under it (LABEL), a button's words (BUTTON).
-// Headlines are frame pixels (times g.u); the rest are a hero's own pixels,
-// scaled with it. A number the voice says and a device's own screen keep
-// their sizes. No scene shows more than three of them.
-export const TYPE = { HERO: 190, HEAD: 120, SUB: 72, TITLE: 48, ITEM: 48, LABEL: 30, BUTTON: 56 } as const;
+// throughout): the words alone (HERO), the words beside or above a hero —
+// second to it — and a name (HEAD), words under a name (SUB), a thing on a
+// card or a tile (ITEM, its title TITLE), a small line under it (LABEL), a
+// button's words (BUTTON). Headlines are frame pixels (times g.u); the rest
+// are a hero's own pixels, scaled with it. A number the voice says and a
+// device's own screen keep their sizes. No scene shows more than three.
+export const TYPE = { HERO: 190, HEAD: 96, SUB: 64, TITLE: 48, ITEM: 48, LABEL: 30, BUTTON: 56 } as const;
 export const WEIGHT = { title: 700, item: 650 } as const;
 // the room between the words and a hero
 const GAP = 120;
+// a hero may grow to this much of its designed size to fill its place
+const MOST = 1.35;
+// the room kept above and below a group (a tall frame keeps more: phones lay their own buttons there)
+const vpad = (g: Geo) => (g.shape === "wide" ? 90 : g.shape === "tall" ? 170 : 60);
 
-// The words and a hero as one group, centred on the frame: side by side on a
-// wide frame (the words as wide as they are, not as their place), one above
-// the other on a tall or square one. `words`: their fitted size, how many
-// lines and the widest line (fit.ts measured).
+// The words and a hero as one group, centred on the frame, the hero as big
+// as its place lets it be: side by side on a wide frame (the words as wide as
+// they are, the hero taking the rest), one above the other on a tall or
+// square one. `words`: their fitted size, how many lines and the widest line
+// (fit.ts measured).
 export type Measured = { size: number; lines: number; width: number };
 export function sideOf(g: Geo, left: boolean, hw: number, words: Measured, dw: number, dh: number): { words: Box; hero: CSSProperties } {
   const { W, H, pad } = g;
-  const { words: box, hero } = splitOf(g, left, hw);
-  const s = Math.min(1, hero.width / dw, hero.height / dh);
-  const [w, h] = [dw * s, dh * s];
-  const at = (x: number, y: number): CSSProperties => ({ position: "absolute", left: x, top: y, width: dw, height: dh, transform: `scale(${s.toFixed(4)})`, transformOrigin: "0 0" });
+  const { words: box } = splitOf(g, left, hw);
+  const place = (s: number, x: number, y: number): CSSProperties => {
+    noteHero((dw * s * dh * s) / (W * H));
+    return { position: "absolute", left: x, top: y, width: dw, height: dh, transform: `scale(${s.toFixed(4)})`, transformOrigin: "0 0" };
+  };
   if (g.shape === "wide") {
     const ww = Math.min(box.width, words.width);
+    // (the hero takes what the words leave, up to a little more than its own width)
+    const s = Math.min(MOST, Math.min(W - 2 * pad - ww - GAP, hw * 1.25) / dw, (H - 2 * vpad(g)) / dh);
+    const w = dw * s;
     const x0 = Math.max(pad, (W - (ww + GAP + w)) / 2);
     // (the words' place keeps its width — they are fitted to it — and starts where they do)
     return left
-      ? { hero: at(x0, (H - h) / 2), words: { ...box, left: x0 + w + GAP } }
-      : { words: { ...box, left: x0 }, hero: at(x0 + ww + GAP, (H - h) / 2) };
+      ? { hero: place(s, x0, (H - dh * s) / 2), words: { ...box, left: x0 + w + GAP } }
+      : { words: { ...box, left: x0 }, hero: place(s, x0 + ww + GAP, (H - dh * s) / 2) };
   }
   const wh = words.lines * words.size * 1.08;
-  const y0 = Math.max(pad, (H - (wh + GAP * 0.6 + h)) / 2);
-  return { words: { ...box, top: y0, height: wh }, hero: at((W - w) / 2, y0 + wh + GAP * 0.6) };
+  const gap = GAP * 0.6;
+  const s = Math.min(MOST, (W - 2 * pad) / dw, (H - 2 * vpad(g) - wh - gap) / dh);
+  const y0 = Math.max(vpad(g) * 0.5, (H - (wh + gap + dh * s)) / 2);
+  return { words: { ...box, top: y0, height: wh }, hero: place(s, (W - dw * s) / 2, y0 + wh + gap) };
 }
-// the words in a band on top and a group below them, centred on the frame together
+// the words in a band on top and a group below them, centred on the frame together, the group as big as it may be
 export function bandOf(g: Geo, words: Measured, dw: number, dh: number): { words: Box; body: CSSProperties } {
   const { W, H, pad } = g;
-  const { words: box, body } = stackOf(g);
-  const s = Math.min(1, body.width / dw, body.height / dh);
+  const { words: box } = stackOf(g);
   const wh = words.lines * words.size * 1.08;
   const gap = GAP * 0.6;
-  const y0 = Math.max(pad * 0.5, (H - (wh + gap + dh * s)) / 2);
+  const s = Math.min(MOST, (W - 2 * pad) / dw, (H - 2 * vpad(g) - wh - gap) / dh);
+  noteHero((dw * s * dh * s) / (W * H));
+  const y0 = Math.max(vpad(g) * 0.5, (H - (wh + gap + dh * s)) / 2);
   return { words: { ...box, top: y0, height: wh }, body: { position: "absolute", left: (W - dw * s) / 2, top: y0 + wh + gap, width: dw, height: dh, transform: `scale(${s.toFixed(4)})`, transformOrigin: "0 0" } };
 }
 

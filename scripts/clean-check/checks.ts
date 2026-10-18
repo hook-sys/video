@@ -15,9 +15,9 @@ import { iconFor } from "@/lib/simple/brain";
 import { resolveIcon } from "@/components/video/icons";
 import { beatsOf, durationOf } from "@/components/video/simple/beats";
 import { guessReadings } from "@/components/video/simple/guess";
-import { differs, planOf } from "@/components/video/simple/select";
+import { differs, planOf, repeats, wordsAlone } from "@/components/video/simple/select";
 import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
-import { checkPlan, repairPlan } from "@/components/video/simple/check";
+import { checkPlan, heroShares, repairPlan } from "@/components/video/simple/check";
 import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
 import { geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
@@ -226,6 +226,20 @@ export async function runChecks(): Promise<Check[]> {
     const wrong = DIRECTOR_CASES.map((c) => scoreCase(c, beatsOf(c.words).map((b) => ({ intent: "feature" as const, show: [b.first, b.last] as [number, number], key: null, icon: null, items: [], number: null }))));
     const avg = (xs: number[]) => Math.round(xs.reduce((a, x) => a + x, 0) / xs.length);
     add("the Director's test set: 10 scripts, every good reading inside its beat; a right reading scores high, a careless one low", DIRECTOR_CASES.length === 10 && setOk && avg(right) >= 95 && avg(wrong) <= 50, `${DIRECTOR_CASES.reduce((a, c) => a + c.beats.length, 0)} beats · right ${avg(right)} · careless ${avg(wrong)}`);
+    // the product, not the words: the 10 test scripts (their right readings) drawn 4 ways each, mended as the pipeline does
+    const drawn = DIRECTOR_CASES.flatMap((c) => {
+      const beats = beatsOf(c.words);
+      const readings = c.beats.map((gb) => ({ intent: gb.intent[0], show: [gb.show[0], gb.show[1]] as [number, number], key: gb.key[0], icon: null, items: gb.items.map((t) => ({ text: t, icon: null })), number: gb.number }));
+      return [11, 222, 3333, 44444].map((seed) => repairPlan(planOf({ words: c.words, beats, readings, brand: { name: c.brand, color: "#6a5bff", cta: "Get started" }, seed, duration: durationOf(c.words) }), readings).plan);
+    });
+    const body = drawn.flatMap((p) => p.scenes.slice(0, -1).map((sc, i) => ({ sc, alone: wordsAlone(sc.template, sc.variant), before: i ? wordsAlone(p.scenes[i - 1].template, p.scenes[i - 1].variant) : false })));
+    const aloneShare = body.filter((x) => x.alone).length / body.length;
+    const heroes = drawn.flatMap((p) => heroShares(p)).filter((x): x is number => x != null);
+    const heroMean = heroes.reduce((a, x) => a + x, 0) / heroes.length;
+    add("the product, not the words: words alone in at most a quarter of scenes and never twice in a row; a hero takes on average 28% of the frame or more", aloneShare <= 0.25 && !body.some((x) => x.alone && x.before) && heroMean >= 0.28, `${drawn.length} videos · words alone ${Math.round(aloneShare * 100)}% · hero ${Math.round(heroMean * 100)}%`);
+    // one scene, one idea: beside a hero at most 4 words; no thing that only repeats them
+    const crowded = body.filter(({ sc, alone }) => (!alone && sc.template !== "reveal" && sc.words.length > 4) || sc.items.some((it) => repeats(it.text, sc.words.map((w) => w.t).join(" "))));
+    add("one scene, one idea: beside a hero at most 4 words, and no thing that only repeats them", !crowded.length && repeats("Precise Timing", "Precise animation timing") && !repeats("Story Transitions", "Precise animation timing"), crowded.slice(0, 2).map((x) => `${x.sc.template}: ${x.sc.words.map((w) => w.t).join(" ")}`).join(" · ") || `${body.length} scenes`);
   }
 
   return checks;

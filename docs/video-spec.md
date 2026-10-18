@@ -25,10 +25,13 @@ asked. The same script made twice gives two visibly different videos.
    are said (never later than half a second into the scene), one lit in the accent colour. Never a sentence, never a label
    above them, never the same words twice on one screen.
 4. **Every cell is short.** A row, a step, a chip: 1–3 words, one line.
-5. **It never stands still.** The camera drifts or pushes in every scene;
-   things spring in and settle (a visible settle, never a bounce).
+5. **It never stands still.** The camera pushes in and drifts one way for
+   the whole video, and keeps moving through the way out of a scene and into
+   the next; things spring in and settle (a visible settle, never a bounce).
 6. **Scenes flow.** A slide, a zoom through, or a mask wipe — one family per
-   video, never a dip to black.
+   video, never a dip to black — over one ground for the whole video (its
+   soft lights drift and never jump at a cut). Two scenes are never on top of
+   each other: a zoom takes the old one out, then brings the new one in.
 7. **One brand colour + neutrals.** Dark, light or brand-filled ground. The
    colour is the brand's exact colour (only made lighter or darker where it
    would not read, never another hue), on the keyword, the icons, the buttons
@@ -44,6 +47,14 @@ asked. The same script made twice gives two visibly different videos.
     template (geo.ts `TYPE`): the words alone 190, beside a hero 120, under a
     name 72, a thing on a card 48, a small line 30, a button 56 — at most
     three of them in a scene.
+11. **The product, not the words.** The hero takes the room the words leave
+    (up to 1.35× its own size): on average 28% of the frame or more. Words
+    alone (no hero) in at most one scene in four, never two in a row; beside
+    a hero the words are its caption — at most 4, around the key one.
+12. **One scene, one idea.** A thing that only repeats the words shown is
+    not shown again.
+13. **Sound.** The voice and a sound on what happens (a whoosh, a pop, a
+    click, a chime). Never music.
 8. **The story arc.** Hook → problem → reveal → features → proof → the ask.
    The last scene is always the brand and the call to action.
 9. **Honest.** No number the voice does not say; no invented feature, customer
