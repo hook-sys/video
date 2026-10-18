@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { Icon } from "../icons";
 import { familyOf } from "./faces";
 import { fitWords } from "./fit";
-import { type C, Glyph, One, Words, clamp01, ease, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { type C, Glyph, One, Words, clamp01, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { TYPE, WEIGHT } from "./geo";
 import { Band, Side, TEMPLATES_1, WordsIn, abs, center, display, itemAt, thingAt } from "./scenes";
 import type { Item, Scene, TemplateId } from "./types";
 
@@ -23,7 +24,7 @@ function Compare({ c }: { c: C }) {
   const row = (it: Item, i: number, after: boolean, w: number) => (
     <div key={i} style={{ height: 120, display: "flex", alignItems: "center", gap: 22, padding: "0 28px", borderTop: i ? `1.5px solid ${c.look.line}` : undefined }}>
       <Glyph c={c} name={it.icon ?? c.s.icon} size={64} card />
-      <One style={{ fontSize: 46, fontWeight: 600, flex: 1, color: after ? c.look.panelInk : c.look.panelSub }} fit={w - 200} face={c.look.text}>{it.text}</One>
+      <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1, color: after ? c.look.panelInk : c.look.panelSub }} fit={w - 200} face={c.look.text}>{it.text}</One>
       <div style={{ width: 52, height: 52, borderRadius: 99, background: after ? c.look.panelAccent : tint(c.look.bad, 0.16), display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Icon name={after ? "check" : "x"} size={32} color={after ? onPanel(c) : c.look.bad} strokeWidth={3} />
       </div>
@@ -40,7 +41,7 @@ function Compare({ c }: { c: C }) {
           return (
             <div key={`b${i}`} style={abs({ left: 40 + (i % 2) * 60, top: 30 + i * (cardH / n + 10), width: w - 120, height: 120, ...panel(c, 26), display: "flex", alignItems: "center", gap: 20, padding: "0 26px", boxSizing: "border-box", opacity: clamp01(k * 1.6) * (1 - 0.35 * after), transform: `rotate(${(turn[i] * k).toFixed(2)}deg)`, filter: undefined })}>
               <Glyph c={c} name={it.icon ?? c.s.icon} size={60} card />
-              <One style={{ fontSize: 42, fontWeight: 600, color: c.look.panelSub }} fit={w - 280} face={c.look.text}>{it.text}</One>
+              <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: c.look.panelSub }} fit={w - 280} face={c.look.text}>{it.text}</One>
             </div>
           );
         })}
@@ -149,7 +150,7 @@ function Chart({ c }: { c: C }) {
           <div key={i} style={abs({ left: 0, top: i * (bh + gap), width: dw, height: bh })}>
             <div style={abs({ left: 0, top: 0, width: dw * len, height: bh, borderRadius: 30, background: last ? c.look.accent : tint(c.look.accent, c.look.dark ? 0.24 : 0.2), display: "flex", alignItems: "center", gap: 20, padding: "0 30px", boxSizing: "border-box", overflow: "hidden" })}>
               <Icon name={it.icon ?? c.s.icon} size={56} color={last ? c.look.onAccent : c.look.ink} strokeWidth={2.2} />
-              <One style={{ fontFamily: familyOf(c.look.text), fontSize: 46, fontWeight: 650, color: last ? c.look.onAccent : c.look.ink }} fit={dw * 0.45} face={c.look.text}>{it.text}</One>
+              <One style={{ fontFamily: familyOf(c.look.text), fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: last ? c.look.onAccent : c.look.ink }} fit={dw * 0.45} face={c.look.text}>{it.text}</One>
             </div>
           </div>
         );
@@ -173,7 +174,7 @@ function Kinetic({ c }: { c: C }) {
     const size = fitWords([w.t], c.look.display, { width: W - 2 * pad, lines: 1, max: Math.round(320 * u), min: 90 }).size;
     return (
       <div style={center({ inset: 0 })}>
-        <div style={{ ...display(c, size, { fontWeight: 800, color: w.key ? c.look.accent : c.look.ink }), opacity: c.f >= w.at - 2 ? 1 : 0, transform: `scale(${(1.25 - 0.25 * k).toFixed(4)})` }}>{w.t}</div>
+        <div style={{ ...display(c, size, { fontWeight: 800, color: c.look.ink, ...(w.key ? keyStyle(c.look, size) : {}) }), opacity: c.f >= w.at - 2 ? 1 : 0, transform: `scale(${(1.25 - 0.25 * k).toFixed(4)})` }}>{w.t}</div>
       </div>
     );
   }
@@ -187,7 +188,7 @@ function Kinetic({ c }: { c: C }) {
       <div style={abs({ left: pad, top: (H - bh) / 2, width: bw, height: bh, ...panel(c, Math.round(50 * u)), display: "flex", alignItems: "center", gap: 30 * u, padding: `0 ${Math.round(50 * u)}px`, boxSizing: "border-box", ...rise(k, 50) })}>
         <Icon name="sparkles" size={Math.round(72 * u)} color={c.look.panelAccent} strokeWidth={2} />
         <div style={{ flex: 1, display: "flex" }}>
-          <Words c={{ ...c, look: { ...c.look, ink: c.look.panelInk, accent: c.look.panelAccent } }} width={bw - 300 * u} lines={tall(c) ? 4 : 2} max={Math.round(110 * u)} min={50} align="left" effect="type" />
+          <Words c={{ ...c, look: { ...c.look, ink: c.look.panelInk, accent: c.look.panelAccent, plate: false } }} width={bw - 300 * u} lines={tall(c) ? 4 : 2} max={Math.round(110 * u)} min={50} align="left" effect="type" />
         </div>
         <div style={center({ position: "relative", width: Math.round(110 * u), height: Math.round(110 * u), borderRadius: 99, flexShrink: 0, background: sent ? c.look.panelAccent : c.look.line, transform: `scale(${(1 + 0.1 * Math.sin(clamp01((c.f - (c.s.words.at(-1)?.at ?? 0) - 22) / 10) * Math.PI)).toFixed(3)})` })}>
           <Icon name="arrow-up" size={Math.round(60 * u)} color={sent ? onPanel(c) : c.look.panelSub} strokeWidth={2.8} />
@@ -212,7 +213,7 @@ function Messages({ c }: { c: C }) {
         <div style={abs({ left: 0, top: 0, width: dw, height: dh, ...panel(c, 40), overflow: "hidden", ...rise(k, 60) })}>
           <div style={{ height: 130, display: "flex", alignItems: "center", gap: 22, padding: "0 40px", borderBottom: `1.5px solid ${c.look.line}` }}>
             <Glyph c={c} name={c.s.icon} size={72} solid card />
-            <One style={{ fontSize: 42, fontWeight: 700 }} fit={600} face={c.look.text}>{c.brand.name}</One>
+            <One style={{ fontSize: TYPE.TITLE, fontWeight: WEIGHT.title }} fit={600} face={c.look.text}>{c.brand.name}</One>
           </div>
           {items.map((it, i) => {
             const at = itemAt(c, i, n) + 6;
@@ -225,7 +226,7 @@ function Messages({ c }: { c: C }) {
                 {c.f >= at && (
                   <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "24px 34px", borderRadius: 44, background: mine ? c.look.panelAccent : tint(c.look.panelAccent, 0.12), color: mine ? onPanel(c) : c.look.panelInk, ...pop(kb), transformOrigin: mine ? "right center" : "left center" }}>
                     <Icon name={it.icon ?? c.s.icon} size={48} color={mine ? onPanel(c) : c.look.panelAccent} strokeWidth={2.2} />
-                    <One style={{ fontSize: 46, fontWeight: 600 }} fit={dw - 360} face={c.look.text}>{it.text}</One>
+                    <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={dw - 360} face={c.look.text}>{it.text}</One>
                   </div>
                 )}
               </div>
@@ -244,8 +245,8 @@ function Messages({ c }: { c: C }) {
         <div style={abs({ left: 0, top: 0, width: dw, height: dh, ...panel(c, 36), overflow: "hidden", ...rise(k, 60) })}>
           <div style={{ height: 130, display: "flex", alignItems: "center", gap: 20, padding: "0 40px", borderBottom: `1.5px solid ${c.look.line}` }}>
             <Icon name="inbox" size={56} color={c.look.panelAccent} strokeWidth={2.2} />
-            <One style={{ fontSize: 42, fontWeight: 700, flex: 1 }} fit={560} face={c.look.text}>{c.brand.name}</One>
-            <div style={{ padding: "8px 20px", borderRadius: 99, background: c.look.panelAccent, color: onPanel(c), fontSize: 34, fontWeight: 700 }}>{n}</div>
+            <One style={{ fontSize: TYPE.TITLE, fontWeight: WEIGHT.title, flex: 1 }} fit={560} face={c.look.text}>{c.brand.name}</One>
+            <div style={{ padding: "8px 20px", borderRadius: 99, background: c.look.panelAccent, color: onPanel(c), fontSize: TYPE.LABEL, fontWeight: 700 }}>{n}</div>
           </div>
           {items.map((it, i) => {
             const at = itemAt(c, i, n);
@@ -256,7 +257,7 @@ function Messages({ c }: { c: C }) {
                 <div style={{ width: 18, height: 18, borderRadius: 99, background: read ? "transparent" : c.look.panelAccent }} />
                 <Glyph c={c} name={it.icon ?? c.s.icon} size={72} card />
                 <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-                  <One style={{ fontSize: 46, fontWeight: read ? 550 : 750 }} fit={560} face={c.look.text}>{it.text}</One>
+                  <One style={{ fontSize: TYPE.ITEM, fontWeight: read ? 550 : 750 }} fit={560} face={c.look.text}>{it.text}</One>
                   <div style={{ height: 14, width: 260 + i * 40, borderRadius: 9, background: c.look.line, marginTop: 14 }} />
                 </div>
               </div>
@@ -282,8 +283,8 @@ function Messages({ c }: { c: C }) {
             <div key={i} style={abs({ right: 36, top: 130 + i * 160, width: 560, height: 136, ...panel(c, 30), display: "flex", alignItems: "center", gap: 20, padding: "0 26px", boxSizing: "border-box", opacity: clamp01(kt * 1.6), transform: `translateX(${((1 - kt) * 260).toFixed(1)}px)`, boxShadow: `0 24px 60px ${c.look.shadow}` })}>
               <Glyph c={c} name={it.icon ?? c.s.icon} size={72} solid card />
               <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
-                <One style={{ fontSize: 40, fontWeight: 700 }} fit={400} face={c.look.text}>{it.text}</One>
-                <One style={{ fontSize: 26, color: c.look.panelSub }}>{c.brand.name} · now</One>
+                <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={400} face={c.look.text}>{it.text}</One>
+                <One style={{ fontSize: TYPE.LABEL, color: c.look.panelSub }}>{c.brand.name} · now</One>
               </div>
             </div>
           );
@@ -308,7 +309,7 @@ function Bento({ c }: { c: C }) {
         ) : (
           <Glyph c={c} name={it.icon ?? c.s.icon} size={big ? 110 : 92} card />
         )}
-        <One style={{ fontSize: big ? 60 : 48, fontWeight: 700 }} fit={w - 80} face={c.look.text}>{it.text}</One>
+        <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.title }} fit={w - 80} face={c.look.text}>{it.text}</One>
       </div>
     );
   };
@@ -342,7 +343,7 @@ function Bento({ c }: { c: C }) {
             <div key={i} style={abs({ left: W * spots[i].x - 240, top: H * spots[i].y - 60, width: 480, height: 120, display: "flex", justifyContent: "center", opacity: clamp01(k * 1.6), transform: `translateY(${float.toFixed(1)}px) scale(${((0.6 + 0.4 * k) * Math.max(0.75, u)).toFixed(3)})` })}>
               <div style={{ ...panel(c, 99), height: 120, display: "flex", alignItems: "center", gap: 20, padding: "0 34px 0 20px" }}>
                 <Glyph c={c} name={it.icon ?? c.s.icon} size={80} card />
-                <One style={{ fontSize: 46, fontWeight: 650 }} fit={300} face={c.look.text}>{it.text}</One>
+                <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={300} face={c.look.text}>{it.text}</One>
               </div>
             </div>
           );
@@ -362,7 +363,7 @@ function Bento({ c }: { c: C }) {
           <div key={i} style={abs({ left: dw / 2 - cw / 2 + off * 430 * spread, top: (dh - ch) / 2 + Math.abs(off) * 30 * spread, width: cw, height: ch, opacity: clamp01(k * 1.6), transform: `rotate(${(off * 8 * spread).toFixed(2)}deg)`, zIndex: 10 - Math.abs(off) })}>
             <div style={{ width: cw, height: ch, ...panel(c, 34), padding: 44, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
               <Glyph c={c} name={it.icon ?? c.s.icon} size={120} card />
-              <One style={{ fontSize: 52, fontWeight: 700 }} fit={cw - 88} face={c.look.text}>{it.text}</One>
+              <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={cw - 88} face={c.look.text}>{it.text}</One>
             </div>
           </div>
         );

@@ -20,7 +20,7 @@ import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
 import { checkPlan, repairPlan } from "@/components/video/simple/check";
 import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
-import { geoOf, splitOf, stackOf } from "@/components/video/simple/geo";
+import { geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/simple/faces";
 import { GROUNDS, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
 
@@ -186,6 +186,23 @@ export async function runChecks(): Promise<Check[]> {
     });
     const tallPlan = planOf({ words: sw, beats, readings, brand, seed: 21, duration: durationOf(sw), size: [1080, 1920] });
     add("every frame (16:9, 9:16, 1:1): the words' place and the hero's inside it and apart; a 9:16 plan keeps its frame", frames.every((x) => x.ok) && tallPlan.w === 1080 && tallPlan.h === 1920, frames.map((x) => `${x.shape} ${x.ok ? "ok" : "bad"}`).join(" · "));
+    // the words and a hero as one group: centred on the frame, inside its margins, apart
+    const grouped = ([[1920, 1080], [1080, 1920], [1080, 1080]] as [number, number][]).flatMap(([W, H]) => {
+      const g = geoOf(W, H);
+      return [true, false].flatMap((left) => [180, 420, 640].flatMap((width) => [[860, 760], [480, 940], [640, 640]].map(([dw, dh]) => {
+        const words = { size: 100, lines: 2, width };
+        const { words: wb, hero } = sideOf(g, left, 860, words, dw, dh);
+        const s = Number(/scale\(([\d.]+)\)/.exec(String(hero.transform))![1]);
+        const h = { left: Number(hero.left), top: Number(hero.top), right: Number(hero.left) + dw * s, bottom: Number(hero.top) + dh * s };
+        // (the words as wide as they come out, not their place)
+        const w = g.shape === "wide" ? { left: wb.left, right: wb.left + Math.min(wb.width, width), top: (H - 216) / 2, bottom: (H + 216) / 2 } : { left: (W - width) / 2, right: (W + width) / 2, top: wb.top, bottom: wb.top + wb.height };
+        const [l, r] = [Math.min(w.left, h.left), Math.max(w.right, h.right)];
+        const apart = g.shape === "wide" ? w.right <= h.left || h.right <= w.left : w.bottom <= h.top;
+        return { ok: apart && l >= g.pad - 1 && r <= W - g.pad + 1 && Math.abs(l - (W - r)) <= 2, at: `${W}x${H} ${left ? "L" : "R"} ${width} ${dw}x${dh}` };
+      })));
+    });
+    const loose = grouped.filter((x) => !x.ok);
+    add("the words and a hero as one group: centred on every frame, inside its margins, never touching", !loose.length, loose.slice(0, 3).map((x) => x.at).join(" · ") || `${grouped.length} layouts`);
     // the words fit their place: at most the lines allowed, every line inside it
     const face = faceOf("plus-jakarta-sans");
     const fitted = fitWords("Your invoices finally pay themselves automatically".split(" "), face, { width: 680, lines: 3, max: 120, min: 60 });

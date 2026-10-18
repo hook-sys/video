@@ -15,6 +15,10 @@ export type Look = {
   sub: string;
   // the keyword, the icons, the buttons
   accent: string;
+  // the keyword on a plate (the brand colour made as light or as dark as the words; on the
+  // brand's own colour a lighter or darker brand colour does not stand out from the words)
+  plate: boolean;
+  plateFill: string;
   // on the accent (a button's words, an icon on a filled tile)
   onAccent: string;
   panel: string;
@@ -83,7 +87,7 @@ export function lookOf(theme: Theme, color: string): Look {
     const bg = mix(brand, "#ffffff", 0.96);
     const accent = readable(brand, bg, 3, "#000000");
     return {
-      dark: false, bg, glow: alpha(brand, 0.14), ink: "#0e1015", sub: "#5b606b", accent, onAccent: inkOn(accent),
+      dark: false, bg, glow: alpha(brand, 0.14), ink: "#0e1015", sub: "#5b606b", accent, plate: false, plateFill: accent, onAccent: inkOn(accent),
       panel: "#ffffff", panelFill: "#ffffff", panelAccent: readable(brand, "#ffffff", 3, "#000000"), onPanelAccent: inkOn(readable(brand, "#ffffff", 3, "#000000")),
       panelInk: "#0e1015", panelSub: "#6b7080", line: "rgba(14,16,21,0.07)", shadow: "rgba(16,24,40,0.12)",
       fill: brand, onFill: inkOn(brand), bad, ...faces,
@@ -96,7 +100,7 @@ export function lookOf(theme: Theme, color: string): Look {
     const accent = light ? mix(brand, "#ffffff", 0.78) : mix(brand, "#000000", 0.62);
     const panelAccent = readable(brand, "#ffffff", 3, "#000000");
     return {
-      dark: light, bg: brand, glow: alpha(light ? "#ffffff" : "#000000", 0.1), ink, sub: alpha(ink, 0.78), accent, onAccent: readable(brand, accent, 4.5, light ? "#000000" : "#ffffff"),
+      dark: light, bg: brand, glow: alpha(light ? "#ffffff" : "#000000", 0.1), ink, sub: alpha(ink, 0.78), accent, plate: true, plateFill: readable(brand, brand, 4.5, light ? "#ffffff" : "#000000"), onAccent: readable(brand, accent, 4.5, light ? "#000000" : "#ffffff"),
       panel: "#ffffff", panelFill: "#ffffff", panelAccent, onPanelAccent: inkOn(panelAccent),
       panelInk: "#0e1015", panelSub: "#6b7080", line: "rgba(14,16,21,0.07)", shadow: "rgba(0,0,0,0.22)",
       fill: "#ffffff", onFill: panelAccent, bad, ...faces,
@@ -105,7 +109,7 @@ export function lookOf(theme: Theme, color: string): Look {
   const bg = mix(brand, "#07080b", 0.93);
   const accent = readable(brand, bg, 3.5, "#ffffff");
   return {
-    dark: true, bg, glow: alpha(brand, 0.22), ink: "#ffffff", sub: "rgba(255,255,255,0.66)", accent, onAccent: inkOn(accent),
+    dark: true, bg, glow: alpha(brand, 0.22), ink: "#ffffff", sub: "rgba(255,255,255,0.66)", accent, plate: false, plateFill: accent, onAccent: inkOn(accent),
     panel: "rgba(255,255,255,0.06)", panelFill: "linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04))", panelAccent: accent, onPanelAccent: inkOn(accent),
     panelInk: "#ffffff", panelSub: "rgba(255,255,255,0.6)", line: "rgba(255,255,255,0.09)", shadow: "rgba(0,0,0,0.5)",
     fill: brand, onFill: inkOn(brand), bad: "#ff6369", ...faces,
