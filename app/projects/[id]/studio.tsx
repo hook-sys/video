@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { renderProgress, startRender } from "@/app/projects/actions";
-import { Player, type PlayerRef } from "@remotion/player";
+import { Player } from "@remotion/player";
 import { SimpleFilm } from "@/components/video/simple/film";
 import { FILM_ID, type FilmProps, type SimplePlan } from "@/components/video/simple/types";
 import { Editor } from "./editor";
@@ -48,13 +48,9 @@ async function renderToFile({ props, file, signal, onProgress }: { props: Props;
 // file: the MP4 made on the server (lib/render-server.ts); rendering: it is
 // being made (autoStart: ask for it now)
 // editable: the owner may edit it (editor.tsx); edited: it was, and can go back
-export function Studio({ projectId, file, rendering = false, autoStart = false, plan: saved, audioUrl, name, className, editable = false, edited = false }: { projectId?: string; file?: string | null; rendering?: boolean; autoStart?: boolean; plan: SimplePlan; audioUrl: string | null; name: string; className: string; editable?: boolean; edited?: boolean }) {
+export function Studio({ projectId, file, rendering = false, autoStart = false, plan, audioUrl, name, className, editable = false, edited = false }: { projectId?: string; file?: string | null; rendering?: boolean; autoStart?: boolean; plan: SimplePlan; audioUrl: string | null; name: string; className: string; editable?: boolean; edited?: boolean }) {
   const router = useRouter();
-  // what the player shows: the video as saved, or as it is being edited
-  const [preview, setPreview] = useState<{ of: string; plan: SimplePlan } | null>(null);
-  const plan = preview && preview.of === saved.print + saved.duration ? preview.plan : saved;
-  const changed = plan !== saved;
-  const player = useRef<PlayerRef>(null);
+  const [editing, setEditing] = useState(false);
   const asked = useRef(false);
   const [made, setMade] = useState(0);
   useEffect(() => {
@@ -105,7 +101,6 @@ export function Studio({ projectId, file, rendering = false, autoStart = false, 
       <section className="flex min-w-0 flex-col gap-3">
         <div className="overflow-hidden rounded-2xl bg-black shadow-xl shadow-black/15 ring-1 ring-black/10">
           <Player
-            ref={player}
             key={`${plan.seed}:${plan.w ?? 1920}`}
             component={SimpleFilm}
             inputProps={{ plan, audioUrl } satisfies Props}
@@ -117,30 +112,29 @@ export function Studio({ projectId, file, rendering = false, autoStart = false, 
             style={{ width: "100%", maxHeight: "75vh", aspectRatio: `${sizeOf(plan)[0]} / ${sizeOf(plan)[1]}` }}
           />
         </div>
-        {editable && projectId && (
-          <Editor
-            key={saved.print + String(edited)}
-            projectId={projectId}
-            plan={saved}
-            edited={edited}
-            onPreview={(next) => setPreview({ of: saved.print + saved.duration, plan: next })}
-            onPick={(frame) => {
-              player.current?.seekTo(frame);
-              player.current?.pause();
-            }}
-          />
-        )}
+        {editable && projectId && editing && <Editor projectId={projectId} plan={plan} audioUrl={audioUrl} edited={edited} onClose={() => setEditing(false)} />}
       </section>
       <aside className="flex flex-col gap-4">
+        {editable && projectId && (
+          <div className="flex flex-col gap-3 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Edit</h2>
+              {edited && <span className="rounded-full bg-[#0a66d6]/10 px-2 py-0.5 text-[11px] font-medium text-[#0a66d6]">Edited</span>}
+            </div>
+            <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center justify-center gap-2 rounded-full border border-foreground/15 bg-white px-5 py-2.5 text-sm font-semibold hover:border-foreground/35">
+              Edit video
+            </button>
+            <p className="text-xs text-foreground/50">Change the style, each scene&apos;s layout, words and icons. Free.</p>
+          </div>
+        )}
         <div className="flex flex-col gap-3 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
           <h2 className="text-sm font-semibold">Download</h2>
-          {changed && <p className="text-xs text-[#8a5300]">You have unsaved changes: the download is the video as you see it now.</p>}
-          {file && !busy && !changed ? (
+          {file && !busy ? (
             <>
               <a href={file} className={className}>Download video</a>
               <p className="text-xs text-foreground/50">1080p · high-quality MP4, ready now.</p>
             </>
-          ) : rendering && !busy && !changed ? (
+          ) : rendering && !busy ? (
             <>
               <button type="button" disabled className={className}>
                 <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true" />
