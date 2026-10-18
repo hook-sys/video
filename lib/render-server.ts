@@ -4,12 +4,11 @@ import { getRenderProgress } from "@remotion/vercel";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VIDEOS_BUCKET } from "@/lib/projects";
 import { RENDER_PROJECT_COLUMNS, type RenderProject, buildRenderInput } from "@/lib/render-input";
-import { filmSnapshot } from "@/lib/frame-check";
-import { COMPOSER_ID } from "@/components/video/composer/types";
+import { filmSnapshot } from "@/lib/film-snapshot";
+import { FILM_ID } from "@/components/video/simple/types";
 
 // The video's MP4, made on the server: the film opened in a real Chrome in a
-// Vercel Sandbox (started from the frame check's snapshot: the same bundled
-// film) and encoded for quality — every frame as PNG (no banding in
+// Vercel Sandbox (started from the film's snapshot, lib/film-snapshot.ts) and encoded for quality — every frame as PNG (no banding in
 // gradients), x264 "slow" at CRF 16, bt709 colour, AAC 320k. Stored in
 // project-videos; the customer downloads the file (no rendering in their
 // browser).
@@ -70,8 +69,7 @@ async function fail(projectId: string, why: string) {
   return { error: why };
 }
 
-// Starts the render of the project's video (its newest version, as the
-// studio shows it first) in a sandbox of its own.
+// Starts the render of the project's video in a sandbox of its own.
 export async function startServerRender(projectId: string): Promise<{ started: true } | { error: string } | { skipped: string }> {
   if (!(await claim(projectId))) return { skipped: "already rendering or rendered" };
   const admin = createAdminClient();
@@ -79,9 +77,8 @@ export async function startServerRender(projectId: string): Promise<{ started: t
     const { data: project } = await admin.from("projects").select(RENDER_PROJECT_COLUMNS).eq("id", projectId).maybeSingle();
     if (!project) return await fail(projectId, "project not found");
     // (the voice's link must last as long as the render may)
-    const { composer, audioUrl, problems } = await buildRenderInput(admin, project as RenderProject, 2 * 3600);
-    const index = (composer?.plans.length ?? 0) - 1;
-    const plan = composer?.plans[index];
+    const { plan, audioUrl, problems } = await buildRenderInput(admin, project as RenderProject, 2 * 3600);
+    const index = 0;
     if (!plan || !audioUrl) return await fail(projectId, problems.join(" ") || "nothing to render");
 
     const signal = AbortSignal.timeout(240_000);
@@ -91,8 +88,8 @@ export async function startServerRender(projectId: string): Promise<{ started: t
     // options), run detached: it writes progress.json as it goes
     const config = {
       serveUrl: `${HOME}/remotion-bundle`,
-      compositionId: COMPOSER_ID,
-      inputProps: { plan, audioUrl, screens: composer!.screens },
+      compositionId: FILM_ID,
+      inputProps: { plan, audioUrl },
       outputLocation: OUT,
       codec: "h264",
       crf: 16,

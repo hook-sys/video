@@ -1,4 +1,4 @@
-import { DISPLAY_FACES, TEXT_FACES, type Face, faceOf } from "../composer/art";
+import { DISPLAY_FACES, TEXT_FACES, type Face, faceOf } from "./faces";
 import { type Pace, type Theme, TYPE_PAIRS } from "./types";
 
 // A video's colours and type. Every colour is the brand's own colour or a

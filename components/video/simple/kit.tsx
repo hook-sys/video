@@ -1,7 +1,8 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Img, interpolate, spring } from "remotion";
+import type { Img as RemotionImg, spring as remotionSpring } from "remotion";
+import { interpolate } from "remotion/no-react";
 import { Icon } from "../icons";
-import { type Face, familyOf } from "../composer/art";
+import { type Face, familyOf } from "./faces";
 import { fitWords } from "./fit";
 import type { Geo } from "./geo";
 import { SPRINGS, type Look } from "./theme";
@@ -10,14 +11,18 @@ import { type Brand, FPS, type Pace, type Scene } from "./types";
 // What every template is made of: words coming in as they are said, an icon
 // on a tile, a card, the brand's mark, a cursor, a number counting up.
 
-export type C = { f: number; s: Scene; look: Look; pace: Pace; brand: Brand; g: Geo };
+// What plays the templates: the film passes Remotion's spring and image; the
+// check before playing (check.ts, on the server, where Remotion cannot load)
+// lays them out with every spring settled.
+export type Play = { spring: typeof remotionSpring; Img: typeof RemotionImg };
+export type C = { f: number; s: Scene; look: Look; pace: Pace; brand: Brand; g: Geo; play: Play };
 
 export const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 export const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 // a thing's spring from frame `at` (0 → 1, a visible settle)
 export const springAt = (c: C, at: number, slow = 1) => {
   const { damping, stiffness, mass } = SPRINGS[c.pace];
-  return spring({ frame: c.f - at, fps: FPS, config: { damping, stiffness: stiffness / slow, mass } });
+  return c.play.spring({ frame: c.f - at, fps: FPS, config: { damping, stiffness: stiffness / slow, mass } });
 };
 export const stagger = (c: C) => SPRINGS[c.pace].stagger;
 // a hex colour at an alpha
@@ -94,6 +99,7 @@ export const panel = (c: C, radius = 30): CSSProperties => ({ background: c.look
 // The brand's mark: its logo, else its initial on the accent
 export function Mark({ c, size }: { c: C; size: number }) {
   const { look, brand } = c;
+  const { Img } = c.play;
   if (brand.icon) return <Img src={brand.icon} style={{ width: size, height: size, objectFit: "contain", flexShrink: 0 }} />;
   return (
     <div style={{ width: size, height: size, borderRadius: size * 0.26, background: look.accent, color: look.onAccent, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: familyOf(look.display), fontWeight: 800, fontSize: size * 0.52, flexShrink: 0 }}>

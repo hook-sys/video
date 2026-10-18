@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// The Composer's checks: its layouts, house rules, staging, Directors and
-// AI settings — everything that can be checked without a render.
+// The app's checks: the simple engine, the AI models' plumbing, projects,
+// credits and settings — everything that can be checked without a render.
 //
 //   npm run check:clean
 //   npm run check:clean -- --allow-known   (CI: the checks listed in

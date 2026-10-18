@@ -6,7 +6,7 @@ import { createProjectV2 } from "@/app/projects/v2-actions";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
 import { BRAND_NAME_MAX, CTA_MAX, FORMATS, LOGO_MAX_BYTES, VERCEL_SCREENSHOT_TOTAL_BYTES, VOICE_LANGUAGES, VOICE_SCRIPT_MAX, VOICE_STYLES, estimateVideoSeconds, validateLogo, voiceVideoSeconds } from "@/lib/projects";
 import { V2_VOICE_TYPES } from "@/lib/v2/form";
-import { Field, Step, Upload, VoicePicker, colourOf, type Prefill } from "./create-project-form";
+import { Field, Step, Upload, VoicePicker, colourOf, type Prefill } from "./form-parts";
 
 const input =
   "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";

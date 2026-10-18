@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Icon } from "../icons";
-import { familyOf } from "../composer/art";
+import { familyOf } from "./faces";
 import { fitWords } from "./fit";
 import { type C, Glyph, One, Words, clamp01, ease, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import { Band, Side, TEMPLATES_1, WordsIn, abs, center, display, itemAt, thingAt } from "./scenes";

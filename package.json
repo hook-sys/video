@@ -4,16 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/frame-check/bundle.mjs && next build",
+    "build": "node scripts/film/bundle.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "icons:build": "node scripts/icons/build.mjs",
-    "lottie:build": "node scripts/lottie/build.mjs",
-    "check:parity": "node scripts/parity/run.mjs",
-    "check:clean": "node scripts/clean-check/run.mjs",
-    "check:frames": "node scripts/frame-check/local.mjs",
-    "refs:ingest": "node scripts/references/ingest.mjs"
+    "check:clean": "node scripts/clean-check/run.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",

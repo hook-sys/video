@@ -14,14 +14,14 @@ export const ADMIN_ROLES = ["super_admin", "admin", "support", "finance", "conte
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 export const isAdminRole = (role?: string | null): role is AdminRole => (ADMIN_ROLES as readonly string[]).includes(role ?? "");
 
-export const SECTIONS = ["overview", "queue", "costs", "quality", "users", "credits", "videos", "billing", "coupons", "content", "settings", "models", "audit", "team"] as const;
+export const SECTIONS = ["overview", "queue", "costs", "users", "credits", "videos", "billing", "coupons", "content", "settings", "models", "audit", "team"] as const;
 export type Section = (typeof SECTIONS)[number];
 // (the super admin: every section)
 export const ROLE_SECTIONS: Record<Exclude<AdminRole, "super_admin">, readonly Section[]> = {
-  admin: ["overview", "queue", "costs", "quality", "users", "credits", "videos", "billing", "coupons", "content", "settings", "models", "audit"],
+  admin: ["overview", "queue", "costs", "users", "credits", "videos", "billing", "coupons", "content", "settings", "models", "audit"],
   support: ["overview", "queue", "users", "videos"],
   finance: ["overview", "costs", "users", "credits", "billing", "coupons", "audit"],
-  content: ["overview", "queue", "quality", "videos", "content"],
+  content: ["overview", "queue", "videos", "content"],
 };
 export const ROLE_INFO: Record<AdminRole, { label: string; help: string }> = {
   super_admin: { label: "Super admin", help: "Everything, and manages the team." },

@@ -49,12 +49,35 @@ voice + word times            (as now: our voice + Whisper, or the recording)
   → selector                  code: a template + a designed variant per beat,
                               a theme, a transition family, a pace — unlike
                               this customer's last videos
+  → check                     code: every scene laid out once and checked;
+                              what goes wrong mended, at most 3 rounds
   → film                      the templates, played on the voice
 ```
 
 The AI never chooses layout, colour or style. A template's slots have fixed
 places and sizes; its words are fitted to them, so nothing can overlap or be
 cut off. There is no layout solver and no repair pass.
+
+## The check before playing (`check.ts`, no AI)
+
+Every scene is laid out once at its last frame, without a browser, and
+checked: words that do not fit their place, a line cut short, an icon the
+library has not got, the same thing twice on one screen, a scene that ends
+before it has settled and been held, colours that do not read. Each is
+mended the way written for it — the icon replaced, the thing said twice
+dropped, shorter things, fewer words around the key one, another variant,
+another template the beat can be played as, another ground — and the plan
+checked again (at most 3 rounds). What was mended and what was left shows on
+the video's admin page. Every template variant passes it on every frame and
+ground (`npm run check:clean`).
+
+## The Director's test set (`lib/simple/director-test.ts`)
+
+10 real scripts (60 beats) with what a good reading of each beat is. On
+/admin/models → Director test, a model, its reasoning and temperature are run
+over them and scored (per beat: intent 30, words shown 25, key 15, things
+named 20, number 10). A model or a prompt change is kept only when it scores
+higher.
 
 ## Templates (12 × 3, every frame)
 
@@ -89,9 +112,11 @@ template order.
 
 ## Phase plan
 
-- Phase 0: this spec; the old version (v1) gets no new features.
-- Phase 1: the engine behind the admin switch "Simple engine" (New version
-  only, super admin), the template gallery, side-by-side tests.
-- Phase 2 (done): 12 templates × 3 variants, 9:16 and 1:1, word effects
-  (one word at a time, typing, strike, the key word growing in).
-- Phase 3: when it wins, the old Composer is removed.
+- Phase 0: this spec.
+- Phase 1: the engine, the template gallery, side-by-side tests.
+- Phase 2 (done): 12 templates × 3 variants, 9:16 and 1:1, word effects.
+- Phase 3 (done): the check before playing and the Director's test set.
+- Phase 4 (done): the only engine. The old versions (v1 and the Composer) and
+  every engine switch are removed; they are kept on the branch
+  `archive/old-engines` and come back to the live site only when the owner
+  asks. A video made with them shows its MP4 if one was made.

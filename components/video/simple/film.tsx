@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { AbsoluteFill, Html5Audio, Sequence, continueRender, delayRender, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Html5Audio, Img, Sequence, continueRender, delayRender, spring, staticFile, useCurrentFrame } from "remotion";
 import { Audio as MediaAudio } from "@remotion/media";
-import { type Face, familyOf, fontUrl } from "../composer/art";
-import { type C, clamp01, ease, tint } from "./kit";
+import { type Face, familyOf, fontUrl } from "./faces";
+import { type C, type Play, clamp01, ease, tint } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
 import { geoOf } from "./geo";
 import { type Look, lookOf } from "./theme";
-import type { Scene, SimplePlan } from "./types";
+import type { FilmProps, Scene, SimplePlan } from "./types";
 
 // The simple engine's film: each scene its template on its own ground,
 // moving slowly in (the camera never stops), one way between scenes for the
@@ -14,6 +14,7 @@ import type { Scene, SimplePlan } from "./types";
 
 // frames a way between scenes takes (half before the cut, half after)
 const T = 18;
+const PLAY: Play = { spring, Img };
 
 const loaded = new Set<string>();
 function useFaces(faces: Face[]) {
@@ -50,7 +51,7 @@ function Ground({ look, f, i }: { look: Look; f: number; i: number }) {
   );
 }
 
-export function SimpleFilm({ plan, audioUrl, webAudio }: { plan: SimplePlan; audioUrl?: string | null; webAudio?: boolean }) {
+export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
   const f = useCurrentFrame();
   const look = useMemo(() => lookOf(plan.theme, plan.brand.color), [plan.theme, plan.brand.color]);
   useFaces([look.display, look.text]);
@@ -77,7 +78,7 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: { plan: SimplePlan; aud
           way = `scale(${(pin < 1 ? 0.82 + 0.18 * pin : 1 + 0.6 * pout).toFixed(4)})`;
           opacity = pin < 1 ? pin : 1 - pout;
         } else if (pin < 1) clip = `inset(0 ${((1 - pin) * 100).toFixed(2)}% 0 0)`;
-        const c: C = { f, s, look, pace: theme.pace, brand: plan.brand, g };
+        const c: C = { f, s, look, pace: theme.pace, brand: plan.brand, g, play: PLAY };
         const Body = TEMPLATE[s.template];
         return (
           <AbsoluteFill key={i} style={{ transform: way || undefined, opacity, clipPath: clip }}>

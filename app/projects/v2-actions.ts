@@ -9,7 +9,6 @@ import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
 import { balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, refundVideo } from "@/lib/billing";
-import { newVersionOn } from "@/lib/new-version";
 import { V2_VOICE_TYPES, type V2Details } from "@/lib/v2/form";
 import { startPipelineV2 } from "@/lib/v2/pipeline";
 
@@ -19,11 +18,9 @@ const oneOf = <T extends string>(list: readonly T[], value: unknown) => list.fin
 // (the form says "about 15 s per 250 characters")
 const trialSecondsOf = (chars: number) => Math.ceil((chars / 250) * 15);
 
-// "New version" (admin → Settings): a video from the customer's script or
-// their own recording, their logo, a voice, a format, their name and call to
-// action. Refused when the switch is off.
+// A video from the customer's script or their own recording, their logo, a
+// voice, a format, their name and call to action.
 export async function createProjectV2(_prev: CreateProjectV2State, formData: FormData): Promise<CreateProjectV2State> {
-  if (!(await newVersionOn())) return { error: "This form is not available. Reload the page." };
   const mode = formData.get("voice_mode") === "upload" ? "upload" : "script";
   const script = mode === "script" ? String(formData.get("script") ?? "").trim() : "";
   const voiceEntry = mode === "upload" ? formData.get("voice_file") : null;

@@ -16,7 +16,7 @@ export type RoleAi = TextAi & { reasoning: Reasoning; temperature: number | null
 export async function v2Role(role: V2Role, opts: { timeout?: number; maxRetries?: number } = {}, config?: AiConfig): Promise<RoleAi> {
   const c = (config ?? (await getAiConfig())).v2.roles[role];
   const label = V2_ROLES.find((r) => r.id === role)?.label ?? role;
-  if (!c.model.trim()) throw new Error(`No ${label} model is set for the new version. ${SET_IT}`);
+  if (!c.model.trim()) throw new Error(`No ${label} model is set. ${SET_IT}`);
   return { ...textClient("fal", c.model.trim(), false, opts, false), reasoning: c.reasoning, temperature: c.temperature };
 }
 
@@ -24,13 +24,13 @@ export async function v2Role(role: V2Role, opts: { timeout?: number; maxRetries?
 // make lib/ai/motion-director.ts fall back to OPENAI_MODEL / gpt-5-mini.
 export function v2DirectorModel(model: unknown): string {
   const m = typeof model === "string" ? model.trim() : "";
-  if (!m) throw new Error(`The new version's Director has no model. ${SET_IT}`);
+  if (!m) throw new Error(`The Director has no model. ${SET_IT}`);
   return m;
 }
 
 export async function v2Whisper(config?: AiConfig): Promise<string> {
   const model = (config ?? (await getAiConfig())).v2.whisper;
-  if (!model) throw new Error(`No Whisper model is set for the new version. ${SET_IT}`);
+  if (!model) throw new Error(`No Whisper model is set. ${SET_IT}`);
   return model;
 }
 
@@ -39,14 +39,14 @@ export async function v2Whisper(config?: AiConfig): Promise<string> {
 export function v2VoiceName(voice: AiConfig["voice"], gender: string, picked?: string | null): string {
   const g = gender === "female" ? "female" : "male";
   const name = picked?.trim() || voice[g] || voice.choices.find((c) => c.gender === g)?.name;
-  if (!name) throw new Error(`No ${g} voice name is set for the new version. ${SET_IT}`);
+  if (!name) throw new Error(`No ${g} voice name is set. ${SET_IT}`);
   return name;
 }
 
 // The script spoken by the voice model on /admin/models (its own template).
 export async function v2Speak(input: { script: string; language: string; style: string; gender: string; voice?: string | null }) {
   const voice = (await getAiConfig()).voice;
-  if (!voice.model) throw new Error(`No voice model is set for the new version. ${SET_IT}`);
+  if (!voice.model) throw new Error(`No voice model is set. ${SET_IT}`);
   const text = input.script.trim();
   if (!text) throw new Error("There is no script to speak.");
   const body = buildInput(voice.template || '{"text":"{{text}}"}', { text, language: input.language, style: input.style, gender: input.gender, voice: v2VoiceName(voice, input.gender, input.voice) });

@@ -1,11 +1,4 @@
 {
-  "note": "Checks that already failed on main when CI was added (Oct 16). With --allow-known (CI) they are reported but do not fail the run; any other failing check does. Remove a name once its check is fixed.",
-  "checks": [
-    "Flowly: the faces a customer has seen are not used again",
-    "Bookwell: the faces a customer has seen are not used again",
-    "review: sees our checks, its improved plan is kept, the brand stays",
-    "review: an answer without scenes changes nothing",
-    "form: every answer is required (no features asked)",
-    "inline, label, caption, around, between lay out cleanly"
-  ]
+  "note": "Checks allowed to fail in CI (--allow-known). None: every check passes.",
+  "checks": []
 }

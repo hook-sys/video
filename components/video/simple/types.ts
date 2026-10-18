@@ -79,6 +79,12 @@ export type SimplePlan = {
   // what makes it look like itself (kept to keep the next videos unlike it)
   print: string;
   sfx?: boolean;
+  // what the check before playing mended, and what it could not (check.ts)
+  check?: { fixed: string[]; left: string[] };
 };
 
 export const isSimple = (plan: unknown): plan is SimplePlan => !!plan && (plan as { engine?: unknown }).engine === "simple";
+
+// the film's id in the bundle (remotion/root.tsx) and what it takes
+export const FILM_ID = "SimpleFilm";
+export type FilmProps = { plan: SimplePlan; audioUrl?: string | null; webAudio?: boolean };

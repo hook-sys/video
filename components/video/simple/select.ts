@@ -1,4 +1,4 @@
-import { rng } from "../composer/art";
+import { rng } from "./faces";
 import { framesOf } from "./beats";
 import { type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
 
@@ -9,7 +9,7 @@ import { type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, 
 // what each intent can be played as, with how often (a template that needs
 // things — tiles, steps, chips — only when the beat has them): the same
 // script drawn again tells a beat another way
-function choices(r: Reading): [TemplateId, number][] {
+export function choices(r: Reading): [TemplateId, number][] {
   const many = r.items.length >= 2, three = r.items.length >= 3;
   const only = (xs: [TemplateId, number, boolean?][]) => xs.filter(([, , ok]) => ok !== false).map(([t, w]) => [t, w] as [TemplateId, number]);
   switch (r.intent) {
@@ -32,7 +32,7 @@ function pickOf(list: [TemplateId, number][], prev: TemplateId | null, R: Return
 }
 
 // a colour too grey to fill the ground with
-function grey(hex: string): boolean {
+export function grey(hex: string): boolean {
   const n = parseInt(hex.replace("#", "").padEnd(6, "0").slice(0, 6), 16);
   const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
   return Math.max(r, g, b) - Math.min(r, g, b) < 40;
@@ -51,9 +51,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     prev = template;
     // (a variant that needs things only when there are some)
     let variant = R.int(0, VARIANTS - 1);
-    if (template === "reveal" && r.items.length < 2) variant = 0;
-    // (bars of the things only when there are some)
-    if (template === "chart" && variant === 2 && r.items.length < 2) variant = R.int(0, 1);
+    if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
     const shown = words.slice(r.show[0], r.show[1] + 1);
     // (the words come in as they are said — never later than half a second into the scene: no empty start)
     const late = Math.max(0, Math.round((shown[0]?.start ?? 0) * FPS) - (frames[i].from + 15));
@@ -68,9 +66,14 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       number: r.number,
     };
   });
-  const print = [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${TEMPLATES.indexOf(s.template).toString(36)}${s.variant}`).join("")].join("|");
-  return { engine: "simple", v: 1, duration, seed, brand, theme, scenes, print };
+  return { engine: "simple", v: 1, duration, seed, brand, theme, scenes, print: printOf(theme, scenes) };
 }
+
+// a variant that needs things (the things flying into the mark, bars of the things) only when there are some
+export const variantOk = (template: TemplateId, variant: number, items: number) => !(template === "reveal" && variant > 0 && items < 2) && !(template === "chart" && variant === 2 && items < 2);
+
+// what makes a video look like itself: its ground, type, transitions, pace and template order
+export const printOf = (theme: Theme, scenes: Scene[]) => [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${TEMPLATES.indexOf(s.template).toString(36)}${s.variant}`).join("")].join("|");
 
 // a word as shown: the first capitalised, the last without a trailing comma or colon
 function shownWord(t: string, k: number, n: number): string {
