@@ -109,6 +109,46 @@ const SOUNDS = {
   },
 };
 
+// ── the icons' own sounds (components/video/simple/motion.ts): short and soft,
+// under the voice; added after the others, so those come out as they were
+Object.assign(SOUNDS, {
+  // a check mark drawn: a small, bright tick
+  tick() {
+    const out = buffer(0.12);
+    tick(out, 0, 0.7, 7000);
+    tone(out, 0, 0.08, () => 3200, 0.35, 0.0005, 0.012, [1, 0.2]);
+    return out;
+  },
+  // a bell rung: two soft bell partials, ringing out
+  ding() {
+    const out = buffer(0.9);
+    tone(out, 0, 0.9, () => 1320, 0.6, 0.002, 0.28, [1, 0.35, 0.12]);
+    tone(out, 0, 0.9, () => 1980, 0.25, 0.002, 0.18);
+    return lowpass(out, 6000);
+  },
+  // a line rising: a short pitch climbing, with a little air
+  rise() {
+    const d = 0.45;
+    const out = buffer(d);
+    tone(out, 0, d, (t) => 420 + 900 * (t / d) ** 1.4, 0.45, 0.04, 0.2, [1, 0.25]);
+    const air = bandpass(buffer(d).map(rand), (t) => 1500 + 4000 * (t / d), 2);
+    return out.map((v, i) => v + air[i] * 0.25 * Math.sin((Math.PI * i) / out.length));
+  },
+  // a flash or a sparkle: a few high, quick glints
+  shimmer() {
+    const out = buffer(0.5);
+    [2637, 3136, 3520, 4186].forEach((f, k) => tone(out, k * 0.045, 0.3, () => f, 0.3, 0.002, 0.08));
+    return lowpass(out, 9000);
+  },
+  // a lock shutting: a low knock and a click
+  lock() {
+    const out = buffer(0.18);
+    tone(out, 0, 0.12, (t) => 160 + 140 * Math.exp(-t / 0.01), 0.8, 0.001, 0.03);
+    tick(out, 0.05, 0.8, 4500);
+    return out;
+  },
+});
+
 function normalize(x) {
   const n = Math.round(0.004 * RATE); // short fade-out avoids end clicks
   x.forEach((_, i) => i >= x.length - n && (x[i] *= (x.length - i) / n));
@@ -133,9 +173,13 @@ const ffmpeg = process.env.FFMPEG ?? path.join(compositor, "ffmpeg");
 const outDir = path.resolve("public/sfx");
 const tmp = mkdtempSync(path.join(tmpdir(), "sfx-"));
 mkdirSync(outDir, { recursive: true });
+// (names given: only those written — every sound is still made, in order, so the others' noise stays the same)
+const only = process.argv.slice(2);
 for (const [name, make] of Object.entries(SOUNDS)) {
+  const samples = normalize(make());
+  if (only.length && !only.includes(name)) continue;
   const src = path.join(tmp, `${name}.wav`);
-  writeFileSync(src, wav(normalize(make())));
+  writeFileSync(src, wav(samples));
   execFileSync(ffmpeg, ["-y", "-loglevel", "error", "-i", src, "-ac", "1", "-b:a", "96k", path.join(outDir, `${name}.mp3`)], {
     env: { ...process.env, LD_LIBRARY_PATH: compositor },
   });

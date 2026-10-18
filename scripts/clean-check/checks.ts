@@ -13,6 +13,11 @@ import { creditsFor, normalizeBilling, pickable, withCoupon } from "@/lib/billin
 import { SETTINGS } from "@/lib/app-settings";
 import { iconFor } from "@/lib/simple/brain";
 import { resolveIcon } from "@/components/video/icons";
+import { livingStandIn } from "@/components/video/icons/living";
+import { existsSync } from "node:fs";
+import { keyIconOf } from "@/components/video/simple/kit";
+import { MOTION_SOUND, WORD_ICON_NAMES, motionOf, wordIcon } from "@/components/video/simple/motion";
+import { SOUND_NAMES, soundsOf } from "@/components/video/simple/sounds";
 import { askOf, beatsOf, durationOf } from "@/components/video/simple/beats";
 import { isPublicHost, websiteUrlOf } from "@/lib/website-url";
 import { applyEdit, editOf } from "@/components/video/simple/edit";
@@ -319,6 +324,17 @@ export async function runChecks(): Promise<Check[]> {
     // (words alone show no things)
     const crowded = body.filter(({ sc, alone }) => !alone && (sc.words.length > 4 || sc.items.some((it) => repeats(it.text, sc.words.map((w) => w.t).join(" ")))));
     add("one scene, one idea: beside a hero at most 4 words, and no thing that only repeats them", !crowded.length && repeats("Precise Timing", "Precise animation timing") && !repeats("Story Transitions", "Precise animation timing"), crowded.slice(0, 2).map((x) => `${x.sc.template}: ${x.sc.words.map((w) => w.t).join(" ")}`).join(" · ") || `${body.length} scenes`);
+    // icons that move, with their own sound: a word gets an icon only when it plainly stands for one; every
+    // icon named is one there is (and never a person or an animal); every sound is a file; never a crowd of sounds
+    const badIcons = WORD_ICON_NAMES.filter((n) => !resolveIcon(n) || livingStandIn(n));
+    const sounds = [...SOUND_NAMES, ...Object.values(MOTION_SOUND).map((x) => x.name)].filter((n) => !existsSync(`public/sfx/${n}.mp3`));
+    const heard = drawn.map((p) => soundsOf(p));
+    const crowd = Math.max(...heard.map((list) => Math.max(0, ...list.map((e) => list.filter((x) => x.at >= e.at && x.at < e.at + 30).length))));
+    const unknown = heard.flat().filter((e) => !SOUND_NAMES.includes(e.name)).length;
+    const keyed = body.filter((x) => x.alone && keyIconOf(x.sc)).length;
+    const moving = heard.flat().filter((e) => ["tick", "ding", "rise", "shimmer", "lock", "digital_processing", "typing"].includes(e.name)).length;
+    const plain = wordIcon("Invoices,") === "receipt" && wordIcon("fast") === "zap" && wordIcon("the") === null && wordIcon("team") === null && motionOf("circle-check") === "draw" && motionOf("bell") === "ring" && motionOf("house") === null;
+    add("icons that move, with their own sound: a word gets an icon only when it plainly stands for one (none for the rest, never a person); every icon and sound is there; never more than 3 sounds in a second", !badIcons.length && !sounds.length && !unknown && crowd <= 3 && plain, `${badIcons.length ? `no icon ${badIcons.join(", ")} · ` : ""}${sounds.length ? `no sound ${sounds.join(", ")} · ` : ""}${keyed}/${body.filter((x) => x.alone).length} words-alone scenes with an icon · ${moving} icon/typing sounds in ${drawn.length} videos · at most ${crowd} sounds a second`);
   }
 
   return checks;

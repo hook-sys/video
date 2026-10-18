@@ -4,6 +4,8 @@ import { interpolate } from "remotion/no-react";
 import { Icon } from "../icons";
 import { type Face, familyOf } from "./faces";
 import { fitWords } from "./fit";
+import { MOTION_DELAY, motionOf, motionStyle, wordIcon } from "./motion";
+import { wordsAlone } from "./select";
 import type { Geo } from "./geo";
 import { SPRINGS, type Look } from "./theme";
 import { type Brand, FPS, type Pace, type Scene } from "./types";
@@ -46,17 +48,35 @@ export const keyStyle = (look: Look, size: number): CSSProperties =>
 // accent colour (on the brand's own colour: on a plate, keyStyle) — or with an effect: struck
 // through (what goes away), typed letter by letter, or the key word growing in.
 export type Effect = "strike" | "type" | "pop";
+// The words alone on screen, their lit word one an icon plainly stands for
+// ("invoices", "fast"): that icon comes in just before it, beside it, and does
+// what it means (keyIconOf, motion.ts).
+export const ICON_SLOT = "OO";
+// (only where it fits: check.ts settleWordIcons marks the scenes it would crowd)
+export function keyIconOf(s: Scene): { at: number; index: number; name: string } | null {
+  if (s.wordIcon === false || !wordsAlone(s.template, s.variant)) return null;
+  const index = s.words.findIndex((w) => w.key);
+  const name = index >= 0 ? wordIcon(s.words[index].t) : null;
+  return name ? { at: s.words[index].at - 6, index, name } : null;
+}
+
 export function Words({ c, width, lines, max, min, align = "center", color, effect, style }: { c: C; width: number; lines: number; max: number; min?: number; align?: "left" | "center" | "right"; color?: string; effect?: Effect; style?: CSSProperties }) {
   const { look } = c;
   const words = c.s.words;
-  const fit = fitWords(words.map((w) => w.t), look.display, { width, lines, max, min });
+  const icon = !effect || effect === "pop" ? keyIconOf(c.s) : null;
+  // (the icon laid out as a word of its own, before the lit one)
+  const texts = words.map((w) => w.t);
+  if (icon) texts.splice(icon.index, 0, ICON_SLOT);
+  const fit = fitWords(texts, look.display, { width, lines, max, min });
   const lh = 1.08;
   const lastTyped = effect === "type" ? words.findLastIndex((w) => c.f >= w.at - 2) : -1;
   return (
     <div data-part="text" style={{ width, display: "flex", flexDirection: "column", alignItems: align === "center" ? "center" : align === "left" ? "flex-start" : "flex-end", fontFamily: familyOf(look.display), fontWeight: 700, fontSize: fit.size, lineHeight: lh, letterSpacing: "-0.03em", color: color ?? look.ink, ...style }}>
       {fit.lines.map((line, li) => (
         <div key={li} style={{ display: "flex", gap: `0 ${(fit.size * 0.26).toFixed(0)}px`, whiteSpace: "nowrap" }}>
-          {line.map((i) => {
+          {line.map((j) => {
+            if (icon && j === icon.index) return <Glyph key="icon" c={c} name={icon.name} size={Math.round(fit.size * 1.04)} solid at={icon.at} style={{ alignSelf: "center", ...pop(springAt(c, icon.at)) }} />;
+            const i = icon && j > icon.index ? j - 1 : j;
             const w = words[i];
             const k = springAt(c, w.at - 2);
             const after = clamp01((c.f - w.at - 8) / 14);
@@ -74,7 +94,7 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
             }
             const grow = effect === "pop" && w.key ? springAt(c, w.at + 2, 0.8) : 1;
             return (
-              <span key={i} style={{ display: "inline-block", position: "relative", ...rise(k, fit.size * 0.45), ...(lit ? keyStyle(look, fit.size) : {}), ...(effect === "pop" && w.key ? { transform: `${rise(k, fit.size * 0.45).transform} scale(${(1.35 - 0.35 * grow).toFixed(4)})` } : {}) }}>
+              <span key={i} style={{ display: "inline-block", position: "relative", ...rise(k, fit.size * 0.45), ...(lit ? keyStyle(look, fit.size) : {}), ...(effect === "pop" && w.key ? { transform: `${rise(k, fit.size * 0.45).transform} scale(${(1.35 - 0.35 * grow).toFixed(4)})`, transformOrigin: icon ? "left center" : undefined } : {}) }}>
                 {w.t}
                 {effect === "strike" && <span style={{ position: "absolute", left: -fit.size * 0.04, top: "52%", height: Math.max(6, fit.size * 0.08), width: `calc(${(ease(after) * 100).toFixed(1)}% + ${(ease(after) * fit.size * 0.08).toFixed(1)}px)`, background: look.bad, borderRadius: 99 }} />}
               </span>
@@ -88,14 +108,17 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
 
 // An icon on a tile, one way everywhere: the accent's icon on a soft tile of
 // the same colour (on a card: the card's accent), or solid — the accent tile.
-// (`part`: what it is to the editor — the scene's icon or a thing's)
-export function Glyph({ c, name, size, solid = false, card = false, style, part }: { c: C; name: string; size: number; solid?: boolean; card?: boolean; style?: CSSProperties; part?: "icon" | "item-icon" }) {
+// Once in (`at`: when it comes in; else a little into the scene) the icon does
+// what it means (motion.ts). (`part`: what it is to the editor — the scene's icon or a thing's)
+export function Glyph({ c, name, size, solid = false, card = false, style, part, at }: { c: C; name: string; size: number; solid?: boolean; card?: boolean; style?: CSSProperties; part?: "icon" | "item-icon"; at?: number }) {
   const { look } = c;
   const accent = card ? look.panelAccent : look.accent;
   const on = card ? look.onPanelAccent : look.onAccent;
   return (
     <div data-part={part} style={{ width: size, height: size, borderRadius: size * 0.28, background: solid ? accent : tint(accent, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: solid ? `0 ${(size * 0.12).toFixed(0)}px ${(size * 0.3).toFixed(0)}px ${tint(accent, 0.28)}` : undefined, ...style }}>
-      <Icon name={name} size={size * 0.5} color={solid ? on : accent} strokeWidth={2} />
+      <div style={{ display: "flex", ...motionStyle(motionOf(name), c.f - (at ?? c.s.from + 12) - MOTION_DELAY) }}>
+        <Icon name={name} size={size * 0.5} color={solid ? on : accent} strokeWidth={2} />
+      </div>
     </div>
   );
 }

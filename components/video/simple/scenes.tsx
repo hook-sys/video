@@ -111,7 +111,7 @@ function Trouble({ c }: { c: C }) {
           return (
             <div key={i} style={abs({ left: row ? i * (tw + gap) : 0, top: row ? 0 : i * (th + gap), width: tw, height: th, ...rise(k, 80) })}>
               <div style={{ ...panel(c), width: "100%", height: "100%", display: "flex", flexDirection: row ? "column" : "row", alignItems: "center", justifyContent: "center", gap: 30, padding: row ? 0 : "0 40px", boxSizing: "border-box", opacity: 1 - strike * 0.45 }}>
-                <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={row ? 170 : 120} card />
+                <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={row ? 170 : 120} card />
                 <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, maxWidth: row ? tw - 50 : tw - 240, flex: row ? undefined : 1 }} fit={row ? tw - 60 : tw - 240} face={c.look.text}>{it.text}</One>
               </div>
               <svg width={tw} height={th} style={abs({ left: 0, top: 0 })}>
@@ -207,7 +207,7 @@ function Reveal({ c }: { c: C }) {
   const chip = (it: { text: string; icon: string | null }, style: CSSProperties, key: number) => (
     <div key={key} style={abs({ width: 460, height: 110, ...style })}>
       <div style={{ ...panel(c, 99), height: "100%", display: "flex", alignItems: "center", gap: 20, padding: "0 28px 0 18px", boxSizing: "border-box" }}>
-        <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={74} card />
+        <Glyph c={c} part="item-icon" at={thingAt(c.s, key, c.s.items.length)} name={it.icon ?? c.s.icon} size={74} card />
         <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={300} face={c.look.text}>{it.text}</One>
       </div>
     </div>
@@ -276,7 +276,7 @@ function Feature({ c }: { c: C }) {
               const lit = i === n - 1 && done;
               return (
                 <div key={i} style={{ height: rowH, display: "flex", alignItems: "center", gap: 24, padding: "0 36px", borderBottom: i < n - 1 ? `1.5px solid ${c.look.line}` : undefined, background: lit ? tint(c.look.panelAccent, 0.1) : undefined, ...rise(kr, 30) }}>
-                  <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={72} card />
+                  <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={72} card />
                   <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={580} face={c.look.text}>{it.text}</One>
                   <div style={{ width: 52, height: 52, borderRadius: 99, border: `3px solid ${lit ? c.look.panelAccent : c.look.line}`, background: lit ? c.look.panelAccent : undefined, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {lit && <Icon name="check" size={32} color={c.look.onPanelAccent} strokeWidth={3} />}
@@ -304,7 +304,7 @@ function Feature({ c }: { c: C }) {
                 const kr = springAt(c, itemAt(c, i, n));
                 return (
                   <div key={i} style={abs({ left: 18, right: 18, top: 300 + i * 148, height: 132, borderRadius: 30, background: c.look.dark ? "rgba(255,255,255,0.1)" : "#ffffff", boxShadow: "0 10px 30px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 18, padding: "0 20px", color: c.look.dark ? "#fff" : "#111", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * -80).toFixed(1)}px) scale(${(0.92 + 0.08 * kr).toFixed(3)})` })}>
-                    <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={72} solid />
+                    <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={72} solid />
                     <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                       <One part="item" style={{ fontSize: 36, fontWeight: 700 }} fit={270} face={c.look.text}>{it.text}</One>
                       <One style={{ fontSize: 24, opacity: 0.6 }}>{c.brand.name} · now</One>
@@ -341,7 +341,7 @@ function Feature({ c }: { c: C }) {
         const kr = springAt(c, doneAt + 4 + i * stagger(c) * 2);
         return (
           <div key={i} style={abs({ left: 30, top: 170 + i * 130, width: dw - 60, height: 112, ...panel(c, 26), display: "flex", alignItems: "center", gap: 24, padding: "0 30px", boxSizing: "border-box", ...rise(kr, 40) })}>
-            <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={64} card />
+            <Glyph c={c} part="item-icon" at={doneAt + 4 + i * stagger(c) * 2} name={it.icon ?? c.s.icon} size={64} card />
             <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
             <Icon name="chevron-right" size={40} color={c.look.panelSub} strokeWidth={2.4} />
           </div>
@@ -484,7 +484,7 @@ function Steps({ c }: { c: C }) {
         return (
           <div key={i} style={abs({ left: row ? i * dx : (920 - cw) / 2 + (i - (n - 1) / 2) * 60, top: i * dy, width: cw, height: ch, ...panel(c, 34), padding: 40, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between", opacity: clamp01(k * 1.6), transform: `translate(${((1 - k) * -60).toFixed(1)}px, ${((1 - k) * 40).toFixed(1)}px) rotate(${((1 - k) * -6).toFixed(2)}deg)` })}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={88} card />
+              <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={88} card />
               {badge(i, 70)}
             </div>
             <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={cw - 80} face={c.look.text}>{it.text}</One>

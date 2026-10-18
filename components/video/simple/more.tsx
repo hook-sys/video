@@ -23,7 +23,7 @@ function Compare({ c }: { c: C }) {
   // a row of the thing: crossed out (before) or ticked (after)
   const row = (it: Item, i: number, after: boolean, w: number) => (
     <div key={i} style={{ height: 120, display: "flex", alignItems: "center", gap: 22, padding: "0 28px", borderTop: i ? `1.5px solid ${c.look.line}` : undefined }}>
-      <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={64} card />
+      <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={64} card />
       <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1, color: after ? c.look.panelInk : c.look.panelSub }} fit={w - 200} face={c.look.text}>{it.text}</One>
       <div style={{ width: 52, height: 52, borderRadius: 99, background: after ? c.look.panelAccent : tint(c.look.bad, 0.16), display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Icon name={after ? "check" : "x"} size={32} color={after ? onPanel(c) : c.look.bad} strokeWidth={3} />
@@ -40,7 +40,7 @@ function Compare({ c }: { c: C }) {
           const k = springAt(c, itemAt(c, i, n));
           return (
             <div key={`b${i}`} style={abs({ left: 40 + (i % 2) * 60, top: 30 + i * (cardH / n + 10), width: w - 120, height: 120, ...panel(c, 26), display: "flex", alignItems: "center", gap: 20, padding: "0 26px", boxSizing: "border-box", opacity: clamp01(k * 1.6) * (1 - 0.35 * after), transform: `rotate(${(turn[i] * k).toFixed(2)}deg)`, filter: undefined })}>
-              <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={60} card />
+              <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={60} card />
               <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: c.look.panelSub }} fit={w - 280} face={c.look.text}>{it.text}</One>
             </div>
           );
@@ -255,7 +255,7 @@ function Messages({ c }: { c: C }) {
             return (
               <div key={i} style={{ height: rowH, display: "flex", alignItems: "center", gap: 24, padding: "0 40px", borderTop: i ? `1.5px solid ${c.look.line}` : undefined, ...rise(kr, 30) }}>
                 <div style={{ width: 18, height: 18, borderRadius: 99, background: read ? "transparent" : c.look.panelAccent }} />
-                <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={72} card />
+                <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={72} card />
                 <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
                   <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: read ? 550 : 750 }} fit={560} face={c.look.text}>{it.text}</One>
                   <div style={{ height: 14, width: 260 + i * 40, borderRadius: 9, background: c.look.line, marginTop: 14 }} />
@@ -281,7 +281,7 @@ function Messages({ c }: { c: C }) {
           const kt = springAt(c, itemAt(c, i, n));
           return (
             <div key={i} style={abs({ right: 36, top: 130 + i * 160, width: 560, height: 136, ...panel(c, 30), display: "flex", alignItems: "center", gap: 20, padding: "0 26px", boxSizing: "border-box", opacity: clamp01(kt * 1.6), transform: `translateX(${((1 - kt) * 260).toFixed(1)}px)`, boxShadow: `0 24px 60px ${c.look.shadow}` })}>
-              <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={72} solid card />
+              <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={72} solid card />
               <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                 <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={400} face={c.look.text}>{it.text}</One>
                 <One style={{ fontSize: TYPE.LABEL, color: c.look.panelSub }}>{c.brand.name} · now</One>
@@ -307,7 +307,7 @@ function Bento({ c }: { c: C }) {
             <Icon name={it.icon ?? c.s.icon} size={64} color={c.look.onFill} strokeWidth={2.2} />
           </div>
         ) : (
-          <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={big ? 110 : 92} card />
+          <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={big ? 110 : 92} card />
         )}
         <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.title }} fit={w - 80} face={c.look.text}>{it.text}</One>
       </div>
@@ -342,7 +342,7 @@ function Bento({ c }: { c: C }) {
           return (
             <div key={i} style={abs({ left: W * spots[i].x - 240, top: H * spots[i].y - 60, width: 480, height: 120, display: "flex", justifyContent: "center", opacity: clamp01(k * 1.6), transform: `translateY(${float.toFixed(1)}px) scale(${((0.6 + 0.4 * k) * Math.max(0.75, u)).toFixed(3)})` })}>
               <div style={{ ...panel(c, 99), height: 120, display: "flex", alignItems: "center", gap: 20, padding: "0 34px 0 20px" }}>
-                <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={80} card />
+                <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={80} card />
                 <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={300} face={c.look.text}>{it.text}</One>
               </div>
             </div>
@@ -362,7 +362,7 @@ function Bento({ c }: { c: C }) {
         return (
           <div key={i} style={abs({ left: dw / 2 - cw / 2 + off * 430 * spread, top: (dh - ch) / 2 + Math.abs(off) * 30 * spread, width: cw, height: ch, opacity: clamp01(k * 1.6), transform: `rotate(${(off * 8 * spread).toFixed(2)}deg)`, zIndex: 10 - Math.abs(off) })}>
             <div style={{ width: cw, height: ch, ...panel(c, 34), padding: 44, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-              <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={120} card />
+              <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={120} card />
               <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={cw - 88} face={c.look.text}>{it.text}</One>
             </div>
           </div>

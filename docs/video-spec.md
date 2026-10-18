@@ -183,3 +183,20 @@ A scene may stand on a background of its own (Scene.ground): at most two
 scenes, only a ground whose colours read; it comes in with the scene, the
 video's own ground stays under the rest.
 
+
+## Icons that move, with their own sound (components/video/simple/motion.ts)
+
+Every icon on a tile (kit.tsx Glyph) does what it means once it has come in:
+a check is drawn, a bell rings, a chart line rises, a bolt flashes, a letter
+flies off and back, a lock shuts, a cog turns, a clock ticks, a truck drives
+in, a trophy beats twice; other icons stay still. The first icon that moves in
+a scene is heard (its sound in place of the scene's pop): tick, ding, rise,
+shimmer, lock, digital processing — made by scripts/generate-sfx.mjs, soft,
+under the voice. Letters typed are heard typing. Never more than 3 sounds in
+a second, never two within 0.3 s (sounds.ts).
+
+When the words are on screen alone, a lit word that plainly stands for an
+icon ("invoices", "fast", "secure", "reminders" — a fixed list, never people)
+gets that icon beside it, just before it is said. Only where it fits:
+check.ts settleWordIcons leaves it out of a scene it would crowd (Scene.wordIcon
+false), and the film, its sounds and the editor follow.
