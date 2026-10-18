@@ -101,6 +101,20 @@ function colourProblems(look: ReturnType<typeof lookOf>): Problem[] {
   return out;
 }
 
+// How much of the frame each scene's hero takes (null: the words alone), laid out at its last frame
+export function heroShares(plan: SimplePlan): (number | null)[] {
+  const look = lookOf(plan.theme, plan.brand.color);
+  return plan.scenes.map((s) => {
+    const c: C = { f: s.to - 1, s, look, pace: plan.theme.pace, brand: { ...plan.brand, icon: null }, g: geoOf(plan.w ?? 1920, plan.h ?? 1080), play: SETTLED };
+    try {
+      const { heroes } = noting(() => walk(TEMPLATE[s.template]({ c }), []));
+      return heroes.length ? Math.max(...heroes) : null;
+    } catch {
+      return null;
+    }
+  });
+}
+
 export function checkPlan(plan: SimplePlan): Problem[] {
   const look = lookOf(plan.theme, plan.brand.color);
   return [...colourProblems(look), ...plan.scenes.flatMap((_, i) => sceneProblems(plan, i, look))];
@@ -140,8 +154,8 @@ function candidates(plan: SimplePlan, i: number, kinds: Set<Problem["kind"]>, re
     const near = new Set([plan.scenes[i - 1]?.template, plan.scenes[i + 1]?.template]);
     const others = choices(reading).filter(([t]) => t !== s.template && t !== "cta" && !near.has(t)).sort((a, b) => b[1] - a[1]);
     for (const [t] of others) for (const x of mended) out.push(...variants(x, t));
-    // (the last resort: the words alone)
-    if (!near.has("statement")) out.push({ ...fewerWords(base, 4), template: "statement", variant: 0, items: [] });
+    // (the last resort: the words beside its icon, then the words alone)
+    if (!near.has("statement")) out.push({ ...fewerWords(base, 4), template: "statement", variant: 1, items: [] }, { ...fewerWords(base, 4), template: "statement", variant: 0, items: [] });
   }
   return out;
 }

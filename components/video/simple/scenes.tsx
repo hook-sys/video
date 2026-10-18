@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Icon } from "../icons";
 import { emWidth, familyOf } from "./faces";
 import { fitWords, measured } from "./fit";
-import { type Box, TYPE, WEIGHT, bandOf, sideOf, splitOf, stackOf, wordsFit } from "./geo";
+import { type Box, HERO_W, TYPE, WEIGHT, bandOf, sideOf, splitOf, stackOf, wordsFit } from "./geo";
 import { type C, Cursor, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import type { Scene } from "./types";
 
@@ -39,7 +39,7 @@ const wordsIn = (c: C, box: Box, place: "side" | "band", only?: (t: string) => b
 };
 // the words and a hero of its own size (dw × dh), side by side or one above
 // the other — together centred on the frame
-export function Side({ c, dw, dh, hw = 860, effect, only, children }: { c: C; dw: number; dh: number; hw?: number; effect?: Effect; only?: (t: string) => boolean; children: ReactNode }) {
+export function Side({ c, dw, dh, hw = HERO_W, effect, only, children }: { c: C; dw: number; dh: number; hw?: number; effect?: Effect; only?: (t: string) => boolean; children: ReactNode }) {
   const { words, hero } = sideOf(c.g, c.s.left, hw, wordsIn(c, splitOf(c.g, c.s.left, hw).words, "side", only), dw, dh);
   return (
     <>
@@ -68,9 +68,9 @@ function Statement({ c }: { c: C }) {
     const k = springAt(c, c.s.from + 4, 1.4);
     const float = Math.sin((c.f - c.s.from) / 22) * 10;
     return (
-      <Side c={c} dw={420} dh={420} hw={560}>
+      <Side c={c} dw={560} dh={560} hw={760}>
         <div style={{ ...center({ inset: 0 }), opacity: clamp01(k * 1.8), transform: `scale(${(0.6 + 0.4 * k).toFixed(4)}) translateY(${float.toFixed(1)}px) rotate(${((1 - k) * -14).toFixed(2)}deg)` }}>
-          <Glyph c={c} name={c.s.icon} size={320} solid />
+          <Glyph c={c} name={c.s.icon} size={440} solid />
         </div>
       </Side>
     );
@@ -173,7 +173,7 @@ function Reveal({ c }: { c: C }) {
   // (orbiting things keep clear of the mark and of the words under it)
   const orbiting = c.s.variant === 2 && c.s.items.length >= 2;
   const my = Math.round(H * (c.s.variant === 0 ? 0.37 : orbiting ? 0.36 : 0.42));
-  const ms = Math.round((c.s.variant === 0 ? 260 : 200) * Math.max(0.8, u));
+  const ms = Math.round((c.s.variant === 0 ? 320 : 240) * Math.max(0.8, u));
   const ry = ms / 2 + 90 * u;
   const below = orbiting ? my + ry + 70 * u : my + ms / 2 + 50 * u;
   const wordsBox = { left: pad, top: below, width: W - 2 * pad, height: H - below - 60 };
@@ -187,7 +187,7 @@ function Reveal({ c }: { c: C }) {
   );
   const rings = [0, 0.35].map((d, i) => {
     const r = clamp01(ring - d);
-    return r > 0 && r < 1 ? <div key={`r${i}`} style={abs({ left: W / 2 - 160, top: my - 160, width: 320, height: 320, borderRadius: 999, border: `5px solid ${c.look.accent}`, transform: `scale(${(0.7 + 0.9 * r).toFixed(3)})`, opacity: 1 - r })} /> : null;
+    return r > 0 && r < 1 ? <div key={`r${i}`} style={abs({ left: W / 2 - ms * 0.62, top: my - ms * 0.62, width: ms * 1.24, height: ms * 1.24, borderRadius: 999, border: `5px solid ${c.look.accent}`, transform: `scale(${(0.7 + 0.9 * r).toFixed(3)})`, opacity: 1 - r })} /> : null;
   });
   const mark = (extra = 1) => (
     <div style={center({ left: 0, width: W, top: my - ms / 2 - 20, height: ms + 40 })}>

@@ -9,15 +9,20 @@ export type Fitted = { size: number; lines: number[][]; ok: boolean };
 
 // While a plan is checked (check.ts): every fitting made, and whether it fitted.
 export type FitNote = { text: string; ok: boolean; size: number };
+// …and how much of the frame each hero laid out takes (geo.ts)
 let notes: FitNote[] | null = null;
-export function noting<T>(run: () => T): { out: T; notes: FitNote[] } {
+let heroes: number[] | null = null;
+export function noting<T>(run: () => T): { out: T; notes: FitNote[]; heroes: number[] } {
   notes = [];
+  heroes = [];
   try {
-    return { out: run(), notes };
+    return { out: run(), notes, heroes };
   } finally {
     notes = null;
+    heroes = null;
   }
 }
+export const noteHero = (share: number) => void heroes?.push(share);
 const noted = (words: string[], f: Fitted): Fitted => (notes?.push({ text: words.join(" "), ok: f.ok, size: f.size }), f);
 
 export function fitWords(words: string[], face: Face, { width, lines: most, max, min = 40, weight = 700 }: { width: number; lines: number; max: number; min?: number; weight?: number }): Fitted {

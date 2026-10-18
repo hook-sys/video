@@ -8,9 +8,10 @@ import { geoOf } from "./geo";
 import { type Look, lookOf } from "./theme";
 import type { FilmProps, Scene, SimplePlan } from "./types";
 
-// The simple engine's film: each scene its template on its own ground,
-// moving slowly in (the camera never stops), one way between scenes for the
-// whole video, the voice and a sound on what happens.
+// The simple engine's film: each scene its template, on one ground for the
+// whole video, moving slowly in (the camera never stops, not even between
+// scenes), one way between scenes for the whole video, the voice and a sound
+// on what happens. No music.
 
 // frames a way between scenes takes (half before the cut, half after)
 const T = 18;
@@ -40,9 +41,11 @@ function useFaces(faces: Face[]) {
   });
 }
 
-// a scene's ground: its colour and a soft light that drifts (each scene's in its own place)
-function Ground({ look, f, i }: { look: Look; f: number; i: number }) {
-  const x = 30 + ((i * 37) % 45) + Math.sin(f / 150 + i) * 6, y = 25 + ((i * 23) % 40) + Math.cos(f / 170 + i) * 5;
+// The ground: one for the whole video — its colour and two soft lights that
+// drift slowly the whole time — so scenes pass over one space (docs/reference:
+// the glow is never flat, never busy, and never jumps at a cut).
+function Ground({ look, f }: { look: Look; f: number }) {
+  const x = 32 + Math.sin(f / 170) * 14, y = 30 + Math.cos(f / 210) * 10;
   return (
     <AbsoluteFill style={{ background: look.bg }}>
       <AbsoluteFill style={{ background: `radial-gradient(1200px 900px at ${x.toFixed(1)}% ${y.toFixed(1)}%, ${look.glow}, transparent 70%)` }} />
@@ -62,31 +65,35 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
   const W = g.W;
   return (
     <AbsoluteFill style={{ background: look.bg, overflow: "hidden", fontFamily: familyOf(look.text) }}>
+      <Ground look={look} f={f} />
       {scenes.map((s, i) => {
         const start = i ? s.from - T / 2 : 0, end = i < n - 1 ? s.to + T / 2 : plan.duration;
         if (f < start || f >= end) return null;
         const pin = i ? ease(clamp01((f - start) / T)) : 1;
         const pout = i < n - 1 ? ease(clamp01((f - (s.to - T / 2)) / T)) : 0;
-        // the camera: a slow push and drift through the scene
-        const p = clamp01((f - s.from) / Math.max(1, s.to - s.from));
-        const cam = `scale(${(1 + (lively ? 0.07 : 0.045) * p).toFixed(4)}) translateX(${(Math.sin(p * Math.PI) * (s.left ? -14 : 14)).toFixed(1)}px)`;
+        // the camera: a slow push and a drift one way, for the whole video — it
+        // keeps moving through the way out and into the next scene, never stops
+        const p = (f - s.from) / Math.max(1, s.to - s.from);
+        const cam = `scale(${(1 + (lively ? 0.07 : 0.045) * p).toFixed(4)}) translateX(${((0.5 - p) * 28).toFixed(1)}px)`;
         let way = "";
         let opacity = 1;
         let clip: string | undefined;
         if (theme.way === "slide") way = `translateX(${((1 - pin) * W - pout * W).toFixed(1)}px)`;
         else if (theme.way === "zoom") {
           way = `scale(${(pin < 1 ? 0.82 + 0.18 * pin : 1 + 0.6 * pout).toFixed(4)})`;
-          opacity = pin < 1 ? pin : 1 - pout;
+          // (one after the other, never the two on top of each other: the way out in the first half, the way in in the second)
+          opacity = pin < 1 ? clamp01(pin * 2 - 1) : clamp01(1 - pout * 2);
         } else if (pin < 1) clip = `inset(0 ${((1 - pin) * 100).toFixed(2)}% 0 0)`;
+        // (on one ground, the scene going out is wiped away where the next comes in)
+        else if (pout > 0) clip = `inset(0 0 0 ${(pout * 100).toFixed(2)}%)`;
         const c: C = { f, s, look, pace: theme.pace, brand: plan.brand, g, play: PLAY };
         const Body = TEMPLATE[s.template];
         return (
           <AbsoluteFill key={i} style={{ transform: way || undefined, opacity, clipPath: clip }}>
-            <Ground look={look} f={f} i={i} />
             <AbsoluteFill style={{ transform: cam }}>
               <Body c={c} />
             </AbsoluteFill>
-            {clip && <div style={{ position: "absolute", top: 0, bottom: 0, left: pin * W - 6, width: 12, background: look.accent }} />}
+            {pin < 1 && theme.way === "wipe" && <div style={{ position: "absolute", top: 0, bottom: 0, left: pin * W - 6, width: 12, background: look.accent }} />}
           </AbsoluteFill>
         );
       })}
