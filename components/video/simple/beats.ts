@@ -1,3 +1,4 @@
+import { retimeScript } from "@/lib/voice-timing";
 import { type Beat, FPS, type Word } from "./types";
 
 // The voice cut into beats: one sentence each, a long one split at its
@@ -61,3 +62,14 @@ export function framesOf(words: Word[], beats: Beat[], duration: number): { from
 
 // a video's length: the voice and a held ending
 export const durationOf = (words: Word[]) => Math.round(((words.at(-1)?.end ?? 0) + 1.6) * FPS);
+
+// The script's own words on the voice's times. Some voices time pieces of
+// words ("s" "upport") and the stops on their own ("."); shown as they come
+// they read as broken words.
+const letters = (t: string) => t.replace(/[^\p{L}\p{M}\p{N}]/gu, "").length;
+export function scriptWords(script: string | null | undefined, voice: Word[]): Word[] {
+  const heard = voice.filter((w) => letters(w.text) > 0);
+  const text = (script ?? "").trim();
+  if (!text || !heard.length) return voice;
+  return retimeScript(text, heard) ?? voice;
+}

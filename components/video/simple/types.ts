@@ -84,3 +84,7 @@ export type SimplePlan = {
 };
 
 export const isSimple = (plan: unknown): plan is SimplePlan => !!plan && (plan as { engine?: unknown }).engine === "simple";
+
+// the film's id in the bundle (remotion/root.tsx) and what it takes
+export const FILM_ID = "SimpleFilm";
+export type FilmProps = { plan: SimplePlan; audioUrl?: string | null; webAudio?: boolean };

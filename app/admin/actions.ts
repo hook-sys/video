@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { ADMIN_ROLES, type AdminRole, audit, isAdminRole, requireAdmin, requireSuperAdmin } from "@/lib/admin";
 import { SETTINGS } from "@/lib/app-settings";
 import { VIDEOS_BUCKET } from "@/lib/projects";
-import { checkProjectFrames } from "@/lib/frame-check";
 import { BILLING_KEY, TIER_IDS, changeCredits, getBilling, grantSignupCredits, normalizeBilling, refundVideo } from "@/lib/billing";
 
 // Admin actions. Each re-checks the caller's role (and that the role may
@@ -176,13 +175,6 @@ export async function markFailed(projectId: string, what: keyof typeof FAIL_FIEL
 }
 
 // The frame check run again on a video (its result replaces the last one).
-export async function recheckFrames(projectId: string) {
-  const s = await requireAdmin("videos");
-  await checkProjectFrames(projectId, 270_000);
-  await audit(s, "video.frame_check", { type: "project", id: projectId });
-  revalidatePath(`/admin/videos/${projectId}`);
-}
-
 export async function deleteProject(projectId: string) {
   const s = await requireAdmin("videos");
   const { data: p } = await s.db.from("projects").select("id, user_id, brand_name, video_path, video_4k_path").eq("id", projectId).maybeSingle();
@@ -288,23 +280,4 @@ export async function toggleCoupon(id: string, active: boolean) {
   await s.db.from("coupons").update({ active }).eq("id", id);
   await audit(s, active ? "coupon.on" : "coupon.off", { type: "coupon", id });
   revalidatePath("/admin/coupons");
-}
-
-// ── video rules ────────────────────────────────────────────────────────────
-export async function addRule(formData: FormData) {
-  const s = await requireAdmin("quality");
-  const id = String(formData.get("id") ?? "").trim().toLowerCase();
-  let never = String(formData.get("never") ?? "").trim();
-  if (never && !/^never\b/i.test(never)) never = `never ${never}`;
-  const { error } = await s.db.from("video_rules").insert({ id, never, note: String(formData.get("note") ?? "").trim() || null });
-  if (error) redirect(`/admin/quality?error=${encodeURIComponent(error.message.includes("check") ? "Id: 2–40 lowercase letters, digits or dashes. Rule: 10–300 characters." : error.message)}`);
-  await audit(s, "rule.create", { type: "rule", id }, { never });
-  revalidatePath("/admin/quality");
-}
-
-export async function toggleRule(id: string, active: boolean) {
-  const s = await requireAdmin("quality");
-  await s.db.from("video_rules").update({ active }).eq("id", id);
-  await audit(s, active ? "rule.enable" : "rule.disable", { type: "rule", id });
-  revalidatePath("/admin/quality");
 }

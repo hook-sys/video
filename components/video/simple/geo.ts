@@ -49,3 +49,7 @@ export function fitIn(box: Box, dw: number, dh: number, most = 1): CSSProperties
   const s = Math.min(most, box.width / dw, box.height / dh);
   return { position: "absolute", left: box.left + (box.width - dw * s) / 2, top: box.top + (box.height - dh * s) / 2, width: dw, height: dh, transform: `scale(${s.toFixed(4)})`, transformOrigin: "0 0" };
 }
+
+// the frame of a format (16:9 unless it is 9:16 or 1:1)
+const FRAMES: Record<string, [number, number]> = { "16:9": [1920, 1080], "9:16": [1080, 1920], "1:1": [1080, 1080] };
+export const frameOf = (format: string | null | undefined): [number, number] => FRAMES[format ?? ""] ?? FRAMES["16:9"];

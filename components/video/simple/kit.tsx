@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { Img as RemotionImg, spring as remotionSpring } from "remotion";
 import { interpolate } from "remotion/no-react";
 import { Icon } from "../icons";
-import { type Face, familyOf } from "../composer/art";
+import { type Face, familyOf } from "./faces";
 import { fitWords } from "./fit";
 import type { Geo } from "./geo";
 import { SPRINGS, type Look } from "./theme";

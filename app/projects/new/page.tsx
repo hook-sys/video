@@ -4,12 +4,9 @@ import { AppShell } from "@/components/site/app-shell";
 import { userAccess } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getAiConfig } from "@/lib/ai/models";
-import { TIER_IDS, balanceOf, getBilling, grantSignupCredits, hasPaid } from "@/lib/billing";
-import { getSettings } from "@/lib/app-settings";
-import { formAskOf } from "@/lib/project-form";
-import { CreateProjectForm, type Level, type Prefill } from "./create-project-form";
+import { balanceOf, getBilling, grantSignupCredits, hasPaid } from "@/lib/billing";
+import { type Prefill } from "./form-parts";
 import { CreateProjectFormV2 } from "./create-project-form-v2";
-import { newVersionOn } from "@/lib/new-version";
 
 export const metadata: Metadata = { title: "New video" };
 
@@ -34,17 +31,11 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
   // The voices customers can pick (set on /admin/models; none = by gender only).
   const { voice } = await getAiConfig();
   const voices = voice.on ? voice.choices : [];
-  // the quality levels (no model names reach the browser) and the balance (the team: none)
+  // the balance (the team: none)
   const billing = await getBilling();
   const paid = admin || (user ? await hasPaid(user.id) : false);
-  const levels: Level[] = TIER_IDS.filter((id) => billing.tiers[id].status !== "off").map((id) => {
-    const t = billing.tiers[id];
-    return { id, name: t.name, blurb: t.blurb, badge: t.badge, perSecond: t.perSecond, soon: t.status === "soon", locked: t.paidOnly && !paid };
-  });
   if (user) await grantSignupCredits(user.id, !!user.email_confirmed_at).catch(() => {});
   const credits = user && !admin ? await balanceOf(user.id) : null;
-  // the questions the form asks (admin → Settings, "Form: …")
-  const ask = formAskOf(await getSettings());
   return (
     <AppShell title="New video" admin={admin} active="new" initial={(user?.email ?? "?")[0]} wide action={<span />}>
       <div className="mb-6 flex flex-col gap-2">
@@ -55,11 +46,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
         <p className="mb-6 rounded-2xl border border-amber-500/25 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">Your account is waiting for approval. You can look around and fill in your video now — your welcome credits arrive as soon as it&apos;s approved.</p>
       )}
       {/* (only welcome credits so far: a script short enough for them) */}
-      {(await newVersionOn()) ? (
-        <CreateProjectFormV2 prefill={prefill} voices={voices} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} />
-      ) : (
-      <CreateProjectForm prefill={prefill} voices={voices} levels={levels} minSeconds={billing.minSeconds} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} ask={ask} />
-      )}
+      <CreateProjectFormV2 prefill={prefill} voices={voices} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} />
     </AppShell>
   );
 }

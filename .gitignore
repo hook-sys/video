@@ -41,5 +41,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# the film bundled for the frame check (scripts/frame-check/bundle.mjs)
+# the film bundled for the server render (scripts/film/bundle.mjs)
 /.remotion-bundle/

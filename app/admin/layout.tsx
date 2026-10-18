@@ -13,7 +13,6 @@ const PAGE_SECTION: Record<string, Section> = {
   "/admin": "overview",
   "/admin/queue": "queue",
   "/admin/costs": "costs",
-  "/admin/quality": "quality",
   "/admin/users": "users",
   "/admin/videos": "videos",
   "/admin/billing": "billing",

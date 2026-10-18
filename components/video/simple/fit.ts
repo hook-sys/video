@@ -1,4 +1,4 @@
-import { type Face, emWidth } from "../composer/art";
+import { type Face, emWidth } from "./faces";
 
 // Words fitted to their place: the biggest size at which they wrap into at
 // most `lines` lines no wider than the place (a little kept spare: the

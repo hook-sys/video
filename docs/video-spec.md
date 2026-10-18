@@ -112,10 +112,11 @@ template order.
 
 ## Phase plan
 
-- Phase 0: this spec; the old version (v1) gets no new features.
-- Phase 1: the engine behind the admin switch "Simple engine" (New version
-  only, super admin), the template gallery, side-by-side tests.
-- Phase 2 (done): 12 templates × 3 variants, 9:16 and 1:1, word effects
-  (one word at a time, typing, strike, the key word growing in).
-- Phase 3 (now): the check before playing and the Director's test set.
-- Phase 4: when it wins, the old Composer is removed.
+- Phase 0: this spec.
+- Phase 1: the engine, the template gallery, side-by-side tests.
+- Phase 2 (done): 12 templates × 3 variants, 9:16 and 1:1, word effects.
+- Phase 3 (done): the check before playing and the Director's test set.
+- Phase 4 (done): the only engine. The old versions (v1 and the Composer) and
+  every engine switch are removed; they are kept on the branch
+  `archive/old-engines` and come back to the live site only when the owner
+  asks. A video made with them shows its MP4 if one was made.

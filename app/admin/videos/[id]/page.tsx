@@ -2,15 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { VIDEOS_BUCKET } from "@/lib/projects";
-import type { FrameCheckResult } from "@/lib/frame-check";
 import type { SimplePlan } from "@/components/video/simple/types";
-import { deleteProject, markFailed, recheckFrames } from "../../actions";
+import { deleteProject, markFailed } from "../../actions";
 import { ConfirmSubmit } from "../../_components/confirm-submit";
 import { Badge, Card, PageHeader, Table, btn, btnDanger, td } from "../../_components/ui";
 import { STATE_LABEL, ago, projectTitle, usd, videoState } from "../../_components/format";
-
-// (the frame check, run from here, takes up to a few minutes)
-export const maxDuration = 300;
 
 export default async function VideoPage({ params }: PageProps<"/admin/videos/[id]">) {
   const { id } = await params;
@@ -24,8 +20,7 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
   ]);
   const [label, tone] = STATE_LABEL[videoState(p)];
   // what the frame check saw before the video was shown (lib/frame-check)
-  const composer = (p.brief as { composer?: { frames?: FrameCheckResult; simple?: SimplePlan; problems?: string[] } } | null)?.composer;
-  const frames = composer?.frames ?? null;
+  const composer = (p.brief as { composer?: { simple?: SimplePlan; problems?: string[] } } | null)?.composer;
   // the simple engine's check before playing (components/video/simple/check.ts)
   const simple = composer?.simple ?? null;
   // (what it mended, what it left, and what the reading of the voice noted)
@@ -122,33 +117,6 @@ export default async function VideoPage({ params }: PageProps<"/admin/videos/[id
                 <li key={i}><Badge tone={k === "mended" ? "green" : k === "left" ? "amber" : "gray"}>{k}</Badge> {x}</li>
               ))}
             </ul>
-          )}
-        </Card>
-      )}
-      {!!composer && !simple && (
-        <Card title="Frame check">
-          <form action={recheckFrames.bind(null, id)} className="mb-3">
-            <ConfirmSubmit message="Check this video frame by frame now? It takes about a minute (longer the first time after a deploy)." className={btn}>{frames ? "Check again" : "Check now"}</ConfirmSubmit>
-          </form>
-          {!frames ? (
-            <p className="text-sm text-zinc-400">Not checked yet.</p>
-          ) : "skipped" in frames ? (
-            <p className="text-sm text-zinc-400">Not checked: {frames.skipped}</p>
-          ) : (
-            <>
-              <p className="text-sm text-zinc-400">
-                <Badge tone={frames.ok ? "green" : "red"}>{frames.ok ? "clean" : `${frames.findings.length} found`}</Badge> {frames.frames} frames looked at in {(frames.ms / 1000).toFixed(0)} s · {ago(frames.at)}
-              </p>
-              {frames.findings.length > 0 && (
-                <ul className="mt-3 flex flex-col gap-1.5 text-sm text-zinc-300">
-                  {frames.findings.map((f, i) => (
-                    <li key={i}>
-                      <span className="tabular-nums text-zinc-500">{(f.from / 30).toFixed(1)}{f.to > f.from ? `–${(f.to / 30).toFixed(1)}` : ""} s · scene {f.scene + 1}</span> — {f.what}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
           )}
         </Card>
       )}

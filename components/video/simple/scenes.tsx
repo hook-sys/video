@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Icon } from "../icons";
-import { emWidth, familyOf } from "../composer/art";
+import { emWidth, familyOf } from "./faces";
 import { fitWords } from "./fit";
 import { type Box, fitIn, splitOf, stackOf, wordsFit } from "./geo";
 import { type C, Cursor, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, panel, pop, rise, springAt, stagger, tint } from "./kit";

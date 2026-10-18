@@ -39,7 +39,7 @@ const INSTRUCTIONS = `You read the voice-over of a short product video, beat by 
 Answer every beat listed, in order, nothing else.`;
 
 // (an icon the library has: the name given, else the nearest to it and its words)
-const iconFor = (name: string | null, words: string) => (name && resolveIcon(name) ? name : searchIcons(`${(name ?? "").replace(/[-_]/g, " ")} ${words}`.trim(), 1)[0] ?? searchIcons(words, 1)[0] ?? null);
+export const iconFor = (name: string | null, words: string) => (name && resolveIcon(name) ? name : searchIcons(`${(name ?? "").replace(/[-_]/g, " ")} ${words}`.trim(), 1)[0] ?? searchIcons(words, 1)[0] ?? null);
 const wordsIn = (words: Word[], b: Beat) => words.slice(b.first, b.last + 1);
 const trim3 = (t: string) => t.trim().split(/\s+/).slice(0, 3).join(" ");
 

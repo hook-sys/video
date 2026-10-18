@@ -26,7 +26,6 @@ const GROUPS: { title: string; items: { href: string; label: string; icon: keyof
     { href: "/admin", label: "Overview", icon: "overview" },
     { href: "/admin/queue", label: "Video queue", icon: "queue" },
     { href: "/admin/costs", label: "Costs", icon: "costs" },
-    { href: "/admin/quality", label: "Video rules", icon: "quality" },
   ] },
   { title: "Manage", items: [
     { href: "/admin/users", label: "Users", icon: "users" },

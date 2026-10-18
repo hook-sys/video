@@ -69,9 +69,6 @@ export function openaiCost(model: string, inputTokens: number, outputTokens: num
 export const falCost = (model: string, units: number) =>
   units * num(loadPricing().fal?.[model]?.per_unit);
 
-export const renderCost = (resolution: string, videoSeconds: number) =>
-  videoSeconds * num(loadPricing().render?.[resolution]?.per_video_second);
-
 // One month of storage for the given bytes.
 export const storageCost = (bytes: number) =>
   (bytes / 1e9) * num(loadPricing().storage?.per_gb_month);

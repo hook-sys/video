@@ -47,7 +47,6 @@ export async function saveAiModels(formData: FormData) {
     prices,
     v2: { whisper: text(formData, "v2_whisper"), roles: Object.fromEntries(V2_ROLES.map((r) => [r.id, { model: text(formData, `v2_${r.id}_model`), reasoning: text(formData, `v2_${r.id}_reasoning`), on: r.id !== "reviewer", temperature: num(formData, `v2_${r.id}_temperature`) ?? null }])) },
   });
-  if (!next.text.model) redirect("/admin/models?error=" + encodeURIComponent("Choose a main text model: text jobs have no other default."));
   if (!validTemplate(next.voice.template)) redirect("/admin/models?error=" + encodeURIComponent("An input template is not a valid JSON object."));
   const { data: before } = await s.db.from("app_settings").select("value").eq("key", SETTING_KEY).maybeSingle();
   if (JSON.stringify(before?.value ?? null) === JSON.stringify(next)) redirect("/admin/models?saved=0");

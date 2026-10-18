@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { AbsoluteFill, Html5Audio, Img, Sequence, continueRender, delayRender, spring, staticFile, useCurrentFrame } from "remotion";
 import { Audio as MediaAudio } from "@remotion/media";
-import { type Face, familyOf, fontUrl } from "../composer/art";
+import { type Face, familyOf, fontUrl } from "./faces";
 import { type C, type Play, clamp01, ease, tint } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
 import { geoOf } from "./geo";
 import { type Look, lookOf } from "./theme";
-import type { Scene, SimplePlan } from "./types";
+import type { FilmProps, Scene, SimplePlan } from "./types";
 
 // The simple engine's film: each scene its template on its own ground,
 // moving slowly in (the camera never stops), one way between scenes for the
@@ -51,7 +51,7 @@ function Ground({ look, f, i }: { look: Look; f: number; i: number }) {
   );
 }
 
-export function SimpleFilm({ plan, audioUrl, webAudio }: { plan: SimplePlan; audioUrl?: string | null; webAudio?: boolean }) {
+export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
   const f = useCurrentFrame();
   const look = useMemo(() => lookOf(plan.theme, plan.brand.color), [plan.theme, plan.brand.color]);
   useFaces([look.display, look.text]);

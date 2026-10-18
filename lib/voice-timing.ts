@@ -52,61 +52,6 @@ export function parseWordTimings(raw: unknown): WordTiming[] | null {
   return words.length && sorted ? words : null;
 }
 
-// Script-agnostic tokens (Bangla, English, ...): lowercase letters/marks/digits only.
-export function tokenize(text: string): string[] {
-  return text
-    .normalize("NFC")
-    .toLowerCase()
-    .split(/[^\p{L}\p{M}\p{N}]+/u)
-    .filter(Boolean);
-}
-
-// Same word, tolerating inflection ("video"/"videos"); matches sync.ts.
-export const sameWord = (a: string, b: string) =>
-  a === b || (Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a)));
-
-// How many voice tokens from `i` spell the word `w`: voices sometimes split a
-// word, a brand name above all ("Plateful" → "Pl" + "ateful"), so 1–3
-// adjacent tokens may join into it. 0 when they don't.
-export function tokensForWord(stream: { t: string }[], i: number, w: string): number {
-  // The exact join wins: "Motion" + "Brief" is "MotionBrief" (a bare
-  // "Motion" is only its start), "108" + "0p" is "1080p".
-  let joined = "";
-  let loose = 0;
-  for (let k = 0; k < 3 && i + k < stream.length; k++) {
-    joined += stream[i + k].t;
-    if (joined === w) return k + 1;
-    if (k === 0 && sameWord(joined, w)) loose = 1;
-    if (!w.startsWith(joined)) break;
-  }
-  return loose;
-}
-
-// Where each cue phrase is actually spoken: the start time of its first word in
-// the voice's word stream, matched in order (each cue after the previous one).
-// null when the phrase isn't spoken (in that order).
-export function spokenCueTimes(cues: string[], words: WordTiming[]): (number | null)[] {
-  const stream = words.flatMap((w) => tokenize(w.text).map((t) => ({ t, start: w.start })));
-  let from = 0;
-  return cues.map((cue) => {
-    const want = tokenize(cue);
-    if (!want.length) return null;
-    for (let i = from; i < stream.length; i++) {
-      let at = i;
-      const ok = want.every((w) => {
-        const n = tokensForWord(stream, at, w);
-        at += n;
-        return n > 0;
-      });
-      if (ok) {
-        from = i + 1;
-        return stream[i].start;
-      }
-    }
-    return null;
-  });
-}
-
 // The script's own words on the times a speech-to-text pass heard (heard words
 // may be spelled differently, merged or split): each script word is placed at
 // the same share of the letters, read off the heard words' times. Null when
@@ -153,11 +98,4 @@ export function retimeScript(script: string, heard: WordTiming[]): WordTiming[] 
     return { text, start, end: Math.max(start, at(s * scale, false)) };
   });
   return out.every((w, i) => i === 0 || w.start >= out[i - 1].start) ? out : null;
-}
-
-// Words timed at an even pace over `durationSeconds` (no voice to time them).
-export function estimateWords(narration: string, durationSeconds: number): WordTiming[] {
-  const words = narration.split(/\s+/).filter(Boolean);
-  const per = (durationSeconds * 0.92) / Math.max(1, words.length);
-  return words.map((text, i) => ({ text, start: 0.25 + i * per, end: 0.25 + (i + 1) * per }));
 }

@@ -1,4 +1,4 @@
-import { rng } from "../composer/art";
+import { rng } from "./faces";
 import { framesOf } from "./beats";
 import { type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
 
