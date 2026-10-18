@@ -72,7 +72,8 @@ function sceneProblems(plan: SimplePlan, i: number, look: ReturnType<typeof look
     out.push({ scene: i, kind: "error", detail: e instanceof Error ? e.message.slice(0, 120) : String(e) });
   }
   const said = norm(s.words.map((w) => w.t).join(" "));
-  for (const n of notes.filter((n) => !n.ok)) out.push({ scene: i, kind: norm(n.text) === said ? "words" : "cut", detail: `"${n.text}" does not fit (${n.size}px)` });
+  // (a fitting made twice — to measure, then to set — is one problem)
+  for (const n of notes.filter((n, k) => !n.ok && notes.findIndex((m) => m.text === n.text && m.size === n.size) === k)) out.push({ scene: i, kind: norm(n.text) === said ? "words" : "cut", detail: `"${n.text}" does not fit (${n.size}px)` });
   for (const name of new Set(icons)) out.push({ scene: i, kind: "icon", detail: `no icon "${name}"` });
   // the same thing twice on one screen: a thing that is the words shown, or two things alike
   const things = s.items.map((it) => norm(it.text));
@@ -91,7 +92,8 @@ function colourProblems(look: ReturnType<typeof lookOf>): Problem[] {
   const hex = (x: string) => /^#[0-9a-f]{6}$/i.test(x);
   const pairs: [string, string, number, string][] = [
     [look.ink, look.bg, 4.5, "the words on the ground"],
-    [look.accent, look.bg, 3, "the keyword on the ground"],
+    // (on a plate: the ground's colour on the plate's)
+    look.plate ? [look.bg, look.plateFill, 3, "the keyword on its plate"] : [look.accent, look.bg, 3, "the keyword on the ground"],
     [look.onAccent, look.accent, 3, "a button's words"],
     [look.panelAccent, look.panel, 3, "a card's accent"],
   ];

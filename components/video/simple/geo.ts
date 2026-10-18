@@ -39,9 +39,55 @@ export function stackOf(g: Geo): { words: Box; body: Box } {
 // how big the words may be in each place
 export type WordsFit = { width: number; lines: number; max: number; min: number };
 export function wordsFit(g: Geo, place: "side" | "band" | "center", box: Box): WordsFit {
-  if (place === "side") return g.shape === "wide" ? { width: box.width, lines: 4, max: 120, min: 60 } : { width: box.width, lines: 3, max: g.shape === "tall" ? 112 : 84, min: 52 };
-  if (place === "band") return { width: box.width, lines: g.shape === "wide" ? 2 : 3, max: Math.round(118 * g.u), min: 48 };
-  return { width: box.width, lines: g.shape === "wide" ? 2 : 4, max: Math.round(210 * g.u), min: 70 };
+  if (place === "side") return g.shape === "wide" ? { width: box.width, lines: 4, max: TYPE.HEAD, min: 60 } : { width: box.width, lines: 3, max: Math.round(TYPE.HEAD * g.u), min: 52 };
+  if (place === "band") return { width: box.width, lines: g.shape === "wide" ? 2 : 3, max: Math.round(TYPE.HEAD * g.u), min: 48 };
+  return { width: box.width, lines: g.shape === "wide" ? 2 : 4, max: Math.round(TYPE.HERO * g.u), min: 70 };
+}
+
+// The type scale (docs/reference: the promos use few sizes, the same ones
+// throughout): the words alone (HERO), the words beside or above a hero
+// (HEAD), words under a name (SUB), a thing on a card or a tile (ITEM, its
+// title TITLE), a small line under it (LABEL), a button's words (BUTTON).
+// Headlines are frame pixels (times g.u); the rest are a hero's own pixels,
+// scaled with it. A number the voice says and a device's own screen keep
+// their sizes. No scene shows more than three of them.
+export const TYPE = { HERO: 190, HEAD: 120, SUB: 72, TITLE: 48, ITEM: 48, LABEL: 30, BUTTON: 56 } as const;
+export const WEIGHT = { title: 700, item: 650 } as const;
+// the room between the words and a hero
+const GAP = 120;
+
+// The words and a hero as one group, centred on the frame: side by side on a
+// wide frame (the words as wide as they are, not as their place), one above
+// the other on a tall or square one. `words`: their fitted size, how many
+// lines and the widest line (fit.ts measured).
+export type Measured = { size: number; lines: number; width: number };
+export function sideOf(g: Geo, left: boolean, hw: number, words: Measured, dw: number, dh: number): { words: Box; hero: CSSProperties } {
+  const { W, H, pad } = g;
+  const { words: box, hero } = splitOf(g, left, hw);
+  const s = Math.min(1, hero.width / dw, hero.height / dh);
+  const [w, h] = [dw * s, dh * s];
+  const at = (x: number, y: number): CSSProperties => ({ position: "absolute", left: x, top: y, width: dw, height: dh, transform: `scale(${s.toFixed(4)})`, transformOrigin: "0 0" });
+  if (g.shape === "wide") {
+    const ww = Math.min(box.width, words.width);
+    const x0 = Math.max(pad, (W - (ww + GAP + w)) / 2);
+    // (the words' place keeps its width — they are fitted to it — and starts where they do)
+    return left
+      ? { hero: at(x0, (H - h) / 2), words: { ...box, left: x0 + w + GAP } }
+      : { words: { ...box, left: x0 }, hero: at(x0 + ww + GAP, (H - h) / 2) };
+  }
+  const wh = words.lines * words.size * 1.08;
+  const y0 = Math.max(pad, (H - (wh + GAP * 0.6 + h)) / 2);
+  return { words: { ...box, top: y0, height: wh }, hero: at((W - w) / 2, y0 + wh + GAP * 0.6) };
+}
+// the words in a band on top and a group below them, centred on the frame together
+export function bandOf(g: Geo, words: Measured, dw: number, dh: number): { words: Box; body: CSSProperties } {
+  const { W, H, pad } = g;
+  const { words: box, body } = stackOf(g);
+  const s = Math.min(1, body.width / dw, body.height / dh);
+  const wh = words.lines * words.size * 1.08;
+  const gap = GAP * 0.6;
+  const y0 = Math.max(pad * 0.5, (H - (wh + gap + dh * s)) / 2);
+  return { words: { ...box, top: y0, height: wh }, body: { position: "absolute", left: (W - dw * s) / 2, top: y0 + wh + gap, width: dw, height: dh, transform: `scale(${s.toFixed(4)})`, transformOrigin: "0 0" } };
 }
 
 // a design of its own size, scaled to fit its place and centred in it

@@ -59,6 +59,13 @@ export function fitWords(words: string[], face: Face, { width, lines: most, max,
   return noted(words, { size: min, lines, ok: lines.length <= most && em.every((e) => e * min <= room) });
 }
 
+// How big fitted words come out: their size, how many lines and the widest
+// line (as Words sets them: a gap of 0.26 of the size between words)
+export function measured(words: string[], face: Face, f: Fitted, weight = 700): { size: number; lines: number; width: number } {
+  const lineW = (line: number[]) => line.reduce((s, i) => s + emWidth(words[i], face, weight) * f.size, 0) + Math.max(0, line.length - 1) * f.size * 0.26;
+  return { size: f.size, lines: f.lines.length, width: Math.max(0, ...f.lines.map(lineW)) };
+}
+
 // The same words on the same number of lines, as even as they go (never one
 // word left alone on the last line when it can be helped).
 function balanced(widths: number[], gap: number, n: number): number[][] {

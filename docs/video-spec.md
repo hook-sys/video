@@ -33,7 +33,17 @@ asked. The same script made twice gives two visibly different videos.
    colour is the brand's exact colour (only made lighter or darker where it
    would not read, never another hue), on the keyword, the icons, the buttons
    and glows. Nothing is drawn behind or under the words (no underline, no
-   marker, no block).
+   marker), except on a brand-filled ground: there the keyword sits on a plate
+   of the brand colour made as light or as dark as the words (refs 03, 06, 09),
+   because a lighter or darker brand colour does not stand out from them.
+10. **Centred and in proportion** (docs/reference, all 29). Every scene is
+    one group centred on the frame: the words beside or above a hero are
+    measured and placed with it, never pinned to one side with the other side
+    empty; the last scene is centred too (or on its half). Margins are the
+    frame's (140 px wide, 80 tall, 70 square). One type scale for every
+    template (geo.ts `TYPE`): the words alone 190, beside a hero 120, under a
+    name 72, a thing on a card 48, a small line 30, a button 56 — at most
+    three of them in a scene.
 8. **The story arc.** Hook → problem → reveal → features → proof → the ask.
    The last scene is always the brand and the call to action.
 9. **Honest.** No number the voice does not say; no invented feature, customer

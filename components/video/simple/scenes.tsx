@@ -1,9 +1,9 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Icon } from "../icons";
 import { emWidth, familyOf } from "./faces";
-import { fitWords } from "./fit";
-import { type Box, fitIn, splitOf, stackOf, wordsFit } from "./geo";
-import { type C, Cursor, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { fitWords, measured } from "./fit";
+import { type Box, TYPE, WEIGHT, bandOf, sideOf, splitOf, stackOf, wordsFit } from "./geo";
+import { type C, Cursor, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import type { Scene } from "./types";
 
 // The templates (docs/video-spec.md), part 1: statement, trouble, reveal,
@@ -32,23 +32,29 @@ export function WordsIn({ c, box, place, effect, color, only }: { c: C; box: Box
     </div>
   );
 }
-// the words and a hero of its own size (dw × dh), side by side or one above the other
-export function Side({ c, dw, dh, hw, effect, only, children }: { c: C; dw: number; dh: number; hw?: number; effect?: Effect; only?: (t: string) => boolean; children: ReactNode }) {
-  const { words, hero } = splitOf(c.g, c.s.left, hw);
+// how the words will come out in a place (to centre them with what is beside them)
+const wordsIn = (c: C, box: Box, place: "side" | "band", only?: (t: string) => boolean) => {
+  const shown = c.s.words.filter((w) => !only || only(w.t)).map((w) => w.t);
+  return measured(shown, c.look.display, fitWords(shown, c.look.display, wordsFit(c.g, place, box)));
+};
+// the words and a hero of its own size (dw × dh), side by side or one above
+// the other — together centred on the frame
+export function Side({ c, dw, dh, hw = 860, effect, only, children }: { c: C; dw: number; dh: number; hw?: number; effect?: Effect; only?: (t: string) => boolean; children: ReactNode }) {
+  const { words, hero } = sideOf(c.g, c.s.left, hw, wordsIn(c, splitOf(c.g, c.s.left, hw).words, "side", only), dw, dh);
   return (
     <>
       <WordsIn c={c} box={words} place="side" effect={effect} only={only} />
-      <div style={fitIn(hero, dw, dh)}>{children}</div>
+      <div style={hero}>{children}</div>
     </>
   );
 }
-// the words in a band on top, a group of its own size below them
+// the words in a band on top, a group of its own size below them — together centred on the frame
 export function Band({ c, dw, dh, effect, children }: { c: C; dw: number; dh: number; effect?: Effect; children: ReactNode }) {
-  const { words, body } = stackOf(c.g);
+  const { words, body } = bandOf(c.g, wordsIn(c, stackOf(c.g).words, "band"), dw, dh);
   return (
     <>
       <WordsIn c={c} box={words} place="band" effect={effect} />
-      <div style={fitIn(body, dw, dh)}>{children}</div>
+      <div style={body}>{children}</div>
     </>
   );
 }
@@ -70,7 +76,7 @@ function Statement({ c }: { c: C }) {
     );
   }
   // the lines come in from alternate sides, the key word in the accent
-  const fit = fitWords(c.s.words.map((w) => w.t), c.look.display, { width: W - 2 * pad, lines: c.g.shape === "wide" ? 3 : 4, max: Math.round(190 * c.g.u), min: 70 });
+  const fit = fitWords(c.s.words.map((w) => w.t), c.look.display, { width: W - 2 * pad, lines: c.g.shape === "wide" ? 3 : 4, max: Math.round(TYPE.HERO * c.g.u), min: 70 });
   return (
     <div style={center({ left: pad, top: 0, width: W - 2 * pad, height: H, flexDirection: "column" })}>
       {fit.lines.map((line, li) => {
@@ -78,7 +84,7 @@ function Statement({ c }: { c: C }) {
         const from = (li % 2 ? 1 : -1) * W * 0.4;
         return (
           <div key={li} style={{ ...display(c, fit.size, { fontWeight: 800, lineHeight: 1.06 }), display: "flex", gap: `0 ${(fit.size * 0.26).toFixed(0)}px`, opacity: clamp01(k * 1.6), transform: `translateX(${((1 - k) * from).toFixed(1)}px)` }}>
-            {line.map((i) => <span key={i} style={{ color: c.s.words[i].key ? c.look.accent : undefined }}>{c.s.words[i].t}</span>)}
+            {line.map((i) => <span key={i} style={c.s.words[i].key ? keyStyle(c.look, fit.size) : undefined}>{c.s.words[i].t}</span>)}
           </div>
         );
       })}
@@ -106,7 +112,7 @@ function Trouble({ c }: { c: C }) {
             <div key={i} style={abs({ left: row ? i * (tw + gap) : 0, top: row ? 0 : i * (th + gap), width: tw, height: th, ...rise(k, 80) })}>
               <div style={{ ...panel(c), width: "100%", height: "100%", display: "flex", flexDirection: row ? "column" : "row", alignItems: "center", justifyContent: "center", gap: 30, padding: row ? 0 : "0 40px", boxSizing: "border-box", opacity: 1 - strike * 0.45 }}>
                 <Glyph c={c} name={it.icon ?? c.s.icon} size={row ? 170 : 120} card />
-                <One style={{ fontSize: row ? 48 : 56, fontWeight: 650, maxWidth: row ? tw - 50 : tw - 240, flex: row ? undefined : 1 }} fit={row ? tw - 60 : tw - 240} face={c.look.text}>{it.text}</One>
+                <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, maxWidth: row ? tw - 50 : tw - 240, flex: row ? undefined : 1 }} fit={row ? tw - 60 : tw - 240} face={c.look.text}>{it.text}</One>
               </div>
               <svg width={tw} height={th} style={abs({ left: 0, top: 0 })}>
                 <line x1={50} y1={th - 50} x2={tw - 50} y2={50} stroke={c.look.bad} strokeWidth={14} strokeLinecap="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - strike} />
@@ -129,7 +135,7 @@ function Trouble({ c }: { c: C }) {
                 <div style={{ width: 100, height: 100, borderRadius: 26, background: tint(c.look.bad, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <Icon name={it.icon ?? "triangle-alert"} size={54} color={c.look.bad} strokeWidth={2.2} />
                 </div>
-                <One style={{ fontSize: 54, fontWeight: 650, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
+                <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
                 <div style={{ width: 20, height: 20, borderRadius: 99, background: c.look.bad }} />
               </div>
             </div>
@@ -164,15 +170,19 @@ function Reveal({ c }: { c: C }) {
   const { W, H, pad, u } = c.g;
   const k = springAt(c, c.s.from + 6, 1.3);
   const ring = clamp01((c.f - c.s.from - 10) / 34);
-  const my = Math.round(H * (c.s.variant === 0 ? 0.37 : 0.42));
+  // (orbiting things keep clear of the mark and of the words under it)
+  const orbiting = c.s.variant === 2 && c.s.items.length >= 2;
+  const my = Math.round(H * (c.s.variant === 0 ? 0.37 : orbiting ? 0.36 : 0.42));
   const ms = Math.round((c.s.variant === 0 ? 260 : 200) * Math.max(0.8, u));
-  const wordsBox = { left: pad, top: my + ms / 2 + 50 * u, width: W - 2 * pad, height: H - (my + ms / 2 + 50 * u) - 60 };
+  const ry = ms / 2 + 90 * u;
+  const below = orbiting ? my + ry + 70 * u : my + ms / 2 + 50 * u;
+  const wordsBox = { left: pad, top: below, width: W - 2 * pad, height: H - below - 60 };
   const words = saysName(c) ? (
     <WordsIn c={c} box={wordsBox} place="band" />
   ) : (
     <div style={center({ ...wordsBox, flexDirection: "column", gap: 18 })}>
-      <div style={{ ...display(c, Math.round(120 * u)), ...rise(k) }}>{c.brand.name}</div>
-      <Words c={c} width={wordsBox.width} lines={tall(c) ? 2 : 1} max={Math.round(84 * u)} min={40} color={c.look.sub} />
+      <div style={{ ...display(c, Math.round(TYPE.HEAD * u)), ...rise(k) }}>{c.brand.name}</div>
+      <Words c={c} width={wordsBox.width} lines={tall(c) ? 2 : 1} max={Math.round(TYPE.SUB * u)} min={40} color={c.look.sub} />
     </div>
   );
   const rings = [0, 0.35].map((d, i) => {
@@ -198,13 +208,13 @@ function Reveal({ c }: { c: C }) {
     <div key={key} style={abs({ width: 460, height: 110, ...style })}>
       <div style={{ ...panel(c, 99), height: "100%", display: "flex", alignItems: "center", gap: 20, padding: "0 28px 0 18px", boxSizing: "border-box" }}>
         <Glyph c={c} name={it.icon ?? c.s.icon} size={74} card />
-        <One style={{ fontSize: 40, fontWeight: 650 }} fit={300} face={c.look.text}>{it.text}</One>
+        <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={300} face={c.look.text}>{it.text}</One>
       </div>
     </div>
   );
   if (c.s.variant === 1) {
     // the things it brings together fly into it (their paths stay above the words)
-    const homes = [{ x: W * 0.19, y: H * 0.2 }, { x: W * 0.81, y: H * 0.2 }, { x: W * 0.8, y: H * 0.5 }];
+    const homes = [{ x: W * 0.2, y: H * 0.2 }, { x: W * 0.8, y: H * 0.2 }, { x: W * 0.8, y: H * 0.5 }];
     const land = c.s.from + 22 + c.s.items.length * stagger(c) * 3;
     return (
       <>
@@ -221,7 +231,7 @@ function Reveal({ c }: { c: C }) {
     );
   }
   // they orbit it (the near side bigger and in front)
-  const rx = Math.min(W * 0.32, 600), ry = rx * 0.34;
+  const rx = Math.min(W * 0.32, 600);
   const t = (c.f - c.s.from) / 30;
   const orbit = c.s.items.map((it, i) => {
     const a = t * 0.55 + (i / c.s.items.length) * Math.PI * 2;
@@ -258,7 +268,7 @@ function Feature({ c }: { c: C }) {
           <div style={{ ...panel(c, 34), width: "100%", height: "100%", opacity: clamp01(k * 1.6), transform: `rotateY(${((1 - k) * (c.s.left ? 18 : -18)).toFixed(2)}deg) translateY(${((1 - k) * 60).toFixed(1)}px)`, overflow: "hidden" }}>
             <div style={{ height: 140, display: "flex", alignItems: "center", gap: 24, padding: "0 40px", borderBottom: `1.5px solid ${c.look.line}` }}>
               <Glyph c={c} name={c.s.icon} size={76} solid card />
-              <One style={{ fontSize: 44, fontWeight: 700, flex: 1 }} fit={540} face={c.look.text}>{c.brand.name}</One>
+              <One style={{ fontSize: TYPE.TITLE, fontWeight: WEIGHT.title, flex: 1 }} fit={540} face={c.look.text}>{c.brand.name}</One>
               {[0, 1, 2].map((d) => <div key={d} style={{ width: 14, height: 14, borderRadius: 99, background: c.look.line }} />)}
             </div>
             {items.map((it, i) => {
@@ -267,7 +277,7 @@ function Feature({ c }: { c: C }) {
               return (
                 <div key={i} style={{ height: rowH, display: "flex", alignItems: "center", gap: 24, padding: "0 36px", borderBottom: i < n - 1 ? `1.5px solid ${c.look.line}` : undefined, background: lit ? tint(c.look.panelAccent, 0.1) : undefined, ...rise(kr, 30) }}>
                   <Glyph c={c} name={it.icon ?? c.s.icon} size={72} card />
-                  <One style={{ fontSize: 50, fontWeight: 600, flex: 1 }} fit={580} face={c.look.text}>{it.text}</One>
+                  <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={580} face={c.look.text}>{it.text}</One>
                   <div style={{ width: 52, height: 52, borderRadius: 99, border: `3px solid ${lit ? c.look.panelAccent : c.look.line}`, background: lit ? c.look.panelAccent : undefined, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {lit && <Icon name="check" size={32} color={c.look.onPanelAccent} strokeWidth={3} />}
                   </div>
@@ -319,7 +329,7 @@ function Feature({ c }: { c: C }) {
     <Side c={c} dw={dw} dh={dh}>
       <div style={abs({ left: 0, top: 0, width: dw, height: 140, ...panel(c, 99), display: "flex", alignItems: "center", gap: 26, padding: "0 40px", boxSizing: "border-box", ...rise(k, 40) })}>
         <Icon name="search" size={56} color={c.look.panelAccent} strokeWidth={2.4} />
-        <div style={{ flex: 1, fontSize: 52, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", position: "relative" }}>
+        <div style={{ flex: 1, fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, whiteSpace: "nowrap", overflow: "hidden", position: "relative" }}>
           {typed.slice(0, shown)}
           {c.f < doneAt + 20 && Math.floor(c.f / 8) % 2 === 0 && <span style={{ display: "inline-block", width: 4, height: 54, marginLeft: 4, verticalAlign: "middle", background: c.look.panelAccent }} />}
         </div>
@@ -332,7 +342,7 @@ function Feature({ c }: { c: C }) {
         return (
           <div key={i} style={abs({ left: 30, top: 170 + i * 130, width: dw - 60, height: 112, ...panel(c, 26), display: "flex", alignItems: "center", gap: 24, padding: "0 30px", boxSizing: "border-box", ...rise(kr, 40) })}>
             <Glyph c={c} name={it.icon ?? c.s.icon} size={64} card />
-            <One style={{ fontSize: 44, fontWeight: 600, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
+            <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
             <Icon name="chevron-right" size={40} color={c.look.panelSub} strokeWidth={2.4} />
           </div>
         );
@@ -387,7 +397,7 @@ function Stat({ c }: { c: C }) {
       <div style={abs({ left: 0, top: 0, width: dw, height: dh, ...panel(c, 40), overflow: "hidden", ...rise(k, 60) })}>
         <div style={abs({ left: 50, top: 50, display: "flex", alignItems: "center", gap: 20 })}>
           <Glyph c={c} name={c.s.icon} size={72} card />
-          <One style={{ fontSize: 40, fontWeight: 650, color: c.look.panelSub }} fit={500} face={c.look.text}>{c.brand.name}</One>
+          <One style={{ fontSize: TYPE.TITLE, fontWeight: WEIGHT.title, color: c.look.panelSub }} fit={500} face={c.look.text}>{c.brand.name}</One>
         </div>
         <div style={abs({ left: 50, top: 150, display: "flex", alignItems: "center", gap: 30 })}>
           <div style={display(c, size, { fontWeight: 800, letterSpacing: "-0.05em", color: c.look.panelInk })}>{countUp(value, count)}</div>
@@ -432,7 +442,7 @@ function Steps({ c }: { c: C }) {
                 </div>
                 {badge(i, 64, { position: "absolute", right: -6, top: -6 })}
               </div>
-              <One style={{ fontFamily: familyOf(c.look.text), fontSize: row ? 44 : 56, fontWeight: 650, color: c.look.ink, maxWidth: row ? 440 : 640 }} fit={row ? 430 : 640} face={c.look.text}>{it.text}</One>
+              <One style={{ fontFamily: familyOf(c.look.text), fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: c.look.ink, maxWidth: row ? 440 : 640 }} fit={row ? 430 : 640} face={c.look.text}>{it.text}</One>
             </div>
           );
         })}
@@ -455,7 +465,7 @@ function Steps({ c }: { c: C }) {
                     <path d="M5 12.5 L10 17.5 L19 7" fill="none" stroke={c.look.onPanelAccent} strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - tick} />
                   </svg>
                 </div>
-                <One style={{ fontSize: 54, fontWeight: 600, flex: 1 }} fit={640} face={c.look.text}>{it.text}</One>
+                <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={640} face={c.look.text}>{it.text}</One>
               </div>
             );
           })}
@@ -477,7 +487,7 @@ function Steps({ c }: { c: C }) {
               <Glyph c={c} name={it.icon ?? c.s.icon} size={88} card />
               {badge(i, 70)}
             </div>
-            <One style={{ fontSize: 52, fontWeight: 650 }} fit={cw - 80} face={c.look.text}>{it.text}</One>
+            <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={cw - 80} face={c.look.text}>{it.text}</One>
           </div>
         );
       })}
@@ -503,49 +513,81 @@ export function Button({ c, at, size = 60, on }: { c: C; at: number; size?: numb
     </div>
   );
 }
+// Every way of it centred on the frame (or on its half): its parts stacked
+// as one group, the group in the middle — never one side left empty.
 function Cta({ c }: { c: C }) {
   const { W, H, pad, u } = c.g;
   // (its click: clickOf)
   const at = c.s.from + 18;
   const k = springAt(c, c.s.from + 2, 1.3);
   const repeat = norm(c.s.words.map((w) => w.t).join(" ")) === norm(c.brand.name);
-  const bs = Math.round(60 * Math.max(0.8, u));
-  if (c.s.variant === 0)
+  const bs = Math.round(TYPE.BUTTON * Math.max(0.8, u));
+  const bh = bs * 2.2;
+  const words = c.s.words.map((w) => w.t);
+  // the words' height at their size in a place
+  const wordsH = (width: number, lines: number, max: number) => {
+    const fit = fitWords(words, c.look.display, { width, lines, max, min: 44 });
+    return { max, lines, height: fit.lines.length * fit.size * 1.08 };
+  };
+  // parts of these heights one under the other, the whole centred in a height: each one's top
+  const stack = (heights: number[], gap: number, top: number, height: number) => {
+    let y = top + Math.max(0, (height - heights.reduce((s, h) => s + h, 0) - gap * (heights.length - 1)) / 2);
+    return heights.map((h) => ((y += h + gap), y - h - gap));
+  };
+  const nameSize = (width: number, max: number) => Math.round(fitWords([c.brand.name], c.look.display, { width, lines: 1, max, min: 44 }).size);
+  if (c.s.variant === 0) {
+    // the brand first: its mark and name, the words under them, the button
+    const ms = Math.round(150 * u);
+    const sub = wordsH(W - 2 * pad, tall(c) ? 3 : 2, Math.round(TYPE.SUB * u));
+    const [yName, yWords, yButton] = stack([ms, repeat ? 0 : sub.height, bh], 56 * u, 0, H);
     return (
       <>
-        <div style={center({ left: 0, width: W, top: H * 0.17, height: H * 0.2, gap: 36 * u, ...rise(k) })}>
-          <Mark c={c} size={Math.round(150 * u)} />
-          <div style={display(c, Math.round(fitWords([c.brand.name], c.look.display, { width: W - 2 * pad - 200 * u, lines: 1, max: 120 * u, min: 50 }).size))}>{c.brand.name}</div>
+        <div style={center({ left: 0, width: W, top: yName, height: ms, gap: 36 * u, ...rise(k) })}>
+          <Mark c={c} size={ms} />
+          <div style={display(c, nameSize(W - 2 * pad - 200 * u, Math.round(TYPE.HEAD * u)))}>{c.brand.name}</div>
         </div>
-        {!repeat && <WordsIn c={c} box={{ left: pad, top: H * 0.4, width: W - 2 * pad, height: H * 0.22 }} place="band" />}
-        <div style={center({ left: 0, width: W, top: H * 0.64, height: H * 0.18 })}>
+        {!repeat && (
+          <div style={center({ left: pad, width: W - 2 * pad, top: yWords, height: sub.height })}>
+            <Words c={c} width={W - 2 * pad} lines={sub.lines} max={sub.max} min={44} color={c.look.sub} />
+          </div>
+        )}
+        <div style={center({ left: 0, width: W, top: yButton, height: bh })}>
           <Button c={c} at={at} size={bs} />
         </div>
-        <Cursor c={c} from={{ x: W / 2 + 460 * u, y: H + 40 }} to={{ x: W / 2 + buttonWidth(c, bs) / 2 - 40, y: H * 0.73 + 20 }} click={at + 34} />
+        <Cursor c={c} from={{ x: W / 2 + 460 * u, y: H + 40 }} to={{ x: W / 2 + buttonWidth(c, bs) / 2 - 40, y: yButton + bh / 2 + 20 }} click={at + 34} />
       </>
     );
+  }
   if (c.s.variant === 1) {
-    const centred = tall(c);
+    // the words first: big, the brand small above them, the button under them
+    const ms = Math.round(84 * Math.max(0.8, u));
+    const head = wordsH(W - 2 * pad, tall(c) ? 4 : 2, Math.round(TYPE.HEAD * u));
+    const [yBrand, yWords, yButton] = stack([ms, repeat ? 0 : head.height, bh], 64 * u, 0, H);
     return (
       <>
-        <div style={abs({ left: pad, top: H * 0.09, width: W - 2 * pad, display: "flex", alignItems: "center", justifyContent: centred ? "center" : "flex-start", gap: 22, ...rise(k, 30) })}>
-          <Mark c={c} size={Math.round(84 * Math.max(0.8, u))} />
+        <div style={center({ left: pad, top: yBrand, width: W - 2 * pad, height: ms, gap: 22, ...rise(k, 30) })}>
+          <Mark c={c} size={ms} />
           {/* (the words say the name already: the mark alone) */}
-          {!repeat && <div style={display(c, Math.round(54 * Math.max(0.8, u)))}>{c.brand.name}</div>}
+          {!repeat && <div style={display(c, Math.round(TYPE.TITLE * Math.max(0.8, u)))}>{c.brand.name}</div>}
         </div>
-        <div style={abs({ left: pad, width: W - 2 * pad, top: H * 0.26, height: H * 0.38, display: "flex", alignItems: "center", justifyContent: centred ? "center" : "flex-start" })}>
-          <Words c={c} width={W - 2 * pad} lines={centred ? 4 : 2} max={Math.round(150 * u)} min={60} align={centred ? "center" : "left"} />
-        </div>
-        <div style={abs({ left: pad, width: W - 2 * pad, top: H * 0.68, display: "flex", justifyContent: centred ? "center" : "flex-start" })}>
-          <Button c={c} at={at} size={Math.round(56 * Math.max(0.8, u))} />
+        {!repeat && (
+          <div style={center({ left: pad, width: W - 2 * pad, top: yWords, height: head.height })}>
+            <Words c={c} width={W - 2 * pad} lines={head.lines} max={head.max} min={44} />
+          </div>
+        )}
+        <div style={center({ left: pad, width: W - 2 * pad, top: yButton, height: bh })}>
+          <Button c={c} at={at} size={bs} />
         </div>
       </>
     );
   }
-  // the brand on a half of its colour, the words and the ask on the other
+  // the brand on a half of its colour, the words and the ask centred on the other
   const wide = !tall(c);
+  const m = pad * 0.6;
   const half = wide ? { left: c.s.left ? 0 : W / 2, top: 0, width: W / 2, height: H } : { left: 0, top: 0, width: W, height: H * 0.44 };
-  const rest = wide ? { left: c.s.left ? W / 2 + 80 : 100, top: 0, width: W / 2 - 180, height: H } : { left: pad, top: H * 0.46, width: W - 2 * pad, height: H * 0.54 };
+  const rest = wide ? { left: (c.s.left ? W / 2 : 0) + m, top: 0, width: W / 2 - 2 * m, height: H } : { left: pad, top: H * 0.44, width: W - 2 * pad, height: H * 0.56 };
+  const head = wordsH(rest.width, 3, Math.round(TYPE.HEAD * u * (wide ? 0.85 : 1)));
+  const [yWords, yButton] = stack([repeat ? 0 : head.height, bh], 60 * u, rest.top, rest.height);
   const wipe = ease(clamp01((c.f - c.s.from) / 18));
   const onA = c.look.onFill;
   return (
@@ -554,11 +596,15 @@ function Cta({ c }: { c: C }) {
         <div style={{ ...pop(springAt(c, c.s.from + 10)) }}>
           <Mark c={{ ...c, look: { ...c.look, accent: onA, onAccent: c.look.fill } }} size={Math.round(180 * u)} />
         </div>
-        <div style={display(c, Math.round(fitWords([c.brand.name], c.look.display, { width: half.width - 120, lines: 1, max: 110 * u, min: 44 }).size), { color: onA })}>{c.brand.name}</div>
+        <div style={display(c, nameSize(half.width - 2 * m, Math.round(TYPE.HEAD * u)), { color: onA })}>{c.brand.name}</div>
       </div>
-      <div style={center({ ...rest, flexDirection: "column", gap: 60 * u })}>
-        {!repeat && <Words c={c} width={rest.width} lines={3} max={Math.round(110 * u)} min={52} />}
-        <Button c={c} at={at} size={Math.round(54 * Math.max(0.8, u))} />
+      {!repeat && (
+        <div style={center({ left: rest.left, width: rest.width, top: yWords, height: head.height })}>
+          <Words c={c} width={rest.width} lines={head.lines} max={head.max} min={44} />
+        </div>
+      )}
+      <div style={center({ left: rest.left, width: rest.width, top: yButton, height: bh })}>
+        <Button c={c} at={at} size={bs} />
       </div>
     </>
   );

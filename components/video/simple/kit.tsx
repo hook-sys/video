@@ -35,8 +35,15 @@ export function tint(hex: string, a: number): string {
 export const rise = (k: number, by = 60): CSSProperties => ({ opacity: clamp01(k * 1.6), transform: `translateY(${((1 - k) * by).toFixed(1)}px)` });
 export const pop = (k: number): CSSProperties => ({ opacity: clamp01(k * 1.8), transform: `scale(${(0.6 + 0.4 * k).toFixed(4)})` });
 
+// the keyword's look at a size: the accent colour, or (on the brand's own
+// colour) the ground's colour on a plate of the brand colour made as light
+// or as dark as the words
+export const keyStyle = (look: Look, size: number): CSSProperties =>
+  // (the plate a little deeper than the line, so letters that hang below it stay on it)
+  look.plate ? { color: look.bg, background: look.plateFill, borderRadius: Math.round(size * 0.16), padding: `${Math.round(size * 0.02)}px ${Math.round(size * 0.14)}px ${Math.round(size * 0.1)}px`, margin: `0 ${-Math.round(size * 0.06)}px` } : { color: look.accent };
+
 // The voice's words in their place: each as it is said, the key one in the
-// accent colour (nothing behind or under it) — or with an effect: struck
+// accent colour (on the brand's own colour: on a plate, keyStyle) — or with an effect: struck
 // through (what goes away), typed letter by letter, or the key word growing in.
 export type Effect = "strike" | "type" | "pop";
 export function Words({ c, width, lines, max, min, align = "center", color, effect, style }: { c: C; width: number; lines: number; max: number; min?: number; align?: "left" | "center" | "right"; color?: string; effect?: Effect; style?: CSSProperties }) {
@@ -58,7 +65,7 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
               // (its letters as they are said, a caret after the last one)
               const shown = c.f < w.at - 2 ? 0 : Math.min(w.t.length, Math.ceil((c.f - w.at + 3) / 1.6));
               return (
-                <span key={i} style={{ display: "inline-block", position: "relative", color: lit ? look.accent : undefined, opacity: shown ? 1 : 0 }}>
+                <span key={i} style={{ display: "inline-block", position: "relative", ...(lit ? keyStyle(look, fit.size) : {}), opacity: shown ? 1 : 0 }}>
                   {w.t.slice(0, shown)}
                   <span style={{ opacity: 0 }}>{w.t.slice(shown)}</span>
                   {i === lastTyped && Math.floor(c.f / 8) % 2 === 0 && <span style={{ position: "absolute", right: -fit.size * 0.12, top: "8%", width: Math.max(4, fit.size * 0.06), height: "84%", background: look.accent }} />}
@@ -67,7 +74,7 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
             }
             const grow = effect === "pop" && w.key ? springAt(c, w.at + 2, 0.8) : 1;
             return (
-              <span key={i} style={{ display: "inline-block", position: "relative", ...rise(k, fit.size * 0.45), color: lit ? look.accent : undefined, ...(effect === "pop" && w.key ? { transform: `${rise(k, fit.size * 0.45).transform} scale(${(1.35 - 0.35 * grow).toFixed(4)})` } : {}) }}>
+              <span key={i} style={{ display: "inline-block", position: "relative", ...rise(k, fit.size * 0.45), ...(lit ? keyStyle(look, fit.size) : {}), ...(effect === "pop" && w.key ? { transform: `${rise(k, fit.size * 0.45).transform} scale(${(1.35 - 0.35 * grow).toFixed(4)})` } : {}) }}>
                 {w.t}
                 {effect === "strike" && <span style={{ position: "absolute", left: -fit.size * 0.04, top: "52%", height: Math.max(6, fit.size * 0.08), width: `calc(${(ease(after) * 100).toFixed(1)}% + ${(ease(after) * fit.size * 0.08).toFixed(1)}px)`, background: look.bad, borderRadius: 99 }} />}
               </span>
