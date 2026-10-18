@@ -84,6 +84,8 @@ export type Scene = {
   said?: { t: string; at: number }[];
   // its own ground, when the customer gave it one other than the video's (edit.ts; at most two scenes)
   ground?: Ground;
+  // false: its lit word's icon (kit.tsx keyIconOf) left out — it did not fit (check.ts settleWordIcons)
+  wordIcon?: false;
 };
 
 export type SimplePlan = {

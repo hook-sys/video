@@ -2,7 +2,7 @@ import { type ReactNode, isValidElement } from "react";
 import { Icon, resolveIcon } from "../icons";
 import { type FitNote, noting } from "./fit";
 import { geoOf } from "./geo";
-import type { C, Play } from "./kit";
+import { type C, ICON_SLOT, type Play, keyIconOf } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
 import { norm, thingAt } from "./scenes";
 import { choices, grey, planOf, printOf, variantOk, wordsAlone } from "./select";
@@ -85,7 +85,7 @@ function sceneProblems(plan: SimplePlan, i: number, look: ReturnType<typeof look
   }
   const said = norm(s.words.map((w) => w.t).join(" "));
   // (a fitting made twice — to measure, then to set — is one problem)
-  for (const n of notes.filter((n, k) => !n.ok && notes.findIndex((m) => m.text === n.text && m.size === n.size) === k)) out.push({ scene: i, kind: norm(n.text) === said ? "words" : "cut", detail: `"${n.text}" does not fit (${n.size}px)` });
+  for (const n of notes.filter((n, k) => !n.ok && notes.findIndex((m) => m.text === n.text && m.size === n.size) === k)) out.push({ scene: i, kind: norm(n.text.split(" ").filter((t) => t !== ICON_SLOT).join(" ")) === said ? "words" : "cut", detail: `"${n.text}" does not fit (${n.size}px)` });
   for (const name of new Set(icons)) out.push({ scene: i, kind: "icon", detail: `no icon "${name}"` });
   // the same thing twice on one screen: a thing that is the words shown, or two things alike
   const things = s.items.map((it) => norm(it.text));
@@ -188,12 +188,31 @@ function candidates(plan: SimplePlan, i: number, kinds: Set<Problem["kind"]>, re
   return out;
 }
 
+// The lit word's icon kept only where it fits: a scene whose words fit
+// without it but not with it goes without it (marked, so the film, its
+// sounds and the editor all leave it out)
+export function settleWordIcons(plan: SimplePlan): SimplePlan {
+  let out = plan;
+  plan.scenes.forEach((_, i) => (out = settleAt(out, i)));
+  return out;
+}
+// (one scene)
+function settleAt(plan: SimplePlan, i: number): SimplePlan {
+  const s = plan.scenes[i];
+  const bare = { ...s };
+  delete bare.wordIcon;
+  const fits = (sc: Scene) => !problemsOf({ ...plan, scenes: plan.scenes.map((x, k) => (k === i ? sc : x)) }, i).some((x) => x.kind === "words" || x.kind === "cut");
+  const next = !keyIconOf(bare) || fits(bare) || !fits({ ...bare, wordIcon: false }) ? bare : { ...bare, wordIcon: false as const };
+  return next.wordIcon === s.wordIcon ? plan : { ...plan, scenes: plan.scenes.map((x, k) => (k === i ? next : x)) };
+}
+
 // The plan mended (readings: the beats' readings, to play a beat another way)
 export function repairPlan(plan: SimplePlan, readings?: Reading[]): { plan: SimplePlan; report: CheckReport } {
   const fixed: string[] = [];
   let p = plan;
   let rounds = 0;
   for (; rounds < 3; rounds++) {
+    p = settleWordIcons(p);
     const problems = checkPlan(p);
     if (!problems.length) break;
     // colours: another ground that reads
@@ -212,9 +231,10 @@ export function repairPlan(plan: SimplePlan, readings?: Reading[]): { plan: Simp
       if (!now.length) continue;
       let best: { s: Scene; n: number } | null = null;
       for (const s of candidates(p, i, new Set(now.map((x) => x.kind)), readings?.[i])) {
-        const scenes = p.scenes.map((x, k) => (k === i ? s : x));
-        const n = sceneProblems({ ...p, scenes }, i, look).length;
-        if (!best || n < best.n) best = { s, n };
+        // (with its lit word's icon only if it fits)
+        const trial = settleAt({ ...p, scenes: p.scenes.map((x, k) => (k === i ? s : x)) }, i);
+        const n = sceneProblems(trial, i, look).length;
+        if (!best || n < best.n) best = { s: trial.scenes[i], n };
         if (!n) break;
       }
       if (best && best.n < now.length) {
@@ -224,8 +244,9 @@ export function repairPlan(plan: SimplePlan, readings?: Reading[]): { plan: Simp
       }
     }
   }
+  p = settleWordIcons(p);
   const left = checkPlan(p).map((x) => `${x.scene === null ? "video" : `scene ${x.scene + 1}`}: ${x.detail}`);
-  return { plan: !fixed.length && !left.length ? plan : { ...p, print: printOf(p.theme, p.scenes), check: { fixed, left } }, report: { rounds, fixed, left } };
+  return { plan: !fixed.length && !left.length ? p : { ...p, print: printOf(p.theme, p.scenes), check: { fixed, left } }, report: { rounds, fixed, left } };
 }
 
 // ── several drafts, the best kept ─────────────────────────────────────────

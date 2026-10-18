@@ -3,18 +3,17 @@ import { AbsoluteFill, Html5Audio, Img, Sequence, continueRender, delayRender, s
 import { Audio as MediaAudio } from "@remotion/media";
 import { type Face, familyOf, fontUrl } from "./faces";
 import { type C, type Play, clamp01, ease, tint } from "./kit";
-import { TEMPLATE, clickOf } from "./more";
+import { T, soundsOf } from "./sounds";
+import { TEMPLATE } from "./more";
 import { geoOf } from "./geo";
 import { type Look, lookOf, themeOf } from "./theme";
-import { type FilmProps, GROUNDS, type Scene, type SimplePlan } from "./types";
+import { type FilmProps, GROUNDS, type SimplePlan } from "./types";
 
 // The simple engine's film: each scene its template, on one ground for the
 // whole video (a scene the customer gave its own ground brings it in with it), moving slowly in (the camera never stops, not even between
 // scenes), one way between scenes for the whole video, the voice and a sound
 // on what happens. No music.
 
-// frames a way between scenes takes (half before the cut, half after)
-const T = 18;
 const PLAY: Play = { spring, Img };
 
 const loaded = new Set<string>();
@@ -107,19 +106,6 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
   );
 }
 
-// a whoosh as each scene comes in, a pop as things come in, a click on each click, a chime at the end
-function soundsOf(plan: SimplePlan): { at: number; name: string; volume: number }[] {
-  const out: { at: number; name: string; volume: number }[] = [];
-  plan.scenes.forEach((s: Scene, i) => {
-    if (i) out.push({ at: Math.max(0, s.from - T / 2), name: "whoosh", volume: 0.22 });
-    if (s.items.length && s.template !== "statement" && s.template !== "stat") out.push({ at: s.from + 10, name: "soft_pop", volume: 0.3 });
-    if (s.template === "stat" || s.template === "reveal") out.push({ at: s.from + 8, name: s.template === "stat" ? "subtle_impact" : "reveal", volume: 0.36 });
-    const click = clickOf(s, !!plan.brand.cta.trim());
-    if (click != null) out.push({ at: click, name: "click", volume: 0.45 });
-    if (s.template === "cta" && click != null) out.push({ at: click + 10, name: "success_chime", volume: 0.32 });
-  });
-  return out.filter((e) => e.at < plan.duration - 6).sort((a, b) => a.at - b.at).filter((e, i, a) => !i || e.at - a[i - 1].at >= 8);
-}
 function Sounds({ plan, webAudio }: { plan: SimplePlan; webAudio?: boolean }) {
   return (
     <>

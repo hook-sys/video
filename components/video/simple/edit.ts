@@ -1,3 +1,4 @@
+import { settleWordIcons } from "./check";
 import { printOf, shownWord, variantOk, wordsAlone } from "./select";
 import { GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, VARIANTS, WAYS } from "./types";
 
@@ -99,10 +100,12 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
     else delete next.screen;
     if (own[i]) next.ground = own[i]!;
     else delete next.ground;
+    // (whether its lit word's icon fits is weighed again below)
+    delete next.wordIcon;
     scenes.push(next);
   }
   const theme: Theme = { ground: t.ground, type: t.type, way: t.way, pace: t.pace };
-  return { plan: { ...plan, theme, scenes, print: printOf(theme, scenes) } };
+  return { plan: settleWordIcons({ ...plan, theme, scenes, print: printOf(theme, scenes) }) };
 }
 
 // two edits the same (to know whether anything is left to save)
