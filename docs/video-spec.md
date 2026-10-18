@@ -165,3 +165,11 @@ change. The browser previews an edit at once; the server applies the same
 edit to the plan as stored, checks it like a drawn plan and keeps it (the plan
 as made kept too, to go back to). No AI, no credits; the MP4 is made again.
 
+The editor (app/projects/[id]/editor.tsx) opens over the page from "Edit
+video": the video in the middle, its scenes on a timeline below (as long as
+they are, a playhead), and beside it the scene picked (its layout, text,
+items, icon, picture) or the whole video's style. Every layout, background and
+lettering is offered as a still of this scene drawn with it; a layout that
+holds fewer words keeps the run around the lit word, never starting or ending
+on a little word. Undo and redo, Space to play, ← → between scenes.
+
