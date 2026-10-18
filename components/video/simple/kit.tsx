@@ -53,7 +53,7 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
   const lh = 1.08;
   const lastTyped = effect === "type" ? words.findLastIndex((w) => c.f >= w.at - 2) : -1;
   return (
-    <div style={{ width, display: "flex", flexDirection: "column", alignItems: align === "center" ? "center" : align === "left" ? "flex-start" : "flex-end", fontFamily: familyOf(look.display), fontWeight: 700, fontSize: fit.size, lineHeight: lh, letterSpacing: "-0.03em", color: color ?? look.ink, ...style }}>
+    <div data-part="text" style={{ width, display: "flex", flexDirection: "column", alignItems: align === "center" ? "center" : align === "left" ? "flex-start" : "flex-end", fontFamily: familyOf(look.display), fontWeight: 700, fontSize: fit.size, lineHeight: lh, letterSpacing: "-0.03em", color: color ?? look.ink, ...style }}>
       {fit.lines.map((line, li) => (
         <div key={li} style={{ display: "flex", gap: `0 ${(fit.size * 0.26).toFixed(0)}px`, whiteSpace: "nowrap" }}>
           {line.map((i) => {
@@ -88,12 +88,13 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
 
 // An icon on a tile, one way everywhere: the accent's icon on a soft tile of
 // the same colour (on a card: the card's accent), or solid — the accent tile.
-export function Glyph({ c, name, size, solid = false, card = false, style }: { c: C; name: string; size: number; solid?: boolean; card?: boolean; style?: CSSProperties }) {
+// (`part`: what it is to the editor — the scene's icon or a thing's)
+export function Glyph({ c, name, size, solid = false, card = false, style, part }: { c: C; name: string; size: number; solid?: boolean; card?: boolean; style?: CSSProperties; part?: "icon" | "item-icon" }) {
   const { look } = c;
   const accent = card ? look.panelAccent : look.accent;
   const on = card ? look.onPanelAccent : look.onAccent;
   return (
-    <div style={{ width: size, height: size, borderRadius: size * 0.28, background: solid ? accent : tint(accent, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: solid ? `0 ${(size * 0.12).toFixed(0)}px ${(size * 0.3).toFixed(0)}px ${tint(accent, 0.28)}` : undefined, ...style }}>
+    <div data-part={part} style={{ width: size, height: size, borderRadius: size * 0.28, background: solid ? accent : tint(accent, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: solid ? `0 ${(size * 0.12).toFixed(0)}px ${(size * 0.3).toFixed(0)}px ${tint(accent, 0.28)}` : undefined, ...style }}>
       <Icon name={name} size={size * 0.5} color={solid ? on : accent} strokeWidth={2} />
     </div>
   );
@@ -107,9 +108,9 @@ export const panel = (c: C, radius = 30): CSSProperties => ({ background: c.look
 export function Mark({ c, size }: { c: C; size: number }) {
   const { look, brand } = c;
   const { Img } = c.play;
-  if (brand.icon) return <Img src={brand.icon} style={{ width: size, height: size, objectFit: "contain", flexShrink: 0 }} />;
+  if (brand.icon) return <Img data-part="brand" src={brand.icon} style={{ width: size, height: size, objectFit: "contain", flexShrink: 0 }} />;
   return (
-    <div style={{ width: size, height: size, borderRadius: size * 0.26, background: look.accent, color: look.onAccent, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: familyOf(look.display), fontWeight: 800, fontSize: size * 0.52, flexShrink: 0 }}>
+    <div data-part="brand" style={{ width: size, height: size, borderRadius: size * 0.26, background: look.accent, color: look.onAccent, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: familyOf(look.display), fontWeight: 800, fontSize: size * 0.52, flexShrink: 0 }}>
       {brand.name.trim().charAt(0).toUpperCase() || "•"}
     </div>
   );
@@ -150,8 +151,13 @@ export function countUp(value: string, k: number): string {
 
 // a short line of UI text: one line, never wrapping; with `fit` its size
 // comes down (to 0.6 of it at most) until it fits that width
-export function One({ children, style, fit, face }: { children: ReactNode; style?: CSSProperties; fit?: number; face?: Face }) {
+// (`part="item"`: one of the scene's things, to the editor)
+export function One({ children, style, fit, face, part }: { children: ReactNode; style?: CSSProperties; fit?: number; face?: Face; part?: "item" }) {
   const size = typeof style?.fontSize === "number" ? style.fontSize : null;
   const sized = fit && size && face && typeof children === "string" ? fitWords([children], face, { width: fit, lines: 1, max: size, min: Math.round(size * 0.6), weight: Number(style?.fontWeight ?? 600) }).size : size;
-  return <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...style, ...(sized ? { fontSize: sized } : {}) }}>{children}</span>;
+  return (
+    <span data-part={part} data-text={part && typeof children === "string" ? children : undefined} style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", ...style, ...(sized ? { fontSize: sized } : {}) }}>
+      {children}
+    </span>
+  );
 }

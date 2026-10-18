@@ -1,15 +1,15 @@
 import { printOf, shownWord, variantOk, wordsAlone } from "./select";
-import { GROUNDS, type Item, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, VARIANTS, WAYS } from "./types";
+import { GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, VARIANTS, WAYS } from "./types";
 
 // The customer's edits of their video, guided: the look of the whole video
 // (its ground, type, pace and way between scenes) and, scene by scene, how it
 // is shown (a template and a variant), which of its beat's words are on
-// screen and the one lit, its things, its icon and which picture of the
-// product. Timing, the voice and the brand never change. The same code
+// screen and the one lit, its things, its icon, which picture of the product
+// and — for at most two scenes — a ground of its own. Timing, the voice and the brand never change. The same code
 // applies an edit in the browser (to preview it) and on the server (to save
 // it), from the plan as stored — so nothing else can be sent in.
 
-export type SceneEdit = { template: TemplateId; variant: number; show: [number, number] | null; key: number | null; icon: string; items: Item[]; screen: number | null };
+export type SceneEdit = { template: TemplateId; variant: number; show: [number, number] | null; key: number | null; icon: string; items: Item[]; screen: number | null; ground: Ground | null };
 export type PlanEdit = { theme: Theme; scenes: SceneEdit[] };
 
 // names a customer reads
@@ -19,6 +19,8 @@ export const TYPE_NAME = ["Clean", "Modern", "Characterful", "Soft", "Bold"];
 export const SHOWS_THINGS: TemplateId[] = ["trouble", "compare", "reveal", "feature", "messages", "bento", "chart", "steps"];
 
 const THING_WORDS = 3, THING_CHARS = 28;
+// scenes that may stand on a ground other than the video's (more and the video stops being one piece)
+export const OWN_GROUNDS = 2;
 // a word as said and as shown (capitalised, a comma dropped) the same word
 const same = (a: string, b: string) => a.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "") === b.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 // how many words may be on screen: beside a hero a caption of at most four; alone, or at the end, up to six
@@ -40,7 +42,7 @@ export function editOf(plan: SimplePlan): PlanEdit {
           key = lit >= 0 ? first + lit : null;
         }
       }
-      return { template: s.template, variant: s.variant, show, key, icon: s.icon, items: s.items.map((it) => ({ ...it })), screen: s.screen ?? null };
+      return { template: s.template, variant: s.variant, show, key, icon: s.icon, items: s.items.map((it) => ({ ...it })), screen: s.screen ?? null, ground: s.ground && s.ground !== plan.theme.ground ? s.ground : null };
     }),
   };
 }
@@ -51,6 +53,10 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
   if (!t || !GROUNDS.includes(t.ground) || !WAYS.includes(t.way) || !PACES.includes(t.pace) || !Number.isInteger(t.type) || t.type < 0 || t.type >= TYPE_PAIRS.length) return { error: "That look is not one there is." };
   if (!Array.isArray(edit.scenes) || edit.scenes.length !== plan.scenes.length) return { error: "The scenes do not match the video." };
   const shots = plan.brand.screens?.length ?? 0;
+  // (a scene's own ground: one there is, other than the video's — the same as the video's is none)
+  const own = edit.scenes.map((e) => (e?.ground != null && e.ground !== t.ground ? e.ground : null));
+  if (own.some((g) => g !== null && !GROUNDS.includes(g))) return { error: "That background is not one there is." };
+  if (own.filter(Boolean).length > OWN_GROUNDS) return { error: `At most ${OWN_GROUNDS} scenes can have a background of their own.` };
   const scenes: Scene[] = [];
   for (const [i, s] of plan.scenes.entries()) {
     const e = edit.scenes[i];
@@ -91,6 +97,8 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
     // (a picture of the product only in a screen scene)
     if (e.template === "screen") next.screen = e.screen!;
     else delete next.screen;
+    if (own[i]) next.ground = own[i]!;
+    else delete next.ground;
     scenes.push(next);
   }
   const theme: Theme = { ground: t.ground, type: t.type, way: t.way, pace: t.pace };

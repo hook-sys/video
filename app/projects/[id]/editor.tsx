@@ -7,15 +7,17 @@ import { Player, type PlayerRef, Thumbnail } from "@remotion/player";
 import { resetVideoEdit, saveVideoEdit } from "@/app/projects/actions";
 import { ICON_NAMES, Icon, resolveIcon } from "@/components/video/icons";
 import { colourProblemsOf, problemsOf, settledAt } from "@/components/video/simple/check";
-import { type PlanEdit, SHOWS_THINGS, type SceneEdit, TEMPLATE_NAME, TYPE_NAME, applyEdit, editOf, mostWords, sameEdit } from "@/components/video/simple/edit";
+import { OWN_GROUNDS, type PlanEdit, SHOWS_THINGS, type SceneEdit, TEMPLATE_NAME, TYPE_NAME, applyEdit, editOf, mostWords, sameEdit } from "@/components/video/simple/edit";
 import { SimpleFilm } from "@/components/video/simple/film";
 import { variantOk } from "@/components/video/simple/select";
-import { type FilmProps, GROUNDS, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, TYPE_PAIRS, VARIANTS, WAYS } from "@/components/video/simple/types";
+import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, TYPE_PAIRS, VARIANTS, WAYS } from "@/components/video/simple/types";
 
 // The customer's editor of a finished video (components/video/simple/edit.ts),
 // opened over the page: the video in the middle, its scenes on a timeline
 // below, and beside it the choices for the scene picked (its layout, words,
-// things, icon and picture) or for the whole video (its style). Every choice
+// things, icon, picture and background) or for the whole video (its style).
+// Anything in the video can be clicked: its scene is picked and its choices
+// come up (the templates mark what each part is, data-part). Every choice
 // is checked before it is offered and shown as it will look; nothing costs
 // credits. Saved, the download and the server's MP4 are the edited video.
 
@@ -66,6 +68,8 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
   const [tab, setTab] = useState<"scene" | "style">("scene");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string }>();
+  // the choices a click in the video brought up (lit for a moment)
+  const [focus, setFocus] = useState<{ sec: string; item?: number; n: number } | null>(null);
   const [frame, setFrame] = useState(0);
   const player = useRef<PlayerRef>(null);
   const opening = useRef(frameOf(plan.scenes[0]));
@@ -146,6 +150,65 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
     [plan, edit],
   );
 
+  // this scene's background: as the video's, or one of its own (at most two scenes have one)
+  const own = scene.ground && scene.ground !== edit.theme.ground ? scene.ground : null;
+  const sceneGrounds = useMemo(
+    () =>
+      ([null, ...GROUNDS.filter((g) => g !== edit.theme.ground)] as (Ground | null)[]).map((g) => {
+        const trial = applyEdit(plan, { ...edit, scenes: edit.scenes.map((x, i) => (i === at ? { ...x, ground: g } : x)) });
+        const why = trial.error ?? (g && colourProblemsOf({ ...shown, theme: { ...shown.theme, ground: g } }).length ? "Your brand colour does not read on this background" : undefined);
+        return { g, plan: trial.plan, why };
+      }),
+    [plan, edit, at, shown],
+  );
+
+  // a click in the video: its scene picked, the choices for what was clicked brought up
+  const choose = (e: React.MouseEvent) => {
+    const el = e.target as HTMLElement;
+    const box = el.closest<HTMLElement>("[data-scene]");
+    if (!box) return;
+    const i = Number(box.dataset.scene);
+    const sc = edit.scenes[i];
+    const mark = el.closest<HTMLElement>("[data-part]");
+    let part = mark && box.contains(mark) ? mark.dataset.part : undefined;
+    // (a thing's own words, near an icon of it)
+    const thingNear = (from: HTMLElement, up: number) => {
+      for (let n: HTMLElement | null = from, d = 0; n && n !== box && d <= up; n = n.parentElement, d++) {
+        const t = n.querySelectorAll<HTMLElement>('[data-part="item"]');
+        if (t.length === 1) return sc.items.findIndex((x) => x.text === t[0].dataset.text);
+        if (t.length > 1) return -1;
+      }
+      return -1;
+    };
+    let item = -1;
+    if (part === "item") item = sc.items.findIndex((x) => x.text === mark!.dataset.text);
+    else if (part === "item-icon" || (!part && el.closest("svg"))) {
+      item = thingNear(mark ?? el, 3);
+      if (item < 0 && part === "item-icon") part = "items";
+      else if (item < 0) part = "icon";
+    }
+    if (item >= 0) part = "item";
+    if (part === "brand") return setNote({ ok: true, text: "Your logo and brand colour come from the project." });
+    const sec =
+      part === "text" ? "text"
+      : part === "icon" ? "icon"
+      : part === "item" || part === "items" ? (SHOWS_THINGS.includes(sc.template) ? "items" : "layout")
+      : part === "picture" ? ((plan.brand.screens?.length ?? 0) > 1 ? "picture" : "layout")
+      : "ground";
+    player.current?.pause();
+    setAt(i);
+    setTab("scene");
+    setNote(undefined);
+    const n = (focus?.n ?? 0) + 1;
+    setFocus({ sec, item: item >= 0 ? item : undefined, n });
+    setTimeout(() => {
+      document.querySelector(`[data-sec="${sec}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (item >= 0) document.querySelector<HTMLInputElement>(`[data-item-input="${item}"]`)?.focus();
+    }, 60);
+    setTimeout(() => setFocus((f) => (f?.n === n ? null : f)), 1600);
+  };
+  const lit = (sec: string) => focus?.sec === sec;
+
   const save = async () => {
     setBusy(true);
     const r = await saveVideoEdit(projectId, edit);
@@ -222,6 +285,8 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
 
   return createPortal(
     <div className="fixed inset-0 z-[100] flex flex-col bg-[#0b0d11] text-white" role="dialog" aria-modal="true" aria-label="Edit video">
+      {/* (what can be clicked in the video, outlined under the pointer) */}
+      <style>{`.edit-stage [data-scene]{cursor:pointer}.edit-stage [data-scene] [data-part]:hover{outline:5px solid #3b8cff;outline-offset:10px}`}</style>
       {/* the bar: back, undo and redo, where the edit is, save */}
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.07] bg-[#111318] px-3 sm:px-4">
         <button type="button" onClick={close} className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-white/75 hover:bg-white/[0.07] hover:text-white">
@@ -252,7 +317,7 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
         {/* the video and its timeline */}
         <div className="flex shrink-0 flex-col lg:min-w-0 lg:flex-1 lg:shrink">
           <div className="flex items-center justify-center p-3 sm:p-6 lg:min-h-0 lg:flex-1 lg:[container-type:size]">
-            <div className="w-full overflow-hidden rounded-lg bg-black shadow-2xl ring-1 ring-white/10 lg:w-[min(100cqw,calc(100cqh*var(--ratio)))]" style={{ aspectRatio: `${W} / ${H}`, ["--ratio" as string]: W / H }}>
+            <div onClick={choose} className="edit-stage w-full overflow-hidden rounded-lg bg-black shadow-2xl ring-1 ring-white/10 lg:w-[min(100cqw,calc(100cqh*var(--ratio)))]" style={{ aspectRatio: `${W} / ${H}`, ["--ratio" as string]: W / H }}>
               <Player
                 ref={player}
                 component={SimpleFilm}
@@ -262,6 +327,7 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
                 compositionWidth={W}
                 compositionHeight={H}
                 controls
+                clickToPlay={false}
                 style={{ width: "100%", height: "100%" }}
               />
             </div>
@@ -282,7 +348,7 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
           <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
             {tab === "scene" ? (
               <>
-                <Section title="Layout" hint={at === last ? "The last scene is always your brand and the ask" : `${ways.length} that fit this scene`}>
+                <Section id="layout" lit={lit("layout")} title="Layout" hint={at === last ? "The last scene is always your brand and the ask" : `${ways.length} that fit this scene`}>
                   <div className="grid grid-cols-2 gap-2">
                     {ways.map((w) => {
                       const on = scene.template === w.t && scene.variant === w.v;
@@ -301,23 +367,23 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
                 </Section>
 
                 {s.said?.length && scene.show ? (
-                  <Section title="Text" hint={`${scene.show[1] - scene.show[0] + 1} of up to ${mostWords(scene.template, scene.variant)} words`}>
+                  <Section id="text" lit={lit("text")} title="Text" hint={`${scene.show[1] - scene.show[0] + 1} of up to ${mostWords(scene.template, scene.variant)} words`}>
                     <Words said={s.said.map((w) => w.t)} show={scene.show} lit={scene.key} onChange={(show, key) => changeScene({ show, key })} />
                     <p className="text-[11px] leading-relaxed text-white/40">Click a word to add it · click a shown word to highlight it · × takes a word off</p>
                   </Section>
                 ) : (
-                  <Section title="Text">
+                  <Section id="text" lit={lit("text")} title="Text">
                     <p className="text-xs text-white/45">The words of this scene were set when the video was made.</p>
                   </Section>
                 )}
 
                 {SHOWS_THINGS.includes(scene.template) && (
-                  <Section title="Items" hint="Up to 3 · each 1–3 words">
+                  <Section id="items" lit={lit("items")} title="Items" hint="Up to 3 · each 1–3 words">
                     <div className="flex flex-col gap-2">
                       {scene.items.map((it, k) => (
-                        <div key={`${at}-${k}-${scene.items.length}`} className="flex items-center gap-2">
+                        <div key={`${at}-${k}-${scene.items.length}`} className={`flex items-center gap-2 rounded-md transition ${focus?.sec === "items" && focus.item === k ? "bg-[#3b8cff]/15" : ""}`}>
                           <IconPick value={it.icon ?? scene.icon} onChange={(icon) => changeScene({ items: scene.items.map((x, j) => (j === k ? { ...x, icon } : x)) })} />
-                          <input defaultValue={it.text} maxLength={28} onBlur={(e) => e.target.value.trim() !== it.text && changeScene({ items: scene.items.map((x, j) => (j === k ? { ...x, text: e.target.value } : x)) })} className={field} />
+                          <input data-item-input={k} defaultValue={it.text} maxLength={28} onBlur={(e) => e.target.value.trim() !== it.text && changeScene({ items: scene.items.map((x, j) => (j === k ? { ...x, text: e.target.value } : x)) })} className={field} />
                           <button type="button" aria-label="Remove" onClick={() => changeScene({ items: scene.items.filter((_, j) => j !== k) })} className="rounded p-1 text-white/35 hover:bg-white/[0.07] hover:text-white">
                             <Icon name="x" size={14} color="currentColor" />
                           </button>
@@ -332,12 +398,12 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
                   </Section>
                 )}
 
-                <Section title="Icon">
+                <Section id="icon" lit={lit("icon")} title="Icon">
                   <IconPick value={scene.icon} onChange={(icon) => icon && changeScene({ icon })} wide />
                 </Section>
 
                 {scene.template === "screen" && (plan.brand.screens?.length ?? 0) > 1 && (
-                  <Section title="Picture">
+                  <Section id="picture" lit={lit("picture")} title="Picture">
                     <div className="grid grid-cols-3 gap-2">
                       {plan.brand.screens!.map((src, k) => (
                         <button key={k} type="button" onClick={() => changeScene({ screen: k })} className={`${option(scene.screen === k)} overflow-hidden`}>
@@ -348,10 +414,24 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
                     </div>
                   </Section>
                 )}
+
+                <Section id="ground" lit={lit("ground")} title="Background" hint={`This scene only · up to ${OWN_GROUNDS} scenes`}>
+                  <div className="grid grid-cols-3 gap-2">
+                    {sceneGrounds.map(({ g, plan: p, why }) => (
+                      <button key={g ?? "video"} type="button" disabled={!!why} title={why} onClick={() => own !== g && changeScene({ ground: g })} className={`${option(own === g, !!why)} overflow-hidden`}>
+                        {p && <Still plan={p} frame={frameOf(p.scenes[at])} />}
+                        <span className="block truncate px-2 py-1.5 text-[11px] text-white/70">{g ? GROUND_NAME[g] : "Same as video"}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Section>
               </>
             ) : (
               <>
-                <Section title="Background" hint="For the whole video">
+                <Section title="Background" hint={(() => {
+                  const mine = shown.scenes.map((x, i) => (x.ground && x.ground !== shown.theme.ground ? i + 1 : 0)).filter(Boolean);
+                  return mine.length ? `Scene ${mine.join(" and ")} ${mine.length > 1 ? "have" : "has"} its own` : "For the whole video";
+                })()}>
                   <div className="grid grid-cols-3 gap-2">
                     {looks.grounds.map(({ g, plan: p, ok }) => (
                       <button key={g} type="button" disabled={!ok} title={ok ? undefined : "Your brand colour does not read on this background"} onClick={() => edit.theme.ground !== g && changeLook({ ground: g })} className={`${option(edit.theme.ground === g, !ok)} overflow-hidden`}>
@@ -404,9 +484,9 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
 }
 
 // a section of the panel
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Section({ id, lit = false, title, hint, children }: { id?: string; lit?: boolean; title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-2.5">
+    <section data-sec={id} className={`-m-2 flex flex-col gap-2.5 rounded-lg p-2 transition-colors duration-500 ${lit ? "bg-[#3b8cff]/[0.12] ring-1 ring-[#3b8cff]/60" : "ring-1 ring-transparent"}`}>
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{title}</h3>
         {hint && <span className="truncate text-[11px] text-white/35">{hint}</span>}
@@ -435,6 +515,7 @@ function Timeline({ plan, at, frame, onPick, onSeek }: { plan: SimplePlan; at: n
     <div className="shrink-0 border-t border-white/[0.07] bg-[#0e1014] px-3 pb-3 pt-2 sm:px-6">
       <div className="mb-1.5 flex justify-between text-[10px] tabular-nums text-white/40">
         <span>{time(frame)}</span>
+        <span className="hidden text-white/35 sm:inline">Click anything in the video to edit it</span>
         <span>{time(total)}</span>
       </div>
       <div

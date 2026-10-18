@@ -304,8 +304,16 @@ export async function runChecks(): Promise<Check[]> {
         applyEdit(video, { ...as, scenes: as.scenes.map((x, i) => (i === 1 ? { ...x, template: "screen" as const, screen: 0 } : x)) }),
         applyEdit(video, { ...as, theme: { ...as.theme, ground: "neon" as never } }),
         applyEdit(video, { ...as, scenes: as.scenes.slice(1) }),
+        // (a background of its own for a third scene)
+        applyEdit(video, { ...as, scenes: as.scenes.map((x, i) => (i < 3 ? { ...x, ground: as.theme.ground === "light" ? ("brand" as const) : ("light" as const) } : x)) }),
       ].filter((r) => r.error).length;
-      add("the editor: a video round-trips as it is; a look and the words on screen change as asked; words outside the beat, a moved ending, too many or too long things, a picture there is not, an unknown look and missing scenes are refused", round && !!relook.plan && relook.plan.theme.ground === "light" && wordsOk && refused === 7, `round trip ${round ? "same" : "differs"} · ${refused}/7 refused`);
+      // a scene on a background of its own: kept, drawn on it, put back as the video's when it is the same
+      const otherGround = as.theme.ground === "light" ? ("dark" as const) : ("light" as const);
+      const own = applyEdit(video, { ...as, scenes: as.scenes.map((x, i) => (i === 1 ? { ...x, ground: otherGround } : x)) });
+      const ownOk = !!own.plan && own.plan.scenes[1].ground === otherGround && !own.plan.scenes[0].ground && own.plan.print !== video.print && editOf(own.plan).scenes[1].ground === otherGround;
+      const backAgain = own.plan ? applyEdit(own.plan, { ...editOf(own.plan), theme: { ...as.theme, ground: otherGround } }) : null;
+      const sameAsVideo = !!backAgain?.plan && !backAgain.plan.scenes[1].ground;
+      add("the editor: a video round-trips as it is; a look, the words on screen and a scene's own background change as asked; words outside the beat, a moved ending, too many or too long things, a picture there is not, an unknown look, missing scenes and a third scene on its own background are refused", round && !!relook.plan && relook.plan.theme.ground === "light" && wordsOk && ownOk && sameAsVideo && refused === 8, `round trip ${round ? "same" : "differs"} · own background ${ownOk && sameAsVideo ? "kept" : "wrong"} · ${refused}/8 refused`);
     }
     // one scene, one idea: beside a hero at most 4 words; no thing that only repeats them
     // (words alone show no things)

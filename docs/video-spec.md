@@ -173,3 +173,13 @@ lettering is offered as a still of this scene drawn with it; a layout that
 holds fewer words keeps the run around the lit word, never starting or ending
 on a little word. Undo and redo, Space to play, ← → between scenes.
 
+Anything in the video can be clicked: the templates mark their parts
+(data-part: text, icon, item, item-icon, picture, brand; each scene
+data-scene), so a click picks that scene and brings up the choices for what was
+clicked (the words, the icon, that thing's line, the picture, or — on the
+ground — the scene's background).
+
+A scene may stand on a background of its own (Scene.ground): at most two
+scenes, only a ground whose colours read; it comes in with the scene, the
+video's own ground stays under the rest.
+
