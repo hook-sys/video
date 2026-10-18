@@ -15,6 +15,7 @@ import { iconFor } from "@/lib/simple/brain";
 import { resolveIcon } from "@/components/video/icons";
 import { askOf, beatsOf, durationOf } from "@/components/video/simple/beats";
 import { isPublicHost, websiteUrlOf } from "@/lib/website-capture";
+import { applyEdit, editOf } from "@/components/video/simple/edit";
 import { guessReadings } from "@/components/video/simple/guess";
 import { differs, planOf, repeats, wordsAlone } from "@/components/video/simple/select";
 import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
@@ -283,6 +284,29 @@ export async function runChecks(): Promise<Check[]> {
     const urls = [websiteUrlOf("acme.com"), websiteUrlOf("https://acme.com/pricing"), websiteUrlOf("ftp://acme.com"), websiteUrlOf("not a site")];
     const privateHosts = await Promise.all(["127.0.0.1", "localhost", "10.1.2.3", "192.168.0.10", "169.254.169.254", "[::1]"].map(isPublicHost));
     add("the product's own pictures: shown in beats about the product, each once; a website link made a safe public address (no private networks)", screenScenes.length >= pictured.length / 2 && onceEach && urls[0] === "https://acme.com/" && urls[1] === "https://acme.com/pricing" && !urls[2] && !urls[3] && privateHosts.every((x) => !x), `${screenScenes.length} screen scenes in ${pictured.length} videos · private addresses refused`);
+    // the editor (edit.ts): a video as it is round-trips; a look and a scene changed as asked; nothing outside the rules goes in
+    {
+      const c = DIRECTOR_CASES[1];
+      const beats = beatsOf(c.words);
+      const readings = c.beats.map((gb) => ({ intent: gb.intent[0], show: [gb.show[0], gb.show[1]] as [number, number], key: gb.key[0], icon: null, items: gb.items.map((t) => ({ text: t, icon: null })), number: gb.number }));
+      const video = bestPlan({ words: c.words, beats, readings, brand: { name: c.brand, color: "#6a5bff", cta: "Book a free demo today" }, seed: 7, duration: durationOf(c.words) }).plan;
+      const as = editOf(video);
+      const same = applyEdit(video, as);
+      const round = !!same.plan && JSON.stringify(same.plan.scenes) === JSON.stringify(video.scenes);
+      const relook = applyEdit(video, { ...as, theme: { ...as.theme, ground: "light", pace: "lively" } });
+      const words = applyEdit(video, { ...as, scenes: as.scenes.map((x, i) => (i === 0 ? { ...x, template: "statement" as const, variant: 0, show: [0, 1] as [number, number], key: 1 } : x)) });
+      const wordsOk = !!words.plan && words.plan.scenes[0].words.map((w) => w.t).join(" ") === `${c.words[0].text} ${c.words[1].text}` && words.plan.scenes[0].words[1].key;
+      const refused = [
+        applyEdit(video, { ...as, scenes: as.scenes.map((x, i) => (i === 0 ? { ...x, show: [0, 999] as [number, number] } : x)) }),
+        applyEdit(video, { ...as, scenes: as.scenes.map((x, i) => (i === 0 ? { ...x, template: "cta" as const } : x)) }),
+        applyEdit(video, { ...as, scenes: as.scenes.map((x, i) => (i === 1 ? { ...x, items: [1, 2, 3, 4].map((k) => ({ text: `Thing ${k}`, icon: null })) } : x)) }),
+        applyEdit(video, { ...as, scenes: as.scenes.map((x, i) => (i === 1 ? { ...x, items: [{ text: "a thing far too many words long", icon: null }] } : x)) }),
+        applyEdit(video, { ...as, scenes: as.scenes.map((x, i) => (i === 1 ? { ...x, template: "screen" as const, screen: 0 } : x)) }),
+        applyEdit(video, { ...as, theme: { ...as.theme, ground: "neon" as never } }),
+        applyEdit(video, { ...as, scenes: as.scenes.slice(1) }),
+      ].filter((r) => r.error).length;
+      add("the editor: a video round-trips as it is; a look and the words on screen change as asked; words outside the beat, a moved ending, too many or too long things, a picture there is not, an unknown look and missing scenes are refused", round && !!relook.plan && relook.plan.theme.ground === "light" && wordsOk && refused === 7, `round trip ${round ? "same" : "differs"} · ${refused}/7 refused`);
+    }
     // one scene, one idea: beside a hero at most 4 words; no thing that only repeats them
     // (words alone show no things)
     const crowded = body.filter(({ sc, alone }) => !alone && (sc.words.length > 4 || sc.items.some((it) => repeats(it.text, sc.words.map((w) => w.t).join(" ")))));

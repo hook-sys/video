@@ -115,6 +115,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       items: r.items.slice(0, 3),
       number: r.number,
       ...(screen != null ? { screen } : {}),
+      said: words.slice(beats[i].first, beats[i].last + 1).map((w) => ({ t: w.text, at: Math.round(w.start * FPS) })),
     };
   });
   return { engine: "simple", v: 1, duration, seed, brand, theme, scenes, print: printOf(theme, scenes) };
@@ -150,7 +151,7 @@ export function keyRun(words: Word[], [a, b]: [number, number], key: number | nu
 }
 
 // a word as shown: the first capitalised, the last without a trailing comma or colon
-function shownWord(t: string, k: number, n: number): string {
+export function shownWord(t: string, k: number, n: number): string {
   let out = k === n - 1 ? t.replace(/[,;:—–-]+$/, "") : t;
   if (k === 0) out = out.charAt(0).toUpperCase() + out.slice(1);
   return out;

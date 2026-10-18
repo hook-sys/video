@@ -118,7 +118,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {/* The video: watch it, download it. */}
       {ready && input?.plan && (
-        <Studio projectId={id} file={file} rendering={rendering} autoStart={rendering && project.render_status === "idle"} plan={input.plan} audioUrl={input.audioUrl} name={title} className={primaryBtn} />
+        <Studio projectId={id} file={file} rendering={rendering} autoStart={rendering && project.render_status === "idle"} plan={input.plan} audioUrl={input.audioUrl} name={title} className={primaryBtn} editable={!!user && user.id === project.user_id && project.pipeline_status === "completed"} edited={!!(project.brief as { composer?: { original?: unknown } } | null)?.composer?.original} />
       )}
       {ready && !input?.plan && (
         <section className="flex flex-col items-start gap-3 rounded-2xl bg-white/70 p-6 text-sm text-foreground/65 ring-1 ring-black/[0.06]">

@@ -131,6 +131,11 @@ export function heroShares(plan: SimplePlan): (number | null)[] {
   });
 }
 
+// one scene's problems (the editor asks this for every way a scene can be shown)
+export const problemsOf = (plan: SimplePlan, i: number): Problem[] => sceneProblems(plan, i, lookOf(plan.theme, plan.brand.color));
+// the look's colours alone
+export const colourProblemsOf = (plan: SimplePlan): Problem[] => colourProblems(lookOf(plan.theme, plan.brand.color));
+
 export function checkPlan(plan: SimplePlan): Problem[] {
   const look = lookOf(plan.theme, plan.brand.color);
   return [...colourProblems(look), ...plan.scenes.flatMap((_, i) => sceneProblems(plan, i, look))];
