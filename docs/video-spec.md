@@ -152,3 +152,16 @@ template order.
   every engine switch are removed; they are kept on the branch
   `archive/old-engines` and come back to the live site only when the owner
   asks. A video made with them shows its MP4 if one was made.
+
+## The customer's edits (components/video/simple/edit.ts)
+
+A finished video can be edited by its owner on its page, guided: the look of
+the whole video (background, lettering, the way between scenes, movement)
+and, scene by scene, how it is shown (only the templates and designs that fit
+it, each laid out and checked first), which of the beat's own words are on
+screen and the one lit (never typed words), its things (up to 3, 1–3 words),
+its icon and its picture of the product. Timing, the voice and the brand never
+change. The browser previews an edit at once; the server applies the same
+edit to the plan as stored, checks it like a drawn plan and keeps it (the plan
+as made kept too, to go back to). No AI, no credits; the MP4 is made again.
+

@@ -80,6 +80,8 @@ export type Scene = {
   number: string | null;
   // (a screen scene) which picture of the product it shows
   screen?: number;
+  // every word of its beat, each when it is said (the words that may be shown — the editor picks from these)
+  said?: { t: string; at: number }[];
 };
 
 export type SimplePlan = {
