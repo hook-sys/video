@@ -168,14 +168,6 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
             <h2 className="text-sm font-semibold">What viewers see</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/75">{project.advanced_direction || "Chosen automatically from your script."}</p>
             <dl className="mt-2 grid grid-cols-2 gap-3 border-t border-foreground/[0.07] pt-3 text-xs">
-              {[
-                ["Call to action", project.call_to_action || "—"],
-              ].map(([k, v]) => (
-                <div key={k}>
-                  <dt className="text-foreground/45">{k}</dt>
-                  <dd className="mt-0.5 font-medium">{v}</dd>
-                </div>
-              ))}
               <div>
                 <dt className="text-foreground/45">Brand colour</dt>
                 <dd className="mt-0.5 flex items-center gap-1.5 font-medium">

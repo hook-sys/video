@@ -3,7 +3,9 @@ import { type Beat, FPS, type Word } from "./types";
 
 // The voice cut into beats: one sentence each, a long one split at its
 // comma or pause nearest the middle, a short one joined to the next — so
-// every beat is 2.5–5 s, one idea the viewer can take in.
+// every beat is 2.5–5 s, one idea the viewer can take in. The last sentence
+// is the last beat on its own (the brand and the ask): nothing before it is
+// swallowed by it, except a name of a word or two said just before ("Orin ERP.").
 
 const LONG = 5.5, SHORT = 2.2, MAX = 5.5;
 const ends = (w: Word) => /[.?!…]["'”’)]*$/.test(w.text);
@@ -30,7 +32,10 @@ export function beatsOf(words: Word[]): Beat[] {
     const at = (soft1.length ? soft1 : cuts).reduce((a, i) => (Math.abs(words[i].end - mid) < Math.abs(words[a].end - mid) ? i : a));
     return [...split({ first: b.first, last: at }), ...split({ first: at + 1, last: b.last })];
   };
-  out = out.flatMap(split);
+  // (the last sentence keeps its own beat, however long)
+  const lastSentence = out.at(-1)!;
+  out = [...out.slice(0, -1).flatMap(split), lastSentence];
+  const words2 = (b: Beat) => b.last - b.first + 1;
   // a short one joins its shorter neighbour, never past MAX (else the other one; else it stays)
   for (let i = 0; i < out.length && out.length > 1; ) {
     const b = out[i];
@@ -40,6 +45,8 @@ export function beatsOf(words: Word[]): Beat[] {
     }
     const join = [i - 1, i + 1]
       .filter((j) => j >= 0 && j < out.length)
+      // (into the last beat only a name said just before it; the last beat into none)
+      .filter((j) => (i < out.length - 1 && j < out.length - 1) || (i === out.length - 2 && j === out.length - 1 && words2(b) <= 2))
       .map((j) => ({ j, merged: { first: Math.min(b.first, out[j].first), last: Math.max(b.last, out[j].last) } }))
       .filter((x) => span(words, x.merged) <= MAX)
       .sort((x, y) => span(words, x.merged) - span(words, y.merged))[0];
@@ -51,6 +58,18 @@ export function beatsOf(words: Word[]): Beat[] {
     i = Math.max(0, Math.min(i, join.j));
   }
   return out;
+}
+
+// The ask the voice ends on ("Book a free demo today.") — the button's words,
+// as said — or null when the last sentence asks nothing (no button then).
+const ASKS = new Set(["book", "try", "start", "get", "sign", "join", "download", "install", "visit", "call", "contact", "request", "schedule", "order", "buy", "shop", "claim", "grab", "register", "subscribe", "apply", "chat", "talk", "message", "email", "text", "discover", "explore", "learn", "see", "watch", "upgrade", "switch"]);
+export function askOf(words: Word[], b: Beat): string | null {
+  let first = b.first;
+  for (let i = b.first; i < b.last; i++) if (ends(words[i])) first = i + 1;
+  const said = words.slice(first, b.last + 1).map((w) => w.text);
+  const lead = said[0]?.toLowerCase().replace(/[^\p{L}]/gu, "") ?? "";
+  if (!said.length || said.length > 7 || !ASKS.has(lead)) return null;
+  return said.join(" ").replace(/[.!?…]+["'”’)]*$/, "");
 }
 
 // Each beat's frames: it starts a little before its first word (the first at

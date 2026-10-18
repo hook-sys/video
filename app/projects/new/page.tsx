@@ -25,8 +25,8 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
   const admin = access?.admin ?? false;
   let prefill: Prefill | undefined;
   if (from && /^[0-9a-f-]{36}$/i.test(from)) {
-    const { data } = await supabase.from("projects").select("direction, brand_name, website_url, call_to_action").eq("id", from).maybeSingle();
-    if (data?.direction) prefill = { script: data.direction.replace(/\n\nVisual style:[\s\S]*$/, ""), brandName: data.brand_name ?? "", websiteUrl: data.website_url ?? "", cta: data.call_to_action ?? "", voice: voiceChoiceOf(data.direction) ?? "" };
+    const { data } = await supabase.from("projects").select("direction, brand_name, website_url").eq("id", from).maybeSingle();
+    if (data?.direction) prefill = { script: data.direction.replace(/\n\nVisual style:[\s\S]*$/, ""), brandName: data.brand_name ?? "", websiteUrl: data.website_url ?? "", voice: voiceChoiceOf(data.direction) ?? "" };
   }
   // The voices customers can pick (set on /admin/models; none = by gender only).
   const { voice } = await getAiConfig();

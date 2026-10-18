@@ -7,7 +7,7 @@ import { galleryPlan } from "@/components/video/simple/gallery";
 import { GROUNDS, PACES, TEMPLATES, TYPE_PAIRS, type Theme, WAYS } from "@/components/video/simple/types";
 import { Card } from "../_components/ui";
 
-const LABEL: Record<string, string> = { statement: "Statement — hook, any beat", kinetic: "Kinetic — the words as the show", trouble: "Trouble — the problem", compare: "Compare — before → after", reveal: "Reveal — the product arrives", feature: "Feature — the UI doing it", messages: "Messages — the product talking", bento: "Bento — what it brings", stat: "Stat — a number said", chart: "Chart — it grows", steps: "Steps — how it works", cta: "The ask — always last" };
+const LABEL: Record<string, string> = { statement: "Statement — hook, any beat", kinetic: "Kinetic — the words as the show", trouble: "Trouble — the problem", compare: "Compare — before → after", reveal: "Reveal — the product arrives", feature: "Feature — the UI doing it", messages: "Messages — the product talking", bento: "Bento — what it brings", stat: "Stat — a number said", chart: "Chart — it grows", steps: "Steps — how it works", cta: "The ask — always last" , screen: "Screen — the product's own pages (its website or uploaded pictures)" };
 const FRAMES = { "16:9": [1920, 1080], "9:16": [1080, 1920], "1:1": [1080, 1080] } as const;
 type Frame = keyof typeof FRAMES;
 

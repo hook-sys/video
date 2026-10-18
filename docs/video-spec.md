@@ -64,16 +64,27 @@ asked. The same script made twice gives two visibly different videos.
 
 ```
 voice + word times            (as now: our voice + Whisper, or the recording)
-  → beats                     code: sentences, split/merged to 2.5–5 s
-  → one AI call               per beat: intent, the words to show, an icon,
-                              up to 3 short items, the number said (if any)
-  → selector                  code: a template + a designed variant per beat,
+  + product pictures          uploaded, else taken from the website by a
+                              browser on the server (none if it is private)
+  → beats                     code: sentences, split/merged to 2.5–5 s; the
+                              last sentence (the ask) its own beat
+  → the Director, two calls   1. the story: what the product does, its parts,
+                              the main moment, what each beat shows
+                              2. per beat, with that plan: intent, the words
+                              to show, an icon, up to 3 short items, the
+                              number said (if any)
+  → selector, 8 drafts        code: a template + a designed variant per beat,
                               a theme, a transition family, a pace — unlike
                               this customer's last videos
-  → check                     code: every scene laid out once and checked;
-                              what goes wrong mended, at most 3 rounds
+  → check, each draft         code: every scene laid out and checked (fit,
+                              icons, repeats, timing, colour, what the
+                              template means, the hero's size); mended, at
+                              most 3 rounds; the best scored draft is played
   → film                      the templates, played on the voice
 ```
+
+The button's words are the ask the voice ends on, as said ("Book a free
+demo today"); a script that asks nothing ends without a button.
 
 The AI never chooses layout, colour or style. A template's slots have fixed
 places and sizes; its words are fitted to them, so nothing can overlap or be

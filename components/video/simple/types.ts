@@ -5,7 +5,10 @@
 export const FPS = 30;
 
 export type Word = { text: string; start: number; end: number };
-export type Brand = { name: string; color: string; cta: string; icon?: string | null };
+// `screens`: pictures of the product (its website, or uploaded) — file names
+// in the plan as stored, addresses once it is played (lib/render-input.ts)
+// `site`: the website's address as a browser shows it ("acme.com"), when there is one
+export type Brand = { name: string; color: string; cta: string; icon?: string | null; screens?: string[]; site?: string };
 
 // what a beat is for (the story arc)
 export const INTENTS = ["hook", "problem", "solution", "feature", "proof", "steps", "cta"] as const;
@@ -13,6 +16,13 @@ export type Intent = (typeof INTENTS)[number];
 
 // A beat: a run of the voice's words (indexes, `last` included).
 export type Beat = { first: number; last: number };
+
+// What a beat should show, from the Director's plan of the whole story
+// (lib/simple/brain.ts readStory): the pains listed, the old way against the
+// new, the product's screen, what it brings as tiles, a number said, steps,
+// the brand, or a line to say big.
+export const SHOWS = ["pains", "before-after", "product", "list", "number", "steps", "brand", "words"] as const;
+export type Show = (typeof SHOWS)[number];
 
 // What a beat says, as the AI (or the rule guess) reads it.
 export type Item = { text: string; icon: string | null };
@@ -26,9 +36,13 @@ export type Reading = {
   items: Item[];
   // a number the voice says in this beat, exactly as said
   number: string | null;
+  // (from the story plan, when there is one) what it should show, and whether it is the video's main moment
+  shows?: Show;
+  hero?: boolean;
 };
 
-export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta"] as const;
+// (a new template goes last: a video's print keeps each template's place)
+export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta", "screen"] as const;
 export type TemplateId = (typeof TEMPLATES)[number];
 // every template has three designed variants
 export const VARIANTS = 3;
@@ -64,6 +78,8 @@ export type Scene = {
   icon: string;
   items: Item[];
   number: string | null;
+  // (a screen scene) which picture of the product it shows
+  screen?: number;
 };
 
 export type SimplePlan = {

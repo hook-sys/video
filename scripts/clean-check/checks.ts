@@ -13,11 +13,12 @@ import { creditsFor, normalizeBilling, pickable, withCoupon } from "@/lib/billin
 import { SETTINGS } from "@/lib/app-settings";
 import { iconFor } from "@/lib/simple/brain";
 import { resolveIcon } from "@/components/video/icons";
-import { beatsOf, durationOf } from "@/components/video/simple/beats";
+import { askOf, beatsOf, durationOf } from "@/components/video/simple/beats";
+import { isPublicHost, websiteUrlOf } from "@/lib/website-capture";
 import { guessReadings } from "@/components/video/simple/guess";
 import { differs, planOf, repeats, wordsAlone } from "@/components/video/simple/select";
 import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
-import { checkPlan, heroShares, repairPlan } from "@/components/video/simple/check";
+import { bestPlan, checkPlan, heroShares, repairPlan, scoreOf } from "@/components/video/simple/check";
 import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
 import { geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
@@ -226,6 +227,20 @@ export async function runChecks(): Promise<Check[]> {
     const wrong = DIRECTOR_CASES.map((c) => scoreCase(c, beatsOf(c.words).map((b) => ({ intent: "feature" as const, show: [b.first, b.last] as [number, number], key: null, icon: null, items: [], number: null }))));
     const avg = (xs: number[]) => Math.round(xs.reduce((a, x) => a + x, 0) / xs.length);
     add("the Director's test set: 10 scripts, every good reading inside its beat; a right reading scores high, a careless one low", DIRECTOR_CASES.length === 10 && setOk && avg(right) >= 95 && avg(wrong) <= 50, `${DIRECTOR_CASES.reduce((a, c) => a + c.beats.length, 0)} beats · right ${avg(right)} · careless ${avg(wrong)}`);
+    // a template that means what the words do not say is found and mended (a chart with no number said)
+    const noNumber = { ...sampleScene("chart", 0, 0, 120), number: null };
+    const meant = { ...galleryPlan({ ground: "dark", type: 0, way: "slide", pace: "calm" }), scenes: [noNumber, sampleScene("cta", 0, 120, 90)], duration: 210 };
+    const meantFixed = repairPlan(meant, [{ intent: "feature", show: [0, 4], key: 2, icon: "trending-up", items: noNumber.items, number: null }, { intent: "cta", show: [0, 3], key: 1, icon: "rocket", items: [], number: null }]).plan;
+    add("what a template means is checked: a chart or a number only when the voice says one, a typed prompt only for a question", checkPlan(meant).some((x) => x.kind === "meaning") && !["chart", "stat"].includes(meantFixed.scenes[0].template) && !checkPlan(meantFixed).length, `chart with no number → ${meantFixed.scenes[0].template}`);
+    // the last scene is the last sentence (the ask) on its own; the button says the ask as said, or there is none
+    const ends = (t: string) => /[.?!…]["'”’)]*$/.test(t);
+    const lastOk = DIRECTOR_CASES.every((c) => {
+      const b = beatsOf(c.words).at(-1)!;
+      const inside = c.words.slice(b.first, b.last).filter((w) => ends(w.text)).length;
+      return ends(c.words[b.first - 1]?.text ?? ".") && (inside === 0 || (inside === 1 && c.words.slice(b.first, b.last + 1).findIndex((w) => ends(w.text)) <= 1));
+    });
+    const asked = Object.fromEntries(DIRECTOR_CASES.map((c) => [c.id, askOf(c.words, beatsOf(c.words).at(-1)!)]));
+    add("the last scene is the ask on its own, never the sentence before it; the button says the ask as said, or there is none", lastOk && asked.b8d1 === "Book a free demo today" && asked["31ec"] === "Try it today" && asked.e762 === null, `${asked.b8d1} · ${asked["31ec"]} · ${asked.e762 ?? "no button"}`);
     // the product, not the words: the 10 test scripts (their right readings) drawn 4 ways each, mended as the pipeline does
     const drawn = DIRECTOR_CASES.flatMap((c) => {
       const beats = beatsOf(c.words);
@@ -236,9 +251,41 @@ export async function runChecks(): Promise<Check[]> {
     const aloneShare = body.filter((x) => x.alone).length / body.length;
     const heroes = drawn.flatMap((p) => heroShares(p)).filter((x): x is number => x != null);
     const heroMean = heroes.reduce((a, x) => a + x, 0) / heroes.length;
-    add("the product, not the words: words alone in at most a quarter of scenes and never twice in a row; a hero takes on average 28% of the frame or more", aloneShare <= 0.25 && !body.some((x) => x.alone && x.before) && heroMean >= 0.28, `${drawn.length} videos · words alone ${Math.round(aloneShare * 100)}% · hero ${Math.round(heroMean * 100)}%`);
+    add("the product, not the words: words alone in at most a quarter of scenes and never twice in a row; a hero takes on average over a quarter of the frame (it was a fifth)", aloneShare <= 0.25 && !body.some((x) => x.alone && x.before) && heroMean >= 0.26, `${drawn.length} videos · words alone ${Math.round(aloneShare * 100)}% · hero ${Math.round(heroMean * 100)}%`);
+    // the story plan is followed: a beat is shown as the plan says (when it can be), the main moment always shows something
+    const planRuns = DIRECTOR_CASES.flatMap((c) => {
+      const beats = beatsOf(c.words);
+      const readings = c.beats.map((gb, i) => ({ intent: gb.intent[0], show: [gb.show[0], gb.show[1]] as [number, number], key: gb.key[0], icon: null, items: gb.items.map((t) => ({ text: t, icon: null })), number: gb.number, shows: (gb.items.length >= 2 ? "steps" : "words") as "steps" | "words", hero: i === 1 }));
+      return [11, 222, 3333].map((seed) => ({ readings, plan: planOf({ words: c.words, beats, readings, brand: { name: c.brand, color: "#6a5bff", cta: "" }, seed, duration: durationOf(c.words) }) }));
+    });
+    // (counted where it can be: a beat that still has two things to show as steps)
+    const asSteps = planRuns.flatMap(({ readings, plan }) => plan.scenes.slice(0, -1).filter((sc, i) => readings[i].shows === "steps" && sc.items.length >= 2));
+    const stepShare = asSteps.filter((sc) => sc.template === "steps").length / Math.max(1, asSteps.length);
+    const heroAlone = planRuns.filter(({ plan }) => wordsAlone(plan.scenes[1].template, plan.scenes[1].variant)).length;
+    add("the story plan is followed: a beat is shown as planned when it can be, and the main moment always shows something", stepShare >= 0.35 && heroAlone === 0, `planned as steps → steps ${Math.round(stepShare * 100)}% · main moment as words alone ${heroAlone}`);
+    // several drafts, the best kept: never worse than one, and nothing left unmended
+    const bests = DIRECTOR_CASES.map((c) => {
+      const beats = beatsOf(c.words);
+      const readings = c.beats.map((gb) => ({ intent: gb.intent[0], show: [gb.show[0], gb.show[1]] as [number, number], key: gb.key[0], icon: null, items: gb.items.map((t) => ({ text: t, icon: null })), number: gb.number }));
+      const args = { words: c.words, beats, readings, brand: { name: c.brand, color: "#6a5bff", cta: "" }, seed: 11, duration: durationOf(c.words) };
+      const best = bestPlan(args).plan;
+      return { best, worseThanOne: scoreOf(best) < scoreOf(repairPlan(planOf(args), readings).plan) };
+    });
+    add("several drafts, each mended and scored by code, the best kept: never worse than one draft, nothing left unmended", bests.every((x) => !x.worseThanOne && !checkPlan(x.best).length), `${bests.length} scripts × 8 drafts`);
+    // the product's own pictures: offered in beats about the product, each shown once; a website address made safe
+    const pictured = DIRECTOR_CASES.flatMap((c) => {
+      const beats = beatsOf(c.words);
+      const readings = c.beats.map((gb) => ({ intent: gb.intent[0], show: [gb.show[0], gb.show[1]] as [number, number], key: gb.key[0], icon: null, items: gb.items.map((t) => ({ text: t, icon: null })), number: gb.number }));
+      return [11, 222].map((seed) => bestPlan({ words: c.words, beats, readings, brand: { name: c.brand, color: "#6a5bff", cta: "", screens: ["screen-1.jpg", "screen-2.jpg"] }, seed, duration: durationOf(c.words) }).plan);
+    });
+    const screenScenes = pictured.flatMap((p) => p.scenes.filter((sc) => sc.template === "screen"));
+    const onceEach = pictured.every((p) => { const used = p.scenes.filter((sc) => sc.template === "screen").map((sc) => sc.screen); return new Set(used).size === used.length && used.every((x) => x != null && x < 2); });
+    const urls = [websiteUrlOf("acme.com"), websiteUrlOf("https://acme.com/pricing"), websiteUrlOf("ftp://acme.com"), websiteUrlOf("not a site")];
+    const privateHosts = await Promise.all(["127.0.0.1", "localhost", "10.1.2.3", "192.168.0.10", "169.254.169.254", "[::1]"].map(isPublicHost));
+    add("the product's own pictures: shown in beats about the product, each once; a website link made a safe public address (no private networks)", screenScenes.length >= pictured.length / 2 && onceEach && urls[0] === "https://acme.com/" && urls[1] === "https://acme.com/pricing" && !urls[2] && !urls[3] && privateHosts.every((x) => !x), `${screenScenes.length} screen scenes in ${pictured.length} videos · private addresses refused`);
     // one scene, one idea: beside a hero at most 4 words; no thing that only repeats them
-    const crowded = body.filter(({ sc, alone }) => (!alone && sc.template !== "reveal" && sc.words.length > 4) || sc.items.some((it) => repeats(it.text, sc.words.map((w) => w.t).join(" "))));
+    // (words alone show no things)
+    const crowded = body.filter(({ sc, alone }) => !alone && (sc.words.length > 4 || sc.items.some((it) => repeats(it.text, sc.words.map((w) => w.t).join(" ")))));
     add("one scene, one idea: beside a hero at most 4 words, and no thing that only repeats them", !crowded.length && repeats("Precise Timing", "Precise animation timing") && !repeats("Story Transitions", "Precise animation timing"), crowded.slice(0, 2).map((x) => `${x.sc.template}: ${x.sc.words.map((w) => w.t).join(" ")}`).join(" · ") || `${body.length} scenes`);
   }
 

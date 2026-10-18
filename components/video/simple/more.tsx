@@ -372,11 +372,71 @@ function Bento({ c }: { c: C }) {
   );
 }
 
-export const TEMPLATE: Record<TemplateId, (p: { c: C }) => ReactNode> = { ...TEMPLATES_1, kinetic: Kinetic, compare: Compare, chart: Chart, messages: Messages, bento: Bento };
+// ── screen: the product itself, a picture of it in a browser window ───────
+// (its website's pages, or pictures the customer uploaded). Without a picture
+// (the gallery, the check) a plain page of the brand's colours stands in.
+const SW = 1040, BAR = 52, SH = Math.round((SW * 900) / 1440);
+function Page({ c }: { c: C }) {
+  const ink = c.look.panelSub;
+  return (
+    <div style={{ position: "absolute", inset: 0, background: c.look.panel === "#ffffff" ? "#ffffff" : "#15171d", padding: 48, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 26 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+        <Glyph c={c} name={c.s.icon} size={44} solid card />
+        <div style={{ height: 14, width: 120, borderRadius: 9, background: tint(ink, 0.3) }} />
+        <div style={{ flex: 1 }} />
+        {[70, 70, 70].map((w, i) => <div key={i} style={{ height: 12, width: w, borderRadius: 9, background: tint(ink, 0.22) }} />)}
+        <div style={{ height: 40, width: 120, borderRadius: 99, background: c.look.panelAccent }} />
+      </div>
+      <div style={{ display: "flex", gap: 40, flex: 1 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 18, paddingTop: 40 }}>
+          {[0.9, 0.7].map((w, i) => <div key={i} style={{ height: 44, width: `${w * 100}%`, borderRadius: 12, background: tint(ink, 0.45) }} />)}
+          {[0.95, 0.8, 0.6].map((w, i) => <div key={i} style={{ height: 14, width: `${w * 100}%`, borderRadius: 9, background: tint(ink, 0.2) }} />)}
+          <div style={{ height: 52, width: 200, borderRadius: 99, background: c.look.panelAccent, marginTop: 14 }} />
+        </div>
+        <div style={{ flex: 1, borderRadius: 24, background: tint(c.look.panelAccent, 0.16), display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Icon name={c.s.icon} size={120} color={c.look.panelAccent} strokeWidth={1.6} />
+        </div>
+      </div>
+    </div>
+  );
+}
+function Screen({ c }: { c: C }) {
+  const { Img } = c.play;
+  const src = c.brand.screens?.[c.s.screen ?? 0] || null;
+  const k = springAt(c, c.s.from + 2, 1.3);
+  const p = clamp01((c.f - c.s.from) / Math.max(1, c.s.to - c.s.from));
+  // how the picture moves inside its window: a slow push in, a slow scroll down,
+  // or a closer push into the top of the page (where its headline and main
+  // screen are) — never a click on a spot we cannot know is a button
+  const v = c.s.variant;
+  const zoom = v === 0 ? 1 + 0.12 * ease(p) : v === 2 ? 1 + 0.4 * ease(clamp01((c.f - c.s.from - 8) / 60)) : 1.18;
+  const shiftY = v === 1 ? -SH * 0.16 * ease(p) : 0;
+  const origin = v === 2 ? "50% 18%" : "50% 30%";
+  return (
+    <Side c={c} dw={SW} dh={SH + BAR}>
+      <div style={abs({ left: 0, top: 0, width: SW, height: SH + BAR, ...panel(c, 22), overflow: "hidden", opacity: clamp01(k * 1.6), transform: `translateY(${((1 - k) * 60).toFixed(1)}px) perspective(1800px) rotateY(${((c.s.left ? 1 : -1) * (v === 1 ? 0 : 6) * (1 - 0.5 * p)).toFixed(2)}deg)` })}>
+        <div style={{ height: BAR, display: "flex", alignItems: "center", gap: 10, padding: "0 20px", borderBottom: `1.5px solid ${c.look.line}` }}>
+          {["#ff5f57", "#febc2e", "#28c840"].map((col) => <div key={col} style={{ width: 14, height: 14, borderRadius: 99, background: col }} />)}
+          <div style={{ marginLeft: 18, height: 30, flex: 1, maxWidth: 520, borderRadius: 99, background: tint(c.look.panelSub, 0.14), display: "flex", alignItems: "center", gap: 10, padding: "0 16px" }}>
+            <Icon name="lock" size={16} color={c.look.panelSub} strokeWidth={2.4} />
+            {c.brand.site && <One style={{ fontSize: 18, color: c.look.panelSub }}>{c.brand.site}</One>}
+          </div>
+        </div>
+        <div style={{ position: "absolute", left: 0, top: BAR, width: SW, height: SH, overflow: "hidden" }}>
+          <div style={{ position: "absolute", inset: 0, transform: `translateY(${shiftY.toFixed(1)}px) scale(${zoom.toFixed(4)})`, transformOrigin: origin }}>
+            {src ? <Img src={src} style={{ width: SW, height: "auto", minHeight: SH, objectFit: "cover", objectPosition: "top", display: "block" }} /> : <Page c={c} />}
+          </div>
+        </div>
+      </div>
+    </Side>
+  );
+}
 
-// the scene's click (its cursor's or its button's), for its sound
-export function clickOf(s: Scene): number | null {
+export const TEMPLATE: Record<TemplateId, (p: { c: C }) => ReactNode> = { ...TEMPLATES_1, kinetic: Kinetic, compare: Compare, chart: Chart, messages: Messages, bento: Bento, screen: Screen };
+
+// the scene's click (its cursor's or its button's — the last scene has a button only when the voice asks), for its sound
+export function clickOf(s: Scene, asks = true): number | null {
   if (s.template === "feature" && s.variant === 0) return thingAt(s, Math.max(1, s.items.length) - 1, Math.max(1, s.items.length)) + 26;
-  if (s.template === "cta") return s.from + 52;
+  if (s.template === "cta") return asks ? s.from + 52 : null;
   return null;
 }

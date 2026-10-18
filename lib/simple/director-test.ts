@@ -3,12 +3,13 @@ import { beatsOf } from "@/components/video/simple/beats";
 import type { Intent, Reading, Word } from "@/components/video/simple/types";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 import type { RoleAi } from "@/lib/v2/models";
-import { readBeats } from "./brain";
+import { readBeats, readStory } from "./brain";
 import CASES from "./director-cases.json";
 
-// The Director's test set: real scripts read by a model, every beat scored
-// against what a good reading is (director-cases.json) — so a model, its
-// reasoning or the prompt is chosen by its score, not by a guess.
+// The Director's test set: real scripts read by a model as the pipeline reads
+// them (the story, then the beats with it), every beat scored against what a
+// good reading is (director-cases.json) — so a model, its reasoning or the
+// prompt is chosen by its score, not by a guess.
 //
 // Per beat (100): the intent fits (30), the words shown lie inside the run
 // that may be shown and are 2–6 of them (25), the key fits (15), the things
@@ -67,7 +68,9 @@ export async function runDirectorTest(ai: RoleAi, cases: TestCase[] = DIRECTOR_C
     const t0 = Date.now();
     const beats = beatsOf(c.words);
     try {
-      const { readings } = await readBeats(c.words, beats, c.brand, ai, (u) => usage.push(u), 120_000);
+      // (as the pipeline reads: the story, then the beats with it)
+      const story = await readStory(c.words, beats, c.brand, ai, (u) => usage.push(u), 60_000).catch(() => null);
+      const { readings } = await readBeats(c.words, beats, c.brand, ai, (u) => usage.push(u), 120_000, story);
       const scored = beats.map((b, i) => scoreReading(c.words, c.beats[i], readings[i], i + 1, b.first, b.last));
       return { id: c.id, brand: c.brand, score: Math.round(scored.reduce((s, x) => s + x.score, 0) / Math.max(1, scored.length)), beats: scored, ms: Date.now() - t0 };
     } catch (e) {

@@ -110,7 +110,7 @@ function soundsOf(plan: SimplePlan): { at: number; name: string; volume: number 
     if (i) out.push({ at: Math.max(0, s.from - T / 2), name: "whoosh", volume: 0.22 });
     if (s.items.length && s.template !== "statement" && s.template !== "stat") out.push({ at: s.from + 10, name: "soft_pop", volume: 0.3 });
     if (s.template === "stat" || s.template === "reveal") out.push({ at: s.from + 8, name: s.template === "stat" ? "subtle_impact" : "reveal", volume: 0.36 });
-    const click = clickOf(s);
+    const click = clickOf(s, !!plan.brand.cta.trim());
     if (click != null) out.push({ at: click, name: "click", volume: 0.45 });
     if (s.template === "cta" && click != null) out.push({ at: click + 10, name: "success_chime", volume: 0.32 });
   });

@@ -25,7 +25,7 @@ await build({
   outfile,
   alias: { "@": root, "server-only": path.join(root, "scripts/clean-check/server-only.mjs") },
   jsx: "automatic",
-  external: ["remotion", "react", "react-dom", "zod", "openai"],
+  external: ["remotion", "react", "react-dom", "zod", "openai", "playwright-core", "@sparticuz/chromium"],
   logLevel: "warning",
 });
 const { runChecks } = await import(pathToFileURL(outfile).href + `?t=${Date.now()}`);
