@@ -16,11 +16,11 @@ import { TIER_IDS, type TierId, refundVideo, settleVideo } from "@/lib/billing";
 import type { PipelineStep } from "@/lib/pipeline";
 import { v2DetailsOf, type V2Details } from "@/lib/v2/form";
 import { type RoleAi, v2DirectorModel, v2Role, v2Speak, v2TimeScript, v2Transcribe, v2Whisper } from "@/lib/v2/models";
-import { readBeats } from "@/lib/simple/brain";
-import { beatsOf, scriptWords } from "@/components/video/simple/beats";
+import { readBeats, readStory } from "@/lib/simple/brain";
+import { askOf, beatsOf, scriptWords } from "@/components/video/simple/beats";
 import { frameOf } from "@/components/video/simple/geo";
-import { planOf } from "@/components/video/simple/select";
-import { repairPlan } from "@/components/video/simple/check";
+import { bestPlan } from "@/components/video/simple/check";
+import { productPictures } from "@/lib/product-pictures";
 
 // The pipeline: one simple path (docs/video-spec.md), no fallbacks.
 //   1. the voice: our voice reads the script (timed by the admin's Whisper),
@@ -48,7 +48,7 @@ export async function startPipelineV2(projectId: string, userId: string) {
   if (data?.length) after(() => runPipelineV2(projectId, userId));
 }
 
-const PROJECT = "brief, direction, details, brand_name, brand_color, call_to_action, format, quality, duration_seconds, voice_status, voice_result, voice_language, voice_style, voice_gender";
+const PROJECT = "brief, direction, details, brand_name, brand_color, call_to_action, website_url, format, quality, duration_seconds, voice_status, voice_result, voice_language, voice_style, voice_gender";
 type Project = {
   brief: unknown;
   direction: string;
@@ -56,6 +56,7 @@ type Project = {
   brand_name: string | null;
   brand_color: string | null;
   call_to_action: string | null;
+  website_url: string | null;
   format: string;
   quality: string;
   duration_seconds: number;
@@ -64,6 +65,15 @@ type Project = {
   voice_language: string;
   voice_style: string;
   voice_gender: string;
+};
+
+// a website's address as a browser shows it ("acme.com")
+const siteOf = (url: string | null) => {
+  try {
+    return url ? new URL(url).hostname.replace(/^www\./, "") : null;
+  } catch {
+    return null;
+  }
 };
 
 // a brand colour for a video whose logo gave none: one of these, the same for the same project
@@ -107,6 +117,8 @@ export async function runPipelineV2(projectId: string, userId: string) {
       await update({ brand_color: project.brand_color });
     }
     const stored = (project.brief as { composer?: unknown } | null)?.composer;
+    // (the product's pictures — uploaded, or taken from its website — fetched while the voice is made)
+    const pictures = stored ? null : productPictures(admin, userId, projectId, project.website_url).catch((e) => ({ names: [] as string[], bytes: 0, note: `website not pictured: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}` }));
 
     // 1. The voice and its words.
     await enter("voice");
@@ -123,7 +135,9 @@ export async function runPipelineV2(projectId: string, userId: string) {
     // 3. The video.
     await enter("visuals");
     if (!stored) {
-      const composer = await buildSimple(admin, projectId, userId, project, words, brief, director, left);
+      const shots = (await pictures) ?? { names: [], bytes: 0, note: null };
+      if (shots.bytes) await recordCost(admin, { project_id: projectId, user_id: userId, operation: "storage", quantity: shots.bytes, estimated_cost_usd: storageCost(shots.bytes), metadata: { kind: "screens", unit: "bytes" } });
+      const composer = await buildSimple(admin, projectId, userId, project, words, brief, director, left, shots);
       await update({ brief: { ...brief, composer }, render_status: "idle", render_error: null, video_path: null });
     }
 
@@ -188,22 +202,26 @@ async function voiceOf(admin: Admin, projectId: string, userId: string, project:
 // The simple engine's video (docs/video-spec.md): the voice in beats, one AI
 // call reading them (the Director's model), the templates chosen unlike this
 // customer's last five videos, checked and mended. Throws when the reading fails.
-async function buildSimple(admin: Admin, projectId: string, userId: string, project: Project, voice: WordTiming[], brief: ProductBrief, director: RoleAi, left: () => number) {
+async function buildSimple(admin: Admin, projectId: string, userId: string, project: Project, voice: WordTiming[], brief: ProductBrief, director: RoleAi, left: () => number, shots: { names: string[]; note: string | null }) {
   const usage: BriefUsage[] = [];
   const words = scriptWords(brief.script, voice);
-  const brand = { name: project.brand_name?.trim() || brief.product_name || "Your product", color: project.brand_color || COLOURS[0], cta: project.call_to_action?.trim() || brief.cta || "Get started", icon: null };
   const started = Date.now();
+  // (the button's words are the ask the voice ends on, as said; no ask, no button)
+  const beats = beatsOf(words);
+  const brand = { name: project.brand_name?.trim() || brief.product_name || "Your product", color: project.brand_color || COLOURS[0], cta: beats.length ? (askOf(words, beats[beats.length - 1]) ?? "") : "", icon: null, screens: shots.names, ...(siteOf(project.website_url) ? { site: siteOf(project.website_url)! } : {}) };
   try {
     v2DirectorModel(director.model);
-    const beats = beatsOf(words);
-    const { readings, problems } = await readBeats(words, beats, brand.name, director, (u) => usage.push(u), Math.max(30_000, Math.min(120_000, left() - 60_000)));
+    // (the Director's two calls: the story, then the beats read with it — the story failing leaves the beats read alone, noted)
+    const told: string[] = shots.note ? [shots.note] : [];
+    const story = await readStory(words, beats, brand.name, director, (u) => usage.push(u), Math.max(20_000, Math.min(60_000, left() - 120_000))).catch((e) => (told.push(`story plan not read — ${e instanceof Error ? e.message.slice(0, 160) : String(e)}`), null));
+    const { readings, problems: read } = await readBeats(words, beats, brand.name, director, (u) => usage.push(u), Math.max(30_000, Math.min(120_000, left() - 60_000)), story);
+    const problems = [...told, ...read];
     const { data: last } = await admin.from("projects").select("print:brief->composer->simple->>print").eq("user_id", userId).neq("id", projectId).not("brief->composer->simple", "is", null).order("created_at", { ascending: false }).limit(5);
     const recent = (last ?? []).map((p) => p.print as string | null).filter((p): p is string => !!p);
-    const drawn = planOf({ words, beats, readings, brand, seed: seedFrom(projectId), duration: Math.round(project.duration_seconds * 30), recent, size: frameOf(project.format) });
-    // (checked and mended by code before it is played: check.ts)
-    const { plan, report } = repairPlan(drawn, readings);
+    // (several drafts, each checked and mended by code before it is played, the best scored kept: check.ts)
+    const { plan, report, scores } = bestPlan({ words, beats, readings, brand, seed: seedFrom(projectId), duration: Math.round(project.duration_seconds * 30), recent, size: frameOf(project.format) });
     const noted = [...problems, ...report.fixed.map((x) => `mended — ${x}`), ...report.left.map((x) => `left — ${x}`)];
-    console.info("simple engine:", { projectId, model: director.model, beats: beats.length, print: plan.print, problems: noted.slice(0, 8) });
+    console.info("simple engine:", { projectId, model: director.model, beats: beats.length, print: plan.print, drafts: scores, problems: noted.slice(0, 8) });
     return { simple: plan, problems: noted, at: new Date().toISOString() };
   } finally {
     await price(admin, projectId, userId, director.model, usage, started);

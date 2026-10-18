@@ -8,7 +8,7 @@ import { VOICE_LANGUAGES } from "@/lib/projects";
 
 const label = "text-sm font-medium";
 
-export type Prefill = { script: string; brandName: string; websiteUrl: string; cta: string; voice?: string };
+export type Prefill = { script: string; brandName: string; websiteUrl: string; voice?: string };
 type VoiceOption = { name: string; gender: "female" | "male"; label: string };
 
 // The brand's colour, read from its icon: the most common colourful shade
@@ -131,4 +131,24 @@ export function VoicePicker({ voices, initial }: { voices: VoiceOption[]; initia
       </div>
     </div>
   );
+}
+
+// A picture made smaller in the browser before it is sent (a JPEG at most
+// `width` wide), so pictures, the icon and a recording fit one request.
+export function smaller(file: File, width = 1600, quality = 0.82): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, width / img.naturalWidth);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((b) => (b ? resolve(new File([b], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" })) : reject(new Error("unreadable"))), "image/jpeg", quality);
+    };
+    img.onerror = () => (URL.revokeObjectURL(url), reject(new Error(`${file.name}: not a picture`)));
+    img.src = url;
+  });
 }

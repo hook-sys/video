@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { createProjectV2 } from "@/app/projects/v2-actions";
 import { WaitingScreen } from "@/components/waiting/waiting-screen";
-import { BRAND_NAME_MAX, CTA_MAX, FORMATS, LOGO_MAX_BYTES, VERCEL_SCREENSHOT_TOTAL_BYTES, VOICE_LANGUAGES, VOICE_SCRIPT_MAX, VOICE_STYLES, estimateVideoSeconds, validateLogo, voiceVideoSeconds } from "@/lib/projects";
+import { BRAND_NAME_MAX, FORMATS, LOGO_MAX_BYTES, SCREENS_MAX, VERCEL_SCREENSHOT_TOTAL_BYTES, VOICE_LANGUAGES, VOICE_SCRIPT_MAX, VOICE_STYLES, estimateVideoSeconds, validateLogo, voiceVideoSeconds } from "@/lib/projects";
 import { V2_VOICE_TYPES } from "@/lib/v2/form";
-import { Field, Step, Upload, VoicePicker, colourOf, type Prefill } from "./form-parts";
+import { Field, Step, Upload, VoicePicker, colourOf, smaller, type Prefill } from "./form-parts";
 
 const input =
   "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
@@ -28,9 +28,10 @@ function secondsOf(file: File): Promise<number> {
   });
 }
 
-// "New version" (admin → Settings): the script or the customer's own
-// recording, the logo, the voice, the format, the name and the call to action.
-// No website, no screenshots, no questions, one quality level.
+// A new video: the script or the customer's own recording, the logo, the
+// name, the website (pictures of the product are taken from it) or pictures
+// of it uploaded, the voice and the format. No call to action (the button
+// says the ask the voice ends on), no questions, one quality level.
 export function CreateProjectFormV2({ prefill, voices = [], credits = null, scriptMax = VOICE_SCRIPT_MAX }: { prefill?: Prefill; voices?: VoiceOption[]; credits?: number | null; scriptMax?: number }) {
   const [state, action, pending] = useActionState(createProjectV2, {});
   const [mode, setMode] = useState<"script" | "upload">("script");
@@ -40,10 +41,14 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
   const [format, setFormat] = useState<string>(FORMATS[0]);
   const [logo, setLogo] = useState<{ name: string; size: number; url: string; colour: string | null } | null>(null);
   const [logoError, setLogoError] = useState<string>();
-  const tooBig = mode === "upload" && voiceFile && voiceFile.size + (logo?.size ?? 0) > VERCEL_SCREENSHOT_TOTAL_BYTES ? `The voice file and the icon together must be ${VERCEL_SCREENSHOT_TOTAL_BYTES / 1024 / 1024} MB or smaller.` : undefined;
-  const error = logoError ?? voiceError ?? tooBig ?? state.error;
+  const [screens, setScreens] = useState<File[]>([]);
+  const [screensError, setScreensError] = useState<string>();
+  const screensInput = useRef<HTMLInputElement>(null);
+  const sending = (mode === "upload" ? (voiceFile?.size ?? 0) : 0) + (logo?.size ?? 0) + screens.reduce((a, f) => a + f.size, 0);
+  const tooBig = sending > VERCEL_SCREENSHOT_TOTAL_BYTES ? `The recording, the icon and the pictures together must be ${VERCEL_SCREENSHOT_TOTAL_BYTES / 1024 / 1024} MB or smaller.` : undefined;
+  const error = logoError ?? voiceError ?? screensError ?? tooBig ?? state.error;
   const seconds = mode === "upload" ? (voiceFile?.seconds ? voiceVideoSeconds(voiceFile.seconds) : 0) : script.trim() ? estimateVideoSeconds(script) : 0;
-  const blocked = pending || !!logoError || !!voiceError || !!tooBig;
+  const blocked = pending || !!logoError || !!voiceError || !!screensError || !!tooBig;
 
   return (
     <>
@@ -135,11 +140,40 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
               <Field title="Company name">
                 <input name="brand_name" required defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="Your company name" className={input} />
               </Field>
-              <Field title="Call to action">
-                <input name="call_to_action" required defaultValue={prefill?.cta} maxLength={CTA_MAX} placeholder="e.g. Start your free trial" className={input} />
+              <Field title="Website (optional)">
+                <input name="website_url" type="text" inputMode="url" defaultValue={prefill?.websiteUrl} maxLength={300} placeholder="yourcompany.com" className={input} />
               </Field>
+              <span className={hint}>We take pictures of your product from it for the video.</span>
             </div>
           </div>
+          <Upload
+            title="Pictures of your product (optional)"
+            text={screens.length ? `${screens.length} picture${screens.length > 1 ? "s" : ""} added` : "Add up to 3 pictures"}
+            sub="Website private, or behind a login? Add screenshots of it here instead."
+          >
+            <input
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={async (e) => {
+                setScreensError(undefined);
+                const picked = [...(e.target.files ?? [])].slice(0, SCREENS_MAX);
+                try {
+                  const made = await Promise.all(picked.map((f) => smaller(f)));
+                  setScreens(made);
+                  // (the smaller pictures are what the form sends)
+                  const sent = new DataTransfer();
+                  made.forEach((f) => sent.items.add(f));
+                  if (screensInput.current) screensInput.current.files = sent.files;
+                } catch (err) {
+                  setScreens([]);
+                  setScreensError(err instanceof Error ? err.message : "A picture could not be read.");
+                }
+              }}
+            />
+          </Upload>
+          <input ref={screensInput} name="screens" type="file" multiple className="hidden" tabIndex={-1} aria-hidden />
         </Step>
 
         {mode === "script" ? (

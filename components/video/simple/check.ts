@@ -5,7 +5,7 @@ import { geoOf } from "./geo";
 import type { C, Play } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
 import { norm, thingAt } from "./scenes";
-import { choices, grey, printOf, variantOk } from "./select";
+import { choices, grey, planOf, printOf, variantOk, wordsAlone } from "./select";
 import { contrast, lookOf } from "./theme";
 import { GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, VARIANTS } from "./types";
 
@@ -18,7 +18,17 @@ import { GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type T
 // fewer words, shorter things, another ground) and the plan checked again,
 // at most 3 rounds; the plan with the fewest problems is played.
 
-export type Problem = { scene: number | null; kind: "words" | "cut" | "icon" | "twice" | "rushed" | "empty" | "colour" | "error"; detail: string };
+export type Problem = { scene: number | null; kind: "words" | "cut" | "icon" | "twice" | "rushed" | "empty" | "colour" | "meaning" | "small" | "error"; detail: string };
+
+// A template that means something the words do not say: a chart or a number
+// with no number said, a prompt being typed that is not a question.
+export function meaningOf(s: Scene): string | null {
+  if ((s.template === "stat" || s.template === "chart") && !s.number) return `a ${s.template} with no number said`;
+  if (s.template === "kinetic" && s.variant === 1 && !/\?["'”’)]*$/.test(s.words.at(-1)?.t ?? "")) return "words typed as a prompt that ask nothing";
+  return null;
+}
+// (a hero under this much of the frame is too small to carry its scene)
+const SMALL = 0.12;
 export type CheckReport = { rounds: number; fixed: string[]; left: string[] };
 
 // (laid out with every spring settled; no logo image)
@@ -42,6 +52,7 @@ export function settledAt(s: Scene): number {
     : t === "steps" ? lastThing + 22
     : t === "bento" ? Math.max(s.from + 36, lastThing + 18)
     : t === "cta" ? (clickOf(s) ?? s.from) + 10
+    : t === "screen" ? s.from + 30
     : s.from;
   return Math.max(lastWord, n ? lastThing + 18 : s.from, own);
 }
@@ -66,8 +77,9 @@ function sceneProblems(plan: SimplePlan, i: number, look: ReturnType<typeof look
   const c: C = { f: s.to - 1, s, look, pace: plan.theme.pace, brand: { ...plan.brand, icon: null }, g: geoOf(plan.w ?? 1920, plan.h ?? 1080), play: SETTLED };
   const icons: string[] = [];
   let notes: FitNote[] = [];
+  let heroes: number[] = [];
   try {
-    notes = noting(() => walk(TEMPLATE[s.template]({ c }), icons)).notes;
+    ({ notes, heroes } = noting(() => walk(TEMPLATE[s.template]({ c }), icons)));
   } catch (e) {
     out.push({ scene: i, kind: "error", detail: e instanceof Error ? e.message.slice(0, 120) : String(e) });
   }
@@ -80,6 +92,10 @@ function sceneProblems(plan: SimplePlan, i: number, look: ReturnType<typeof look
   things.forEach((t, k) => {
     if (t && (t === said || things.indexOf(t) !== k)) out.push({ scene: i, kind: "twice", detail: `"${s.items[k].text}" twice on screen` });
   });
+  // what it means, and how big its hero is
+  const meaning = meaningOf(s);
+  if (meaning) out.push({ scene: i, kind: "meaning", detail: meaning });
+  if (heroes.length && Math.max(...heroes) < SMALL) out.push({ scene: i, kind: "small", detail: `its hero is ${Math.round(Math.max(...heroes) * 100)}% of the frame` });
   // settled, and held long enough to be read, before the scene ends
   const settled = settledAt(s);
   if (s.to - settled < HOLD) out.push({ scene: i, kind: "rushed", detail: `settles ${((settled + HOLD - s.to) / 30).toFixed(1)} s too late to be read` });
@@ -198,4 +214,33 @@ export function repairPlan(plan: SimplePlan, readings?: Reading[]): { plan: Simp
   }
   const left = checkPlan(p).map((x) => `${x.scene === null ? "video" : `scene ${x.scene + 1}`}: ${x.detail}`);
   return { plan: !fixed.length && !left.length ? plan : { ...p, print: printOf(p.theme, p.scenes), check: { fixed, left } }, report: { rounds, fixed, left } };
+}
+
+// ── several drafts, the best kept ─────────────────────────────────────────
+
+// A mended plan scored by code: problems left weigh most, then how much of
+// the frame its heroes take, how few scenes are words alone, how many
+// templates it uses, and how little it had to be mended.
+export function scoreOf(plan: SimplePlan): number {
+  const body = plan.scenes.slice(0, -1);
+  const heroes = heroShares(plan).filter((x): x is number => x != null);
+  const hero = heroes.length ? heroes.reduce((a, x) => a + x, 0) / heroes.length : 0;
+  const alone = body.filter((s) => wordsAlone(s.template, s.variant)).length / Math.max(1, body.length);
+  const kinds = new Set(body.map((s) => s.template)).size / Math.max(1, body.length);
+  return -1000 * checkPlan(plan).length + 100 * hero - 60 * alone + 20 * kinds - 2 * (plan.check?.fixed.length ?? 0);
+}
+
+// The video: `drafts` plans drawn (each unlike this customer's recent videos),
+// each mended, the best scored kept.
+export function bestPlan(args: Parameters<typeof planOf>[0] & { readings: Reading[]; drafts?: number }): { plan: SimplePlan; report: CheckReport; scores: number[] } {
+  const { drafts = 8, ...draw } = args;
+  let best: { plan: SimplePlan; report: CheckReport; score: number } | null = null;
+  const scores: number[] = [];
+  for (let k = 0; k < drafts; k++) {
+    const { plan, report } = repairPlan(planOf({ ...draw, seed: (draw.seed + k * 104729) >>> 0 }), args.readings);
+    const score = scoreOf(plan);
+    scores.push(Math.round(score));
+    if (!best || score > best.score) best = { plan, report, score };
+  }
+  return { plan: best!.plan, report: best!.report, scores };
 }

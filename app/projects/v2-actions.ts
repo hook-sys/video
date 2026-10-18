@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { BRAND_NAME_MAX, CREATIVE_DEFAULTS, CTA_MAX, DIRECTION_MAX, FORMATS, MAX_VIDEO_SECONDS, LOCKUP_SECONDS, SCREENSHOTS_BUCKET, SCREENSHOT_TYPES, VERCEL_SCREENSHOT_TOTAL_BYTES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_SCRIPT_MAX, VOICE_STYLES, estimateVideoSeconds, isHexColor, logoPath, validateLogo, voiceVideoSeconds } from "@/lib/projects";
+import { BRAND_NAME_MAX, CREATIVE_DEFAULTS, DIRECTION_MAX, FORMATS, LOGO_MAX_BYTES, MAX_VIDEO_SECONDS, LOCKUP_SECONDS, SCREENSHOTS_BUCKET, SCREENSHOT_TYPES, SCREEN_FILE_PREFIX, SCREENS_MAX, VERCEL_SCREENSHOT_TOTAL_BYTES, VOICE_GENDERS, VOICE_LANGUAGES, VOICE_SCRIPT_MAX, VOICE_STYLES, estimateVideoSeconds, isHexColor, logoPath, validateLogo, voiceVideoSeconds } from "@/lib/projects";
 import { getAiConfig } from "@/lib/ai/models";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
@@ -11,6 +11,7 @@ import { getSettings } from "@/lib/app-settings";
 import { balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, refundVideo } from "@/lib/billing";
 import { V2_VOICE_TYPES, type V2Details } from "@/lib/v2/form";
 import { startPipelineV2 } from "@/lib/v2/pipeline";
+import { websiteUrlOf } from "@/lib/website-capture";
 
 export type CreateProjectV2State = { error?: string };
 
@@ -19,7 +20,7 @@ const oneOf = <T extends string>(list: readonly T[], value: unknown) => list.fin
 const trialSecondsOf = (chars: number) => Math.ceil((chars / 250) * 15);
 
 // A video from the customer's script or their own recording, their logo, a
-// voice, a format, their name and call to action.
+// voice, a format, their name, and their website or pictures of the product.
 export async function createProjectV2(_prev: CreateProjectV2State, formData: FormData): Promise<CreateProjectV2State> {
   const mode = formData.get("voice_mode") === "upload" ? "upload" : "script";
   const script = mode === "script" ? String(formData.get("script") ?? "").trim() : "";
@@ -31,7 +32,8 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
   const voiceStyle = oneOf(VOICE_STYLES, formData.get("voice_style"));
   const voiceGender = oneOf(VOICE_GENDERS, formData.get("voice_gender")) ?? "female";
   const brandName = String(formData.get("brand_name") ?? "").trim();
-  const callToAction = String(formData.get("call_to_action") ?? "").trim();
+  // (no call-to-action field: the button's words are the ask the voice ends on, read when the video is made)
+  const callToAction = "";
   const brandColorRaw = String(formData.get("brand_color") ?? "").trim();
   const brandColor = brandColorRaw && isHexColor(brandColorRaw) ? brandColorRaw.toUpperCase() : null;
 
@@ -45,17 +47,23 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
     if (heardSeconds + LOCKUP_SECONDS > MAX_VIDEO_SECONDS) return { error: `Your recording must be ${Math.floor(MAX_VIDEO_SECONDS - LOCKUP_SECONDS)} seconds or shorter.` };
   }
   if (!brandName) return { error: "Your company name is required." };
-  if (!callToAction) return { error: "The call to action is required." };
-  if (brandName.length > BRAND_NAME_MAX || callToAction.length > CTA_MAX) return { error: "Company name and call to action must be 60 characters or less." };
+  if (brandName.length > BRAND_NAME_MAX) return { error: `Company name must be ${BRAND_NAME_MAX} characters or less.` };
   if (brandColorRaw && !brandColor) return { error: "Brand colour must be a hex colour like #0E9CA6." };
   if (!format || !voiceLanguage || !voiceStyle) return { error: "Please choose a valid option for every field." };
   const logoEntry = formData.get("logo");
   const logo = logoEntry instanceof File && logoEntry.size > 0 ? logoEntry : null;
   const logoError = validateLogo(logo);
   if (logoError || !logo) return { error: logoError ?? "Please upload your icon." };
-  // (one request on Vercel carries both files)
-  if (process.env.VERCEL && logo.size + (voiceFile?.size ?? 0) > VERCEL_SCREENSHOT_TOTAL_BYTES)
-    return { error: `The recording and the icon together must be ${VERCEL_SCREENSHOT_TOTAL_BYTES / 1024 / 1024} MB or smaller.` };
+  // the website (pictures of the product are taken from it when the video is made), or pictures of it uploaded
+  const websiteRaw = String(formData.get("website_url") ?? "").trim();
+  const website = websiteUrlOf(websiteRaw);
+  if (websiteRaw && !website) return { error: "The website must be an address like yourcompany.com." };
+  const screens = formData.getAll("screens").filter((f): f is File => f instanceof File && f.size > 0);
+  if (screens.length > SCREENS_MAX) return { error: `Add up to ${SCREENS_MAX} pictures of your product.` };
+  for (const f of screens) if (!SCREENSHOT_TYPES[f.type] || f.size > LOGO_MAX_BYTES) return { error: `${f.name}: a picture must be a PNG, JPG or WebP image of ${LOGO_MAX_BYTES / 1024 / 1024} MB or less.` };
+  // (one request on Vercel carries every file)
+  if (process.env.VERCEL && logo.size + (voiceFile?.size ?? 0) + screens.reduce((a, f) => a + f.size, 0) > VERCEL_SCREENSHOT_TOTAL_BYTES)
+    return { error: `The recording, the icon and the pictures together must be ${VERCEL_SCREENSHOT_TOTAL_BYTES / 1024 / 1024} MB or smaller.` };
   const duration = mode === "script" ? estimateVideoSeconds(script) : voiceVideoSeconds(heardSeconds);
 
   const supabase = await createClient();
@@ -99,7 +107,7 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
     .from("projects")
     .insert({
       user_id: user.id,
-      website_url: null,
+      website_url: website,
       // (an uploaded voice: its words replace this once they are heard)
       direction: mode === "script" ? script : "(your own recording)",
       duration_seconds: duration,
@@ -141,6 +149,12 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
   const logoUpload = await admin.storage.from(SCREENSHOTS_BUCKET).upload(logoAt, logo, { contentType: logo.type });
   if (logoUpload.error) return undo("Icon upload failed. Please try again.");
   uploaded.push({ bucket: SCREENSHOTS_BUCKET, path: logoAt });
+  for (const [i, f] of screens.entries()) {
+    const at = `${user.id}/${data.id}/${SCREEN_FILE_PREFIX}${i + 1}.${SCREENSHOT_TYPES[f.type]}`;
+    const up = await admin.storage.from(SCREENSHOTS_BUCKET).upload(at, f, { contentType: f.type });
+    if (up.error) return undo("Picture upload failed. Please try again.");
+    uploaded.push({ bucket: SCREENSHOTS_BUCKET, path: at });
+  }
   if (voiceFile) {
     const voiceAt = `${user.id}/${data.id}/voice/upload.${V2_VOICE_TYPES[voiceFile.type]}`;
     const voiceUpload = await admin.storage.from(AUDIO_BUCKET).upload(voiceAt, voiceFile, { contentType: voiceFile.type });
@@ -168,7 +182,7 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
     call_to_action: callToAction,
     target_audience: null,
     has_logo: true,
-    screenshot_count: 0,
+    screenshot_count: screens.length,
   });
   if (libraryError) console.error("direction library insert failed:", data.id, libraryError.message);
 

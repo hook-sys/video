@@ -16,8 +16,8 @@ export type RenderProject = {
 
 export const RENDER_PROJECT_COLUMNS = "id, user_id, brief, voice_status, voice_result";
 
-// The project's video as it plays: its stored plan with the customer's logo
-// and the voice signed now. A video made with an earlier engine has no plan
+// The project's video as it plays: its stored plan with the customer's logo,
+// the product's pictures and the voice signed now. A video made with an earlier engine has no plan
 // here (its MP4, if one was made, is still downloaded as it is).
 // `problems`: what is missing.
 export async function buildRenderInput(supabase: SupabaseClient, project: RenderProject, expiresIn = 3600): Promise<{ problems: string[]; plan: SimplePlan | null; audioUrl: string | null }> {
@@ -42,7 +42,10 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
     const logoFile = files?.find((f) => f.name.startsWith(LOGO_FILE_PREFIX));
     if (logoFile) logoUrl = (await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrl(`${folder}/${logoFile.name}`, expiresIn)).data?.signedUrl ?? null;
   }
+  // the product's pictures (its screen scenes), by name in this project's own folder; a missing one shows a plain page
+  const names = (stored.brand.screens ?? []).filter((n) => /^[\w.-]+$/.test(n));
+  const screens = project.id && project.user_id && names.length ? await Promise.all(names.map(async (n) => (await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrl(`${project.user_id}/${project.id}/${n}`, expiresIn)).data?.signedUrl ?? "")) : [];
   // sound effects, unless the team turned them off (admin → Settings)
-  const plan: SimplePlan = { ...stored, brand: { ...stored.brand, icon: logoUrl }, sfx: (await getSettings()).feature_sfx !== false };
+  const plan: SimplePlan = { ...stored, brand: { ...stored.brand, icon: logoUrl, screens }, sfx: (await getSettings()).feature_sfx !== false };
   return { problems, plan, audioUrl };
 }

@@ -520,19 +520,23 @@ function Cta({ c }: { c: C }) {
   // (its click: clickOf)
   const at = c.s.from + 18;
   const k = springAt(c, c.s.from + 2, 1.3);
-  const repeat = norm(c.s.words.map((w) => w.t).join(" ")) === norm(c.brand.name);
+  // (the button's words are the ask the voice ends on; no ask, no button — and words the button or the name already say are not shown again)
+  const asks = !!c.brand.cta.trim();
+  const said = norm(c.s.words.map((w) => w.t).join(" "));
+  const repeat = said === norm(c.brand.name) || (asks && said === norm(c.brand.cta));
   const bs = Math.round(TYPE.BUTTON * Math.max(0.8, u));
-  const bh = bs * 2.2;
+  const bh = asks ? bs * 2.2 : 0;
   const words = c.s.words.map((w) => w.t);
   // the words' height at their size in a place
   const wordsH = (width: number, lines: number, max: number) => {
     const fit = fitWords(words, c.look.display, { width, lines, max, min: 44 });
     return { max, lines, height: fit.lines.length * fit.size * 1.08 };
   };
-  // parts of these heights one under the other, the whole centred in a height: each one's top
+  // parts of these heights one under the other (a part of no height is not there), the whole centred in a height: each one's top
   const stack = (heights: number[], gap: number, top: number, height: number) => {
-    let y = top + Math.max(0, (height - heights.reduce((s, h) => s + h, 0) - gap * (heights.length - 1)) / 2);
-    return heights.map((h) => ((y += h + gap), y - h - gap));
+    const n = heights.filter((h) => h > 0).length;
+    let y = top + Math.max(0, (height - heights.reduce((s, h) => s + h, 0) - gap * Math.max(0, n - 1)) / 2);
+    return heights.map((h) => (h > 0 ? ((y += h + gap), y - h - gap) : y));
   };
   const nameSize = (width: number, max: number) => Math.round(fitWords([c.brand.name], c.look.display, { width, lines: 1, max, min: 44 }).size);
   if (c.s.variant === 0) {
@@ -551,10 +555,12 @@ function Cta({ c }: { c: C }) {
             <Words c={c} width={W - 2 * pad} lines={sub.lines} max={sub.max} min={44} color={c.look.sub} />
           </div>
         )}
-        <div style={center({ left: 0, width: W, top: yButton, height: bh })}>
-          <Button c={c} at={at} size={bs} />
-        </div>
-        <Cursor c={c} from={{ x: W / 2 + 460 * u, y: H + 40 }} to={{ x: W / 2 + buttonWidth(c, bs) / 2 - 40, y: yButton + bh / 2 + 20 }} click={at + 34} />
+        {asks && (
+          <div style={center({ left: 0, width: W, top: yButton, height: bh })}>
+            <Button c={c} at={at} size={bs} />
+          </div>
+        )}
+        {asks && <Cursor c={c} from={{ x: W / 2 + 460 * u, y: H + 40 }} to={{ x: W / 2 + buttonWidth(c, bs) / 2 - 40, y: yButton + bh / 2 + 20 }} click={at + 34} />}
       </>
     );
   }
@@ -575,9 +581,11 @@ function Cta({ c }: { c: C }) {
             <Words c={c} width={W - 2 * pad} lines={head.lines} max={head.max} min={44} />
           </div>
         )}
-        <div style={center({ left: pad, width: W - 2 * pad, top: yButton, height: bh })}>
-          <Button c={c} at={at} size={bs} />
-        </div>
+        {asks && (
+          <div style={center({ left: pad, width: W - 2 * pad, top: yButton, height: bh })}>
+            <Button c={c} at={at} size={bs} />
+          </div>
+        )}
       </>
     );
   }
@@ -603,9 +611,11 @@ function Cta({ c }: { c: C }) {
           <Words c={c} width={rest.width} lines={head.lines} max={head.max} min={44} />
         </div>
       )}
-      <div style={center({ left: rest.left, width: rest.width, top: yButton, height: bh })}>
-        <Button c={c} at={at} size={bs} />
-      </div>
+      {asks && (
+        <div style={center({ left: rest.left, width: rest.width, top: yButton, height: bh })}>
+          <Button c={c} at={at} size={bs} />
+        </div>
+      )}
     </>
   );
 }

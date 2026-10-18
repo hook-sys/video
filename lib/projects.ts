@@ -19,7 +19,6 @@ export const voiceChoiceOf = (direction: string | null | undefined) =>
   (direction ?? "").split(/\r?\n\r?\nVisual style:/)[1]?.match(/^Voice:\s*(.+?)\s*$/m)?.[1] ?? null;
 // Brand inputs (optional): shown in the closing lockup and used for the palette.
 export const BRAND_NAME_MAX = 60;
-export const CTA_MAX = 60;
 export const isHexColor = (v: string) => /^#[0-9A-Fa-f]{6}$/.test(v);
 // Also the database defaults, so projects created before these existed get them.
 export const CREATIVE_DEFAULTS = {
@@ -57,6 +56,11 @@ export const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 export const ownedPath = (path: unknown, userId?: string | null, projectId?: string | null): path is string =>
   typeof path === "string" && !!userId && !!projectId && path.startsWith(`${userId}/${projectId}/`) && !path.split("/").includes("..");
 export const LOGO_FILE_PREFIX = "logo.";
+// Pictures of the product for its screen scenes, beside the logo: uploaded
+// with the project, or taken from its website when the video is made
+// (lib/product-pictures.ts) — screen-1.jpg, screen-2.jpg, screen-3.jpg.
+export const SCREEN_FILE_PREFIX = "screen-";
+export const SCREENS_MAX = 3;
 export const logoPath = (userId: string, projectId: string, ext: string) => `${userId}/${projectId}/${LOGO_FILE_PREFIX}${ext}`;
 
 export function validateLogo(file: File | null | undefined): string | undefined {

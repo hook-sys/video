@@ -26,7 +26,7 @@ export function DirectorTest({ defaults, reasonings }: { defaults: { model: stri
       </div>
       <div className="flex items-center gap-3">
         <button className={btn} disabled={pending}>{pending ? "Reading 10 scripts…" : "Run the Director test"}</button>
-        <span className="text-xs text-zinc-500">10 real, paid calls · about a minute. A temperature is only sent with reasoning default or none.</span>
+        <span className="text-xs text-zinc-500">20 real, paid calls (the story and the beats, for 10 scripts) · about two minutes. A temperature is only sent with reasoning default or none.</span>
       </div>
       {result?.error && <p className="rounded-lg border border-rose-400/20 bg-rose-500/5 p-3 text-rose-200">{result.error}</p>}
       {run && (

@@ -1,6 +1,6 @@
 import { rng } from "./faces";
 import { framesOf } from "./beats";
-import { type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
+import { type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
 
 // The selector: each beat's template and variant, and the video's theme —
 // drawn from a seed, never the same template twice in a row, and unlike
@@ -16,12 +16,29 @@ export function choices(r: Reading): [TemplateId, number][] {
     case "hook": return only([["statement", 0.4], ["kinetic", 0.35], ["trouble", 0.25, many]]);
     case "problem": return only([["trouble", 0.45, many], ["compare", 0.2, many], ["kinetic", 0.2], ["statement", 0.15]]);
     case "solution": return only([["reveal", 0.5], ["compare", 0.2, many], ["bento", 0.15, three], ["statement", 0.15]]);
-    case "feature": return many ? only([["feature", 0.35], ["messages", 0.2], ["bento", 0.2, three], ["chart", 0.1], ["statement", 0.15]]) : r.items.length ? [["feature", 0.5], ["messages", 0.3], ["statement", 0.2]] : [["statement", 0.6], ["kinetic", 0.4]];
-    case "proof": return r.number ? [["stat", 0.75], ["chart", 0.25]] : only([["chart", 0.45], ["bento", 0.2, three], ["statement", 0.35]]);
+    case "feature": return many ? only([["feature", 0.4], ["messages", 0.2], ["bento", 0.2, three], ["chart", 0.1, !!r.number], ["statement", 0.1]]) : r.items.length ? [["feature", 0.5], ["messages", 0.3], ["statement", 0.2]] : [["statement", 0.6], ["kinetic", 0.4]];
+    // (a chart or a number only when the voice says one)
+    case "proof": return r.number ? [["stat", 0.75], ["chart", 0.25]] : only([["bento", 0.3, three], ["feature", 0.3, r.items.length > 0], ["statement", 0.4]]);
     case "steps": return many ? only([["steps", 0.7], ["bento", 0.3, three]]) : [["statement", 1]];
     case "cta": return [["cta", 1]];
   }
 }
+// what the story plan says a beat shows, as the templates that show it (they are drawn three times as often)
+const SHOWN_AS: Record<Show, TemplateId[]> = { pains: ["trouble", "compare"], "before-after": ["compare"], product: ["screen", "feature", "messages"], list: ["bento", "feature"], number: ["stat", "chart"], steps: ["steps"], brand: ["reveal"], words: ["statement", "kinetic"] };
+// (and one the intent alone would not draw, when the beat has what it needs: things to list, a number said)
+const fits = (t: TemplateId, r: Reading) => {
+  const n = r.items.length;
+  // (a picture of the product is offered by the draw, while there are pictures left)
+  if (t === "screen") return false;
+  return t === "bento" ? n >= 3 : t === "trouble" || t === "compare" || t === "steps" ? n >= 2 : t === "messages" ? n >= 1 : t === "stat" || t === "chart" ? !!r.number : t !== "cta";
+};
+export function planned(r: Reading, list: [TemplateId, number][]): [TemplateId, number][] {
+  if (!r.shows) return list;
+  const top = Math.max(0.1, ...list.map(([, w]) => w));
+  const added = SHOWN_AS[r.shows].filter((t) => !list.some(([x]) => x === t) && fits(t, r)).map((t): [TemplateId, number] => [t, top]);
+  return [...list, ...added].map(([t, w]) => [t, SHOWN_AS[r.shows!].includes(t) ? w * 3 : w]);
+}
+
 // one of them by its weight, never the one before (unless it is all there is)
 function pickOf(list: [TemplateId, number][], prev: TemplateId | null, R: ReturnType<typeof rng>): TemplateId {
   const open = list.filter(([t]) => t !== prev);
@@ -50,18 +67,25 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
   // (words alone: at most one scene in four, never two in a row)
   const most = Math.max(1, Math.floor((readings.length - 1) / 4));
   let alone = 0, wasAlone = false;
+  // (the product's pictures: each shown once, in a beat about the product)
+  const shots = brand.screens?.length ?? 0;
+  let pictured = 0;
   let prev: TemplateId | null = null;
   const scenes: Scene[] = readings.map((read, i) => {
-    // (a thing that only repeats the words shown is not shown again)
-    const said = words.slice(read.show[0], read.show[1] + 1).map((w) => w.text).join(" ");
+    // (a thing that only repeats the words shown beside it is not shown again)
+    const [c0, c1] = keyRun(words, read.show, read.key, 4);
+    const said = words.slice(c0, c1 + 1).map((w) => w.text).join(" ");
     const r = { ...read, items: read.items.filter((it) => !repeats(it.text, said)) };
     // (the last beat is always the brand and the ask)
-    const list: [TemplateId, number][] = i === readings.length - 1 ? [["cta", 1]] : choices(r).filter(([t]) => t !== "cta");
+    const about = r.intent === "feature" || r.intent === "solution" || r.shows === "product";
+    const base: [TemplateId, number][] = i === readings.length - 1 ? [["cta", 1]] : [...choices(r).filter(([t]) => t !== "cta"), ...(pictured < shots && about ? [["screen", r.intent === "solution" ? 0.35 : 0.6] as [TemplateId, number]] : [])];
+    const list = i === readings.length - 1 ? base : planned(r, base);
     let template = pickOf(list, prev, R);
     // (a variant that needs things only when there are some)
     let variant = R.int(0, VARIANTS - 1);
     if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
-    if (wordsAlone(template, variant) && (wasAlone || alone >= most)) {
+    // (the video's main moment always shows something)
+    if (wordsAlone(template, variant) && (wasAlone || alone >= most || r.hero)) {
       // another way to tell it with a hero, else the words beside its icon
       const shown = list.filter(([t]) => t !== "statement" && t !== "kinetic");
       if (shown.length) {
@@ -70,11 +94,14 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
         if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
       } else [template, variant] = ["statement", 1];
     }
+    // (words typed as a prompt only when they ask something)
+    if (template === "kinetic" && variant === 1 && !/\?["'”’)]*$/.test(words[r.show[1]]?.text ?? "")) variant = R.chance(0.5) ? 0 : 2;
     wasAlone = wordsAlone(template, variant);
     if (wasAlone) alone++;
+    const screen = template === "screen" ? pictured++ : undefined;
     prev = template;
-    // (beside a hero the words are its caption: at most four of them, around the key one)
-    const [start, end] = wasAlone || template === "cta" || template === "reveal" ? r.show : keyRun(words, r.show, r.key, 4);
+    // (beside a hero — or under the brand's mark — the words are its caption: at most four of them, around the key one)
+    const [start, end] = wasAlone || template === "cta" ? r.show : keyRun(words, r.show, r.key, 4);
     const shown = words.slice(start, end + 1);
     // (the words come in as they are said — never later than half a second into the scene: no empty start)
     const late = Math.max(0, Math.round((shown[0]?.start ?? 0) * FPS) - (frames[i].from + 15));
@@ -87,6 +114,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       icon: r.icon ?? "sparkles",
       items: r.items.slice(0, 3),
       number: r.number,
+      ...(screen != null ? { screen } : {}),
     };
   });
   return { engine: "simple", v: 1, duration, seed, brand, theme, scenes, print: printOf(theme, scenes) };

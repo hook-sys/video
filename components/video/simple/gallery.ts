@@ -11,11 +11,12 @@ const SAMPLE: Record<TemplateId, { words: string; key: number; icon: string; ite
   stat: { words: "Ship orders 3x faster", key: 3, icon: "rocket", items: [], number: "3x" },
   steps: { words: "Up and running in a day", key: 3, icon: "rocket", items: [{ text: "Import orders", icon: "upload" }, { text: "Invite team", icon: "users" }, { text: "Go live", icon: "circle-check" }] },
   cta: { words: "Run your factory, not paperwork.", key: 2, icon: "arrow-right", items: [] },
-  kinetic: { words: "Your factory deserves better", key: 1, icon: "sparkles", items: [] },
+  kinetic: { words: "Still chasing orders by phone?", key: 2, icon: "sparkles", items: [] },
   compare: { words: "Everything in one place", key: 3, icon: "layers", items: [{ text: "Orders", icon: "clipboard-list" }, { text: "Stock", icon: "boxes" }, { text: "Production", icon: "factory" }] },
-  chart: { words: "Watch output grow", key: 2, icon: "trending-up", items: [{ text: "Cutting", icon: "scissors" }, { text: "Sewing", icon: "shirt" }, { text: "Shipping", icon: "truck" }] },
+  chart: { words: "Output up 40% in a month", key: 2, icon: "trending-up", items: [{ text: "Cutting", icon: "scissors" }, { text: "Sewing", icon: "shirt" }, { text: "Shipping", icon: "truck" }], number: "40%" },
   messages: { words: "Your team stays in sync", key: 3, icon: "message-circle", items: [{ text: "Order shipped", icon: "truck" }, { text: "Stock updated", icon: "boxes" }, { text: "Line 4 ready", icon: "circle-check" }] },
   bento: { words: "One app for the floor", key: 1, icon: "layout-grid", items: [{ text: "Live orders", icon: "radio" }, { text: "Stock levels", icon: "boxes" }, { text: "Shift reports", icon: "file-text" }] },
+  screen: { words: "Every order on one screen", key: 3, icon: "monitor", items: [] },
 };
 
 export const GALLERY_BRAND: Brand = { name: "Orin ERP", color: "#1FA77A", cta: "Start today", icon: null };
