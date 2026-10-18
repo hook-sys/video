@@ -11,7 +11,7 @@ import { getSettings } from "@/lib/app-settings";
 import { balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, refundVideo } from "@/lib/billing";
 import { V2_VOICE_TYPES, type V2Details } from "@/lib/v2/form";
 import { startPipelineV2 } from "@/lib/v2/pipeline";
-import { websiteUrlOf } from "@/lib/website-capture";
+import { websiteUrlOf } from "@/lib/website-url";
 
 export type CreateProjectV2State = { error?: string };
 

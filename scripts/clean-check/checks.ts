@@ -14,7 +14,7 @@ import { SETTINGS } from "@/lib/app-settings";
 import { iconFor } from "@/lib/simple/brain";
 import { resolveIcon } from "@/components/video/icons";
 import { askOf, beatsOf, durationOf } from "@/components/video/simple/beats";
-import { isPublicHost, websiteUrlOf } from "@/lib/website-capture";
+import { isPublicHost, websiteUrlOf } from "@/lib/website-url";
 import { applyEdit, editOf } from "@/components/video/simple/edit";
 import { guessReadings } from "@/components/video/simple/guess";
 import { differs, planOf, repeats, wordsAlone } from "@/components/video/simple/select";

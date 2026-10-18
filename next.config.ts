@@ -9,9 +9,10 @@ const nextConfig: NextConfig = {
   // The server render (lib/film-snapshot.ts) sends the bundled film to its
   // sandbox (built before `next build` by scripts/film/bundle.mjs).
   // The website capture (lib/website-capture.ts) runs its own serverless
-  // Chromium, whose packed browser files are read at run time.
+  // Chromium and playwright-core, whose files (browsers.json, the packed
+  // browser) are read at run time by paths the tracer cannot follow.
   outputFileTracingIncludes: {
-    "/*": ["./.remotion-bundle/**/*", "./node_modules/@sparticuz/chromium/bin/**/*"],
+    "/*": ["./.remotion-bundle/**/*", "./node_modules/@sparticuz/chromium/bin/**/*", "./node_modules/playwright-core/**/*"],
   },
   experimental: {
     serverActions: { bodySizeLimit: uploadLimit },
