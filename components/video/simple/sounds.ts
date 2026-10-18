@@ -10,6 +10,10 @@ import type { Scene, SimplePlan } from "./types";
 // frames a way between scenes takes (half before the cut, half after)
 export const T = 18;
 // the sounds there are (public/sfx)
+// how long each lasts, in frames (its file's length, a little over)
+export const SOUND_FRAMES: Record<string, number> = { whoosh: 20, soft_pop: 7, click: 5, typing: 25, digital_processing: 27, reveal: 30, subtle_impact: 20, success_chime: 36, tick: 6, ding: 30, rise: 17, shimmer: 18, lock: 8 };
+// sounds heard at once, at most (with the voice, within the player's 5 audio tags)
+export const MOST_AT_ONCE = 3;
 export const SOUND_NAMES = ["whoosh", "soft_pop", "click", "typing", "digital_processing", "reveal", "subtle_impact", "success_chime", "tick", "ding", "rise", "shimmer", "lock"];
 
 // (the templates whose things come in with their icons)
@@ -49,5 +53,9 @@ export function soundsOf(plan: SimplePlan): { at: number; name: string; volume: 
     if (click != null) out.push({ at: click, name: "click", volume: 0.45 });
     if (s.template === "cta" && click != null) out.push({ at: click + 10, name: "success_chime", volume: 0.32 });
   });
-  return out.filter((e) => e.at < plan.duration - 6).sort((a, b) => a.at - b.at).filter((e, i, a) => !i || e.at - a[i - 1].at >= 9);
+  const spaced = out.filter((e) => e.at < plan.duration - 6).sort((a, b) => a.at - b.at).filter((e, i, a) => !i || e.at - a[i - 1].at >= 9);
+  // (never more than MOST_AT_ONCE sounding together: a later one that would be is left out)
+  const kept: typeof spaced = [];
+  for (const e of spaced) if (kept.filter((k) => k.at + (SOUND_FRAMES[k.name] ?? 30) > e.at).length < MOST_AT_ONCE) kept.push(e);
+  return kept;
 }
