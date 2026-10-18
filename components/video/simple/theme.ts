@@ -1,5 +1,5 @@
 import { DISPLAY_FACES, TEXT_FACES, type Face, faceOf } from "./faces";
-import { type Pace, type Theme, TYPE_PAIRS } from "./types";
+import { type Ground, type Pace, type Theme, TYPE_PAIRS } from "./types";
 
 // A video's colours and type. Every colour is the brand's own colour or a
 // neutral: the brand colour exactly where it reads (made only lighter or
@@ -77,6 +77,9 @@ const alpha = (hex: string, a: number) => {
   const [r, g, b] = rgbOf(hex);
   return `rgba(${r},${g},${b},${a})`;
 };
+
+// a scene's theme: the video's, on its own ground when it has one
+export const themeOf = (theme: Theme, s: { ground?: Ground }): Theme => (s.ground && s.ground !== theme.ground ? { ...theme, ground: s.ground } : theme);
 
 export function lookOf(theme: Theme, color: string): Look {
   const brand = /^#?[0-9a-f]{6}$/i.test(color.trim()) ? `#${color.trim().replace("#", "").toLowerCase()}` : "#6a5bff";

@@ -82,6 +82,8 @@ export type Scene = {
   screen?: number;
   // every word of its beat, each when it is said (the words that may be shown — the editor picks from these)
   said?: { t: string; at: number }[];
+  // its own ground, when the customer gave it one other than the video's (edit.ts; at most two scenes)
+  ground?: Ground;
 };
 
 export type SimplePlan = {

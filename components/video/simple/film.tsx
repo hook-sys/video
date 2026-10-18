@@ -5,11 +5,11 @@ import { type Face, familyOf, fontUrl } from "./faces";
 import { type C, type Play, clamp01, ease, tint } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
 import { geoOf } from "./geo";
-import { type Look, lookOf } from "./theme";
-import type { FilmProps, Scene, SimplePlan } from "./types";
+import { type Look, lookOf, themeOf } from "./theme";
+import { type FilmProps, GROUNDS, type Scene, type SimplePlan } from "./types";
 
 // The simple engine's film: each scene its template, on one ground for the
-// whole video, moving slowly in (the camera never stops, not even between
+// whole video (a scene the customer gave its own ground brings it in with it), moving slowly in (the camera never stops, not even between
 // scenes), one way between scenes for the whole video, the voice and a sound
 // on what happens. No music.
 
@@ -57,6 +57,8 @@ function Ground({ look, f }: { look: Look; f: number }) {
 export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
   const f = useCurrentFrame();
   const look = useMemo(() => lookOf(plan.theme, plan.brand.color), [plan.theme, plan.brand.color]);
+  // (the looks of the grounds a scene may have of its own)
+  const own = useMemo(() => Object.fromEntries(GROUNDS.map((gr) => [gr, lookOf(themeOf(plan.theme, { ground: gr }), plan.brand.color)])), [plan.theme, plan.brand.color]);
   useFaces([look.display, look.text]);
   const { scenes, theme } = plan;
   const n = scenes.length;
@@ -86,14 +88,16 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
         } else if (pin < 1) clip = `inset(0 ${((1 - pin) * 100).toFixed(2)}% 0 0)`;
         // (on one ground, the scene going out is wiped away where the next comes in)
         else if (pout > 0) clip = `inset(0 0 0 ${(pout * 100).toFixed(2)}%)`;
-        const c: C = { f, s, look, pace: theme.pace, brand: plan.brand, g, play: PLAY };
+        const mine = s.ground && s.ground !== theme.ground ? own[s.ground] : null;
+        const c: C = { f, s, look: mine ?? look, pace: theme.pace, brand: plan.brand, g, play: PLAY };
         const Body = TEMPLATE[s.template];
         return (
-          <AbsoluteFill key={i} style={{ transform: way || undefined, opacity, clipPath: clip }}>
+          <AbsoluteFill key={i} data-scene={i} style={{ transform: way || undefined, opacity, clipPath: clip }}>
+            {mine && <Ground look={mine} f={f} />}
             <AbsoluteFill style={{ transform: cam }}>
               <Body c={c} />
             </AbsoluteFill>
-            {pin < 1 && theme.way === "wipe" && <div style={{ position: "absolute", top: 0, bottom: 0, left: pin * W - 6, width: 12, background: look.accent }} />}
+            {pin < 1 && theme.way === "wipe" && <div style={{ position: "absolute", top: 0, bottom: 0, left: pin * W - 6, width: 12, background: (mine ?? look).accent }} />}
           </AbsoluteFill>
         );
       })}

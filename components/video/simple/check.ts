@@ -6,7 +6,7 @@ import type { C, Play } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
 import { norm, thingAt } from "./scenes";
 import { choices, grey, planOf, printOf, variantOk, wordsAlone } from "./select";
-import { contrast, lookOf } from "./theme";
+import { contrast, lookOf, themeOf } from "./theme";
 import { GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, VARIANTS } from "./types";
 
 // The plan checked before it is played, by code (no AI, no browser): every
@@ -117,10 +117,18 @@ function colourProblems(look: ReturnType<typeof lookOf>): Problem[] {
   return out;
 }
 
+// a scene's look (its own ground, when it has one)
+const lookIn = (plan: SimplePlan, i: number) => lookOf(themeOf(plan.theme, plan.scenes[i]), plan.brand.color);
+// every ground the video is on, each with its colours checked (named when it is a scene's own)
+function coloursOf(plan: SimplePlan): Problem[] {
+  const grounds = [plan.theme.ground, ...new Set(plan.scenes.map((s) => s.ground).filter((g): g is Ground => !!g && g !== plan.theme.ground))];
+  return grounds.flatMap((g, k) => colourProblems(lookOf({ ...plan.theme, ground: g }, plan.brand.color)).map((x) => (k ? { ...x, detail: `${g} background — ${x.detail}` } : x)));
+}
+
 // How much of the frame each scene's hero takes (null: the words alone), laid out at its last frame
 export function heroShares(plan: SimplePlan): (number | null)[] {
-  const look = lookOf(plan.theme, plan.brand.color);
-  return plan.scenes.map((s) => {
+  return plan.scenes.map((s, i) => {
+    const look = lookIn(plan, i);
     const c: C = { f: s.to - 1, s, look, pace: plan.theme.pace, brand: { ...plan.brand, icon: null }, g: geoOf(plan.w ?? 1920, plan.h ?? 1080), play: SETTLED };
     try {
       const { heroes } = noting(() => walk(TEMPLATE[s.template]({ c }), []));
@@ -132,13 +140,12 @@ export function heroShares(plan: SimplePlan): (number | null)[] {
 }
 
 // one scene's problems (the editor asks this for every way a scene can be shown)
-export const problemsOf = (plan: SimplePlan, i: number): Problem[] => sceneProblems(plan, i, lookOf(plan.theme, plan.brand.color));
-// the look's colours alone
-export const colourProblemsOf = (plan: SimplePlan): Problem[] => colourProblems(lookOf(plan.theme, plan.brand.color));
+export const problemsOf = (plan: SimplePlan, i: number): Problem[] => sceneProblems(plan, i, lookIn(plan, i));
+// the look's colours alone (the video's ground and any scene's own)
+export const colourProblemsOf = (plan: SimplePlan): Problem[] => coloursOf(plan);
 
 export function checkPlan(plan: SimplePlan): Problem[] {
-  const look = lookOf(plan.theme, plan.brand.color);
-  return [...colourProblems(look), ...plan.scenes.flatMap((_, i) => sceneProblems(plan, i, look))];
+  return [...coloursOf(plan), ...plan.scenes.flatMap((_, i) => sceneProblems(plan, i, lookIn(plan, i)))];
 }
 
 // ── mending ───────────────────────────────────────────────────────────────
@@ -198,9 +205,9 @@ export function repairPlan(plan: SimplePlan, readings?: Reading[]): { plan: Simp
         p = { ...p, theme: { ...p.theme, ground: ok } };
       }
     }
-    const look = lookOf(p.theme, p.brand.color);
     const bad = [...new Set(problems.filter((x) => x.scene !== null).map((x) => x.scene!))];
     for (const i of bad) {
+      const look = lookIn(p, i);
       const now = sceneProblems(p, i, look);
       if (!now.length) continue;
       let best: { s: Scene; n: number } | null = null;

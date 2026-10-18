@@ -70,7 +70,7 @@ function Statement({ c }: { c: C }) {
     return (
       <Side c={c} dw={560} dh={560} hw={760}>
         <div style={{ ...center({ inset: 0 }), opacity: clamp01(k * 1.8), transform: `scale(${(0.6 + 0.4 * k).toFixed(4)}) translateY(${float.toFixed(1)}px) rotate(${((1 - k) * -14).toFixed(2)}deg)` }}>
-          <Glyph c={c} name={c.s.icon} size={440} solid />
+          <Glyph c={c} part="icon" name={c.s.icon} size={440} solid />
         </div>
       </Side>
     );
@@ -111,8 +111,8 @@ function Trouble({ c }: { c: C }) {
           return (
             <div key={i} style={abs({ left: row ? i * (tw + gap) : 0, top: row ? 0 : i * (th + gap), width: tw, height: th, ...rise(k, 80) })}>
               <div style={{ ...panel(c), width: "100%", height: "100%", display: "flex", flexDirection: row ? "column" : "row", alignItems: "center", justifyContent: "center", gap: 30, padding: row ? 0 : "0 40px", boxSizing: "border-box", opacity: 1 - strike * 0.45 }}>
-                <Glyph c={c} name={it.icon ?? c.s.icon} size={row ? 170 : 120} card />
-                <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, maxWidth: row ? tw - 50 : tw - 240, flex: row ? undefined : 1 }} fit={row ? tw - 60 : tw - 240} face={c.look.text}>{it.text}</One>
+                <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={row ? 170 : 120} card />
+                <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, maxWidth: row ? tw - 50 : tw - 240, flex: row ? undefined : 1 }} fit={row ? tw - 60 : tw - 240} face={c.look.text}>{it.text}</One>
               </div>
               <svg width={tw} height={th} style={abs({ left: 0, top: 0 })}>
                 <line x1={50} y1={th - 50} x2={tw - 50} y2={50} stroke={c.look.bad} strokeWidth={14} strokeLinecap="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - strike} />
@@ -135,7 +135,7 @@ function Trouble({ c }: { c: C }) {
                 <div style={{ width: 100, height: 100, borderRadius: 26, background: tint(c.look.bad, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <Icon name={it.icon ?? "triangle-alert"} size={54} color={c.look.bad} strokeWidth={2.2} />
                 </div>
-                <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
+                <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
                 <div style={{ width: 20, height: 20, borderRadius: 99, background: c.look.bad }} />
               </div>
             </div>
@@ -154,7 +154,7 @@ function Trouble({ c }: { c: C }) {
         const size = fitWords([it.text], c.look.display, { width: dw - 80, lines: 1, max: 110, min: 50 }).size;
         return (
           <div key={i} style={center({ left: 0, top: i * lh, width: dw, height: lh, ...rise(k, 40) })}>
-            <div style={{ position: "relative", ...display(c, size, { color: strike > 0.5 ? c.look.sub : c.look.ink }) }}>
+            <div data-part="item" data-text={it.text} style={{ position: "relative", ...display(c, size, { color: strike > 0.5 ? c.look.sub : c.look.ink }) }}>
               {it.text}
               <div style={abs({ left: -size * 0.05, top: "52%", height: Math.max(8, size * 0.09), width: `calc(${(strike * 100).toFixed(1)}% + ${(strike * size * 0.1).toFixed(1)}px)`, background: c.look.bad, borderRadius: 99 })} />
             </div>
@@ -207,8 +207,8 @@ function Reveal({ c }: { c: C }) {
   const chip = (it: { text: string; icon: string | null }, style: CSSProperties, key: number) => (
     <div key={key} style={abs({ width: 460, height: 110, ...style })}>
       <div style={{ ...panel(c, 99), height: "100%", display: "flex", alignItems: "center", gap: 20, padding: "0 28px 0 18px", boxSizing: "border-box" }}>
-        <Glyph c={c} name={it.icon ?? c.s.icon} size={74} card />
-        <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={300} face={c.look.text}>{it.text}</One>
+        <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={74} card />
+        <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={300} face={c.look.text}>{it.text}</One>
       </div>
     </div>
   );
@@ -267,7 +267,7 @@ function Feature({ c }: { c: C }) {
         <div style={abs({ left: 0, top: 0, width: cardW, height: cardH, perspective: 1600 })}>
           <div style={{ ...panel(c, 34), width: "100%", height: "100%", opacity: clamp01(k * 1.6), transform: `rotateY(${((1 - k) * (c.s.left ? 18 : -18)).toFixed(2)}deg) translateY(${((1 - k) * 60).toFixed(1)}px)`, overflow: "hidden" }}>
             <div style={{ height: 140, display: "flex", alignItems: "center", gap: 24, padding: "0 40px", borderBottom: `1.5px solid ${c.look.line}` }}>
-              <Glyph c={c} name={c.s.icon} size={76} solid card />
+              <Glyph c={c} part="icon" name={c.s.icon} size={76} solid card />
               <One style={{ fontSize: TYPE.TITLE, fontWeight: WEIGHT.title, flex: 1 }} fit={540} face={c.look.text}>{c.brand.name}</One>
               {[0, 1, 2].map((d) => <div key={d} style={{ width: 14, height: 14, borderRadius: 99, background: c.look.line }} />)}
             </div>
@@ -276,8 +276,8 @@ function Feature({ c }: { c: C }) {
               const lit = i === n - 1 && done;
               return (
                 <div key={i} style={{ height: rowH, display: "flex", alignItems: "center", gap: 24, padding: "0 36px", borderBottom: i < n - 1 ? `1.5px solid ${c.look.line}` : undefined, background: lit ? tint(c.look.panelAccent, 0.1) : undefined, ...rise(kr, 30) }}>
-                  <Glyph c={c} name={it.icon ?? c.s.icon} size={72} card />
-                  <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={580} face={c.look.text}>{it.text}</One>
+                  <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={72} card />
+                  <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={580} face={c.look.text}>{it.text}</One>
                   <div style={{ width: 52, height: 52, borderRadius: 99, border: `3px solid ${lit ? c.look.panelAccent : c.look.line}`, background: lit ? c.look.panelAccent : undefined, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {lit && <Icon name="check" size={32} color={c.look.onPanelAccent} strokeWidth={3} />}
                   </div>
@@ -304,9 +304,9 @@ function Feature({ c }: { c: C }) {
                 const kr = springAt(c, itemAt(c, i, n));
                 return (
                   <div key={i} style={abs({ left: 18, right: 18, top: 300 + i * 148, height: 132, borderRadius: 30, background: c.look.dark ? "rgba(255,255,255,0.1)" : "#ffffff", boxShadow: "0 10px 30px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 18, padding: "0 20px", color: c.look.dark ? "#fff" : "#111", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * -80).toFixed(1)}px) scale(${(0.92 + 0.08 * kr).toFixed(3)})` })}>
-                    <Glyph c={c} name={it.icon ?? c.s.icon} size={72} solid />
+                    <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={72} solid />
                     <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
-                      <One style={{ fontSize: 36, fontWeight: 700 }} fit={270} face={c.look.text}>{it.text}</One>
+                      <One part="item" style={{ fontSize: 36, fontWeight: 700 }} fit={270} face={c.look.text}>{it.text}</One>
                       <One style={{ fontSize: 24, opacity: 0.6 }}>{c.brand.name} · now</One>
                     </div>
                   </div>
@@ -329,7 +329,7 @@ function Feature({ c }: { c: C }) {
     <Side c={c} dw={dw} dh={dh}>
       <div style={abs({ left: 0, top: 0, width: dw, height: 140, ...panel(c, 99), display: "flex", alignItems: "center", gap: 26, padding: "0 40px", boxSizing: "border-box", ...rise(k, 40) })}>
         <Icon name="search" size={56} color={c.look.panelAccent} strokeWidth={2.4} />
-        <div style={{ flex: 1, fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, whiteSpace: "nowrap", overflow: "hidden", position: "relative" }}>
+        <div data-part="item" data-text={typed} style={{ flex: 1, fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, whiteSpace: "nowrap", overflow: "hidden", position: "relative" }}>
           {typed.slice(0, shown)}
           {c.f < doneAt + 20 && Math.floor(c.f / 8) % 2 === 0 && <span style={{ display: "inline-block", width: 4, height: 54, marginLeft: 4, verticalAlign: "middle", background: c.look.panelAccent }} />}
         </div>
@@ -341,8 +341,8 @@ function Feature({ c }: { c: C }) {
         const kr = springAt(c, doneAt + 4 + i * stagger(c) * 2);
         return (
           <div key={i} style={abs({ left: 30, top: 170 + i * 130, width: dw - 60, height: 112, ...panel(c, 26), display: "flex", alignItems: "center", gap: 24, padding: "0 30px", boxSizing: "border-box", ...rise(kr, 40) })}>
-            <Glyph c={c} name={it.icon ?? c.s.icon} size={64} card />
-            <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
+            <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={64} card />
+            <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
             <Icon name="chevron-right" size={40} color={c.look.panelSub} strokeWidth={2.4} />
           </div>
         );
@@ -396,7 +396,7 @@ function Stat({ c }: { c: C }) {
     <Side c={c} dw={dw} dh={dh} only={noNumber}>
       <div style={abs({ left: 0, top: 0, width: dw, height: dh, ...panel(c, 40), overflow: "hidden", ...rise(k, 60) })}>
         <div style={abs({ left: 50, top: 50, display: "flex", alignItems: "center", gap: 20 })}>
-          <Glyph c={c} name={c.s.icon} size={72} card />
+          <Glyph c={c} part="icon" name={c.s.icon} size={72} card />
           <One style={{ fontSize: TYPE.TITLE, fontWeight: WEIGHT.title, color: c.look.panelSub }} fit={500} face={c.look.text}>{c.brand.name}</One>
         </div>
         <div style={abs({ left: 50, top: 150, display: "flex", alignItems: "center", gap: 30 })}>
@@ -442,7 +442,7 @@ function Steps({ c }: { c: C }) {
                 </div>
                 {badge(i, 64, { position: "absolute", right: -6, top: -6 })}
               </div>
-              <One style={{ fontFamily: familyOf(c.look.text), fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: c.look.ink, maxWidth: row ? 440 : 640 }} fit={row ? 430 : 640} face={c.look.text}>{it.text}</One>
+              <One part="item" style={{ fontFamily: familyOf(c.look.text), fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: c.look.ink, maxWidth: row ? 440 : 640 }} fit={row ? 430 : 640} face={c.look.text}>{it.text}</One>
             </div>
           );
         })}
@@ -465,7 +465,7 @@ function Steps({ c }: { c: C }) {
                     <path d="M5 12.5 L10 17.5 L19 7" fill="none" stroke={c.look.onPanelAccent} strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - tick} />
                   </svg>
                 </div>
-                <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={640} face={c.look.text}>{it.text}</One>
+                <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={640} face={c.look.text}>{it.text}</One>
               </div>
             );
           })}
@@ -484,10 +484,10 @@ function Steps({ c }: { c: C }) {
         return (
           <div key={i} style={abs({ left: row ? i * dx : (920 - cw) / 2 + (i - (n - 1) / 2) * 60, top: i * dy, width: cw, height: ch, ...panel(c, 34), padding: 40, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between", opacity: clamp01(k * 1.6), transform: `translate(${((1 - k) * -60).toFixed(1)}px, ${((1 - k) * 40).toFixed(1)}px) rotate(${((1 - k) * -6).toFixed(2)}deg)` })}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <Glyph c={c} name={it.icon ?? c.s.icon} size={88} card />
+              <Glyph c={c} part="item-icon" name={it.icon ?? c.s.icon} size={88} card />
               {badge(i, 70)}
             </div>
-            <One style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={cw - 80} face={c.look.text}>{it.text}</One>
+            <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={cw - 80} face={c.look.text}>{it.text}</One>
           </div>
         );
       })}

@@ -126,7 +126,11 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
 export const variantOk = (template: TemplateId, variant: number, items: number) => !(template === "reveal" && variant > 0 && items < 2) && !(template === "chart" && variant === 2 && items < 2) && !(template === "feature" && variant === 2 && items < 2);
 
 // what makes a video look like itself: its ground, type, transitions, pace and template order
-export const printOf = (theme: Theme, scenes: Scene[]) => [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${TEMPLATES.indexOf(s.template).toString(36)}${s.variant}`).join("")].join("|");
+// (and the scenes on a ground of their own, when there are any)
+export const printOf = (theme: Theme, scenes: Scene[]) => {
+  const own = scenes.map((s) => (s.ground && s.ground !== theme.ground ? s.ground[0] : "-")).join("");
+  return [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${TEMPLATES.indexOf(s.template).toString(36)}${s.variant}`).join(""), ...(/[^-]/.test(own) ? [own] : [])].join("|");
+};
 
 // One scene, one idea: what is shown once is not shown twice
 const LITTLE = new Set(["a", "an", "the", "and", "or", "but", "of", "to", "for", "in", "on", "at", "by", "with", "from", "your", "our", "its", "is", "are", "be", "it", "that", "this"]);
