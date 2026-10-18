@@ -109,6 +109,7 @@ export function Studio({ projectId, file, rendering = false, autoStart = false, 
             compositionWidth={sizeOf(plan)[0]}
             compositionHeight={sizeOf(plan)[1]}
             controls
+            numberOfSharedAudioTags={8}
             style={{ width: "100%", maxHeight: "75vh", aspectRatio: `${sizeOf(plan)[0]} / ${sizeOf(plan)[1]}` }}
           />
         </div>

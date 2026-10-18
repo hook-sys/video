@@ -3,7 +3,7 @@ import { AbsoluteFill, Html5Audio, Img, Sequence, continueRender, delayRender, s
 import { Audio as MediaAudio } from "@remotion/media";
 import { type Face, familyOf, fontUrl } from "./faces";
 import { type C, type Play, clamp01, ease, tint } from "./kit";
-import { T, soundsOf } from "./sounds";
+import { SOUND_FRAMES, T, soundsOf } from "./sounds";
 import { TEMPLATE } from "./more";
 import { geoOf } from "./geo";
 import { type Look, lookOf, themeOf } from "./theme";
@@ -110,7 +110,7 @@ function Sounds({ plan, webAudio }: { plan: SimplePlan; webAudio?: boolean }) {
   return (
     <>
       {soundsOf(plan).map((e, i) => (
-        <Sequence key={i} from={e.at} durationInFrames={Math.min(90, plan.duration - e.at)} layout="none">
+        <Sequence key={i} from={e.at} durationInFrames={Math.max(1, Math.min(SOUND_FRAMES[e.name] ?? 30, plan.duration - e.at))} layout="none">
           {webAudio ? <MediaAudio src={staticFile(`/sfx/${e.name}.mp3`)} volume={e.volume} /> : <Html5Audio src={staticFile(`/sfx/${e.name}.mp3`)} volume={e.volume} />}
         </Sequence>
       ))}

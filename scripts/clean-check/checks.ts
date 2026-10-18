@@ -17,7 +17,7 @@ import { livingStandIn } from "@/components/video/icons/living";
 import { existsSync } from "node:fs";
 import { keyIconOf } from "@/components/video/simple/kit";
 import { MOTION_SOUND, WORD_ICON_NAMES, motionOf, wordIcon } from "@/components/video/simple/motion";
-import { SOUND_NAMES, soundsOf } from "@/components/video/simple/sounds";
+import { MOST_AT_ONCE, SOUND_FRAMES, SOUND_NAMES, soundsOf } from "@/components/video/simple/sounds";
 import { askOf, beatsOf, durationOf } from "@/components/video/simple/beats";
 import { isPublicHost, websiteUrlOf } from "@/lib/website-url";
 import { applyEdit, editOf } from "@/components/video/simple/edit";
@@ -330,11 +330,13 @@ export async function runChecks(): Promise<Check[]> {
     const sounds = [...SOUND_NAMES, ...Object.values(MOTION_SOUND).map((x) => x.name)].filter((n) => !existsSync(`public/sfx/${n}.mp3`));
     const heard = drawn.map((p) => soundsOf(p));
     const crowd = Math.max(...heard.map((list) => Math.max(0, ...list.map((e) => list.filter((x) => x.at >= e.at && x.at < e.at + 30).length))));
-    const unknown = heard.flat().filter((e) => !SOUND_NAMES.includes(e.name)).length;
+    const unknown = heard.flat().filter((e) => !SOUND_NAMES.includes(e.name) || !SOUND_FRAMES[e.name]).length;
+    // (sounding together: the player has 5 audio tags, one is the voice)
+    const together = Math.max(...heard.map((list) => Math.max(0, ...list.map((e) => list.filter((x) => x.at <= e.at && x.at + SOUND_FRAMES[x.name] > e.at).length))));
     const keyed = body.filter((x) => x.alone && keyIconOf(x.sc)).length;
     const moving = heard.flat().filter((e) => ["tick", "ding", "rise", "shimmer", "lock", "digital_processing", "typing"].includes(e.name)).length;
     const plain = wordIcon("Invoices,") === "receipt" && wordIcon("fast") === "zap" && wordIcon("the") === null && wordIcon("team") === null && motionOf("circle-check") === "draw" && motionOf("bell") === "ring" && motionOf("house") === null;
-    add("icons that move, with their own sound: a word gets an icon only when it plainly stands for one (none for the rest, never a person); every icon and sound is there; never more than 3 sounds in a second", !badIcons.length && !sounds.length && !unknown && crowd <= 3 && plain, `${badIcons.length ? `no icon ${badIcons.join(", ")} · ` : ""}${sounds.length ? `no sound ${sounds.join(", ")} · ` : ""}${keyed}/${body.filter((x) => x.alone).length} words-alone scenes with an icon · ${moving} icon/typing sounds in ${drawn.length} videos · at most ${crowd} sounds a second`);
+    add("icons that move, with their own sound: a word gets an icon only when it plainly stands for one (none for the rest, never a person); every icon and sound is there; never more than 3 sounds in a second, nor more than 3 sounding at once", !badIcons.length && !sounds.length && !unknown && crowd <= 3 && together <= MOST_AT_ONCE && plain, `${badIcons.length ? `no icon ${badIcons.join(", ")} · ` : ""}${sounds.length ? `no sound ${sounds.join(", ")} · ` : ""}${keyed}/${body.filter((x) => x.alone).length} words-alone scenes with an icon · ${moving} icon/typing sounds in ${drawn.length} videos · at most ${crowd} sounds a second, ${together} at once`);
   }
 
   return checks;

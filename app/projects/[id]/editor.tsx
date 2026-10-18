@@ -328,6 +328,7 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
                 compositionHeight={H}
                 controls
                 clickToPlay={false}
+                numberOfSharedAudioTags={8}
                 style={{ width: "100%", height: "100%" }}
               />
             </div>

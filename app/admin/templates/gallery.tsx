@@ -46,7 +46,7 @@ export function TemplateGallery() {
           <Card key={t} title={LABEL[t] ?? t}>
             <p className="mb-2 text-xs text-zinc-500">Variants A, B and C (3 s each)</p>
             <div className="overflow-hidden rounded-xl ring-1 ring-white/10">
-              <Player key={frame} component={SimpleFilm} inputProps={{ plan }} durationInFrames={plan.duration} fps={30} compositionWidth={w} compositionHeight={h} controls loop autoPlay style={{ width: "100%", maxHeight: "70vh", aspectRatio: `${w} / ${h}` }} />
+              <Player key={frame} component={SimpleFilm} inputProps={{ plan }} durationInFrames={plan.duration} fps={30} compositionWidth={w} compositionHeight={h} controls loop autoPlay numberOfSharedAudioTags={8} style={{ width: "100%", maxHeight: "70vh", aspectRatio: `${w} / ${h}` }} />
             </div>
           </Card>
         ))}
