@@ -1,5 +1,5 @@
 import { searchIcons } from "@/lib/icons";
-import type { Beat, Intent, Item, Reading, Word } from "./types";
+import type { Beat, Concept, Intent, Item, Reading, Word } from "./types";
 
 // A beat read by rule: for the template gallery, local tests and the
 // side-by-side comparisons — videos for customers are read by the AI
@@ -9,8 +9,23 @@ const STOP = new Set("a an the and or but so of to in on at for with by from is 
 const clean = (t: string) => t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}%]+$/gu, "");
 const isWord = (t: string) => clean(t).length > 2 && !STOP.has(clean(t).toLowerCase());
 
-const PAIN = /\b(still|tired|lost|lose|losing|miss|missed|missing|manual|chaos|messy|scattered|endless|slow|stuck|hard|without|no more|problem|struggle|juggling|spreadsheets?)\b/i;
+const PAIN = /\b(nothing|never|still|tired|lost|lose|losing|miss|missed|missing|manual|chaos|messy|scattered|endless|slow|stuck|hard|without|no more|problem|struggle|juggling|spreadsheets?)\b/i;
 const STEP = /\b(first|then|next|finally|step|steps|three|simple|in minutes)\b/i;
+
+// the idea a beat's words picture, by their words (the truth: "X is just Y", its two words)
+const IDEAS: [Concept, RegExp][] = [
+  ["trapped", /\b(trapped|stuck|locked (in|up|away)|boxed in|held back|caged)\b/i],
+  ["chaos", /\b(chaos|chaotic|mess|messy|scattered|cluttered|juggling|all over the place|overwhelm\w*|organi[sz]e\w*)\b/i],
+  ["waiting", /\b(wait|waits|waiting|delay\w*|takes forever|loading|slow|weeks to|days to)\b/i],
+  ["launch", /\b(launch\w*|take off|takes off|lift ?off|go live|ship it|skyrocket\w*)\b/i],
+];
+const TRUTH = /\b(\p{L}+)\s+(?:is|are)\s+(?:(?:just|only|really|actually|simply|basically|nothing but)\s+)+(?:(?:being|a|an|the)\s+)?(\p{L}+)/iu;
+function ideaOf(text: string): { concept: Concept; items?: Item[] } | null {
+  const t = TRUTH.exec(text);
+  if (t && !STOP.has(t[1].toLowerCase()) && !STOP.has(t[2].toLowerCase())) return { concept: "truth", items: [t[1], t[2]].map((x) => ({ text: x.charAt(0).toUpperCase() + x.slice(1), icon: null })) };
+  const hit = IDEAS.find(([, re]) => re.test(text));
+  return hit ? { concept: hit[0] } : null;
+}
 
 function intentOf(text: string, i: number, n: number, brand: string): Intent {
   if (i === n - 1) return "cta";
@@ -39,6 +54,7 @@ export function guessReadings(words: Word[], beats: Beat[], brand: string): Read
     const things = [...new Set(words.slice(b.first, b.last + 1).map((w) => clean(w.text)).filter((t) => isWord(t) && !/\d/.test(t)))];
     const items: Item[] = things.slice(0, 3).map((t) => ({ text: t.charAt(0).toUpperCase() + t.slice(1), icon: searchIcons(t, 1)[0] ?? null }));
     const number = words.slice(b.first, b.last + 1).map((w) => clean(w.text)).find((t) => /\d/.test(t)) ?? null;
-    return { intent: intentOf(text, i, beats.length, brand), show: best, key, icon: searchIcons(text, 1)[0] ?? "sparkles", items, number };
+    const idea = i < beats.length - 1 ? ideaOf(text) : null;
+    return { intent: intentOf(text, i, beats.length, brand), show: best, key, icon: searchIcons(text, 1)[0] ?? "sparkles", items: idea ? (idea.items ?? []) : items, number, ...(idea ? { concept: idea.concept } : {}) };
   });
 }

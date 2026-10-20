@@ -30,7 +30,8 @@ import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
 import { geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/simple/faces";
-import { GROUNDS, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
+import { CONCEPTS, GROUNDS, type Scene, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
+import { conceptSounds, turnOf } from "@/components/video/simple/concept";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -180,7 +181,7 @@ export async function runChecks(): Promise<Check[]> {
       prints.push(p.print);
       return p;
     });
-    add("a template per beat, never the same twice in a row, the brand and the ask last", plans.every((p) => p.scenes.length === beats.length && p.scenes.at(-1)!.template === "cta" && p.scenes.every((x, i) => !i || x.template !== p.scenes[i - 1].template || x.template === "statement")), plans.map((p) => p.scenes.map((x) => `${x.template}${x.variant}`).join(",")).join(" · "));
+    add("a template per beat, never the same twice in a row, the brand and the ask last", plans.every((p) => p.scenes.length === beats.length && p.scenes.at(-1)!.template === "cta" && p.scenes.every((x, i) => !i || x.template !== p.scenes[i - 1].template || x.template === "statement" || (x.template === "concept" && x.concept !== p.scenes[i - 1].concept))), plans.map((p) => p.scenes.map((x) => `${x.template}${x.variant}`).join(",")).join(" · "));
     add("the same script four times: four videos unlike each other in at least 3 of ground, type, transitions, pace and template order", plans.every((p, i) => plans.slice(0, i).every((q) => differs(p.print, q.print) >= 3)), prints.join(" · "));
     const g = galleryPlan({ ground: "dark", type: 0, way: "slide", pace: "calm" });
     add("every template has its variants in the gallery", TEMPLATES.every((x) => g.scenes.filter((s) => s.template === x).length === VARIANTS), `${g.scenes.length} scenes`);
@@ -344,6 +345,36 @@ export async function runChecks(): Promise<Check[]> {
     const moving = heard.flat().filter((e) => ["tick", "ding", "rise", "shimmer", "lock", "digital_processing", "typing"].includes(e.name)).length;
     const plain = wordIcon("Invoices,") === "receipt" && wordIcon("fast") === "zap" && wordIcon("the") === null && wordIcon("team") === null && motionOf("circle-check") === "draw" && motionOf("bell") === "ring" && motionOf("house") === null;
     add("icons that move, with their own sound: a word gets an icon only when it plainly stands for one (none for the rest, never a person); every icon and sound is there; never more than 3 sounds in a second, nor more than 3 sounding at once", !badIcons.length && !sounds.length && !unknown && crowd <= 3 && together <= MOST_AT_ONCE && plain, `${badIcons.length ? `no icon ${badIcons.join(", ")} · ` : ""}${sounds.length ? `no sound ${sounds.join(", ")} · ` : ""}${keyed}/${body.filter((x) => x.alone).length} words-alone scenes with an icon · ${moving} icon/typing sounds in ${drawn.length} videos · at most ${crowd} sounds a second, ${together} at once`);
+  }
+
+  {
+    // the ideas (concept.tsx): every idea, resolving or not, in every variant, clean on every frame; its turn
+    // inside the scene; its sounds there; and found by its words in a script
+    const left: string[] = [];
+    let turns = 0, heard = 0;
+    for (const size of [[1920, 1080], [1080, 1920], [1080, 1080]] as [number, number][]) {
+      const base = galleryPlan({ ground: "light", type: 2, way: "zoom", pace: "lively" }, undefined, size);
+      const cases = CONCEPTS.flatMap((concept) => [true, false].flatMap((resolves) => Array.from({ length: VARIANTS }, (_, v) => ({ concept, resolves, v }))));
+      const scenes: Scene[] = cases.map(({ concept, resolves, v }, k) => {
+        const words = concept === "truth" ? "Busy is just stuck" : "Ideas stuck in your head";
+        const s = sampleScene("concept", v, k * 150, 150, k % 2 === 0);
+        const ws = words.split(" ");
+        return { ...s, concept, resolves, items: concept === "truth" ? [{ text: "Busy", icon: null }, { text: "Stuck", icon: null }] : s.items, words: ws.map((t, i) => ({ t, at: k * 150 + 4 + i * 9, key: i === ws.length - 1 })), said: ws.map((t, i) => ({ t, at: k * 150 + 4 + i * 9 })) };
+      });
+      const plan = { ...base, scenes, duration: scenes.length * 150 };
+      left.push(...checkPlan(plan).map((x) => `${size.join("x")} ${x.scene != null ? `${scenes[x.scene].concept}${"ABC"[scenes[x.scene].variant]}` : ""} ${x.detail}`));
+      for (const s of scenes) {
+        const t = turnOf(s);
+        if (t >= s.from + 24 && t <= s.to - 40) turns++;
+        if (conceptSounds(s).every((e) => e.at >= s.from && e.at < s.to && SOUND_NAMES.includes(e.name))) heard++;
+      }
+    }
+    const script = "Your best ideas always get stuck inside your own head. Your orders are scattered across five different apps. Every week you wait for approvals that never come. Being busy is really just being stuck. Launch your new online shop today with us. Start now.";
+    let t = 0.3;
+    const words = script.split(" ").map((w) => { const start = t; t += 0.36 + (/[.?!]$/.test(w) ? 0.45 : 0); return { text: w, start, end: start + 0.32 }; });
+    const found = guessReadings(words, beatsOf(words), "Shop").map((r) => r.concept ?? "-").join(" ");
+    const all = CONCEPTS.length * 2 * VARIANTS * 3;
+    add("the ideas: every one, resolving or not, in every variant, clean on every frame; its turn inside the scene and its sounds there; found by its words", !left.length && turns === all && heard === all && found === "trapped chaos waiting truth launch -", left.slice(0, 3).join(" · ") || `${all} scenes · ${found}`);
   }
 
   return checks;

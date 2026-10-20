@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Icon } from "../icons";
+import { Concept } from "./concept";
 import { familyOf } from "./faces";
 import { fitWords } from "./fit";
 import { type C, Glyph, One, Words, clamp01, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
@@ -434,7 +435,7 @@ function Screen({ c }: { c: C }) {
   );
 }
 
-export const TEMPLATE: Record<TemplateId, (p: { c: C }) => ReactNode> = { ...TEMPLATES_1, kinetic: Kinetic, compare: Compare, chart: Chart, messages: Messages, bento: Bento, screen: Screen };
+export const TEMPLATE: Record<TemplateId, (p: { c: C }) => ReactNode> = { ...TEMPLATES_1, kinetic: Kinetic, compare: Compare, chart: Chart, messages: Messages, bento: Bento, screen: Screen, concept: Concept };
 
 // the scene's click (its cursor's or its button's — the last scene has a button only when the voice asks), for its sound
 export function clickOf(s: Scene, asks = true): number | null {

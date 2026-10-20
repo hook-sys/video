@@ -39,10 +39,17 @@ export type Reading = {
   // (from the story plan, when there is one) what it should show, and whether it is the video's main moment
   shows?: Show;
   hero?: boolean;
+  // (when its words picture one idea) the idea (concept.tsx)
+  concept?: Concept;
 };
 
+// The ideas a beat's words may picture (concept.tsx): an idea shut in, a mess put
+// in order, waiting, one word that is really another, taking off
+export const CONCEPTS = ["trapped", "chaos", "waiting", "truth", "launch"] as const;
+export type Concept = (typeof CONCEPTS)[number];
+
 // (a new template goes last: a video's print keeps each template's place)
-export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta", "screen"] as const;
+export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta", "screen", "concept"] as const;
 export type TemplateId = (typeof TEMPLATES)[number];
 // every template has three designed variants
 export const VARIANTS = 3;
@@ -86,6 +93,9 @@ export type Scene = {
   ground?: Ground;
   // false: its lit word's icon (kit.tsx keyIconOf) left out — it did not fit (check.ts settleWordIcons)
   wordIcon?: false;
+  // the idea its words picture, and whether it resolves there (not in a hook or a problem: the box stays shut)
+  concept?: Concept;
+  resolves?: boolean;
 };
 
 export type SimplePlan = {

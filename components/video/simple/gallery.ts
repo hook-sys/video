@@ -17,6 +17,7 @@ const SAMPLE: Record<TemplateId, { words: string; key: number; icon: string; ite
   messages: { words: "Your team stays in sync", key: 3, icon: "message-circle", items: [{ text: "Order shipped", icon: "truck" }, { text: "Stock updated", icon: "boxes" }, { text: "Line 4 ready", icon: "circle-check" }] },
   bento: { words: "One app for the floor", key: 1, icon: "layout-grid", items: [{ text: "Live orders", icon: "radio" }, { text: "Stock levels", icon: "boxes" }, { text: "Shift reports", icon: "file-text" }] },
   screen: { words: "Every order on one screen", key: 3, icon: "monitor", items: [] },
+  concept: { words: "Launch your new line today", key: 0, icon: "lightbulb", items: [{ text: "Design", icon: "pencil-ruler" }, { text: "Produce", icon: "factory" }, { text: "Ship", icon: "truck" }] },
 };
 
 export const GALLERY_BRAND: Brand = { name: "Orin ERP", color: "#1FA77A", cta: "Start today", icon: null };
@@ -25,7 +26,9 @@ export const GALLERY_BRAND: Brand = { name: "Orin ERP", color: "#1FA77A", cta: "
 export function sampleScene(template: TemplateId, variant: number, from: number, len = 90, left = true): Scene {
   const x = SAMPLE[template];
   const words = x.words.split(" ");
-  return { from, to: from + len, template, variant, left, words: words.map((t, i) => ({ t, at: from + 4 + i * 6, key: i === x.key })), icon: x.icon, items: x.items, number: x.number ?? null };
+  // (an idea: one of them for each variant — shut in beside the words, waiting under them, taking off alone)
+  const idea = template === "concept" ? { concept: (["trapped", "waiting", "launch"] as const)[variant % 3], resolves: true } : {};
+  return { from, to: from + len, template, variant, left, words: words.map((t, i) => ({ t, at: from + 4 + i * 6, key: i === x.key })), icon: x.icon, items: x.items, number: x.number ?? null, ...idea };
 }
 
 export function galleryPlan(theme: Theme, only?: TemplateId, size: [number, number] = [1920, 1080]): SimplePlan {

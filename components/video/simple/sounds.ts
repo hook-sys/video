@@ -1,3 +1,4 @@
+import { conceptSounds } from "./concept";
 import { keyIconOf } from "./kit";
 import { clickOf } from "./more";
 import { MOTION_DELAY, MOTION_SOUND, motionOf } from "./motion";
@@ -28,7 +29,7 @@ export function soundsOf(plan: SimplePlan): { at: number; name: string; volume: 
   const out: { at: number; name: string; volume: number }[] = [];
   plan.scenes.forEach((s: Scene, i) => {
     if (i) out.push({ at: Math.max(0, s.from - T / 2), name: "whoosh", volume: 0.22 });
-    if (s.items.length && s.template !== "statement" && s.template !== "stat") out.push({ at: s.from + 10, name: "soft_pop", volume: 0.3 });
+    if (s.items.length && s.template !== "statement" && s.template !== "stat" && s.template !== "concept") out.push({ at: s.from + 10, name: "soft_pop", volume: 0.3 });
     if (s.template === "stat" || s.template === "reveal") out.push({ at: s.from + 8, name: s.template === "stat" ? "subtle_impact" : "reveal", volume: 0.36 });
     const moves: { at: number; m: NonNullable<ReturnType<typeof motionOf>> }[] = [];
     const key = keyIconOf(s);
@@ -47,6 +48,7 @@ export function soundsOf(plan: SimplePlan): { at: number; name: string; volume: 
       if (pop >= 0) out.splice(pop, 1);
       out.push({ at: first.at, ...MOTION_SOUND[first.m] });
     }
+    if (s.template === "concept") out.push(...conceptSounds(s));
     if (s.template === "kinetic" && s.variant === 1 && s.words.length) out.push(...typed(s.words[0].at - 2, s.words.at(-1)!.at + s.words.at(-1)!.t.length * 1.6));
     if (s.template === "feature" && s.variant === 2 && s.items.length) out.push(...typed(s.from + 12, s.from + 12 + s.items[0].text.length * 2));
     const click = clickOf(s, !!plan.brand.cta.trim());

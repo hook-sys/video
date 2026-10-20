@@ -14,7 +14,7 @@ export type SceneEdit = { template: TemplateId; variant: number; show: [number, 
 export type PlanEdit = { theme: Theme; scenes: SceneEdit[] };
 
 // names a customer reads
-export const TEMPLATE_NAME: Record<TemplateId, string> = { statement: "Big words", kinetic: "Moving words", trouble: "The problems", compare: "Before and after", reveal: "Brand reveal", feature: "Product card", screen: "Your product", messages: "Messages", bento: "Tiles", stat: "Big number", chart: "Chart", steps: "Steps", cta: "Ending" };
+export const TEMPLATE_NAME: Record<TemplateId, string> = { statement: "Big words", kinetic: "Moving words", trouble: "The problems", compare: "Before and after", reveal: "Brand reveal", feature: "Product card", screen: "Your product", messages: "Messages", bento: "Tiles", stat: "Big number", chart: "Chart", steps: "Steps", cta: "Ending", concept: "The idea" };
 export const TYPE_NAME = ["Clean", "Modern", "Characterful", "Soft", "Bold"];
 // (the templates that show the things a scene names)
 export const SHOWS_THINGS: TemplateId[] = ["trouble", "compare", "reveal", "feature", "messages", "bento", "chart", "steps"];
@@ -66,6 +66,8 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
     if (!e || !TEMPLATES.includes(e.template)) return { error: `${n}: that way of showing it is not one there is.` };
     // (the last scene is always the brand and the ask, and only it)
     if (last !== (e.template === "cta")) return { error: `${n}: ${last ? "the last scene is always the ending" : "only the last scene is the ending"}.` };
+    // (an idea only where its words picture one, the truth with its two words)
+    if (e.template === "concept" && !s.concept) return { error: `${n}: its words picture no idea to show.` };
     if (e.template === "screen" && !(Number.isInteger(e.screen) && e.screen! >= 0 && e.screen! < shots)) return { error: `${n}: there is no such picture of the product.` };
     const items = Array.isArray(e.items) ? e.items : [];
     if (items.length > 3) return { error: `${n}: at most three things.` };
@@ -77,6 +79,7 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
       const icon = it?.icon == null ? null : String(it.icon).slice(0, 40);
       things.push({ text, icon });
     }
+    if (e.template === "concept" && s.concept === "truth" && things.length < 2) return { error: `${n}: this needs its two words.` };
     if (!Number.isInteger(e.variant) || e.variant < 0 || e.variant >= VARIANTS || !variantOk(e.template, e.variant, things.length)) return { error: `${n}: that way of showing it needs more things.` };
     const icon = String(e.icon ?? "").slice(0, 40) || s.icon;
     // the words on screen: a run of its beat's own words (never typed), the lit one among them
