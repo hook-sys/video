@@ -232,3 +232,36 @@ the ground 1.5–1.7 s → 0–0.3 s of 25 s.
 The end is the brand, big: its mark 230 px (300 on a tall frame, the name
 under it), the name up to 150 px, the words under it larger, a soft light of
 the brand colour opening behind it.
+
+## The ideas: a beat shown as what it means
+
+An icon beside the words says what a beat is about; it does not show it. A
+beat whose words plainly picture one idea is shown as that idea
+(components/video/simple/concept.tsx, the template "The idea"):
+
+- **trapped** — an idea bouncing off the walls of its box, each wall giving as
+  it is hit; it resolves by the walls flying apart and the idea coming to the middle;
+- **chaos** — nine things dropping into a pile, shaking (the scene's own first);
+  it resolves by the pile snapping into a 3 × 3 grid, its middle lit;
+- **waiting** — a clock ticking over a bar stuck at a seventh (never a number
+  on it); it resolves by the bar filling and the clock turning into a check;
+- **truth** — "X is just Y": X big; as Y is said, X splits apart (A), is struck
+  out and dropped (B) or turns over (C), Y stands in its place on a plate, and
+  X comes back small and struck above it. Always alone on the frame — the two
+  words are the picture;
+- **launch** — a line drawn up across the frame, a rocket at its head lighting
+  its stops (the scene's things, named) and arriving with a burst.
+
+Each has a turn — its lit word said (the truth: its second word said), never in
+the scene's first 0.8 s or last 1.3 s (a take-off at no less than 60 % of it).
+A beat about what goes wrong (a hook, a problem) never resolves: the box stays
+shut and closes in, the pile keeps shaking, the bar stays stuck, the rocket
+stalls. Variants: beside the words (A), under them (B), or the idea alone (C;
+never the opening scene, whose words are read). Two different ideas may follow
+each other; each has its own sounds (walls hit, the pile locking, the clock's
+ticks and a ding, the cut, the take-off).
+
+The Director names a beat's idea (or none — most beats); the rule guess finds
+one by its words ("stuck", "scattered", "waiting", "X is just Y", "launch").
+A beat with an idea is shown as it most of the time, and of the drafts the one
+that shows more of its ideas scores higher.

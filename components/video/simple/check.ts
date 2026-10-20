@@ -1,5 +1,6 @@
 import { type ReactNode, isValidElement } from "react";
 import { Icon, resolveIcon } from "../icons";
+import { conceptSettled } from "./concept";
 import { type FitNote, noting } from "./fit";
 import { geoOf } from "./geo";
 import { type C, ICON_SLOT, type Play, keyIconOf } from "./kit";
@@ -24,6 +25,8 @@ export type Problem = { scene: number | null; kind: "words" | "cut" | "icon" | "
 // with no number said, a prompt being typed that is not a question.
 export function meaningOf(s: Scene): string | null {
   if ((s.template === "stat" || s.template === "chart") && !s.number) return `a ${s.template} with no number said`;
+  if (s.template === "concept" && !s.concept) return "an idea with no idea to show";
+  if (s.template === "concept" && s.concept === "truth" && s.items.length < 2) return "a word that is really another with no two words";
   if (s.template === "kinetic" && s.variant === 1 && !/\?["'”’)]*$/.test(s.words.at(-1)?.t ?? "")) return "words typed as a prompt that ask nothing";
   return null;
 }
@@ -53,6 +56,7 @@ export function settledAt(s: Scene): number {
     : t === "bento" ? Math.max(s.from + 36, lastThing + 18)
     : t === "cta" ? (clickOf(s) ?? s.from) + 10
     : t === "screen" ? s.from + 30
+    : t === "concept" ? conceptSettled(s)
     : s.from;
   return Math.max(lastWord, n ? lastThing + 18 : s.from, own);
 }
@@ -253,14 +257,17 @@ export function repairPlan(plan: SimplePlan, readings?: Reading[]): { plan: Simp
 
 // A mended plan scored by code: problems left weigh most, then how much of
 // the frame its heroes take, how few scenes are words alone, how many
-// templates it uses, and how little it had to be mended.
+// templates it uses, how many of its ideas it shows as them, and how little it had to be mended.
 export function scoreOf(plan: SimplePlan): number {
   const body = plan.scenes.slice(0, -1);
   const heroes = heroShares(plan).filter((x): x is number => x != null);
   const hero = heroes.length ? heroes.reduce((a, x) => a + x, 0) / heroes.length : 0;
   const alone = body.filter((s) => wordsAlone(s.template, s.variant)).length / Math.max(1, body.length);
   const kinds = new Set(body.map((s) => s.template)).size / Math.max(1, body.length);
-  return -1000 * checkPlan(plan).length + 100 * hero - 60 * alone + 20 * kinds - 2 * (plan.check?.fixed.length ?? 0);
+  // (a beat whose words picture an idea, shown as that idea)
+  const ideas = body.filter((s) => s.concept);
+  const shown = ideas.length ? ideas.filter((s) => s.template === "concept").length / ideas.length : 0;
+  return -1000 * checkPlan(plan).length + 100 * hero - 60 * alone + 20 * kinds + 40 * shown - 2 * (plan.check?.fixed.length ?? 0);
 }
 
 // The video: `drafts` plans drawn (each unlike this customer's recent videos),

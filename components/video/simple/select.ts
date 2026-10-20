@@ -71,6 +71,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
   const shots = brand.screens?.length ?? 0;
   let pictured = 0;
   let prev: TemplateId | null = null;
+  let prevIdea: string | undefined;
   const scenes: Scene[] = readings.map((read, i) => {
     // (a thing that only repeats the words shown beside it is not shown again)
     const [c0, c1] = keyRun(words, read.show, read.key, 4);
@@ -79,11 +80,17 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // (the last beat is always the brand and the ask)
     const about = r.intent === "feature" || r.intent === "solution" || r.shows === "product";
     const base: [TemplateId, number][] = i === readings.length - 1 ? [["cta", 1]] : [...choices(r).filter(([t]) => t !== "cta"), ...(pictured < shots && about ? [["screen", r.intent === "solution" ? 0.35 : 0.6] as [TemplateId, number]] : [])];
-    const list = i === readings.length - 1 ? base : planned(r, base);
-    let template = pickOf(list, prev, R);
+    // (a beat whose words picture one idea is mostly shown as that idea — the truth only with its two words)
+    const idea = i < readings.length - 1 && read.concept && (read.concept !== "truth" || read.items.length >= 2);
+    const list0 = i === readings.length - 1 ? base : planned(r, base);
+    const list: [TemplateId, number][] = idea ? [...list0, ["concept", 5 * list0.reduce((a, [, w]) => a + w, 0)]] : list0;
+    // (two ideas in a row are two pictures: an idea may follow another idea)
+    let template = pickOf(list, prev === "concept" && prevIdea !== read.concept ? null : prev, R);
     // (a variant that needs things only when there are some)
     let variant = R.int(0, VARIANTS - 1);
     if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
+    // (the opening idea with its words on screen: the hook is read as well as seen)
+    if (template === "concept" && variant === 2 && i === 0 && read.concept !== "truth") variant = R.int(0, 1);
     // (the video's main moment always shows something)
     if (wordsAlone(template, variant) && (wasAlone || alone >= most || r.hero)) {
       // another way to tell it with a hero, else the words beside its icon
@@ -100,6 +107,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     if (wasAlone) alone++;
     const screen = template === "screen" ? pictured++ : undefined;
     prev = template;
+    prevIdea = template === "concept" ? read.concept : undefined;
     // (beside a hero — or under the brand's mark — the words are its caption: at most four of them, around the key one)
     const [start, end] = wasAlone || template === "cta" ? r.show : keyRun(words, r.show, r.key, 4);
     const shown = words.slice(start, end + 1);
@@ -113,9 +121,11 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       left: R.chance(0.5),
       words: shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS) - late), key: start + k === r.key })),
       icon: r.icon ?? "sparkles",
-      items: r.items.slice(0, 3),
+      // (an idea's things as read: the truth's two words are among the words said)
+      items: (template === "concept" ? read : r).items.slice(0, 3),
       number: r.number,
       ...(screen != null ? { screen } : {}),
+      ...(read.concept ? { concept: read.concept, resolves: r.intent !== "hook" && r.intent !== "problem" } : {}),
       said: words.slice(beats[i].first, beats[i].last + 1).map((w) => ({ t: w.text, at: Math.round(w.start * FPS) })),
     };
   });
