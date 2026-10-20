@@ -219,3 +219,16 @@ the picture changes on each:
 The check: something new on screen every 3 s or sooner on average (the test
 videos: 1.8 s). Measured on the same script rendered: motion 2.2–2.6 → 3.5–4.9,
 still frames 40–50 % → 32–37 %.
+
+## No empty frame; a strong end
+
+Nothing on screen is a dead moment. The first words of a scene come in by
+4 frames into it (the video's first at once), a little before they are said
+— titles lead the voice; a phrase's first word comes in as the one before
+goes; the zoom between scenes goes through, the scene going out staying until
+what comes in is there. Measured on the same script rendered: frames with only
+the ground 1.5–1.7 s → 0–0.3 s of 25 s.
+
+The end is the brand, big: its mark 230 px (300 on a tall frame, the name
+under it), the name up to 150 px, the words under it larger, a soft light of
+the brand colour opening behind it.

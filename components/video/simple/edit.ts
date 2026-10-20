@@ -90,8 +90,8 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
       if (!asMade && b - a + 1 > mostWords(e.template, e.variant)) return { error: `${n}: at most ${mostWords(e.template, e.variant)} words beside this.` };
       if (e.key != null && (e.key < a || e.key > b)) return { error: `${n}: the word lit up must be one shown.` };
       const run = said.slice(a, b + 1);
-      // (as they come in in a drawn plan: as said, never later than half a second into the scene)
-      const late = Math.max(0, run[0].at - (s.from + 15));
+      // (as they come in in a drawn plan: as said, the first never later than 4 frames into the scene)
+      const late = Math.max(0, run[0].at - (s.from + (s.from ? 4 : 0)));
       words = run.map((w, k) => ({ t: shownWord(w.t, k, run.length), at: Math.max(s.from, w.at - late), key: a + k === e.key }));
     }
     const next: Scene = { ...s, template: e.template, variant: e.variant, words, icon, items: things };

@@ -552,6 +552,13 @@ export function Button({ c, at, size = 60, on }: { c: C; at: number; size?: numb
 }
 // Every way of it centred on the frame (or on its half): its parts stacked
 // as one group, the group in the middle — never one side left empty.
+// a soft light of the brand colour opening behind the brand at the end
+function Glow({ c, x, y, r }: { c: C; x: number; y: number; r: number }) {
+  const k = springAt(c, c.s.from + 6, 1.6);
+  const breathe = 1 + 0.04 * Math.sin((c.f - c.s.from) / 14);
+  return <div style={{ position: "absolute", left: x - r, top: y - r, width: 2 * r, height: 2 * r, borderRadius: "50%", background: `radial-gradient(closest-side, ${tint(c.look.accent, c.look.dark ? 0.32 : 0.2)}, transparent)`, opacity: clamp01(k), transform: `scale(${((0.6 + 0.4 * k) * breathe).toFixed(4)})`, pointerEvents: "none" }} />;
+}
+
 function Cta({ c }: { c: C }) {
   const { W, H, pad, u } = c.g;
   // (its click: clickOf)
@@ -577,15 +584,20 @@ function Cta({ c }: { c: C }) {
   };
   const nameSize = (width: number, max: number) => Math.round(fitWords([c.brand.name], c.look.display, { width, lines: 1, max, min: 44 }).size);
   if (c.s.variant === 0) {
-    // the brand first: its mark and name, the words under them, the button
-    const ms = Math.round(150 * u);
-    const sub = wordsH(W - 2 * pad, tall(c) ? 3 : 2, Math.round(TYPE.SUB * u));
-    const [yName, yWords, yButton] = stack([ms, repeat ? 0 : sub.height, bh], 56 * u, 0, H);
+    // the brand first, big (the video ends on it): its mark and name, the words under them, the button
+    // (on a tall frame the name under the mark, as wide as the frame lets it be)
+    const up = tall(c);
+    const ms = Math.round((up ? 300 : 230) * u);
+    const ns = up ? nameSize(W - 2 * pad, Math.round(TYPE.HEAD * 2.2 * u)) : nameSize(W - 2 * pad - ms - 60 * u, Math.round(TYPE.HEAD * 1.6 * u));
+    const lockH = up ? ms + 30 * u + ns * 1.15 : ms;
+    const sub = wordsH(W - 2 * pad, up ? 3 : 2, Math.round(TYPE.SUB * 1.25 * u));
+    const [yName, yWords, yButton] = stack([lockH, repeat ? 0 : sub.height, bh], 56 * u, 0, H);
     return (
       <>
-        <div style={center({ left: 0, width: W, top: yName, height: ms, gap: 36 * u, ...rise(k) })}>
+        <Glow c={c} x={W / 2} y={yName + ms / 2} r={ms * 3} />
+        <div style={center({ left: 0, width: W, top: yName, height: lockH, gap: (up ? 30 : 44) * u, flexDirection: up ? "column" : "row", ...rise(k) })}>
           <Mark c={c} size={ms} />
-          <div style={display(c, nameSize(W - 2 * pad - 200 * u, Math.round(TYPE.HEAD * u)))}>{c.brand.name}</div>
+          <div style={display(c, ns)}>{c.brand.name}</div>
         </div>
         {!repeat && (
           <div style={center({ left: pad, width: W - 2 * pad, top: yWords, height: sub.height })}>
@@ -602,16 +614,17 @@ function Cta({ c }: { c: C }) {
     );
   }
   if (c.s.variant === 1) {
-    // the words first: big, the brand small above them, the button under them
-    const ms = Math.round(84 * Math.max(0.8, u));
-    const head = wordsH(W - 2 * pad, tall(c) ? 4 : 2, Math.round(TYPE.HEAD * u));
+    // the words first: big, the brand above them, the button under them
+    const ms = Math.round(120 * Math.max(0.8, u));
+    const head = wordsH(W - 2 * pad, tall(c) ? 4 : 2, Math.round(TYPE.HEAD * 1.5 * u));
     const [yBrand, yWords, yButton] = stack([ms, repeat ? 0 : head.height, bh], 64 * u, 0, H);
     return (
       <>
-        <div style={center({ left: pad, top: yBrand, width: W - 2 * pad, height: ms, gap: 22, ...rise(k, 30) })}>
+        <Glow c={c} x={W / 2} y={yBrand + ms / 2} r={ms * 4} />
+        <div style={center({ left: pad, top: yBrand, width: W - 2 * pad, height: ms, gap: 28, ...rise(k, 30) })}>
           <Mark c={c} size={ms} />
           {/* (the words say the name already: the mark alone) */}
-          {!repeat && <div style={display(c, Math.round(TYPE.TITLE * Math.max(0.8, u)))}>{c.brand.name}</div>}
+          {!repeat && <div style={display(c, Math.round(TYPE.TITLE * 1.4 * Math.max(0.8, u)))}>{c.brand.name}</div>}
         </div>
         {!repeat && (
           <div style={center({ left: pad, width: W - 2 * pad, top: yWords, height: head.height })}>
@@ -639,9 +652,9 @@ function Cta({ c }: { c: C }) {
     <>
       <div style={center({ ...half, background: c.look.fill, flexDirection: "column", gap: 30 * u, clipPath: wide ? `inset(0 ${c.s.left ? (1 - wipe) * 100 : 0}% 0 ${c.s.left ? 0 : (1 - wipe) * 100}%)` : `inset(0 0 ${(1 - wipe) * 100}% 0)` })}>
         <div style={{ ...pop(springAt(c, c.s.from + 10)) }}>
-          <Mark c={{ ...c, look: { ...c.look, accent: onA, onAccent: c.look.fill } }} size={Math.round(180 * u)} />
+          <Mark c={{ ...c, look: { ...c.look, accent: onA, onAccent: c.look.fill } }} size={Math.round(250 * u)} />
         </div>
-        <div style={display(c, nameSize(half.width - 2 * m, Math.round(TYPE.HEAD * u)), { color: onA })}>{c.brand.name}</div>
+        <div style={display(c, nameSize(half.width - 2 * m, Math.round(TYPE.HEAD * 1.5 * u)), { color: onA })}>{c.brand.name}</div>
       </div>
       {!repeat && (
         <div style={center({ left: rest.left, width: rest.width, top: yWords, height: head.height })}>

@@ -103,8 +103,9 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // (beside a hero — or under the brand's mark — the words are its caption: at most four of them, around the key one)
     const [start, end] = wasAlone || template === "cta" ? r.show : keyRun(words, r.show, r.key, 4);
     const shown = words.slice(start, end + 1);
-    // (the words come in as they are said — never later than half a second into the scene: no empty start)
-    const late = Math.max(0, Math.round((shown[0]?.start ?? 0) * FPS) - (frames[i].from + 15));
+    // (the words come in as they are said — the first never later than 4 frames into the scene, the
+    // video's very first at once: no empty start)
+    const late = Math.max(0, Math.round((shown[0]?.start ?? 0) * FPS) - (frames[i].from + (frames[i].from ? 4 : 0)));
     return {
       ...frames[i],
       template,
