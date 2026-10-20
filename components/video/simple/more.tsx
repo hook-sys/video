@@ -4,7 +4,8 @@ import { familyOf } from "./faces";
 import { fitWords } from "./fit";
 import { type C, Glyph, One, Words, clamp01, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import { TYPE, WEIGHT } from "./geo";
-import { Band, Side, TEMPLATES_1, WordsIn, abs, center, display, itemAt, thingAt } from "./scenes";
+import { Band, Phrases, Side, TEMPLATES_1, WordsIn, abs, center, display, itemAt, thingAt } from "./scenes";
+import { phraseMode } from "./rhythm";
 import type { Item, Scene, TemplateId } from "./types";
 
 // The templates, part 2: compare (before → after), chart (it grows),
@@ -196,7 +197,8 @@ function Kinetic({ c }: { c: C }) {
       </div>
     );
   }
-  // big words, the key one growing in as it is said
+  // big words, the key one growing in as it is said (the whole line phrase by phrase, when it says more)
+  if (phraseMode(c.s)) return <Phrases c={c} effect="pop" />;
   return <WordsIn c={c} box={box} place="center" effect="pop" />;
 }
 

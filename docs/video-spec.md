@@ -200,3 +200,22 @@ icon ("invoices", "fast", "secure", "reminders" — a fixed list, never people)
 gets that icon beside it, just before it is said. Only where it fits:
 check.ts settleWordIcons leaves it out of a scene it would crowd (Scene.wordIcon
 false), and the film, its sounds and the editor follow.
+
+## Rhythm (components/video/simple/rhythm.ts)
+
+The promos change what is on screen every 1.5–3 s; our scenes held one
+picture for 4–13 s (measured: motion 2.2–2.6, 40–50 % of frames still, against
+4.7–21 and 10–70 % in the references). The voice is cut into phrases — at its
+punctuation and pauses, at most 5 words, never ending on a little word — and
+the picture changes on each:
+
+- words on screen alone (Big words A/C, Moving words C) whose beat says more
+  than its words show the whole line phrase by phrase, big, each in with a
+  small punch and cut out just before the next (the lit word lit wherever it is);
+- a scene with a hero (Side, Band) cuts to a close-up of its hero on a new
+  phrase — the hero brought to the middle, as close as keeps it in frame, the
+  words faded meanwhile — held up to 1.3 s, then back; always wide at its end.
+
+The check: something new on screen every 3 s or sooner on average (the test
+videos: 1.8 s). Measured on the same script rendered: motion 2.2–2.6 → 3.5–4.9,
+still frames 40–50 % → 32–37 %.
