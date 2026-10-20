@@ -4,6 +4,7 @@ import { emWidth, familyOf } from "./faces";
 import { fitWords, measured } from "./fit";
 import { type Box, HERO_W, TYPE, WEIGHT, bandOf, sideOf, splitOf, stackOf, wordsFit } from "./geo";
 import { type C, Cursor, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { closeAt, phraseMode, phrasesOf } from "./rhythm";
 import type { Scene } from "./types";
 
 // The templates (docs/video-spec.md), part 1: statement, trouble, reveal,
@@ -42,27 +43,63 @@ const wordsIn = (c: C, box: Box, place: "side" | "band", only?: (t: string) => b
 export function Side({ c, dw, dh, hw = HERO_W, effect, only, children }: { c: C; dw: number; dh: number; hw?: number; effect?: Effect; only?: (t: string) => boolean; children: ReactNode }) {
   const { words, hero } = sideOf(c.g, c.s.left, hw, wordsIn(c, splitOf(c.g, c.s.left, hw).words, "side", only), dw, dh);
   return (
-    <>
-      <WordsIn c={c} box={words} place="side" effect={effect} only={only} />
+    <Close c={c} hero={hero} dw={dw} dh={dh}>
+      <div style={{ opacity: 1 - closeAt(c.s, c.f) }}>
+        <WordsIn c={c} box={words} place="side" effect={effect} only={only} />
+      </div>
       <div style={hero}>{children}</div>
-    </>
+    </Close>
   );
+}
+// The close-up on the hero as the voice moves on (rhythm.ts closeAt): the
+// whole scene grown about the hero and the hero brought to the middle — as
+// close as keeps it inside the frame (the words, cut by the frame, fade out meanwhile)
+function Close({ c, hero, dw, dh, children }: { c: C; hero: CSSProperties; dw: number; dh: number; children: ReactNode }) {
+  const v = closeAt(c.s, c.f);
+  if (!v) return <>{children}</>;
+  const { W, H } = c.g;
+  const s0 = Number(/scale\(([\d.]+)\)/.exec(String(hero.transform ?? ""))?.[1] ?? 1);
+  const hw = dw * s0, hh = dh * s0;
+  const cx = Number(hero.left) + hw / 2, cy = Number(hero.top) + hh / 2;
+  const z = Math.min(1.4, (0.86 * W) / hw, (0.86 * H) / hh);
+  if (!(z > 1.06) || !Number.isFinite(cx) || !Number.isFinite(cy)) return <>{children}</>;
+  return <div style={{ position: "absolute", inset: 0, transformOrigin: `${cx}px ${cy}px`, transform: `translate(${((W / 2 - cx) * v).toFixed(1)}px, ${((H / 2 - cy) * v).toFixed(1)}px) scale(${(1 + (z - 1) * v).toFixed(4)})` }}>{children}</div>;
 }
 // the words in a band on top, a group of its own size below them — together centred on the frame
 export function Band({ c, dw, dh, effect, children }: { c: C; dw: number; dh: number; effect?: Effect; children: ReactNode }) {
   const { words, body } = bandOf(c.g, wordsIn(c, stackOf(c.g).words, "band"), dw, dh);
   return (
-    <>
-      <WordsIn c={c} box={words} place="band" effect={effect} />
+    <Close c={c} hero={body} dw={dw} dh={dh}>
+      <div style={{ opacity: 1 - closeAt(c.s, c.f) }}>
+        <WordsIn c={c} box={words} place="band" effect={effect} />
+      </div>
       <div style={body}>{children}</div>
-    </>
+    </Close>
   );
 }
 const tall = (c: C) => c.g.shape !== "wide";
 
+// The whole line phrase by phrase (rhythm.ts): each phrase big and alone, in
+// as it is said with a small punch, out just before the next
+export function Phrases({ c, effect }: { c: C; effect?: Effect }) {
+  const { W, H, pad } = c.g;
+  const ps = phrasesOf(c.s);
+  const i = Math.max(0, ps.findLastIndex((p) => c.f >= p.from));
+  const p = ps[i], next = ps[i + 1];
+  const k = springAt(c, p.from, 0.8);
+  // (out in the two frames before the next: a cut, not a fade)
+  const out = next ? clamp01((c.f - (next.from - 2)) / 2) : 0;
+  return (
+    <div key={i} style={{ position: "absolute", inset: 0, opacity: 1 - out, transform: `scale(${(1.1 - 0.1 * k).toFixed(4)})` }}>
+      <WordsIn c={{ ...c, s: { ...c.s, words: p.words } }} box={{ left: pad, top: 0, width: W - 2 * pad, height: H }} place="center" effect={effect} />
+    </div>
+  );
+}
+
 // ── statement: the words are the hero ─────────────────────────────────────
 function Statement({ c }: { c: C }) {
   const { W, H, pad } = c.g;
+  if (phraseMode(c.s)) return <Phrases c={c} />;
   if (c.s.variant === 0) return <WordsIn c={c} box={{ left: pad, top: 0, width: W - 2 * pad, height: H }} place="center" />;
   if (c.s.variant === 1) {
     const k = springAt(c, c.s.from + 4, 1.4);

@@ -17,6 +17,7 @@ import { livingStandIn } from "@/components/video/icons/living";
 import { existsSync } from "node:fs";
 import { keyIconOf } from "@/components/video/simple/kit";
 import { MOTION_SOUND, WORD_ICON_NAMES, motionOf, wordIcon } from "@/components/video/simple/motion";
+import { phraseMode, phrasesOf, punchesOf } from "@/components/video/simple/rhythm";
 import { MOST_AT_ONCE, SOUND_FRAMES, SOUND_NAMES, soundsOf } from "@/components/video/simple/sounds";
 import { askOf, beatsOf, durationOf } from "@/components/video/simple/beats";
 import { isPublicHost, websiteUrlOf } from "@/lib/website-url";
@@ -324,6 +325,12 @@ export async function runChecks(): Promise<Check[]> {
     // (words alone show no things)
     const crowded = body.filter(({ sc, alone }) => !alone && (sc.words.length > 4 || sc.items.some((it) => repeats(it.text, sc.words.map((w) => w.t).join(" ")))));
     add("one scene, one idea: beside a hero at most 4 words, and no thing that only repeats them", !crowded.length && repeats("Precise Timing", "Precise animation timing") && !repeats("Story Transitions", "Precise animation timing"), crowded.slice(0, 2).map((x) => `${x.sc.template}: ${x.sc.words.map((w) => w.t).join(" ")}`).join(" · ") || `${body.length} scenes`);
+    // the rhythm: something new on screen every ~3 s at most on average (the promos: 1–4 s; we held 4–13 s) —
+    // a scene, a phrase of words alone, a close-up on a hero and back
+    const changes = drawn.map((p) => p.scenes.reduce((n, sc) => n + 1 + (phraseMode(sc) ? phrasesOf(sc).length - 1 : 0) + 2 * punchesOf(sc).length, 0));
+    const gaps = drawn.map((p, k) => p.duration / 30 / changes[k]);
+    const meanGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    add("the rhythm: something new on screen every 3 s or sooner on average (a scene, a phrase of the words alone, a close-up on the hero and back)", meanGap <= 3, `${drawn.length} videos · a change every ${meanGap.toFixed(1)} s on average (slowest ${Math.max(...gaps).toFixed(1)} s)`);
     // icons that move, with their own sound: a word gets an icon only when it plainly stands for one; every
     // icon named is one there is (and never a person or an animal); every sound is a file; never a crowd of sounds
     const badIcons = WORD_ICON_NAMES.filter((n) => !resolveIcon(n) || livingStandIn(n));
