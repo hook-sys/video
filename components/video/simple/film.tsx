@@ -82,8 +82,9 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
         if (theme.way === "slide") way = `translateX(${((1 - pin) * W - pout * W).toFixed(1)}px)`;
         else if (theme.way === "zoom") {
           way = `scale(${(pin < 1 ? 0.82 + 0.18 * pin : 1 + 0.6 * pout).toFixed(4)})`;
-          // (one after the other, never the two on top of each other: the way out in the first half, the way in in the second)
-          opacity = pin < 1 ? clamp01(pin * 2 - 1) : clamp01(1 - pout * 2);
+          // (through, never dipping to the bare ground: the scene going out stays until what comes in —
+          // in from the cut on — is there; the two together only for a moment)
+          opacity = pin < 1 ? clamp01(pin * 2.2 - 0.5) : clamp01((0.85 - pout) * 4);
         } else if (pin < 1) clip = `inset(0 ${((1 - pin) * 100).toFixed(2)}% 0 0)`;
         // (on one ground, the scene going out is wiped away where the next comes in)
         else if (pout > 0) clip = `inset(0 0 0 ${(pout * 100).toFixed(2)}%)`;

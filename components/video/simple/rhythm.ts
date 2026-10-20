@@ -49,11 +49,17 @@ export function phrasesOf(s: Scene): Phrase[] {
   if (run.length) runs.push(run);
   // (a phrase of one little word joins the one before)
   const merged = runs.reduce<number[][]>((out, r) => (out.length && r.length === 1 && LITTLE.has(bare(said[r[0]].t)) ? (out[out.length - 1].push(...r), out) : (out.push(r), out)), []);
-  return merged.map((r, k) => ({
-    from: k ? Math.max(s.from, said[r[0]].at - 4) : s.from,
-    // (as said: its own capitals, a comma at its end dropped)
-    words: r.map((i, j) => ({ t: j === r.length - 1 ? said[i].t.replace(/[,;:—–]$/, "") : said[i].t, at: Math.max(s.from, said[i].at), key: i === lit })),
-  }));
+  // (the first phrase in by 4 frames into the scene — never an empty start — and each later
+  // one's first word in as the phrase before goes: a cut, never an empty frame between)
+  const late = Math.max(0, said[merged[0][0]].at - (s.from + (s.from ? 4 : 0)));
+  return merged.map((r, k) => {
+    const from = k ? Math.max(s.from, said[r[0]].at - 4) : s.from;
+    return {
+      from,
+      // (as said: its own capitals, a comma at its end dropped)
+      words: r.map((i, j) => ({ t: j === r.length - 1 ? said[i].t.replace(/[,;:—–]$/, "") : said[i].t, at: k ? (j ? said[i].at : from) : Math.max(s.from, said[i].at - late), key: i === lit })),
+    };
+  });
 }
 
 // The words alone, the whole line phrase by phrase: a big-words scene whose
