@@ -21,8 +21,8 @@ import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePla
 // is checked before it is offered and shown as it will look; nothing costs
 // credits. Saved, the download and the server's MP4 are the edited video.
 
-const GROUND_NAME = { dark: "Dark", light: "Light", brand: "Brand colour" } as const;
-const WAY_NAME = { slide: "Slide", zoom: "Zoom", wipe: "Wipe" } as const;
+const GROUND_NAME = { dark: "Dark", light: "Light", brand: "Brand colour", glass: "Glass" } as const;
+const WAY_NAME = { slide: "Slide", zoom: "Zoom", wipe: "Wipe", blur: "Blur" } as const;
 const PACE_NAME = { calm: "Calm", lively: "Lively" } as const;
 const noop = () => () => {};
 // a run of words cut to fit a layout: the lit word kept, never starting or ending on a little word, as long as it can be

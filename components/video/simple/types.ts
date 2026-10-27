@@ -45,8 +45,11 @@ export type Reading = {
 
 // The ideas a beat's words may picture (concept.tsx): an idea shut in, a mess put
 // in order, waiting, one word that is really another, taking off
-export const CONCEPTS = ["trapped", "chaos", "waiting", "truth", "launch"] as const;
+// — and what it costs, hours of work made minutes, what stands in the way, the way to a goal
+export const CONCEPTS = ["trapped", "chaos", "waiting", "truth", "launch", "cost", "hours", "barriers", "progress"] as const;
 export type Concept = (typeof CONCEPTS)[number];
+// (the ideas made of the beat's things: the truth's two words, the barriers crossed out — none without two)
+export const ideaNeedsThings = (c: Concept | undefined, things: number) => (c === "truth" || c === "barriers") && things < 2;
 
 // (a new template goes last: a video's print keeps each template's place)
 export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta", "screen", "concept"] as const;
@@ -54,9 +57,11 @@ export type TemplateId = (typeof TEMPLATES)[number];
 // every template has three designed variants
 export const VARIANTS = 3;
 
-export const GROUNDS = ["dark", "light", "brand"] as const;
+// (glass: an airy light ground of soft colour fields, frosted cards, glossy icons, the keyword in a gradient)
+export const GROUNDS = ["dark", "light", "brand", "glass"] as const;
 export type Ground = (typeof GROUNDS)[number];
-export const WAYS = ["slide", "zoom", "wipe"] as const;
+// (blur: the scene going out blurs and fades as the next comes in from a blur)
+export const WAYS = ["slide", "zoom", "wipe", "blur"] as const;
 export type Way = (typeof WAYS)[number];
 export const PACES = ["calm", "lively"] as const;
 export type Pace = (typeof PACES)[number];

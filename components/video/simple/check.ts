@@ -8,7 +8,7 @@ import { TEMPLATE, clickOf } from "./more";
 import { norm, thingAt } from "./scenes";
 import { choices, grey, planOf, printOf, variantOk, wordsAlone } from "./select";
 import { contrast, lookOf, themeOf } from "./theme";
-import { GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, VARIANTS } from "./types";
+import { ideaNeedsThings, GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, VARIANTS } from "./types";
 
 // The plan checked before it is played, by code (no AI, no browser): every
 // scene laid out once at its last frame, and what would go wrong found —
@@ -26,7 +26,7 @@ export type Problem = { scene: number | null; kind: "words" | "cut" | "icon" | "
 export function meaningOf(s: Scene): string | null {
   if ((s.template === "stat" || s.template === "chart") && !s.number) return `a ${s.template} with no number said`;
   if (s.template === "concept" && !s.concept) return "an idea with no idea to show";
-  if (s.template === "concept" && s.concept === "truth" && s.items.length < 2) return "a word that is really another with no two words";
+  if (s.template === "concept" && ideaNeedsThings(s.concept, s.items.length)) return `an idea (${s.concept}) without its two things`;
   if (s.template === "kinetic" && s.variant === 1 && !/\?["'”’)]*$/.test(s.words.at(-1)?.t ?? "")) return "words typed as a prompt that ask nothing";
   return null;
 }

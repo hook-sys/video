@@ -6,7 +6,7 @@ import { type BriefUsage, estimateInput } from "@/lib/ai/product-brief";
 import { searchIcons } from "@/lib/icons";
 import { resolveIcon } from "@/components/video/icons";
 import type { RoleAi } from "@/lib/v2/models";
-import { type Beat, CONCEPTS, INTENTS, type Reading, SHOWS, type Word } from "@/components/video/simple/types";
+import { type Beat, CONCEPTS, ideaNeedsThings, INTENTS, type Reading, SHOWS, type Word } from "@/components/video/simple/types";
 
 // The simple engine's Director (docs/video-spec.md), in two calls to its
 // model. First the story: the whole script read once — what the product does,
@@ -40,7 +40,7 @@ const INSTRUCTIONS = `You read the voice-over of a short product video, beat by 
 - icon: one Lucide icon name for the beat (e.g. "calendar-x", "truck", "chart-line").
 - items: 0–3 short things the beat lists or implies — pains for a problem, what it brings together for a solution, rows of the product's screen for a feature, steps for steps — each 1–3 words (title case) and a Lucide icon name. Only things the script says or plainly means; never invented numbers, names or features. A hook or a cta: none unless the beat lists them.
 - number: a number the voice says in this beat exactly as written in it ("3x", "50%", "2,400"), else null. Never a number it does not say.
-- concept: the one idea the beat's words plainly picture, else none (most beats: none; never the last beat) — trapped (stuck, held back, shut in — or breaking free), chaos (a mess, scattered, too many things — or put in order), waiting (slow, delays, waiting — or no more waiting), truth (it says one thing is really another: "X is just Y" — then items are exactly [X, Y] as said, 1–2 words each, X first), launch (starting, launching, taking off, growing).
+- concept: the one idea the beat's words plainly picture, else none (most beats: none; never the last beat) — trapped (stuck, held back, shut in — or breaking free), chaos (a mess, scattered, too many things — or put in order), waiting (slow, delays, waiting — or no more waiting), truth (it says one thing is really another: "X is just Y" — then items are exactly [X, Y] as said, 1–2 words each, X first), launch (starting, launching, taking off, growing), cost (it costs too much, fees, money spent — or cut, saved), hours (work that takes hours or days — or done in minutes), barriers (what stands in the way: "no X, no Y", "you don't need X" — then items are those things, 2–3, as said), progress (getting to a goal, a target, a share done — its number only as said).
 When a story plan is given, read each beat with it: its items fit what the beat shows (for product: rows of the product's screen, named from its parts when they fit; for pains: the pains; for steps: the steps).
 Answer every beat listed, in order, nothing else.`;
 
@@ -119,7 +119,7 @@ export async function readBeats(words: Word[], beats: Beat[], brand: string, ai:
       const planned = story?.beats.find((x) => Math.round(x.beat) === i + 1)?.shows;
       const shows = planned === "number" && !number ? undefined : planned;
       // (an idea — never in the last beat; the truth only with its two words)
-      const concept = a.concept !== "none" && i < beats.length - 1 && (a.concept !== "truth" || items.length >= 2) ? a.concept : null;
+      const concept = a.concept !== "none" && i < beats.length - 1 && !ideaNeedsThings(a.concept, items.length) ? a.concept : null;
       return { intent: i === beats.length - 1 ? "cta" : a.intent, show: [from, to], key, icon: iconFor(a.icon, said), items, number, ...(shows ? { shows } : {}), ...(story?.hero === i + 1 ? { hero: true } : {}), ...(concept ? { concept } : {}) };
     });
     return { readings, problems };

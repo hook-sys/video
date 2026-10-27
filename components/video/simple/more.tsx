@@ -3,7 +3,7 @@ import { Icon } from "../icons";
 import { Concept } from "./concept";
 import { familyOf } from "./faces";
 import { fitWords } from "./fit";
-import { type C, Glyph, One, Words, clamp01, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { type C, Glyph, blend, One, Words, clamp01, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import { TYPE, WEIGHT } from "./geo";
 import { Band, Phrases, Side, TEMPLATES_1, WordsIn, abs, center, display, itemAt, thingAt } from "./scenes";
 import { phraseMode } from "./rhythm";
@@ -83,7 +83,7 @@ function Compare({ c }: { c: C }) {
   return (
     <Side c={c} dw={w} dh={dh + 20}>
       <div style={abs({ left: 0, top: 0, width: w, height: dh + 20, ...rise(k, 60) })}>
-        <div style={abs({ left: w / 2 - 110, top: 0, width: 220, height: 110, borderRadius: 99, background: flip > 0.5 ? c.look.accent : c.look.line, padding: 10, boxSizing: "border-box" })}>
+        <div style={abs({ left: w / 2 - 110, top: 0, width: 220, height: 110, borderRadius: 99, background: blend(c.look.line, c.look.accent, clamp01((flip - 0.3) / 0.4)), padding: 10, boxSizing: "border-box" })}>
           <div style={{ width: 90, height: 90, borderRadius: 99, background: "#ffffff", transform: `translateX(${(flip * 110).toFixed(1)}px)`, boxShadow: "0 6px 16px rgba(0,0,0,0.2)" }} />
         </div>
         <div style={abs({ left: 0, top: 150, width: w, height: n * 120 + 40, ...panel(c, 34), padding: "20px 0", boxSizing: "border-box" })}>

@@ -33,6 +33,25 @@ export function tint(hex: string, a: number): string {
   const n = parseInt(hex.slice(1, 7), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
+// two colours blended (t: how much of b) — a colour that changes as something
+// happens fades across, never snaps at a halfway point (it reads as a blink)
+const rgbaOf = (x: string): [number, number, number, number] | null => {
+  const h = /^#([0-9a-f]{6})$/i.exec(x.trim());
+  if (h) {
+    const n = parseInt(h[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1];
+  }
+  const m = /^rgba?\(([^)]+)\)$/i.exec(x.trim());
+  if (!m) return null;
+  const [r, g, b, a = 1] = m[1].split(",").map((v) => parseFloat(v));
+  return [r, g, b, a];
+};
+export function blend(a: string, b: string, t: number): string {
+  const x = rgbaOf(a), y = rgbaOf(b), k = clamp01(t);
+  if (!x || !y) return k < 0.5 ? a : b;
+  const v = x.map((c, i) => c + (y[i] - c) * k);
+  return `rgba(${v.slice(0, 3).map((c) => Math.round(c)).join(",")},${v[3].toFixed(3)})`;
+}
 // in: from below, settling (the spring's own small overshoot)
 export const rise = (k: number, by = 60): CSSProperties => ({ opacity: clamp01(k * 1.6), transform: `translateY(${((1 - k) * by).toFixed(1)}px)` });
 export const pop = (k: number): CSSProperties => ({ opacity: clamp01(k * 1.8), transform: `scale(${(0.6 + 0.4 * k).toFixed(4)})` });
@@ -41,8 +60,10 @@ export const pop = (k: number): CSSProperties => ({ opacity: clamp01(k * 1.8), t
 // colour) the ground's colour on a plate of the brand colour made as light
 // or as dark as the words
 export const keyStyle = (look: Look, size: number): CSSProperties =>
+  // (on glass: the keyword's gradient, its letters only)
+  look.keyFill ? { backgroundImage: look.keyFill, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }
   // (the plate a little deeper than the line, so letters that hang below it stay on it)
-  look.plate ? { color: look.bg, background: look.plateFill, borderRadius: Math.round(size * 0.16), padding: `${Math.round(size * 0.02)}px ${Math.round(size * 0.14)}px ${Math.round(size * 0.1)}px`, margin: `0 ${-Math.round(size * 0.06)}px` } : { color: look.accent };
+  : look.plate ? { color: look.bg, background: look.plateFill, borderRadius: Math.round(size * 0.16), padding: `${Math.round(size * 0.02)}px ${Math.round(size * 0.14)}px ${Math.round(size * 0.1)}px`, margin: `0 ${-Math.round(size * 0.06)}px` } : { color: look.accent };
 
 // The voice's words in their place: each as it is said, the key one in the
 // accent colour (on the brand's own colour: on a plate, keyStyle) — or with an effect: struck
@@ -93,8 +114,11 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
               );
             }
             const grow = effect === "pop" && w.key ? springAt(c, w.at + 2, 0.8) : 1;
+            // (on glass each word comes in from a blur — sharp as it is said — and the lit one is crossed once by a light)
+            const soft: CSSProperties = look.glass ? { ...rise(k, fit.size * 0.12), filter: k < 0.995 ? `blur(${(Math.max(0, 1 - k) * 14).toFixed(2)}px)` : undefined } : rise(k, fit.size * 0.45);
+            const shine = look.glass && lit && look.keyFill ? { backgroundImage: `linear-gradient(105deg, rgba(255,255,255,0) 42%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0) 58%), ${look.keyFill}`, backgroundSize: "300% 100%, 100% 100%", backgroundPosition: `${(130 - 160 * clamp01((c.f - w.at - 10) / 24)).toFixed(1)}% 0, 0 0`, backgroundRepeat: "no-repeat" } : {};
             return (
-              <span key={i} style={{ display: "inline-block", position: "relative", ...rise(k, fit.size * 0.45), ...(lit ? keyStyle(look, fit.size) : {}), ...(effect === "pop" && w.key ? { transform: `${rise(k, fit.size * 0.45).transform} scale(${(1.35 - 0.35 * grow).toFixed(4)})`, transformOrigin: icon ? "left center" : undefined } : {}) }}>
+              <span key={i} style={{ display: "inline-block", position: "relative", ...soft, ...(lit ? { ...keyStyle(look, fit.size), ...shine } : {}), ...(effect === "pop" && w.key ? { transform: `${soft.transform} scale(${(1.35 - 0.35 * grow).toFixed(4)})`, transformOrigin: icon ? "left center" : undefined } : {}) }}>
                 {w.t}
                 {effect === "strike" && <span style={{ position: "absolute", left: -fit.size * 0.04, top: "52%", height: Math.max(6, fit.size * 0.08), width: `calc(${(ease(after) * 100).toFixed(1)}% + ${(ease(after) * fit.size * 0.08).toFixed(1)}px)`, background: look.bad, borderRadius: 99 }} />}
               </span>
@@ -115,7 +139,7 @@ export function Glyph({ c, name, size, solid = false, card = false, style, part,
   const accent = card ? look.panelAccent : look.accent;
   const on = card ? look.onPanelAccent : look.onAccent;
   return (
-    <div data-part={part} style={{ width: size, height: size, borderRadius: size * 0.28, background: solid ? accent : tint(accent, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: solid ? `0 ${(size * 0.12).toFixed(0)}px ${(size * 0.3).toFixed(0)}px ${tint(accent, 0.28)}` : undefined, ...style }}>
+    <div data-part={part} style={{ width: size, height: size, borderRadius: size * 0.28, background: solid ? look.accentFill : tint(accent, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: solid ? `${look.glass ? `inset 0 ${(size * 0.05).toFixed(0)}px ${(size * 0.07).toFixed(0)}px rgba(255,255,255,0.5), ` : ""}0 ${(size * 0.12).toFixed(0)}px ${(size * 0.3).toFixed(0)}px ${tint(accent, 0.28)}` : undefined, ...style }}>
       <div style={{ display: "flex", ...motionStyle(motionOf(name), c.f - (at ?? c.s.from + 12) - MOTION_DELAY) }}>
         <Icon name={name} size={size * 0.5} color={solid ? on : accent} strokeWidth={2} />
       </div>
@@ -124,8 +148,9 @@ export function Glyph({ c, name, size, solid = false, card = false, style, part,
 }
 
 // a card's surface
-// (a thin border and a layered, soft shadow; on a dark ground: glass)
-export const panel = (c: C, radius = 30): CSSProperties => ({ background: c.look.panelFill, border: `1px solid ${c.look.line}`, borderRadius: radius, boxShadow: `0 1px 2px ${c.look.shadow}, 0 18px 50px ${c.look.shadow}`, color: c.look.panelInk, fontFamily: familyOf(c.look.text) });
+// (a thin border and a layered, soft shadow; on a dark ground: glass; on the glass
+// ground: frosted white, a hairline of the brand colour round it)
+export const panel = (c: C, radius = 30): CSSProperties => ({ background: c.look.panelFill, border: `1px solid ${c.look.line}`, borderRadius: radius, boxShadow: `${c.look.ring ? `0 0 0 1px ${c.look.ring}, ` : ""}0 1px 2px ${c.look.shadow}, 0 18px 50px ${c.look.shadow}`, color: c.look.panelInk, fontFamily: familyOf(c.look.text) });
 
 // The brand's mark: its logo, else its initial on the accent
 export function Mark({ c, size }: { c: C; size: number }) {
@@ -133,7 +158,7 @@ export function Mark({ c, size }: { c: C; size: number }) {
   const { Img } = c.play;
   if (brand.icon) return <Img data-part="brand" src={brand.icon} style={{ width: size, height: size, objectFit: "contain", flexShrink: 0 }} />;
   return (
-    <div data-part="brand" style={{ width: size, height: size, borderRadius: size * 0.26, background: look.accent, color: look.onAccent, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: familyOf(look.display), fontWeight: 800, fontSize: size * 0.52, flexShrink: 0 }}>
+    <div data-part="brand" style={{ width: size, height: size, borderRadius: size * 0.26, background: look.accentFill, color: look.onAccent, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: familyOf(look.display), fontWeight: 800, fontSize: size * 0.52, flexShrink: 0 }}>
       {brand.name.trim().charAt(0).toUpperCase() || "•"}
     </div>
   );

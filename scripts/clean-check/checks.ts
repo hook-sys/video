@@ -14,7 +14,7 @@ import { SETTINGS } from "@/lib/app-settings";
 import { iconFor } from "@/lib/simple/brain";
 import { resolveIcon } from "@/components/video/icons";
 import { livingStandIn } from "@/components/video/icons/living";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { keyIconOf } from "@/components/video/simple/kit";
 import { MOTION_SOUND, WORD_ICON_NAMES, motionOf, wordIcon } from "@/components/video/simple/motion";
 import { phraseMode, phrasesOf, punchesOf } from "@/components/video/simple/rhythm";
@@ -32,6 +32,7 @@ import { geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/simple/faces";
 import { CONCEPTS, GROUNDS, type Scene, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
 import { conceptSounds, turnOf } from "@/components/video/simple/concept";
+import { PUNCH } from "@/components/video/simple/scenes";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -332,6 +333,15 @@ export async function runChecks(): Promise<Check[]> {
     const gaps = drawn.map((p, k) => p.duration / 30 / changes[k]);
     const meanGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
     add("the rhythm: something new on screen every 3 s or sooner on average (a scene, a phrase of the words alone, a close-up on the hero and back)", meanGap <= 3, `${drawn.length} videos · a change every ${meanGap.toFixed(1)} s on average (slowest ${Math.max(...gaps).toFixed(1)} s)`);
+    // what the motion kit learnt on real edits (docs/video-spec.md): the lit word on screen at least 1 s
+    // before its scene ends; no backdrop blur (it blinks while things move); no colour switched at a halfway
+    // point of a motion (it snaps — colours fade across, kit.tsx blend); a close-up at least 15 % closer
+    const litAt = (sc: Scene) => (phraseMode(sc) ? phrasesOf(sc).flatMap((x) => x.words) : sc.words).find((w) => w.key)?.at;
+    const short = drawn.flatMap((p) => p.scenes.filter((sc) => { const k = litAt(sc); return k != null && sc.to - k < 30; }).map((sc) => `${sc.template}: ${sc.words.map((w) => w.t).join(" ")}`));
+    const engine = readdirSync("components/video/simple").filter((f) => /\.tsx?$/.test(f)).map((f) => [f, readFileSync(`components/video/simple/${f}`, "utf8")] as const);
+    const blurred = engine.filter(([, src]) => /backdrop-?filter/i.test(src)).map(([f]) => f);
+    const snaps = engine.flatMap(([f, src]) => [...src.matchAll(/\w+ [<>]=? 0\.\d+ \? [^:]*look\.\w+[^:]* : [^,;)}]*look\.\w+/g)].map(() => f));
+    add("what the motion kit learnt: the lit word on screen at least 1 s; no backdrop blur; colours fade across, never snap; a close-up at least 15 % closer", !short.length && !blurred.length && !snaps.length && PUNCH >= 1.15, [...short.slice(0, 2), ...blurred, ...snaps].join(" · ") || `${drawn.reduce((n, p) => n + p.scenes.length, 0)} scenes · close-up ×${PUNCH}`);
     // icons that move, with their own sound: a word gets an icon only when it plainly stands for one; every
     // icon named is one there is (and never a person or an animal); every sound is a file; never a crowd of sounds
     const badIcons = WORD_ICON_NAMES.filter((n) => !resolveIcon(n) || livingStandIn(n));
@@ -369,12 +379,12 @@ export async function runChecks(): Promise<Check[]> {
         if (conceptSounds(s).every((e) => e.at >= s.from && e.at < s.to && SOUND_NAMES.includes(e.name))) heard++;
       }
     }
-    const script = "Your best ideas always get stuck inside your own head. Your orders are scattered across five different apps. Every week you wait for approvals that never come. Being busy is really just being stuck. Launch your new online shop today with us. Start now.";
+    const script = "Your best ideas always get stuck inside your own head. Your orders are scattered across five different apps. Every week you wait for approvals that never come. Being busy is really just being stuck. Launch your new online shop today with us. Editing one short video takes hours of your day. Paying agencies is far too expensive for a small team. No designers, no editors and no big budget needed. Hit every single goal you set this quarter. Start now.";
     let t = 0.3;
     const words = script.split(" ").map((w) => { const start = t; t += 0.36 + (/[.?!]$/.test(w) ? 0.45 : 0); return { text: w, start, end: start + 0.32 }; });
     const found = guessReadings(words, beatsOf(words), "Shop").map((r) => r.concept ?? "-").join(" ");
     const all = CONCEPTS.length * 2 * VARIANTS * 3;
-    add("the ideas: every one, resolving or not, in every variant, clean on every frame; its turn inside the scene and its sounds there; found by its words", !left.length && turns === all && heard === all && found === "trapped chaos waiting truth launch -", left.slice(0, 3).join(" · ") || `${all} scenes · ${found}`);
+    add("the ideas: every one, resolving or not, in every variant, clean on every frame; its turn inside the scene and its sounds there; found by its words", !left.length && turns === all && heard === all && found === "trapped chaos waiting truth launch hours cost barriers progress -", left.slice(0, 3).join(" · ") || `${all} scenes · ${found}`);
   }
 
   return checks;

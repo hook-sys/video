@@ -45,6 +45,17 @@ function useFaces(faces: Face[]) {
 // the glow is never flat, never busy, and never jumps at a cut).
 function Ground({ look, f }: { look: Look; f: number }) {
   const x = 32 + Math.sin(f / 170) * 14, y = 30 + Math.cos(f / 210) * 10;
+  // (glass: two large soft fields — the brand colour top left, its warm neighbour bottom right — and a haze along the bottom, drifting)
+  if (look.fields) {
+    const [a, b, haze] = look.fields;
+    return (
+      <AbsoluteFill style={{ background: look.bg }}>
+        <AbsoluteFill style={{ background: `radial-gradient(60% 70% at ${(x - 12).toFixed(1)}% ${(y - 8).toFixed(1)}%, ${a}, transparent 70%)` }} />
+        <AbsoluteFill style={{ background: `radial-gradient(55% 65% at ${(100 - x + 14).toFixed(1)}% ${(100 - y + 12).toFixed(1)}%, ${b}, transparent 70%)` }} />
+        <AbsoluteFill style={{ background: `radial-gradient(90% 30% at 50% 108%, ${haze}, transparent 75%)` }} />
+      </AbsoluteFill>
+    );
+  }
   return (
     <AbsoluteFill style={{ background: look.bg }}>
       <AbsoluteFill style={{ background: `radial-gradient(1200px 900px at ${x.toFixed(1)}% ${y.toFixed(1)}%, ${look.glow}, transparent 70%)` }} />
@@ -79,12 +90,19 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
         let way = "";
         let opacity = 1;
         let clip: string | undefined;
+        let blur: string | undefined;
         if (theme.way === "slide") way = `translateX(${((1 - pin) * W - pout * W).toFixed(1)}px)`;
         else if (theme.way === "zoom") {
           way = `scale(${(pin < 1 ? 0.82 + 0.18 * pin : 1 + 0.6 * pout).toFixed(4)})`;
           // (through, never dipping to the bare ground: the scene going out stays until what comes in —
           // in from the cut on — is there; the two together only for a moment)
           opacity = pin < 1 ? clamp01(pin * 2.2 - 0.5) : clamp01((0.85 - pout) * 4);
+        } else if (theme.way === "blur") {
+          // (out into a blur as the next comes in from one — together, never the bare ground for long)
+          const t = pin < 1 ? 1 - pin : pout;
+          opacity = pin < 1 ? clamp01(pin * 1.7) : clamp01((1 - pout) * 1.7);
+          if (t > 0.002) blur = `blur(${(t * 16).toFixed(2)}px)`;
+          way = `scale(${(pin < 1 ? 1.03 - 0.03 * pin : 1 - 0.03 * pout).toFixed(4)})`;
         } else if (pin < 1) clip = `inset(0 ${((1 - pin) * 100).toFixed(2)}% 0 0)`;
         // (on one ground, the scene going out is wiped away where the next comes in)
         else if (pout > 0) clip = `inset(0 0 0 ${(pout * 100).toFixed(2)}%)`;
@@ -92,7 +110,7 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
         const c: C = { f, s, look: mine ?? look, pace: theme.pace, brand: plan.brand, g, play: PLAY };
         const Body = TEMPLATE[s.template];
         return (
-          <AbsoluteFill key={i} data-scene={i} style={{ transform: way || undefined, opacity, clipPath: clip }}>
+          <AbsoluteFill key={i} data-scene={i} style={{ transform: way || undefined, opacity, clipPath: clip, filter: blur }}>
             {mine && <Ground look={mine} f={f} />}
             <AbsoluteFill style={{ transform: cam }}>
               <Body c={c} />

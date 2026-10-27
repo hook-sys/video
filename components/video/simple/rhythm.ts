@@ -1,4 +1,4 @@
-import { wordsAlone } from "./select";
+import { litInTime, wordsAlone } from "./select";
 import type { Scene } from "./types";
 
 // The rhythm of a scene (docs/video-spec.md): the promos change what is on
@@ -52,7 +52,7 @@ export function phrasesOf(s: Scene): Phrase[] {
   // (the first phrase in by 4 frames into the scene — never an empty start — and each later
   // one's first word in as the phrase before goes: a cut, never an empty frame between)
   const late = Math.max(0, said[merged[0][0]].at - (s.from + (s.from ? 4 : 0)));
-  return merged.map((r, k) => {
+  const out = merged.map((r, k) => {
     const from = k ? Math.max(s.from, said[r[0]].at - 4) : s.from;
     return {
       from,
@@ -60,6 +60,17 @@ export function phrasesOf(s: Scene): Phrase[] {
       words: r.map((i, j) => ({ t: j === r.length - 1 ? said[i].t.replace(/[,;:—–]$/, "") : said[i].t, at: k ? (j ? said[i].at : from) : Math.max(s.from, said[i].at - late), key: i === lit })),
     };
   });
+  // (the phrase with the lit word in, sooner when the word would be on screen less than 1 s — select.ts litInTime)
+  const p = out.findIndex((x) => x.words.some((w) => w.key));
+  if (p > 0) {
+    const words = litInTime(out[p].words, s.from, s.to);
+    const by = out[p].words.findIndex((w) => w.key) >= 0 ? out[p].words.find((w) => w.key)!.at - words.find((w) => w.key)!.at : 0;
+    if (by > 0) {
+      out[p] = { from: Math.max(out[p - 1].from + 12, out[p].from - by), words };
+      out[p].words = out[p].words.map((w, j) => (j ? w : { ...w, at: out[p].from }));
+    }
+  } else if (p === 0) out[0] = { ...out[0], words: litInTime(out[0].words, s.from, s.to) };
+  return out;
 }
 
 // The words alone, the whole line phrase by phrase: a big-words scene whose
