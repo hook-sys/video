@@ -135,8 +135,8 @@ every hero is designed once and scaled into its place (`geo.ts`).
 ## Variation (what the viewer sees change)
 
 Per video the selector draws: the template and variant of every beat (never the
-same template twice in a row), the mirror, the ground (dark / light / brand),
-the type pair, the transition family (slide / zoom / wipe) and the pace (calm /
+same template twice in a row), the mirror, the ground (dark / light / brand / glass),
+the type pair, the transition family (slide / zoom / wipe / blur) and the pace (calm /
 lively); each intent has several templates it can be played with, drawn by
 weight. These make a fingerprint; a new video must differ from the
 customer's last five in at least 3 of: ground, type, transitions, pace,
@@ -250,7 +250,21 @@ beat whose words plainly picture one idea is shown as that idea
   X comes back small and struck above it. Always alone on the frame — the two
   words are the picture;
 - **launch** — a line drawn up across the frame, a rocket at its head lighting
-  its stops (the scene's things, named) and arriving with a burst.
+  its stops (the scene's things, named) and arriving with a burst;
+- **cost** — a bill whose lines (the scene's things, else bare lines) come in
+  one by one, its total bar growing red under a rising arrow; a price is never
+  made up — the number said, when there is one, counts up beside it. It
+  resolves by every line but the first folding away, the bar shrinking to a
+  third in the accent, the arrow turning down and a check;
+- **hours** — a timeline crowded with clips and cut marks, a clock racing; it
+  resolves by a light sweeping across and leaving one clean clip on each track,
+  the clock easing to a stop, a check;
+- **barriers** — what stands in the way ("no designers, no editors"), one card
+  each, each crossed with a red ✕ as it is said; it resolves by the cards
+  fading back and a big check coming up over them. Needs two things at least;
+- **progress** — a bar filling to its goal (to the share said — "90%" — else
+  all the way), its stops lighting as it passes, a flag (or a target, short of
+  100 %) lighting at the end; short of its goal it stalls a little past a third.
 
 Each has a turn — its lit word said (the truth: its second word said), never in
 the scene's first 0.8 s or last 1.3 s (a take-off at no less than 60 % of it).
@@ -262,6 +276,38 @@ each other; each has its own sounds (walls hit, the pile locking, the clock's
 ticks and a ding, the cut, the take-off).
 
 The Director names a beat's idea (or none — most beats); the rule guess finds
-one by its words ("stuck", "scattered", "waiting", "X is just Y", "launch").
+one by its words ("stuck", "scattered", "waiting", "X is just Y", "launch",
+"hours", "expensive", "no X, no Y", "goal").
 A beat with an idea is shown as it most of the time, and of the drafts the one
 that shows more of its ideas scores higher.
+
+## The glass look and the motion kit's lessons
+
+From the motion kit (a house style made on real Bangla promo edits) the
+engine took what an automatic engine can use:
+
+- **Glass**, a fourth ground: near white, lit by two large soft fields — the
+  brand colour top left and its warm neighbour (the brand colour turned 38°
+  round the wheel: the one second colour, only in the light) bottom right —
+  and a haze of it along the bottom, all drifting slowly. Words in a deep ink
+  of the brand's hue; the keyword in a gradient of the two; cards frosted white
+  with a hairline of the brand colour round them; solid icon tiles, the mark and
+  buttons glossy (a soft gradient and a light along their top edge). No
+  backdrop blur anywhere: it blinks while what is under it moves.
+- **Words from a blur** on glass: each sharpens from a 14 px blur as it is said,
+  and the lit word is crossed once by a light.
+- **Blur** between scenes, a fifth way: the scene going out blurs and fades as
+  the next comes in from a blur, the two together for a moment.
+- **No snapping colours.** A colour that changes as something happens (a toggle
+  turning on, a word struck, a step ticked, a stop lit) fades across
+  (kit.tsx blend), never switches at a halfway point — a switch reads as a blink.
+- **A close-up is at least 15 % closer**, or none: less reads as a jolt.
+- **The lit word on screen at least 1 s** before its scene ends: said later, it
+  (and the words after it) comes in that much sooner (select.ts litInTime).
+- **A glitch scan** for renders: `node scripts/qa-glitch.mjs video.mp4 [plan.json]`
+  finds one-frame blinks (always a bug) and jumps away from the cuts between scenes.
+
+SFX levels follow the kit's: under the voice by 14–20 dB (soft pops and whooshes
+0.14–0.3, a click 0.45). Bangla type (Anek Bangla, Hind Siliguri — both in the
+font library) waits for Bangla voices; the kit's talking-head edits and its robot
+need footage and a character, which this engine does not make.

@@ -1,6 +1,6 @@
 import { settleWordIcons } from "./check";
-import { printOf, shownWord, variantOk, wordsAlone } from "./select";
-import { GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, VARIANTS, WAYS } from "./types";
+import { litInTime, printOf, shownWord, variantOk, wordsAlone } from "./select";
+import { ideaNeedsThings, GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, VARIANTS, WAYS } from "./types";
 
 // The customer's edits of their video, guided: the look of the whole video
 // (its ground, type, pace and way between scenes) and, scene by scene, how it
@@ -79,7 +79,7 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
       const icon = it?.icon == null ? null : String(it.icon).slice(0, 40);
       things.push({ text, icon });
     }
-    if (e.template === "concept" && s.concept === "truth" && things.length < 2) return { error: `${n}: this needs its two words.` };
+    if (e.template === "concept" && ideaNeedsThings(s.concept, things.length)) return { error: `${n}: this needs at least two things.` };
     if (!Number.isInteger(e.variant) || e.variant < 0 || e.variant >= VARIANTS || !variantOk(e.template, e.variant, things.length)) return { error: `${n}: that way of showing it needs more things.` };
     const icon = String(e.icon ?? "").slice(0, 40) || s.icon;
     // the words on screen: a run of its beat's own words (never typed), the lit one among them
@@ -95,7 +95,7 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
       const run = said.slice(a, b + 1);
       // (as they come in in a drawn plan: as said, the first never later than 4 frames into the scene)
       const late = Math.max(0, run[0].at - (s.from + (s.from ? 4 : 0)));
-      words = run.map((w, k) => ({ t: shownWord(w.t, k, run.length), at: Math.max(s.from, w.at - late), key: a + k === e.key }));
+      words = litInTime(run.map((w, k) => ({ t: shownWord(w.t, k, run.length), at: Math.max(s.from, w.at - late), key: a + k === e.key })), s.from, s.to);
     }
     const next: Scene = { ...s, template: e.template, variant: e.variant, words, icon, items: things };
     // (a picture of the product only in a screen scene)

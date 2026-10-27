@@ -1,6 +1,6 @@
 import { rng } from "./faces";
 import { framesOf } from "./beats";
-import { type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
+import { ideaNeedsThings, type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
 
 // The selector: each beat's template and variant, and the video's theme —
 // drawn from a seed, never the same template twice in a row, and unlike
@@ -81,7 +81,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     const about = r.intent === "feature" || r.intent === "solution" || r.shows === "product";
     const base: [TemplateId, number][] = i === readings.length - 1 ? [["cta", 1]] : [...choices(r).filter(([t]) => t !== "cta"), ...(pictured < shots && about ? [["screen", r.intent === "solution" ? 0.35 : 0.6] as [TemplateId, number]] : [])];
     // (a beat whose words picture one idea is mostly shown as that idea — the truth only with its two words)
-    const idea = i < readings.length - 1 && read.concept && (read.concept !== "truth" || read.items.length >= 2);
+    const idea = i < readings.length - 1 && read.concept && !ideaNeedsThings(read.concept, read.items.length);
     const list0 = i === readings.length - 1 ? base : planned(r, base);
     const list: [TemplateId, number][] = idea ? [...list0, ["concept", 5 * list0.reduce((a, [, w]) => a + w, 0)]] : list0;
     // (two ideas in a row are two pictures: an idea may follow another idea)
@@ -119,7 +119,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       template,
       variant,
       left: R.chance(0.5),
-      words: shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS) - late), key: start + k === r.key })),
+      words: litInTime(shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS) - late), key: start + k === r.key })), frames[i].from, frames[i].to),
       icon: r.icon ?? "sparkles",
       // (an idea's things as read: the truth's two words are among the words said)
       items: (template === "concept" ? read : r).items.slice(0, 3),
@@ -135,6 +135,17 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
 // a variant that needs things (the things flying into the mark, bars of the things) only when there are some
 // (and a search that types one thing and shows the rest as results only with two or more)
 export const variantOk = (template: TemplateId, variant: number, items: number) => !(template === "reveal" && variant > 0 && items < 2) && !(template === "chart" && variant === 2 && items < 2) && !(template === "feature" && variant === 2 && items < 2);
+
+// The lit word on screen at least 1 s before its scene ends (a hero word seen for less is not read):
+// said later, it — and the words after it — come in that much sooner (the words already lead the voice)
+export const LIT_HOLD = 30;
+export function litInTime<W extends { at: number; key: boolean }>(words: W[], from: number, to: number): W[] {
+  const k = words.findIndex((w) => w.key);
+  const by = k >= 0 ? words[k].at - Math.max(from, to - LIT_HOLD) : 0;
+  if (by <= 0) return words;
+  const at = words[k].at - by;
+  return words.map((w, j) => (j < k ? { ...w, at: Math.min(w.at, at) } : { ...w, at: Math.max(from, w.at - by) }));
+}
 
 // what makes a video look like itself: its ground, type, transitions, pace and template order
 // (and the scenes on a ground of their own, when there are any)

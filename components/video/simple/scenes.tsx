@@ -3,7 +3,7 @@ import { Icon } from "../icons";
 import { emWidth, familyOf } from "./faces";
 import { fitWords, measured } from "./fit";
 import { type Box, HERO_W, TYPE, WEIGHT, bandOf, sideOf, splitOf, stackOf, wordsFit } from "./geo";
-import { type C, Cursor, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { type C, Cursor, blend, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import { closeAt, phraseMode, phrasesOf } from "./rhythm";
 import type { Scene } from "./types";
 
@@ -54,6 +54,7 @@ export function Side({ c, dw, dh, hw = HERO_W, effect, only, children }: { c: C;
 // The close-up on the hero as the voice moves on (rhythm.ts closeAt): the
 // whole scene grown about the hero and the hero brought to the middle — as
 // close as keeps it inside the frame (the words, cut by the frame, fade out meanwhile)
+export const PUNCH = 1.15;
 function Close({ c, hero, dw, dh, children }: { c: C; hero: CSSProperties; dw: number; dh: number; children: ReactNode }) {
   const v = closeAt(c.s, c.f);
   if (!v) return <>{children}</>;
@@ -62,7 +63,8 @@ function Close({ c, hero, dw, dh, children }: { c: C; hero: CSSProperties; dw: n
   const hw = dw * s0, hh = dh * s0;
   const cx = Number(hero.left) + hw / 2, cy = Number(hero.top) + hh / 2;
   const z = Math.min(1.4, (0.86 * W) / hw, (0.86 * H) / hh);
-  if (!(z > 1.06) || !Number.isFinite(cx) || !Number.isFinite(cy)) return <>{children}</>;
+  // (a close-up less than 15 % closer reads as a jolt, not a cut: none then)
+  if (!(z >= PUNCH) || !Number.isFinite(cx) || !Number.isFinite(cy)) return <>{children}</>;
   return <div style={{ position: "absolute", inset: 0, transformOrigin: `${cx}px ${cy}px`, transform: `translate(${((W / 2 - cx) * v).toFixed(1)}px, ${((H / 2 - cy) * v).toFixed(1)}px) scale(${(1 + (z - 1) * v).toFixed(4)})` }}>{children}</div>;
 }
 // the words in a band on top, a group of its own size below them — together centred on the frame
@@ -191,7 +193,7 @@ function Trouble({ c }: { c: C }) {
         const size = fitWords([it.text], c.look.display, { width: dw - 80, lines: 1, max: 110, min: 50 }).size;
         return (
           <div key={i} style={center({ left: 0, top: i * lh, width: dw, height: lh, ...rise(k, 40) })}>
-            <div data-part="item" data-text={it.text} style={{ position: "relative", ...display(c, size, { color: strike > 0.5 ? c.look.sub : c.look.ink }) }}>
+            <div data-part="item" data-text={it.text} style={{ position: "relative", ...display(c, size, { color: blend(c.look.ink, c.look.sub, strike) }) }}>
               {it.text}
               <div style={abs({ left: -size * 0.05, top: "52%", height: Math.max(8, size * 0.09), width: `calc(${(strike * 100).toFixed(1)}% + ${(strike * size * 0.1).toFixed(1)}px)`, background: c.look.bad, borderRadius: 99 })} />
             </div>
@@ -497,7 +499,7 @@ function Steps({ c }: { c: C }) {
             const tick = ease(clamp01((c.f - at - 10) / 10));
             return (
               <div key={i} style={{ height: rowH, display: "flex", alignItems: "center", gap: 28, borderTop: i ? `1.5px solid ${c.look.line}` : undefined, ...rise(k, 30) }}>
-                <div style={{ width: 64, height: 64, borderRadius: 99, border: `4px solid ${tick > 0.5 ? c.look.panelAccent : c.look.line}`, background: tint(c.look.panelAccent, tick), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: 64, height: 64, borderRadius: 99, border: `4px solid ${blend(c.look.line, c.look.panelAccent, tick)}`, background: tint(c.look.panelAccent, tick), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <svg width={36} height={36} viewBox="0 0 24 24">
                     <path d="M5 12.5 L10 17.5 L19 7" fill="none" stroke={c.look.onPanelAccent} strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" pathLength={1} strokeDasharray={1} strokeDashoffset={1 - tick} />
                   </svg>
@@ -544,7 +546,7 @@ export function Button({ c, at, size = 60, on }: { c: C; at: number; size?: numb
   const press = clamp01(1 - Math.abs(c.f - (at + 34)) / 5);
   const bg = on?.bg ?? c.look.accent, ink = on?.ink ?? c.look.onAccent;
   return (
-    <div style={{ opacity: clamp01(k * 1.8), display: "flex", alignItems: "center", gap: 22, padding: `${fit.size * 0.55}px ${fit.size * 0.9}px`, borderRadius: 999, background: bg, color: ink, fontFamily: familyOf(c.look.display), fontWeight: 750, fontSize: fit.size, whiteSpace: "nowrap", boxShadow: `0 24px 60px ${tint(bg, 0.4)}`, transform: `scale(${((0.6 + 0.4 * k) * (1 - press * 0.06)).toFixed(4)})` }}>
+    <div style={{ opacity: clamp01(k * 1.8), display: "flex", alignItems: "center", gap: 22, padding: `${fit.size * 0.55}px ${fit.size * 0.9}px`, borderRadius: 999, background: on ? bg : c.look.accentFill, color: ink, fontFamily: familyOf(c.look.display), fontWeight: 750, fontSize: fit.size, whiteSpace: "nowrap", boxShadow: `0 24px 60px ${tint(bg, 0.4)}`, transform: `scale(${((0.6 + 0.4 * k) * (1 - press * 0.06)).toFixed(4)})` }}>
       {c.brand.cta}
       <Icon name="arrow-right" size={fit.size * 0.9} color={ink} strokeWidth={2.6} />
     </div>
@@ -652,7 +654,7 @@ function Cta({ c }: { c: C }) {
     <>
       <div style={center({ ...half, background: c.look.fill, flexDirection: "column", gap: 30 * u, clipPath: wide ? `inset(0 ${c.s.left ? (1 - wipe) * 100 : 0}% 0 ${c.s.left ? 0 : (1 - wipe) * 100}%)` : `inset(0 0 ${(1 - wipe) * 100}% 0)` })}>
         <div style={{ ...pop(springAt(c, c.s.from + 10)) }}>
-          <Mark c={{ ...c, look: { ...c.look, accent: onA, onAccent: c.look.fill } }} size={Math.round(250 * u)} />
+          <Mark c={{ ...c, look: { ...c.look, accent: onA, accentFill: onA, onAccent: c.look.fill } }} size={Math.round(250 * u)} />
         </div>
         <div style={display(c, nameSize(half.width - 2 * m, Math.round(TYPE.HEAD * 1.5 * u)), { color: onA })}>{c.brand.name}</div>
       </div>

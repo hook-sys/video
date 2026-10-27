@@ -3,7 +3,7 @@ import { Icon } from "../icons";
 import { familyOf } from "./faces";
 import { fitWords, noteHero } from "./fit";
 import { TYPE, WEIGHT, fitIn } from "./geo";
-import { type C, Glyph, One, clamp01, ease, panel, pop, rise, springAt, tint } from "./kit";
+import { type C, Glyph, One, clamp01, countUp, ease, panel, pop, rise, springAt, tint } from "./kit";
 import { Band, Side, abs } from "./scenes";
 import type { Scene } from "./types";
 
@@ -137,10 +137,12 @@ function Chaos({ c }: { c: C }) {
         const x = px + (grid + (i % 3) * (tile + gap) - px) * g + Math.sin((f + i * 7) / 1.7) * shake * 1.2;
         const y = py + (gridTop + Math.floor(i / 3) * (tile + gap) - py) * g + Math.cos((f + i * 5) / 2.1) * shake - (1 - k) * 300;
         const r = pr * (1 - g) + Math.sin((f + i * 13) / 2.3) * shake;
-        const lit = g > 0.6 && i === 4;
+        // (the middle one lit as the grid settles: faded in, never snapped)
+        const lit = i === 4 ? clamp01((g - 0.5) / 0.4) : 0;
         return (
           <div key={i} style={abs({ left: x, top: y, width: tile, height: tile, ...panel(c, 38), display: "flex", alignItems: "center", justifyContent: "center", opacity: clamp01(k * 2), transform: `rotate(${r.toFixed(2)}deg)` })}>
-            <Glyph c={c} part={t.own ? "item-icon" : undefined} name={t.icon} size={96} card solid={lit} at={at} />
+            <Glyph c={c} part={t.own ? "item-icon" : undefined} name={t.icon} size={96} card at={at} />
+            {lit > 0 && <Glyph c={c} name={t.icon} size={96} card solid at={at} style={abs({ opacity: lit })} />}
           </div>
         );
       })}
@@ -336,7 +338,7 @@ function Launch({ c }: { c: C }) {
         const right = x < 560;
         return (
           <div key={i}>
-            <div style={abs({ left: x - 28, top: y - 28, width: 56, height: 56, borderRadius: 99, border: `9px solid ${look.accent}`, background: lit > 0.5 ? look.accent : look.bg, transform: `scale(${(1 + 0.35 * Math.sin(Math.PI * lit)).toFixed(3)})` })} />
+            <div style={abs({ left: x - 28, top: y - 28, width: 56, height: 56, borderRadius: 99, border: `9px solid ${look.accent}`, background: `linear-gradient(${tint(look.accent, lit)}, ${tint(look.accent, lit)}), ${look.bg}`, transform: `scale(${(1 + 0.35 * Math.sin(Math.PI * lit)).toFixed(3)})` })} />
             {it && (
               <div style={abs({ ...(right ? { left: x + 50, top: y + 6 } : { right: dw - x + 50, top: y - 30 }), opacity: 0.3 + 0.7 * lit })}>
                 <One part="item" face={look.text} fit={360} style={{ fontFamily: familyOf(look.text), fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: look.ink }}>{it.text}</One>
@@ -359,6 +361,212 @@ function Launch({ c }: { c: C }) {
   );
 }
 
+// ── cost: a bill getting longer — then cut down ──────────────────────────
+// (its lines: the scene's things, else bare lines; a price is never made up —
+// a number only when the voice says one, as its total)
+const CO = { dw: 760, dh: 700, w: 690, row: 92 };
+const costRows = (s: Scene) => Math.max(3, Math.min(4, s.items.length || 4));
+export const costRowAt = (s: Scene, i: number) => s.from + 8 + Math.round(i * Math.max(4, Math.min(10, (turnOf(s) - s.from - 14) / costRows(s))));
+function Cost({ c }: { c: C }) {
+  const { dw, dh, w, row } = CO;
+  const { s, f, look } = c;
+  const T = s.resolves ? turnOf(s) : Infinity;
+  const n = costRows(s);
+  const cut = Number.isFinite(T) ? ease(clamp01((f - T) / 16)) : 0;
+  const totalAt = costRowAt(s, n - 1) + 8;
+  const kt = springAt(c, totalAt);
+  // (the total: the number said, counting up; else a bar growing — shrunk to a third when it is cut)
+  const grow = clamp01((f - totalAt) / Math.max(20, (Number.isFinite(T) ? T : s.to) - totalAt));
+  const bar = (0.45 + 0.55 * ease(grow)) * (1 - 0.66 * cut);
+  const top = (dh - (110 + n * row + 120)) / 2;
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      <div style={abs({ left: (dw - w) / 2, top, width: w, height: 110 + n * row + 120, ...panel(c, 36), ...rise(springAt(c, s.from + 2)) })}>
+        <div style={abs({ left: 36, top: 30, display: "flex", alignItems: "center", gap: 20 })}>
+          <Glyph c={c} name="receipt" size={76} card at={s.from + 4} />
+          <div style={{ width: 200, height: 18, borderRadius: 9, background: tint(look.panelAccent, 0.14) }} />
+        </div>
+        {Array.from({ length: n }, (_, i) => {
+          const it = s.items[i];
+          const k = springAt(c, costRowAt(s, i));
+          // (cut: every line but the first folds away)
+          const gone = i ? cut : 0;
+          return (
+            <div key={i} style={abs({ left: 36, right: 36, top: 110 + i * row, height: row - 18, display: "flex", alignItems: "center", gap: 18, opacity: clamp01(k * 2) * (1 - gone), transform: `translateX(${((1 - k) * 40 + gone * -30).toFixed(1)}px)`, borderBottom: `2px dashed ${tint(look.panelAccent, 0.18)}` })}>
+              {it ? <One part="item" face={look.text} fit={360} style={{ fontFamily: familyOf(look.text), fontSize: 44, fontWeight: WEIGHT.item, color: look.panelInk, flex: 1 }}>{it.text}</One> : <div style={{ flex: 1 }}><div style={{ width: `${40 + 30 * hash(i, 9)}%`, height: 16, borderRadius: 8, background: tint(look.panelAccent, 0.14) }} /></div>}
+              <div style={{ width: 100 + 60 * hash(i, 4), height: 26, borderRadius: 13, background: tint(look.bad, 0.22) }} />
+            </div>
+          );
+        })}
+        <div style={abs({ left: 36, right: 36, top: 110 + n * row + 20, height: 76, display: "flex", alignItems: "center", gap: 18, opacity: clamp01(kt * 2) })}>
+          <div style={{ flex: 1, height: 36, borderRadius: 18, background: tint(look.panelAccent, 0.1), overflow: "hidden", position: "relative" }}>
+            <div style={abs({ left: 0, top: 0, bottom: 0, width: `${(bar * 100).toFixed(1)}%`, borderRadius: 15, background: look.bad })} />
+            <div style={abs({ left: 0, top: 0, bottom: 0, width: `${(bar * 100).toFixed(1)}%`, borderRadius: 15, background: look.panelAccent, opacity: cut })} />
+          </div>
+          {s.number && <div style={{ fontFamily: familyOf(look.display), fontWeight: 800, fontSize: 64, color: look.panelInk, letterSpacing: "-0.02em" }}>{countUp(s.number, ease(grow))}</div>}
+          <div style={{ position: "relative", width: 64, height: 64 }}>
+            <div style={abs({ inset: 0, opacity: 1 - cut })}><Icon name="trending-up" size={64} color={look.bad} strokeWidth={2.4} /></div>
+            <div style={abs({ inset: 0, opacity: cut })}><Icon name="trending-down" size={64} color={look.panelAccent} strokeWidth={2.4} /></div>
+          </div>
+        </div>
+        {cut > 0 && <div style={abs({ right: -30, top: -30, ...pop(springAt(c, T + 12)) })}><Glyph c={c} name="circle-check" size={110} card solid at={T + 12} /></div>}
+      </div>
+    </Place>
+  );
+}
+
+// ── hours: a crowded timeline, a clock racing — swept into one clean clip ──
+const HO = { dw: 900, dh: 620, w: 860, tracks: 3 };
+export const hoursSweep = (s: Scene) => turnOf(s);
+function Hours({ c }: { c: C }) {
+  const { dw, dh, w, tracks } = HO;
+  const { s, f, look } = c;
+  const T = s.resolves ? turnOf(s) : Infinity;
+  const lane = 70, left = 150, right = w - 40, top = 200;
+  // the sweep: across the tracks over 16 frames
+  const sweep = Number.isFinite(T) ? clamp01((f - T) / 16) : 0;
+  const sx = left + (right - left) * ease(sweep);
+  // the clock: racing until the sweep, then easing to a stop
+  const race = (fr: number) => (fr - s.from) * 9;
+  const sec = Number.isFinite(T) && f > T ? race(T) + 140 * ease(clamp01((f - T) / 24)) : race(f);
+  const clips = Array.from({ length: tracks }, (_, t) => {
+    const out: { x: number; w: number; at: number }[] = [];
+    let x = left + 6 + hash(t, 1) * 30, k = 0;
+    while (x < right - 30) {
+      const cw = 30 + hash(t * 31 + k, 2) * 70;
+      out.push({ x, w: Math.min(cw, right - x), at: s.from + 6 + Math.round((t * 7 + k * 5) % 34) });
+      x += cw + 8 + hash(t * 17 + k, 3) * 18;
+      k++;
+    }
+    return out;
+  });
+  const glyphs = ["film", "type", "music"];
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      <div style={abs({ left: (dw - w) / 2, top: 20, width: w, height: dh - 40, ...panel(c, 34), overflow: "hidden", ...rise(springAt(c, s.from + 2)) })}>
+        <div style={abs({ left: 30, top: 26, display: "flex", gap: 12 })}>{[0, 1, 2].map((i) => <div key={i} style={{ width: 16, height: 16, borderRadius: 8, background: tint(look.panelAccent, 0.25) }} />)}</div>
+        <svg width={120} height={120} viewBox="0 0 120 120" style={abs({ left: (w - 120) / 2, top: 50 })}>
+          <circle cx={60} cy={60} r={52} fill="none" stroke={look.panelInk} strokeWidth={7} />
+          <line x1={60} y1={60} x2={60} y2={30} stroke={look.panelInk} strokeWidth={7} strokeLinecap="round" transform={`rotate(${(sec / 12).toFixed(1)} 60 60)`} />
+          <line x1={60} y1={66} x2={60} y2={16} stroke={look.panelAccent} strokeWidth={4} strokeLinecap="round" transform={`rotate(${sec.toFixed(1)} 60 60)`} />
+          <circle cx={60} cy={60} r={6} fill={look.panelAccent} />
+        </svg>
+        {Array.from({ length: tracks }, (_, t) => (
+          <div key={t}>
+            <div style={abs({ left: 30, top: top + t * (lane + 22) + 10, width: 90, height: lane - 20, display: "flex", alignItems: "center", gap: 8 })}>
+              <Icon name={glyphs[t]} size={34} color={look.panelSub} strokeWidth={2} />
+            </div>
+            <div style={abs({ left, top: top + t * (lane + 22), width: right - left, height: lane, borderRadius: 14, background: tint(look.panelAccent, 0.06) })} />
+            {clips[t].map((cl, k) => {
+              const kk = springAt(c, cl.at);
+              // (gone where the sweep has passed)
+              const past = clamp01((sx - cl.x) / 40);
+              return <div key={k} style={abs({ left: cl.x, top: top + t * (lane + 22) + 8, width: cl.w, height: lane - 16, borderRadius: 10, background: tint(look.panelAccent, 0.22 + 0.2 * hash(t * 13 + k, 5)), opacity: clamp01(kk * 2) * (1 - past), transform: `scaleY(${(0.5 + 0.5 * clamp01(kk)).toFixed(3)})` })} />;
+            })}
+            {/* (the clean clip, drawn as the sweep passes) */}
+            {sweep > 0 && <div style={abs({ left, top: top + t * (lane + 22) + 8, width: Math.max(0, sx - left), height: lane - 16, borderRadius: 10, background: t ? tint(look.panelAccent, 0.35) : look.accentFill })} />}
+          </div>
+        ))}
+        {/* cut marks, until the sweep takes them */}
+        {[0.22, 0.47, 0.71, 0.88].map((u, i) => {
+          const x = left + (right - left) * u;
+          return <div key={i} style={abs({ left: x - 2, top: top - 14, width: 4, height: tracks * (lane + 22) + 6, borderRadius: 2, background: look.bad, opacity: clamp01((f - s.from - 20 - i * 6) / 6) * (1 - clamp01((sx - x) / 20)) * 0.8 })} />;
+        })}
+        {sweep > 0 && sweep < 1 && <div style={abs({ left: sx - 40, top: top - 30, width: 80, height: tracks * (lane + 22) + 40, background: `linear-gradient(90deg, transparent, ${tint(look.panelAccent, 0.45)}, transparent)` })} />}
+        {Number.isFinite(T) && f > T + 16 && <div style={abs({ right: 36, top: 40, ...pop(springAt(c, T + 18)) })}><Glyph c={c} name="circle-check" size={96} card solid at={T + 18} /></div>}
+      </div>
+    </Place>
+  );
+}
+
+// ── barriers: what stands in the way, each crossed out — then gone ────────
+const BA = { dw: 820, dh: 640, card: 150 };
+// when each is crossed: as it is said, else one after another — all before the turn
+export function barrierAt(s: Scene, i: number): number {
+  const said = s.said ?? [];
+  const w = said.find((x) => bare(x.t) === first(s.items[i]?.text ?? ""));
+  const T = turnOf(s);
+  return Math.min(T - 6 - (s.items.length - 1 - i) * 6, Math.max(s.from + 14 + i * 8, (w?.at ?? 0) + 4));
+}
+function Barriers({ c }: { c: C }) {
+  const { dw, dh, card } = BA;
+  const { s, f, look } = c;
+  const items = s.items.slice(0, 3);
+  const T = s.resolves ? turnOf(s) : Infinity;
+  const gone = Number.isFinite(T) ? ease(clamp01((f - T) / 14)) : 0;
+  const gap = 26, h = items.length * card + (items.length - 1) * gap, top = (dh - h) / 2;
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      {items.map((it, i) => {
+        const k = springAt(c, s.from + 4 + i * 6);
+        const x = springAt(c, barrierAt(s, i));
+        return (
+          <div key={i} style={abs({ left: 40, top: top + i * (card + gap), width: dw - 80, height: card, ...panel(c, 32), display: "flex", alignItems: "center", gap: 30, padding: "0 40px", boxSizing: "border-box", opacity: clamp01(k * 2) * (1 - 0.85 * gone), filter: gone > 0.01 ? `blur(${(gone * 4).toFixed(2)}px)` : undefined, transform: `translateY(${((1 - k) * 40 + gone * 30).toFixed(1)}px) scale(${(1 - 0.08 * gone).toFixed(3)})` })}>
+            <Glyph c={c} part="item-icon" name={it.icon ?? s.icon} size={86} card at={s.from + 4 + i * 6} />
+            <One part="item" face={look.text} fit={dw - 80 - 80 - 86 - 30 - 120} style={{ fontFamily: familyOf(look.text), fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: look.panelInk }}>{it.text}</One>
+            <div style={abs({ right: 34, top: (card - 84) / 2, width: 84, height: 84, borderRadius: 42, background: look.bad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 10px 26px ${tint(look.bad, 0.35)}`, ...pop(x), ...(f < barrierAt(s, i) - 2 ? { opacity: 0 } : {}) })}>
+              <Icon name="x" size={52} color="#ffffff" strokeWidth={3.2} />
+            </div>
+          </div>
+        );
+      })}
+      {gone > 0 && (
+        <div style={abs({ left: (dw - 230) / 2, top: (dh - 230) / 2, ...pop(springAt(c, T + 6)) })}>
+          <Glyph c={c} name="circle-check" size={230} solid at={T + 8} />
+        </div>
+      )}
+    </Place>
+  );
+}
+
+// ── progress: a bar filling to its goal, its stops lighting ───────────────
+// (to the number said when it is a share — "40%" — else all the way, a flag at its end)
+const PR = { dw: 900, dh: 560, bw: 760 };
+export const progressArrival = (s: Scene) => Math.min(s.to - 32, Math.max(turnOf(s) + 12, Math.round(s.from + 0.55 * (s.to - s.from))));
+const shareOf = (n: string | null) => {
+  const m = n ? /^(\d+(?:\.\d+)?)\s*%$/.exec(n.trim()) : null;
+  return m ? Math.min(1, Math.max(0.05, parseFloat(m[1]) / 100)) : 1;
+};
+function Progress({ c }: { c: C }) {
+  const { dw, dh, bw } = PR;
+  const { s, f, look } = c;
+  // (short of it, the bar stalls a little past a third)
+  const target = shareOf(s.number);
+  const goal = s.resolves ? target : 0.38;
+  const A = progressArrival(s);
+  const p = goal * ease(clamp01((f - s.from - 10) / Math.max(20, (s.resolves ? A : s.from + 50) - s.from - 10)));
+  const items = s.items.slice(0, 3);
+  const stops = items.length ? items.map((_, i) => (target * (i + 1)) / (items.length + 1)) : [0.25, 0.5, 0.75].map((u) => u * target);
+  const x0 = (dw - bw) / 2, by = 300, bh = 60;
+  const done = s.resolves ? clamp01((f - A) / 10) : 0;
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      {s.number && <div style={abs({ left: 0, right: 0, top: 70, textAlign: "center", fontFamily: familyOf(look.display), fontWeight: 800, fontSize: 150, letterSpacing: "-0.03em", lineHeight: 1, ...(look.keyFill ? { backgroundImage: look.keyFill, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" } : { color: look.accent }), opacity: clamp01(springAt(c, s.from + 6) * 2) })}>{countUp(s.number, p / Math.max(0.01, goal))}</div>}
+      <div style={abs({ left: x0, top: by, width: bw, height: bh, borderRadius: bh / 2, background: tint(look.accent, 0.14), ...rise(springAt(c, s.from + 2)) })}>
+        <div style={abs({ left: 0, top: 0, bottom: 0, width: bw * p, borderRadius: bh / 2, background: look.accentFill, boxShadow: `0 10px 30px ${tint(look.accent, 0.3)}` })} />
+      </div>
+      {stops.map((u, i) => {
+        const lit = clamp01((p - u) / 0.03);
+        const x = x0 + bw * u;
+        return (
+          <div key={i}>
+            <div style={abs({ left: x - 20, top: by + bh / 2 - 20, width: 40, height: 40, borderRadius: 20, border: `7px solid ${look.bg}`, boxSizing: "border-box", background: `linear-gradient(${tint(look.ink, 0.25 * (1 - lit))}, ${tint(look.ink, 0.25 * (1 - lit))}), ${look.accent}`, transform: `scale(${(1 + 0.3 * Math.sin(Math.PI * lit)).toFixed(3)})` })} />
+            {items[i] && (
+              <div style={abs({ left: x - 160, width: 320, top: by + bh + 26, display: "flex", justifyContent: "center", opacity: 0.35 + 0.65 * lit })}>
+                <One part="item" face={look.text} fit={300} style={{ fontFamily: familyOf(look.text), fontSize: 40, fontWeight: WEIGHT.item, color: look.ink }}>{items[i].text}</One>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div style={abs({ left: x0 + bw * target - 50, top: by - 130, opacity: s.resolves ? 0.35 + 0.65 * done : 0.35, ...(done > 0 ? pop(springAt(c, A)) : {}) })}>
+        <Glyph c={c} name={target < 1 ? "target" : "flag"} size={100} at={A} />
+        {done > 0 && <Glyph c={c} name={target < 1 ? "target" : "flag"} size={100} solid at={A} style={abs({ left: 0, top: 0, opacity: done })} />}
+      </div>
+    </Place>
+  );
+}
+
 export function Concept({ c }: { c: C }) {
   switch (c.s.concept) {
     case "trapped": return <Trapped c={c} />;
@@ -366,6 +574,10 @@ export function Concept({ c }: { c: C }) {
     case "waiting": return <Waiting c={c} />;
     case "truth": return <Truth c={c} />;
     case "launch": return <Launch c={c} />;
+    case "cost": return <Cost c={c} />;
+    case "hours": return <Hours c={c} />;
+    case "barriers": return <Barriers c={c} />;
+    case "progress": return <Progress c={c} />;
     default: return null;
   }
 }
@@ -380,9 +592,20 @@ export function conceptSounds(s: Scene): { at: number; name: string; volume: num
     case "waiting": return [...waitTicks(s).slice(0, 4).map((at) => ({ at, name: "tick", volume: 0.22 })), ...(s.resolves ? [{ at: T + 14, name: "ding", volume: 0.24 }] : [])];
     case "truth": return [{ at: T, name: "subtle_impact", volume: 0.34 }];
     case "launch": return [{ at: s.from + 8, name: "rise", volume: 0.26 }, ...(s.resolves ? [{ at: arrivalOf(s), name: "shimmer", volume: 0.22 }] : [])];
+    case "cost": return [{ at: costRowAt(s, 0), name: "soft_pop", volume: 0.24 }, { at: costRowAt(s, costRows(s) - 1) + 8, name: "subtle_impact", volume: 0.24 }, ...(s.resolves ? [{ at: T, name: "whoosh", volume: 0.2 }, { at: T + 12, name: "ding", volume: 0.22 }] : [])];
+    case "hours": return [...[0, 10, 20].map((d) => ({ at: s.from + 10 + d, name: "tick", volume: 0.2 })), ...(s.resolves ? [{ at: T, name: "whoosh", volume: 0.24 }, { at: T + 18, name: "ding", volume: 0.22 }] : [])];
+    case "barriers": return [...s.items.slice(0, 3).map((_, i) => ({ at: barrierAt(s, i), name: "lock", volume: 0.22 })), ...(s.resolves ? [{ at: T + 6, name: "reveal", volume: 0.3 }] : [])];
+    case "progress": return [{ at: s.from + 10, name: "rise", volume: 0.24 }, ...(s.resolves ? [{ at: progressArrival(s), name: "ding", volume: 0.22 }] : [])];
     default: return [];
   }
 }
 
 // when it has settled (check.ts)
-export const conceptSettled = (s: Scene) => (s.concept === "truth" ? turnOf(s) + 20 : s.resolves ? (s.concept === "launch" ? arrivalOf(s) + 12 : turnOf(s) + 30) : s.from + 30);
+export function conceptSettled(s: Scene): number {
+  if (s.concept === "truth") return turnOf(s) + 20;
+  if (s.concept === "launch" && s.resolves) return arrivalOf(s) + 12;
+  if (s.concept === "progress") return s.resolves ? progressArrival(s) + 12 : s.from + 54;
+  if (s.concept === "cost" && !s.resolves) return costRowAt(s, costRows(s) - 1) + 20;
+  if (s.concept === "barriers") return s.resolves ? turnOf(s) + 30 : barrierAt(s, Math.min(3, s.items.length) - 1) + 14;
+  return s.resolves ? turnOf(s) + 30 : s.from + 30;
+}

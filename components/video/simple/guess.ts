@@ -9,7 +9,7 @@ const STOP = new Set("a an the and or but so of to in on at for with by from is 
 const clean = (t: string) => t.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}%]+$/gu, "");
 const isWord = (t: string) => clean(t).length > 2 && !STOP.has(clean(t).toLowerCase());
 
-const PAIN = /\b(nothing|never|still|tired|lost|lose|losing|miss|missed|missing|manual|chaos|messy|scattered|endless|slow|stuck|hard|without|no more|problem|struggle|juggling|spreadsheets?)\b/i;
+const PAIN = /\b(nothing|never|takes hours|hours of|too expensive|costs too|still|tired|lost|lose|losing|miss|missed|missing|manual|chaos|messy|scattered|endless|slow|stuck|hard|without|no more|problem|struggle|juggling|spreadsheets?)\b/i;
 const STEP = /\b(first|then|next|finally|step|steps|three|simple|in minutes)\b/i;
 
 // the idea a beat's words picture, by their words (the truth: "X is just Y", its two words)
@@ -17,12 +17,20 @@ const IDEAS: [Concept, RegExp][] = [
   ["trapped", /\b(trapped|stuck|locked (in|up|away)|boxed in|held back|caged)\b/i],
   ["chaos", /\b(chaos|chaotic|mess|messy|scattered|cluttered|juggling|all over the place|overwhelm\w*|organi[sz]e\w*)\b/i],
   ["waiting", /\b(wait|waits|waiting|delay\w*|takes forever|loading|slow|weeks to|days to)\b/i],
+  ["hours", /\b(hours|all day|all week|time-consuming|in minutes|minutes instead)\b/i],
+  ["cost", /\b(costs?|costly|expensive|overpay\w*|fees|pricey|budget)\b/i],
   ["launch", /\b(launch\w*|take off|takes off|lift ?off|go live|ship it|skyrocket\w*)\b/i],
+  ["progress", /\b(goals?|targets?|milestones?|progress|on track|finish line)\b/i],
 ];
+// "no X, no Y" — what stands in the way, its things
+const THING = String.raw`(\p{L}+(?:\s+(?!(?:and|or|no|needed|required)\b)\p{L}+)?)`;
+const BARRIERS = new RegExp(String.raw`\bno\s+${THING}[,;]?\s+(?:and\s+|or\s+)?no\s+${THING}(?:[,;]?\s+(?:and\s+|or\s+)?no\s+${THING})?`, "iu");
 const TRUTH = /\b(\p{L}+)\s+(?:is|are)\s+(?:(?:just|only|really|actually|simply|basically|nothing but)\s+)+(?:(?:being|a|an|the)\s+)?(\p{L}+)/iu;
 function ideaOf(text: string): { concept: Concept; items?: Item[] } | null {
   const t = TRUTH.exec(text);
   if (t && !STOP.has(t[1].toLowerCase()) && !STOP.has(t[2].toLowerCase())) return { concept: "truth", items: [t[1], t[2]].map((x) => ({ text: x.charAt(0).toUpperCase() + x.slice(1), icon: null })) };
+  const b = BARRIERS.exec(text);
+  if (b) return { concept: "barriers", items: b.slice(1).filter(Boolean).map((x) => x.replace(/[.,;!?]+$/, "")).map((x) => ({ text: x.charAt(0).toUpperCase() + x.slice(1), icon: searchIcons(x, 1)[0] ?? null })) };
   const hit = IDEAS.find(([, re]) => re.test(text));
   return hit ? { concept: hit[0] } : null;
 }
