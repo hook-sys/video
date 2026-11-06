@@ -1,3 +1,4 @@
+import { leadsBn, trailsBn } from "./bangla";
 import { rng } from "./faces";
 import { framesOf } from "./beats";
 import { ideaNeedsThings, type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
@@ -167,10 +168,12 @@ export function keyRun(words: Word[], [a, b]: [number, number], key: number | nu
   if (b - a + 1 <= most) return [a, b];
   const k = key ?? a;
   const little = (i: number) => LITTLE.has(words[i].text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""));
+  // (Bangla: never ending on a word that leads the next — এবং, এই — nor starting on one that follows — থেকে, জন্য)
+  const badStart = (i: number) => little(i) || trailsBn(words[i].text), badEnd = (i: number) => little(i) || leadsBn(words[i].text);
   const runs: [number, number][] = [];
   for (let n = most; n >= 2; n--) for (let from = Math.max(a, k - n + 1); from <= Math.min(k, b - n + 1); from++) runs.push([from, from + n - 1]);
   // (the longest that does not start or end on a little word, the key nearest its middle)
-  const clean = runs.filter(([x, y]) => !little(x) && !little(y));
+  const clean = runs.filter(([x, y]) => !badStart(x) && !badEnd(y));
   const pool = clean.length ? clean : runs;
   const n = pool[0][1] - pool[0][0];
   return pool.filter(([x, y]) => y - x === n).sort((p, q) => Math.abs((p[0] + p[1]) / 2 - k) - Math.abs((q[0] + q[1]) / 2 - k))[0];
@@ -178,7 +181,8 @@ export function keyRun(words: Word[], [a, b]: [number, number], key: number | nu
 
 // a word as shown: the first capitalised, the last without a trailing comma or colon
 export function shownWord(t: string, k: number, n: number): string {
-  let out = k === n - 1 ? t.replace(/[,;:—–-]+$/, "") : t;
+  // (Bangla's । too: a caption needs no full stop)
+  let out = k === n - 1 ? t.replace(/[,;:—–।-]+$/, "") : t;
   if (k === 0) out = out.charAt(0).toUpperCase() + out.slice(1);
   return out;
 }

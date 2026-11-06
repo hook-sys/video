@@ -1,3 +1,4 @@
+import BN_WIDTHS from "./bn-widths.json";
 // The simple engine's type and randomness: the faces from the font library
 // (public/fonts/library) and a seeded random.
 
@@ -29,8 +30,10 @@ export function rng(seed: number) {
 
 // ── type ──────────────────────────────────────────────────────────────────
 // `w`: average glyph width in em at weight 700 (for laying out before the
-// browser can measure); `fixed`: one weight only.
-export type Face = { slug: string; family: string; file: string; w: number; fixed?: number; upper?: boolean };
+// browser can measure); `fixed`: one weight only; `files`: a Bangla face's
+// files — its Bangla letters and its Latin ones, each weight it has.
+export type FontFile = { file: string; weight: string; range?: string };
+export type Face = { slug: string; family: string; file: string; w: number; fixed?: number; upper?: boolean; files?: FontFile[] };
 const face = (slug: string, w: number, opts: Partial<Face> = {}): Face => ({ slug, family: `C-${slug}`, file: `${slug}-latin-wght-normal.woff2`, w, ...opts });
 export const DISPLAY_FACES: Face[] = [
   face("inter", 0.56, { file: "" }),
@@ -71,13 +74,57 @@ export const DISPLAY_FACES: Face[] = [
   face("young-serif", 0.56, { file: "young-serif-latin-400-normal.woff2", fixed: 400 }),
   face("newsreader", 0.5),
 ];
-export const TEXT_FACES: Face[] = ["inter", "dm-sans", "manrope", "figtree", "geist", "onest", "plus-jakarta-sans", "hanken-grotesk", "instrument-sans", "public-sans", "work-sans", "albert-sans", "outfit"].map((s) => DISPLAY_FACES.find((f) => f.slug === s) ?? face(s, 0.55));
+// ── Bangla ───────────────────────────────────────────────────────────────
+// The faces the videos are set in (docs/video-spec.md, Bangla): each loads its
+// Bangla file for the Bangla range and its Latin file for the rest (English
+// words, digits inside a Bangla line).
+const BN_RANGE = "U+0951-0952, U+0964-0965, U+0980-09FE, U+1CD0-1CF9, U+200C-200D, U+20B9, U+25CC, U+A8F1";
+const bangla = (slug: string, statics?: number[]): Face => ({
+  slug,
+  family: `C-${slug}`,
+  file: "",
+  w: 0.62,
+  files: statics
+    ? statics.flatMap((wt) => [{ file: `${slug}-bengali-${wt}-normal.woff2`, weight: String(wt), range: BN_RANGE }, { file: `${slug}-latin-${wt}-normal.woff2`, weight: String(wt) }])
+    : [{ file: `${slug}-bengali-wght-normal.woff2`, weight: "100 900", range: BN_RANGE }, { file: `${slug}-latin-wght-normal.woff2`, weight: "100 900" }],
+});
+export const BANGLA_FACES: Face[] = [bangla("noto-sans-bengali"), bangla("anek-bangla"), bangla("atma", [400, 700]), bangla("baloo-da-2"), bangla("noto-serif-bengali"), bangla("hind-siliguri", [400, 700])];
+DISPLAY_FACES.push(...BANGLA_FACES);
+
+export const TEXT_FACES: Face[] = ["hind-siliguri", "noto-sans-bengali", "inter", "dm-sans", "manrope", "figtree", "geist", "onest", "plus-jakarta-sans", "hanken-grotesk", "instrument-sans", "public-sans", "work-sans", "albert-sans", "outfit"].map((s) => DISPLAY_FACES.find((f) => f.slug === s) ?? face(s, 0.55));
 export const faceOf = (slug: string, list = DISPLAY_FACES) => list.find((f) => f.slug === slug) ?? list[0];
 export const fontUrl = (f: Face) => (f.slug === "inter" ? "fonts/inter-latin-wght.woff2" : `fonts/library/${f.slug}/${f.file}`);
+// every file a face loads, with its weight and range
+export const fontFiles = (f: Face): { url: string; weight: string; range?: string }[] =>
+  f.files ? f.files.map((x) => ({ url: `fonts/library/${f.slug}/${x.file}`, weight: x.weight, range: x.range })) : [{ url: fontUrl(f), weight: f.fixed ? String(f.fixed) : "100 900" }];
 export const familyOf = (f: Face) => `"${f.family}", InterClean, system-ui, sans-serif`;
 
-// Rough width of a text in em (before the browser can measure it).
+// Rough width of a text in em (before the browser can measure it). A Bangla
+// face: from its measured table (scripts/bangla) — each character's width and
+// the corrections for conjuncts and vowel signs that join their letter;
+// a line's width within a percent or so, a word's within a few.
+const BN_TABLE = BN_WIDTHS as Record<string, { space: number; chars: Record<string, number> }>;
+const HASANTA = "\u09CD";
+function bnWidth(text: string, t: { chars: Record<string, number> }) {
+  const c = t.chars;
+  const cs = [...text.normalize("NFC")];
+  let w = 0;
+  cs.forEach((ch, i) => {
+    const prv = cs[i - 1] ?? "", nxt = cs[i + 1] ?? "";
+    if (ch === " ") return void (w += 0.26 / 1.15);
+    if (ch === HASANTA) {
+      w += c[nxt === "য" ? "ya" : nxt === "র" ? "ra" : prv === "র" ? "reph" : "conj"] ?? 0;
+      if (prv && nxt) w += c[`+${prv}${HASANTA}${nxt}`] ?? 0;
+      return;
+    }
+    w += c[ch] ?? 0.55;
+    if ("ুূৃ".includes(ch) && prv) w += c[`+${prv === "র" && cs[i - 2] === HASANTA ? "্র" : prv}${ch}`] ?? 0;
+  });
+  return w;
+}
 export function emWidth(text: string, f: Face, weight = 700, upper = false) {
+  const table = BN_TABLE[f.slug];
+  if (table) return bnWidth(text, table);
   let w = 0;
   for (const ch of upper ? text.toUpperCase() : text) {
     if (ch === " ") w += 0.27;

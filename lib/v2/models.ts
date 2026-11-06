@@ -2,6 +2,7 @@ import "server-only";
 import { type AiConfig, type Reasoning, type TextAi, type V2Role, V2_ROLES, getAiConfig, textClient } from "@/lib/ai/models";
 import { buildInput, falRun, heardWords } from "@/lib/ai/fal";
 import { retimeScript, type WordTiming } from "@/lib/voice-timing";
+import { alignVoice } from "@/lib/voice-pcm";
 
 // "New version" models: only what a super admin chose on /admin/models —
 // no OPENAI_MODEL, no gpt-5-mini, no OpenAI direct, no backup or fallback
@@ -54,19 +55,24 @@ export async function v2Speak(input: { script: string; language: string; style: 
   return { model: voice.model, requestId: result.requestId, audioUrl: result.url };
 }
 
-// The script's own words on the times the admin's Whisper hears them.
-export async function v2TimeScript(audioUrl: string, script: string) {
+// The script's own words on its voice: by the voice's pauses (no AI — lib/voice-align.ts: Whisper
+// hears Bangla badly, writing it in another script and losing its place), else on the times the
+// admin's Whisper hears, told the voice is Bangla. `heard`: whether Whisper was called (it is priced).
+export async function v2TimeScript(audioUrl: string, script: string): Promise<{ words: WordTiming[]; model: string; requestId: string | null; seconds: number; heard: boolean }> {
+  const aligned = await alignVoice(audioUrl, script).catch((e) => (console.warn("pause timing failed:", e instanceof Error ? e.message : e), null));
+  if (aligned?.length) return { words: aligned, model: "pauses", requestId: null, seconds: lastEnd(aligned), heard: false };
   const model = await v2Whisper();
-  const { heard, requestId } = await heardWords(model, audioUrl);
+  const { heard, requestId } = await heardWords(model, audioUrl, "bn");
   const words = retimeScript(script, heard);
   if (!words?.length) throw new Error(`${model} could not time the voice to the script.`);
-  return { words, model, requestId, seconds: lastEnd(heard) };
+  return { words, model, requestId, seconds: lastEnd(heard), heard: true };
 }
 
-// The customer's own recording: what the admin's Whisper hears is the script.
+// The customer's own recording with no script written (videos made before the script was asked
+// for): what the admin's Whisper hears is the script.
 export async function v2Transcribe(audioUrl: string) {
   const model = await v2Whisper();
-  const { heard, requestId } = await heardWords(model, audioUrl);
+  const { heard, requestId } = await heardWords(model, audioUrl, "bn");
   const words = heard.filter((w) => w.text.trim());
   if (!words.length) throw new Error(`${model} heard no words in the uploaded voice.`);
   return { words, script: words.map((w) => w.text).join(" "), model, requestId, seconds: lastEnd(words) };

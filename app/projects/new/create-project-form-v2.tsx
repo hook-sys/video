@@ -36,6 +36,7 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
   const [state, action, pending] = useActionState(createProjectV2, {});
   const [mode, setMode] = useState<"script" | "upload">("script");
   const [script, setScript] = useState(prefill?.script ?? "");
+  const [uploadScript, setUploadScript] = useState("");
   const [voiceFile, setVoiceFile] = useState<{ name: string; size: number; seconds: number } | null>(null);
   const [voiceError, setVoiceError] = useState<string>();
   const [format, setFormat] = useState<string>(FORMATS[0]);
@@ -84,6 +85,7 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
               )}
             </>
           ) : (
+            <>
             <Upload title="Your recording" text={voiceFile ? voiceFile.name : "Upload your voice"} sub={voiceFile ? `${voiceFile.seconds ? `${voiceFile.seconds.toFixed(1)} s · ` : ""}${(voiceFile.size / 1024 / 1024).toFixed(1)} MB` : "MP3, WAV or M4A · the icon and the recording together up to 4 MB"}>
               <input
                 name="voice_file"
@@ -103,6 +105,9 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
                 }}
               />
             </Upload>
+            {/* (the recording's words, written: what the video shows, timed to the recording by its pauses) */}
+            <textarea name="upload_script" required rows={6} maxLength={VOICE_SCRIPT_MAX} value={uploadScript} onChange={(e) => setUploadScript(e.target.value)} placeholder="Write the words of your recording — exactly as you say them, with । , ? where you pause" className={area} />
+            </>
           )}
         </Step>
 
@@ -177,7 +182,7 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
         </Step>
 
         {mode === "script" ? (
-          <Step n={3} title="Voice" sub="English voice-over. Press play to hear each voice.">
+          <Step n={3} title="Voice" sub="Bangla voice-over. Press play to hear each voice.">
             <VoicePicker voices={voices} initial={prefill?.voice} />
           </Step>
         ) : (

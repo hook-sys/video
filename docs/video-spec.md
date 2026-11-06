@@ -311,3 +311,44 @@ SFX levels follow the kit's: under the voice by 14–20 dB (soft pops and whoosh
 0.14–0.3, a click 0.45). Bangla type (Anek Bangla, Hind Siliguri — both in the
 font library) waits for Bangla voices; the kit's talking-head edits and its robot
 need footage and a character, which this engine does not make.
+
+## Bangla
+
+The videos are Bangla only: short ads (15–40 s) and explainers (40–90 s), most
+of them 9:16 for reels. Everything a viewer reads is the script's own Bangla.
+
+- **Timing without AI** (lib/voice-align.ts, lib/voice-pcm.ts). Whisper hears
+  Bangla badly — it writes it in Devanagari, loses its place for whole
+  sentences (measured on a real 112 s voice: 2–5 s off). The script is known
+  (written for our voice, or written by the customer with their recording —
+  the form asks for it), so the voice is timed by its pauses: the audio is read
+  with the ffmpeg Remotion ships, its silences found, and the script's phrases
+  (cut at । ? ! , ;) fitted to the runs of speech between them by their length
+  in letters (dynamic programming over where each run ends); inside a run each
+  word takes its share by letters. Measured on the same voice: every sentence
+  and comma found, within 0.3 s of where it is heard. Whisper (told the language
+  is Bangla) is only the fallback when the audio cannot be read.
+- **Bangla type** (faces.ts, bn-widths.json, scripts/bangla). Five pairs of
+  Bangla faces from the library (Noto Sans Bengali, Anek Bangla, Atma, Baloo
+  Da 2, Noto Serif Bengali for headlines; Hind Siliguri, Noto Sans Bengali for
+  text), each loading its Bangla file for the Bangla range and its Latin file
+  for English words and digits inside a line. A Bangla line is laid out before
+  the browser can measure it from a table measured in Chromium: each
+  character's width and the corrections for conjuncts (ক্ত, স্থ…) and vowel signs
+  that join their letter (রু, দ্রু…) — a line within about 1 %, a word within a
+  few (an error is nearly always on the wide side: smaller type, never an
+  overflow). Text is normalized to NFC (য় ড় ঢ় as a letter and a nukta, however typed).
+- **Bangla rules** (bangla.ts). A sentence ends at । too; a caption never ends
+  on a word that leads the next (এবং, ও, আর, এই, আপনার…) nor starts on one that
+  follows the one before (থেকে, জন্য, দিয়ে, পর্যন্ত…) or a conjunction; a long
+  sentence is never cut inside a list; a number said in words is shown as its
+  digits with its unit ("পাঁচ হাজার" → ৫,০০০, "পঞ্চাশ শতাংশ" → ৫০%,
+  "একশো বিশ টাকা" → ৳১২০) — and "নয়" (not) or "একটি" (a) alone are no number;
+  numbers count up in Bangla digits; the ask a video ends on is found by its
+  last word ("আজই অর্ডার করুন"); a word's icon is found by its stem
+  ("ডেলিভারির" → ডেলিভারি → truck).
+- **Without AI** (guess.ts readBangla). The Director's AI reads the beats when it
+  is set; when it is not, or fails, the beats are read by rule — what each is
+  for (hook, problem, solution, steps, proof, the ask), the words to show, the
+  lit word, the icon, a list said as its things, the number said, the idea its
+  words picture — and the video is made all the same, noted on it.

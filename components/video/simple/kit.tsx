@@ -3,6 +3,7 @@ import type { Img as RemotionImg, spring as remotionSpring } from "remotion";
 import { interpolate } from "remotion/no-react";
 import { Icon } from "../icons";
 import { type Face, familyOf } from "./faces";
+import { toAscii, toBnDigits } from "./bangla";
 import { fitWords } from "./fit";
 import { MOTION_DELAY, motionOf, motionStyle, wordIcon } from "./motion";
 import { wordsAlone } from "./select";
@@ -187,6 +188,8 @@ export function Cursor({ c, from, to, click }: { c: C; from: { x: number; y: num
 
 // A number as said ("3x", "50%", "$2,400") counting up to itself
 export function countUp(value: string, k: number): string {
+  // (Bangla digits counted as ASCII and shown back as Bangla)
+  if (/[০-৯]/.test(value)) return toBnDigits(countUp(toAscii(value), k));
   const m = /^(\D*?)(\d[\d,]*(?:\.\d+)?)(.*)$/.exec(value.trim());
   if (!m) return value;
   const [, pre, num, post] = m;

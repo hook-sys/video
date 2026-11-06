@@ -6,6 +6,7 @@ import { type BriefUsage, estimateInput } from "@/lib/ai/product-brief";
 import { searchIcons } from "@/lib/icons";
 import { resolveIcon } from "@/components/video/icons";
 import type { RoleAi } from "@/lib/v2/models";
+import { hasDigit } from "@/components/video/simple/bangla";
 import { type Beat, CONCEPTS, ideaNeedsThings, INTENTS, type Reading, SHOWS, type Word } from "@/components/video/simple/types";
 
 // The simple engine's Director (docs/video-spec.md), in two calls to its
@@ -33,13 +34,13 @@ const Answer = z.object({
   ),
 });
 const FORMAT = { format: zodTextFormat(Answer, "beats") };
-const INSTRUCTIONS = `You read the voice-over of a short product video, beat by beat. For every beat listed answer:
+const INSTRUCTIONS = `You read the voice-over of a short Bangla video (an ad or an explainer), beat by beat. The script is in Bangla: every text you give (items) is in Bangla, in the script's own words as said — never translated, never reworded; English words the script uses stay as it writes them. Icon names are Lucide names (English). For every beat listed answer:
 - intent: hook (the opening question or pain), problem (what goes wrong today), solution (the product arrives — usually where it is named), feature (what it does), proof (a result or a number), steps (how it works, in steps), cta (the closing ask — always the last beat).
-- from, to: the words to show on screen — 2 to 6 consecutive words of THAT beat (their numbers) that name what it is about; never a whole long sentence, never starting or ending on a little word (and, the, of, to, a…).
+- from, to: the words to show on screen — 2 to 6 consecutive words of THAT beat (their numbers) that name what it is about; never a whole long sentence, never ending on a word that leads the next (এবং, ও, আর, বা, কিন্তু, এই, সেই, আপনার…) and never starting on one that follows the word before (থেকে, জন্য, দিয়ে, সাথে, পর্যন্ত…).
 - key: the one word among them to light up (its number).
 - icon: one Lucide icon name for the beat (e.g. "calendar-x", "truck", "chart-line").
-- items: 0–3 short things the beat lists or implies — pains for a problem, what it brings together for a solution, rows of the product's screen for a feature, steps for steps — each 1–3 words (title case) and a Lucide icon name. Only things the script says or plainly means; never invented numbers, names or features. A hook or a cta: none unless the beat lists them.
-- number: a number the voice says in this beat exactly as written in it ("3x", "50%", "2,400"), else null. Never a number it does not say.
+- items: 0–3 short things the beat lists or implies — pains for a problem, what it brings together for a solution, rows of the product's screen for a feature, steps for steps — each 1–3 Bangla words as the script says them and a Lucide icon name. Only things the script says or plainly means; never invented numbers, names or features. A hook or a cta: none unless the beat lists them.
+- number: a number the voice says in this beat exactly as written in it ("৫০%", "৳৯৯৯", "3x"; a number said in words — "পঞ্চাশ শতাংশ" — as the words), else null. Never a number it does not say.
 - concept: the one idea the beat's words plainly picture, else none (most beats: none; never the last beat) — trapped (stuck, held back, shut in — or breaking free), chaos (a mess, scattered, too many things — or put in order), waiting (slow, delays, waiting — or no more waiting), truth (it says one thing is really another: "X is just Y" — then items are exactly [X, Y] as said, 1–2 words each, X first), launch (starting, launching, taking off, growing), cost (it costs too much, fees, money spent — or cut, saved), hours (work that takes hours or days — or done in minutes), barriers (what stands in the way: "no X, no Y", "you don't need X" — then items are those things, 2–3, as said), progress (getting to a goal, a target, a share done — its number only as said).
 When a story plan is given, read each beat with it: its items fit what the beat shows (for product: rows of the product's screen, named from its parts when they fit; for pains: the pains; for steps: the steps).
 Answer every beat listed, in order, nothing else.`;
@@ -52,9 +53,9 @@ const Story = z.object({
 });
 export type StoryPlan = z.infer<typeof Story>;
 const STORY_FORMAT = { format: zodTextFormat(Story, "story") };
-const STORY_INSTRUCTIONS = `You plan a short product video from its voice-over, before its scenes are made. Read the whole script, then answer:
+const STORY_INSTRUCTIONS = `You plan a short Bangla video (an ad or an explainer) from its voice-over, before its scenes are made. The script is in Bangla; write about and screens in Bangla, in the script's own words. Read the whole script, then answer:
 - about: what the product does, in one short sentence, only from the script.
-- screens: 0–4 parts of the product the script names or plainly means (its screens, modules or views), each 1–3 words in title case. Never invented.
+- screens: 0–4 parts of the product the script names or plainly means (its screens, modules or views), each 1–3 Bangla words as the script says them. Never invented.
 - hero: the number of the one beat that is the video's main moment (usually where the product shows what it does best; never the last beat).
 - beats: for every beat, what it should show — pains (what goes wrong, as a list), before-after (the old way against the new), product (the product's screen doing it), list (what it brings, as tiles), number (only when the voice says a number in it), steps (how it works, in order), brand (the product named: its mark), words (a line to say big, nothing to show). The last beat: brand.
 Answer every beat listed, in order, nothing else.`;
@@ -113,7 +114,7 @@ export async function readBeats(words: Word[], beats: Beat[], brand: string, ai:
       }
       const key = Math.round(a.key) >= from && Math.round(a.key) <= to ? Math.round(a.key) : null;
       // (a number only as the voice says it)
-      const number = a.number && said.includes(a.number.trim()) && /\d/.test(a.number) ? a.number.trim() : null;
+      const number = a.number && said.normalize("NFC").includes(a.number.normalize("NFC").trim()) && hasDigit(a.number) ? a.number.trim() : null;
       const items = a.items.slice(0, 3).map((x) => ({ text: trim3(x.text), icon: iconFor(x.icon, x.text) })).filter((x) => x.text);
       // (what the story plan says it shows — a number only when one is said — and whether it is the main moment)
       const planned = story?.beats.find((x) => Math.round(x.beat) === i + 1)?.shows;

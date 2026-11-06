@@ -66,13 +66,14 @@ export type Way = (typeof WAYS)[number];
 export const PACES = ["calm", "lively"] as const;
 export type Pace = (typeof PACES)[number];
 
-// the type pairs (display, text) — faces in public/fonts/library
+// the type pairs (display, text) — Bangla faces in public/fonts/library (faces.ts BANGLA_FACES):
+// clean, modern, characterful, soft, classic
 export const TYPE_PAIRS: [string, string][] = [
-  ["plus-jakarta-sans", "inter"],
-  ["sora", "dm-sans"],
-  ["bricolage-grotesque", "figtree"],
-  ["lexend", "instrument-sans"],
-  ["unbounded", "manrope"],
+  ["noto-sans-bengali", "hind-siliguri"],
+  ["anek-bangla", "hind-siliguri"],
+  ["atma", "hind-siliguri"],
+  ["baloo-da-2", "hind-siliguri"],
+  ["noto-serif-bengali", "noto-sans-bengali"],
 ];
 
 export type Theme = { ground: Ground; type: number; way: Way; pace: Pace };

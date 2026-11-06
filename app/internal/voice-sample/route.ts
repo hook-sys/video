@@ -15,9 +15,9 @@ export async function GET(request: Request) {
   const name = url.searchParams.get("name") ?? "";
   const gender = url.searchParams.get("gender") === "female" ? "female" : "male";
   if (!/^[A-Za-z]{2,20}$/.test(name)) return Response.json({ error: "name=<voice>" }, { status: 400 });
-  const text = url.searchParams.get("text")?.slice(0, 200) || `Hi, I'm ${name}. I'll turn your product into a video people remember.`;
+  const text = url.searchParams.get("text")?.slice(0, 200) || "আপনার ব্যবসার গল্প এখন সহজ ভিডিওতে, যা মানুষ মনে রাখবে।";
   try {
-    const v = await generateVoice({ script: text, language: "English (US)", style: "Professional", gender, voice: name }, {});
+    const v = await generateVoice({ script: text, language: "Bangla", style: "Professional", gender, voice: name }, {});
     if (!v.audioUrl) return Response.json({ name, error: "no audio" });
     const audio = Buffer.from(await (await fetch(v.audioUrl)).arrayBuffer());
     const end = v.words?.at(-1)?.end ?? null;

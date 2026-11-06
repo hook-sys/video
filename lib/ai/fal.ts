@@ -149,9 +149,9 @@ export async function timeWords(audioUrl: string, script: string): Promise<{ wor
 
 // What a Whisper model hears, word by word (a chunk of several words shares
 // its time evenly). Used by timeWords and by "New version" (lib/v2).
-export async function heardWords(model: string, audioUrl: string): Promise<{ heard: WordTiming[]; requestId: string }> {
+export async function heardWords(model: string, audioUrl: string, language?: string): Promise<{ heard: WordTiming[]; requestId: string }> {
   const result = await falClient().subscribe(model, {
-    input: { audio_url: audioUrl, task: "transcribe", chunk_level: "word" },
+    input: { audio_url: audioUrl, task: "transcribe", chunk_level: "word", ...(language ? { language } : {}) },
     // a minute of speech took Whisper over 55 s (queue included)
     abortSignal: AbortSignal.timeout(WORD_TIMING_TIMEOUT_MS),
   });

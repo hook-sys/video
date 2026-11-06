@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Icon } from "../icons";
+import { hasDigit } from "./bangla";
 import { emWidth, familyOf } from "./faces";
 import { fitWords, measured } from "./fit";
 import { type Box, HERO_W, TYPE, WEIGHT, bandOf, sideOf, splitOf, stackOf, wordsFit } from "./geo";
@@ -346,7 +347,7 @@ function Feature({ c }: { c: C }) {
                     <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={72} solid />
                     <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                       <One part="item" style={{ fontSize: 36, fontWeight: 700 }} fit={270} face={c.look.text}>{it.text}</One>
-                      <One style={{ fontSize: 24, opacity: 0.6 }}>{c.brand.name} · now</One>
+                      <One style={{ fontSize: 24, opacity: 0.6 }}>{c.brand.name} · এখন</One>
                     </div>
                   </div>
                 );
@@ -396,7 +397,7 @@ function Stat({ c }: { c: C }) {
   const value = c.s.number ?? "";
   const k = springAt(c, c.s.from + 6, 1.2);
   const count = ease(clamp01((c.f - c.s.from - 8) / 40));
-  const noNumber = (t: string) => !/\d/.test(t);
+  const noNumber = (t: string) => !hasDigit(t);
   if (c.s.variant === 0) {
     const fit = fitWords([value], c.look.display, { width: W - 2 * pad, lines: 1, max: Math.round(440 * u), min: 140, weight: 800 });
     return (

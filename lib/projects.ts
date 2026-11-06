@@ -28,7 +28,8 @@ export const CREATIVE_DEFAULTS = {
 } as const;
 export const FORMATS = ["16:9", "9:16", "1:1"] as const;
 // English only (the voices that sound best; older videos keep theirs)
-export const VOICE_LANGUAGES = ["English (US)"] as const;
+// (the videos are Bangla only: docs/video-spec.md, Bangla)
+export const VOICE_LANGUAGES = ["Bangla"] as const;
 export const VOICE_GENDERS = ["male", "female"] as const;
 export const VOICE_STYLES = [
   "Professional",

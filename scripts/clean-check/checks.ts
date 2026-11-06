@@ -33,6 +33,9 @@ import { emWidth, faceOf } from "@/components/video/simple/faces";
 import { CONCEPTS, GROUNDS, type Scene, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
 import { conceptSounds, turnOf } from "@/components/video/simple/concept";
 import { PUNCH } from "@/components/video/simple/scenes";
+import { alignScript, pausesOf } from "@/lib/voice-align";
+import { numberInWords, leadsBn, trailsBn } from "@/components/video/simple/bangla";
+import { TYPE_PAIRS } from "@/components/video/simple/types";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
 
@@ -385,6 +388,62 @@ export async function runChecks(): Promise<Check[]> {
     const found = guessReadings(words, beatsOf(words), "Shop").map((r) => r.concept ?? "-").join(" ");
     const all = CONCEPTS.length * 2 * VARIANTS * 3;
     add("the ideas: every one, resolving or not, in every variant, clean on every frame; its turn inside the scene and its sounds there; found by its words", !left.length && turns === all && heard === all && found === "trapped chaos waiting truth launch hours cost barriers progress -", left.slice(0, 3).join(" · ") || `${all} scenes · ${found}`);
+  }
+
+  {
+    // Bangla (docs/video-spec.md, Bangla) — the videos are Bangla only
+    // 1. the voice timed by its pauses, no AI: a voice made of the script's phrases (each as long as its
+    //    letters, a pause after it, and a few pauses inside phrases), every phrase found where it starts
+    const script = "আপনার অনলাইন ব্যবসায় সবচেয়ে বড় সমস্যা কী? অর্ডার আসে, কিন্তু ডেলিভারি হয় না। প্রথমে গ্রাহকের তথ্য সংগ্রহ করুন, তারপর বিজ্ঞাপন সাজান। মাত্র তিন দিনে ফলাফল দেখুন। আজই অর্ডার করুন।";
+    const rate = 8000, pace = 0.085;
+    const tokens = script.split(" ");
+    const phraseStarts: number[] = [];
+    const pcm: number[] = [];
+    const tone = (sec: number) => { for (let k = 0; k < Math.round(sec * rate); k++) pcm.push(Math.round(Math.sin(k * 0.3) * 9000 * (0.6 + 0.4 * Math.sin(k / 400)))); };
+    const hush = (sec: number) => { for (let k = 0; k < Math.round(sec * rate); k++) pcm.push(Math.round((Math.random() - 0.5) * 60)); };
+    hush(0.3);
+    let startNext = true;
+    tokens.forEach((w, i) => {
+      if (startNext) phraseStarts.push(pcm.length / rate);
+      startNext = false;
+      tone(w.replace(/[^\p{L}\p{M}]/gu, "").length * pace);
+      if (/[,।?]$/.test(w)) { hush(/[।?]$/.test(w) ? 0.55 : 0.32); startNext = true; }
+      else if (i % 4 === 2) hush(0.25);
+      else hush(0.04);
+    });
+    const { pauses, duration } = pausesOf(Int16Array.from(pcm), rate);
+    const timed = alignScript(script, pauses, duration) ?? [];
+    const firsts = timed.filter((_, i) => i === 0 || /[,।?]$/.test(tokens[i - 1]));
+    const off = firsts.map((w, i) => Math.abs(w.start - (phraseStarts[i] ?? 99)));
+    add("Bangla: the voice timed by its pauses, no AI — every phrase where it starts, every word in order", timed.length === tokens.length && off.length === phraseStarts.length && Math.max(...off) < 0.12 && timed.every((w, i) => !i || w.start >= timed[i - 1].start), `${phraseStarts.length} phrases · off by ${(Math.max(...off) * 1000).toFixed(0)} ms at most`);
+
+    // 2. Bangla type: every face of every pair measured (scripts/bangla), a word as wide as the browser drew it
+    const measured: [string, string, number][] = [["anek-bangla", "অ্যানালাইসিস", 5.81], ["hind-siliguri", "অ্যানালাইসিস", 5.31], ["noto-sans-bengali", "অ্যানালাইসিস", 5.62]];
+    const unmeasured = [...new Set(TYPE_PAIRS.flat())].filter((slug) => emWidth("অআ", faceOf(slug)) === emWidth("অআ", faceOf("inter")));
+    const far = measured.filter(([slug, w, em]) => Math.abs(emWidth(w, faceOf(slug)) - em) / em > 0.03);
+    add("Bangla type: every face measured; a word as wide as the browser draws it (within 3%)", !unmeasured.length && !far.length, [...unmeasured, ...far.map(([s]) => s)].join(", ") || `${new Set(TYPE_PAIRS.flat()).size} faces`);
+
+    // 3. numbers said in words as their digits, with their units — never "নয়" (not) or "একটি" (a)
+    const nums: [string, string | null][] = [["পাঁচ হাজার ভিজিটর", "৫,০০০"], ["মাত্র পাঁচজন", "৫ জন"], ["পঞ্চাশ শতাংশ ছাড়", "৫০%"], ["মাত্র একশো বিশ টাকা", "৳১২০"], ["এক লাখ পঁচিশ হাজার টাকা", "৳১,২৫,০০০"], ["ক্যাম্পেইন সফল নয়", null], ["একটি ভালো পণ্য", null], ["পঁচিশ, পঞ্চাশ অথবা একশো শতাংশ", "১০০%"]];
+    const wrongNums = nums.filter(([t, want]) => numberInWords(t.split(" ")) !== want);
+    add("Bangla numbers said in words: as digits with their unit; a word that is also a number only with a unit", !wrongNums.length, wrongNums.map(([t]) => t).join(" · ") || `${nums.length} cases`);
+
+    // 4. read by rule (no AI): sentences end at ।, a caption never ends on এবং/এই nor starts on থেকে/জন্য,
+    //    a list said is its things, a number said is its digits, the ask is its button; 5. clean on every frame
+    let t = 0.3;
+    const words = script.split(" ").map((w) => { const start = t; t += 0.42 + (/[।?]$/.test(w) ? 0.5 : /,$/.test(w) ? 0.2 : 0); return { text: w, start, end: start + 0.36 }; });
+    const beats = beatsOf(words);
+    const readings = guessReadings(words, beats, "দোকান");
+    const badRuns = readings.filter((r) => leadsBn(words[r.show[1]].text) || trailsBn(words[r.show[0]].text));
+    const ask = askOf(words, beats[beats.length - 1]);
+    const left: string[] = [];
+    for (const size of [[1080, 1920], [1920, 1080], [1080, 1080]] as [number, number][]) {
+      const { plan } = bestPlan({ words, beats, readings, brand: { name: "দোকান", color: "#7C3AED", cta: ask ?? "", icon: null }, seed: 7, duration: durationOf(words), size, drafts: 4 });
+      left.push(...checkPlan(plan).map((x) => `${size.join("x")} ${x.scene != null ? plan.scenes[x.scene].template : ""} ${x.detail}`));
+    }
+    const sentences = beats.length >= 4;
+    add("Bangla read by rule (no AI): sentences at ।, captions never end on এবং/এই nor start on থেকে/জন্য, the number said as digits, the ask a button", sentences && !badRuns.length && readings.some((r) => r.number === "৩ দিনে") && ask === "আজই অর্ডার করুন", `${beats.length} beats · ask "${ask}" · ${readings.map((r) => r.intent).join(",")}`);
+    add("Bangla plans clean on every frame (9:16, 16:9, 1:1): words fit their places in Bangla type", !left.length, left.slice(0, 3).join(" · ") || "3 frames");
   }
 
   return checks;
