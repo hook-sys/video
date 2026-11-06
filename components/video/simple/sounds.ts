@@ -49,6 +49,8 @@ export function soundsOf(plan: SimplePlan): { at: number; name: string; volume: 
       out.push({ at: first.at, ...MOTION_SOUND[first.m] });
     }
     if (s.template === "concept") out.push(...conceptSounds(s));
+    // (a point opening: a hit as its number lands)
+    if (s.template === "point") out.push({ at: s.from + 6, name: "subtle_impact", volume: 0.3 });
     if (s.template === "kinetic" && s.variant === 1 && s.words.length) out.push(...typed(s.words[0].at - 2, s.words.at(-1)!.at + s.words.at(-1)!.t.length * 1.6));
     if (s.template === "feature" && s.variant === 2 && s.items.length) out.push(...typed(s.from + 12, s.from + 12 + s.items[0].text.length * 2));
     const click = clickOf(s, !!plan.brand.cta.trim());

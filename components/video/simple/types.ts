@@ -46,13 +46,14 @@ export type Reading = {
 // The ideas a beat's words may picture (concept.tsx): an idea shut in, a mess put
 // in order, waiting, one word that is really another, taking off
 // — and what it costs, hours of work made minutes, what stands in the way, the way to a goal
-export const CONCEPTS = ["trapped", "chaos", "waiting", "truth", "launch", "cost", "hours", "barriers", "progress"] as const;
+// — and the points ahead (agenda), less of one thing for more of another (versus), stages narrowing (funnel)
+export const CONCEPTS = ["trapped", "chaos", "waiting", "truth", "launch", "cost", "hours", "barriers", "progress", "agenda", "versus", "funnel"] as const;
 export type Concept = (typeof CONCEPTS)[number];
 // (the ideas made of the beat's things: the truth's two words, the barriers crossed out — none without two)
-export const ideaNeedsThings = (c: Concept | undefined, things: number) => (c === "truth" || c === "barriers") && things < 2;
+export const ideaNeedsThings = (c: Concept | undefined, things: number) => (c === "truth" || c === "barriers" || c === "versus") && things < 2 || (c === "funnel" && things < 3);
 
 // (a new template goes last: a video's print keeps each template's place)
-export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta", "screen", "concept"] as const;
+export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta", "screen", "concept", "point"] as const;
 export type TemplateId = (typeof TEMPLATES)[number];
 // every template has three designed variants
 export const VARIANTS = 3;
@@ -102,7 +103,13 @@ export type Scene = {
   // the idea its words picture, and whether it resolves there (not in a hook or a problem: the box stays shut)
   concept?: Concept;
   resolves?: boolean;
+  // (a script told as numbered points) which point this scene is in — its opening scene is the
+  // template "point"; the others show the point's bar at the top (points.tsx)
+  point?: Point;
+  // (the concept "agenda") the points' titles, previewed
+  agenda?: string[];
 };
+export type Point = { n: number; of: number; title: string };
 
 export type SimplePlan = {
   engine: "simple";

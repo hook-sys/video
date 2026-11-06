@@ -1,6 +1,7 @@
-import { leadsBn, trailsBn } from "./bangla";
+import { countOf, leadsBn, trailsBn } from "./bangla";
 import { rng } from "./faces";
-import { framesOf } from "./beats";
+import { framesOf, pointsOf } from "./beats";
+import { wordIcon } from "./motion";
 import { ideaNeedsThings, type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
 
 // The selector: each beat's template and variant, and the video's theme —
@@ -72,8 +73,39 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
   const shots = brand.screens?.length ?? 0;
   let pictured = 0;
   let prev: TemplateId | null = null;
+  const recent: string[] = [];
   let prevIdea: string | undefined;
-  const scenes: Scene[] = readings.map((read, i) => {
+  // (a script told as numbered points: each opens on a scene of its own, its bar over the rest —
+  // and the beat that promises them ("চারটি বিষয়") shows them ahead)
+  const points = pointsOf(words, beats);
+  const titles = [...new Map(points.filter((p) => p).map((p) => [p!.point.n, p!.point.title])).values()];
+  const firstPoint = points.findIndex((p) => p);
+  const agendaAt = titles.length ? beats.findIndex((b, i) => i < firstPoint && countOf(words.slice(b.first, b.last + 1).map((w) => w.text)) === titles.length) : -1;
+  const scenes: Scene[] = readings.map((read0, i) => {
+    const pt = points[i];
+    if (pt?.open) {
+      // the opening: its ordinal said, then the title as said
+      const b = beats[i];
+      const n = pt.point.title.split(" ").length;
+      const shown = words.slice(b.first + 1, Math.min(b.last, b.first + n) + 1);
+      prev = "point";
+      prevIdea = undefined;
+      recent.push("");
+      return {
+        ...frames[i],
+        template: "point" as const,
+        variant: R.int(0, VARIANTS - 1),
+        left: true,
+        words: litInTime(shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS)), key: k === shown.length - 1 })), frames[i].from, frames[i].to),
+        icon: read0.icon ?? "sparkles",
+        items: [],
+        number: null,
+        point: pt.point,
+        said: words.slice(b.first, b.last + 1).map((w) => ({ t: w.text, at: Math.round(w.start * FPS) })),
+      };
+    }
+    // (the agenda only where the points are promised — it has nothing to show elsewhere)
+    const read: Reading = i === agendaAt ? { ...read0, concept: "agenda" } : read0.concept === "agenda" ? { ...read0, concept: undefined } : read0;
     // (a thing that only repeats the words shown beside it is not shown again)
     const [c0, c1] = keyRun(words, read.show, read.key, 4);
     const said = words.slice(c0, c1 + 1).map((w) => w.text).join(" ");
@@ -102,12 +134,28 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
         if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
       } else [template, variant] = ["statement", 1];
     }
+    // (one picture not twice close together: the words beside an icon seen in the last four scenes are
+    // told another way when there is one — else, when words alone may come, as moving words)
+    if (template === "statement" && variant === 1 && recent.slice(-4).includes(r.icon ?? "sparkles")) {
+      const other = list.filter(([t]) => t !== "statement" && t !== "kinetic" && t !== "concept");
+      if (other.length) {
+        template = pickOf(other, prev, R);
+        variant = R.int(0, VARIANTS - 1);
+        if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
+      } else {
+        // (another picture the beat's own words stand for — "ডেটা", "অর্ডার" — else moving words when they may come)
+        const alt = words.slice(beats[i].first, beats[i].last + 1).map((w) => wordIcon(w.text)).find((x) => x && !recent.slice(-4).includes(x));
+        if (alt) r.icon = alt;
+        else if (!wasAlone && alone < most && !r.hero) [template, variant] = ["kinetic", R.chance(0.5) ? 0 : 2];
+      }
+    }
     // (words typed as a prompt only when they ask something)
     if (template === "kinetic" && variant === 1 && !/\?["'”’)]*$/.test(words[r.show[1]]?.text ?? "")) variant = R.chance(0.5) ? 0 : 2;
     wasAlone = wordsAlone(template, variant);
     if (wasAlone) alone++;
     const screen = template === "screen" ? pictured++ : undefined;
     prev = template;
+    recent.push(template === "statement" && variant === 1 ? (r.icon ?? "sparkles") : "");
     prevIdea = template === "concept" ? read.concept : undefined;
     // (beside a hero — or under the brand's mark — the words are its caption: at most four of them, around the key one)
     const [start, end] = wasAlone || template === "cta" ? r.show : keyRun(words, r.show, r.key, 4);
@@ -123,11 +171,13 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       words: litInTime(shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS) - late), key: start + k === r.key })), frames[i].from, frames[i].to),
       icon: r.icon ?? "sparkles",
       // (an idea's things as read: the truth's two words are among the words said)
-      items: (template === "concept" ? read : r).items.slice(0, 3),
+      items: (template === "concept" ? read : r).items.slice(0, template === "concept" && read.concept === "funnel" ? 5 : 3),
       number: r.number,
       ...(screen != null ? { screen } : {}),
       ...(read.concept ? { concept: read.concept, resolves: r.intent !== "hook" && r.intent !== "problem" } : {}),
       said: words.slice(beats[i].first, beats[i].last + 1).map((w) => ({ t: w.text, at: Math.round(w.start * FPS) })),
+      ...(pt ? { point: pt.point } : {}),
+      ...(template === "concept" && read.concept === "agenda" ? { agenda: titles } : {}),
     };
   });
   return { engine: "simple", v: 1, duration, seed, brand, theme, scenes, print: printOf(theme, scenes) };

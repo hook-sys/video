@@ -100,3 +100,30 @@ export function numberInWords(words: string[]): string | null {
   }
   return null;
 }
+
+// ── points: a script told as numbered points (docs/video-spec.md, Points) ──
+// A point opens with its ordinal ("প্রথমত, …", "দ্বিতীয়ত …") or its number ("১.", "২)").
+const ORDINALS = ["প্রথমত", "দ্বিতীয়ত", "তৃতীয়ত", "চতুর্থত", "পঞ্চমত", "ষষ্ঠত", "সপ্তমত", "অষ্টমত", "নবমত", "দশমত"].map((w) => w.normalize("NFC"));
+export function ordinalOf(word: string): number | null {
+  const w = bare(word);
+  const k = ORDINALS.indexOf(w);
+  if (k >= 0) return k + 1;
+  // ("১." "২)" "3." — a number and a stop, alone)
+  const m = /^([০-৯0-9]{1,2})[.)।:]$/.exec(word.trim());
+  return m ? Number(toAscii(m[1])) : null;
+}
+// what ends the last point: the script's conclusion ("কারণ…", "মনে রাখবেন…", "সবশেষে…")
+const CLOSES = new Set(["কারণ", "মনে", "সবশেষে", "সুতরাং", "অতএব", "শেষ", "তাই", "তাহলে"].map((w) => w.normalize("NFC")));
+export const closesBn = (word: string) => CLOSES.has(bare(word));
+// a count said ("চারটি বিষয়", "৫টি টিপস", "তিনটি উপায়") — the number of points promised
+const COUNTED = /^(বিষয়|টিপস|টিপ|উপায়|ধাপ|কৌশল|ভুল|কারণ|পয়েন্ট|জিনিস|নিয়ম|সুবিধা)/;
+export function countOf(words: string[]): number | null {
+  for (let i = 0; i < words.length - 1; i++) {
+    const w = bare(words[i]);
+    const m = /^(.+?)(টি|টা)$/.exec(w);
+    if (!m || !COUNTED.test(bare(words[i + 1]))) continue;
+    const n = VALUE.get(m[1]) ?? (/^[০-৯0-9]+$/.test(m[1]) ? Number(toAscii(m[1])) : null);
+    if (n && n >= 2 && n <= 9) return n;
+  }
+  return null;
+}

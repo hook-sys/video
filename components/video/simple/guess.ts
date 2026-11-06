@@ -1,5 +1,5 @@
 import { searchIcons } from "@/lib/icons";
-import { bare, hasDigit, leadsBn, numberInWords, trailsBn } from "./bangla";
+import { bare, hasDigit, leadsBn, numberInWords, stemsBn, trailsBn } from "./bangla";
 import { wordIcon } from "./motion";
 import type { Beat, Concept, Intent, Item, Reading, Word } from "./types";
 
@@ -82,7 +82,7 @@ const content = (t: string) => {
 const verbish = (t: string) => /(ছেন|চ্ছে|ছে|বেন|েন|ুন|তে|লে|িনি|বে)$/.test(bare(t)) && !wordIcon(t);
 // (the light verbs that make a verb of the word before: "অপ্টিমাইজ করতে", "যোগ করছেন")
 const LIGHT = new Set("করতে করুন করে করেন করছেন করবেন করছে করা হবে হয় হচ্ছে হচ্ছেন দিন নিন দেখুন".split(" "));
-const BN_PAIN = /(সমস্যা|ঝামেলা|কষ্ট|ভুল|হারা|নষ্ট|অপচয়|পারছেন না|হচ্ছে না|হয় না|আটকে|এলোমেলো|দেরি|অপেক্ষা|খরচ বেশি|বেশি খরচ|ব্যয়বহুল|জটিল|চিন্তা|দুশ্চিন্তা|এখনো|এখনও|আর কত)/;
+const BN_PAIN = /(সমস্যা|ঝামেলা|কষ্ট|ভুল|হারা|নষ্ট|অপচয়|পারছেন না|হচ্ছে না|হয় না|আটকে|এলোমেলো|দেরি|অপেক্ষা|খরচ বেশি|বেশি খরচ|ব্যয়বহুল|জটিল|চিন্তা|দুশ্চিন্তা|এখনো|এখনও|আর কত(?!জন|গুলো|দূর))/;
 const BN_STEP = /(প্রথমে|তারপর|এরপর|শেষে|ধাপ|প্রথমত|দ্বিতীয়ত|তৃতীয়ত|চতুর্থত|পঞ্চমত)/;
 const BN_IDEAS: [Concept, RegExp][] = [
   ["trapped", /(আটকে|আটকা|বন্দি|আটকে আছে)/],
@@ -96,6 +96,27 @@ const BN_IDEAS: [Concept, RegExp][] = [
 // "X আসলে Y" / "X মানেই Y": one thing that is really another
 const BN_TRUTH = /(\S+)\s+(?:আসলে|মানেই|মানে)\s+(?:শুধুই?\s+)?(\S+)/u;
 // what stands in the way: "X লাগবে না" — two or more, or "X, Y ছাড়াই"
+// "X নয়, Y": not one thing, another
+const BN_NOT = /(\S+)\s+নয়,\s+(\S+)/u;
+// less of one thing for more of another: "কম অ্যাডভার্টাইজিং কস্টে বেশি সেলস" → ["কম অ্যাডভার্টাইজিং কস্ট", "বেশি সেলস"]
+// (as said, the case ending off its last word; at most two words after কম, one after বেশি)
+const stem1 = (w: string) => {
+  const b = w.normalize("NFC").replace(/[,;।?!]+$/u, "");
+  return /ে$/.test(b) && stemsBn(b).length > 1 ? stemsBn(b).at(-1)! : b;
+};
+function versusOf(ws: string[]): [string, string] | null {
+  const lo = ws.findIndex((w) => bare(w) === "কম");
+  const hi = ws.findIndex((w, k) => k > lo && bare(w) === "বেশি");
+  if (lo < 0 || hi < 0 || hi - lo < 2 || hi - lo > 3 || hi + 1 >= ws.length) return null;
+  const a = ws.slice(lo + 1, hi), b = ws[hi + 1];
+  if (a.some((w) => /[,;।?!]$/.test(w)) || !a.every(content) || !content(b)) return null;
+  return [["কম", ...a.slice(0, -1), stem1(a[a.length - 1])].join(" "), `বেশি ${stem1(b)}`];
+}
+// stages narrowing: "কতজন প্রোডাক্ট দেখছেন, কতজন কার্টে যোগ করছেন, আর কতজন চেকআউট…" — the word after each কতজন
+function funnelOf(ws: string[]): string[] | null {
+  const out = ws.flatMap((w, k) => (bare(w) === "কতজন" && ws[k + 1] && content(ws[k + 1]) ? [stem1(ws[k + 1])] : []));
+  return out.length >= 3 ? out.slice(0, 5) : null;
+}
 const BN_NEED = /((?:\S+\s+)?\S+?)\s+(?:লাগবে না|লাগে না|দরকার নেই|দরকার হবে না|প্রয়োজন নেই)/gu;
 
 // a list said in the beat: its parts between commas and "এবং/ও/আর/বা/অথবা", each 1–3 words
@@ -160,7 +181,7 @@ function readBangla(words: Word[], beats: Beat[], brand: string): Reading[] {
     // an idea its words picture; the truth's and the barriers' things are their own words
     let concept: Concept | undefined;
     let items: Item[] = [];
-    const t = last ? null : BN_TRUTH.exec(text);
+    const t = last ? null : BN_TRUTH.exec(text) ?? BN_NOT.exec(text);
     const needs = last ? [] : [...text.matchAll(BN_NEED)].map((m) => m[1].split(/\s+/).filter(content).join(" ")).filter(Boolean);
     if (t && content(t[1]) && content(t[2])) {
       concept = "truth";
@@ -168,6 +189,12 @@ function readBangla(words: Word[], beats: Beat[], brand: string): Reading[] {
     } else if (needs.length >= 2) {
       concept = "barriers";
       items = needs.slice(0, 3).map((x) => ({ text: x, icon: iconOfBn(x.split(" ")) }));
+    } else if (!last && versusOf(ws)) {
+      concept = "versus";
+      items = versusOf(ws)!.map((x) => ({ text: x, icon: null }));
+    } else if (!last && funnelOf(ws)) {
+      concept = "funnel";
+      items = funnelOf(ws)!.map((x) => ({ text: x, icon: iconOfBn([x]) }));
     } else {
       concept = last ? undefined : BN_IDEAS.find(([, re]) => re.test(text))?.[0];
       const unit = number?.endsWith("%") ? "%" : "";
@@ -176,6 +203,8 @@ function readBangla(words: Word[], beats: Beat[], brand: string): Reading[] {
         // (a number word listed — "পঁচিশ" — as its digits, with the sentence's % when it has one)
         return { text: n && unit ? n : x, icon: n ? null : iconOfBn(x.split(" ")) };
       });
+      // (shares listed on the way to the one said last — "২৫, ৫০, ৭৫ … ১০০ শতাংশ" — are a bar's stops)
+      if (!last && unit && items.length >= 2 && items.every((x) => /^[০-৯]+%$/.test(x.text))) concept = "progress";
     }
     const icon = iconOfBn(ws) ?? ({ hook: "sparkles", problem: "triangle-alert", solution: "rocket", feature: "circle-check", proof: "trending-up", steps: "list-checks", cta: "arrow-right" } as Record<Intent, string>)[intent];
     return { intent, show: best, key, icon, items, number, ...(concept ? { concept } : {}) };

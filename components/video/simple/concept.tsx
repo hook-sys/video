@@ -3,9 +3,10 @@ import { Icon } from "../icons";
 import { familyOf } from "./faces";
 import { fitWords, noteHero } from "./fit";
 import { TYPE, WEIGHT, fitIn } from "./geo";
-import { type C, Glyph, One, clamp01, countUp, ease, panel, pop, rise, springAt, tint } from "./kit";
+import { type C, Glyph, One, blend, clamp01, countUp, ease, panel, pop, rise, springAt, tint } from "./kit";
 import { Band, Side, abs } from "./scenes";
 import { toAscii } from "./bangla";
+import { numberOf } from "./points";
 import type { Scene } from "./types";
 
 // The ideas (docs/video-spec.md): a beat whose words picture one idea shows
@@ -568,6 +569,115 @@ function Progress({ c }: { c: C }) {
   );
 }
 
+// ── agenda: the points ahead, each lit as the voice promises them ─────────
+// (the titles of the points the script is told in — Scene.agenda — numbered)
+const AG = { dw: 760, dh: 760, row: 132, gap: 24 };
+export const agendaAt = (s: Scene, i: number) => {
+  const n = Math.max(1, s.agenda?.length ?? 0);
+  const span = Math.max(30, Math.round((s.to - s.from) * 0.6) - 14);
+  return s.from + 10 + Math.round((span * i) / n);
+};
+function Agenda({ c }: { c: C }) {
+  const { dw, dh, row, gap } = AG;
+  const { s, look } = c;
+  const list = (s.agenda ?? []).slice(0, 5);
+  const h = list.length * row + (list.length - 1) * gap, top = (dh - h) / 2;
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      {list.map((t, i) => {
+        const k = springAt(c, agendaAt(s, i));
+        return (
+          <div key={i} style={abs({ left: 30, top: top + i * (row + gap), width: dw - 60, height: row, ...panel(c, 30), display: "flex", alignItems: "center", gap: 28, padding: "0 34px", boxSizing: "border-box", opacity: clamp01(k * 2), filter: k < 0.99 ? `blur(${((1 - k) * 8).toFixed(1)}px)` : undefined, transform: `translateX(${((1 - k) * 60).toFixed(1)}px)` })}>
+            <div style={{ flexShrink: 0, width: 76, height: 76, borderRadius: 38, background: look.accentFill, color: look.onAccent, fontFamily: familyOf(look.display), fontWeight: 800, fontSize: 40, display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 6, boxSizing: "border-box", boxShadow: `0 8px 22px ${tint(look.accent, 0.3)}` }}>{numberOf(i + 1)}</div>
+            <One part="item" face={look.text} fit={dw - 60 - 68 - 76 - 28} style={{ fontFamily: familyOf(look.text), fontSize: TYPE.ITEM * 1.15, fontWeight: WEIGHT.item, color: look.panelInk }}>{t}</One>
+          </div>
+        );
+      })}
+    </Place>
+  );
+}
+
+// ── versus: less of one thing, more of another — two meters, one falling as the other fills ──
+// (items[0] the less: "কম খরচ"; items[1] the more: "বেশি বিক্রি"; the turn its second said)
+const VS = { dw: 700, dh: 720, bw: 230, bh: 420 };
+function Versus({ c }: { c: C }) {
+  const { dw, dh, bw, bh } = VS;
+  const { s, f, look } = c;
+  const T = turnOf(s);
+  const a = s.items[0], b = s.items[1];
+  if (!a || !b) return null;
+  const k0 = springAt(c, s.from + 4), k1 = springAt(c, s.from + 10);
+  // (the first falls from full to a quarter as it is said; the second fills at the turn)
+  const fall = ease(clamp01((f - s.from - 12) / 26));
+  const fill = ease(clamp01((f - T) / 22));
+  const lv = [1 - 0.75 * fall, 0.2 + 0.75 * fill];
+  const xs = [dw / 2 - bw - 50, dw / 2 + 50];
+  // (each label in two lines at most, under its meter)
+  const label = [a, b].map((it) => {
+    const ws = it.text.split(" ");
+    const fit = fitWords(ws, look.display, { width: bw + 120, lines: 2, max: 64, min: 40, weight: 800 });
+    return { size: fit.size, lines: fit.lines.map((l) => l.map((k) => ws[k]).join(" ")) };
+  });
+  const top = 40;
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      {[a, b].map((it, i) => {
+        const k = i ? k1 : k0;
+        const good = i === 1;
+        const col = good ? look.accentFill : look.bad;
+        return (
+          <div key={i} style={abs({ left: xs[i], top, width: bw, height: dh - top, ...rise(k) })}>
+            <div style={abs({ left: 0, top: 0, width: bw, height: bh, borderRadius: 40, background: tint(good ? look.accent : look.bad, 0.12), overflow: "hidden", boxShadow: `inset 0 0 0 2px ${tint(good ? look.accent : look.bad, 0.25)}` })}>
+              <div style={abs({ left: 0, right: 0, bottom: 0, height: bh * lv[i], borderRadius: 40, background: col, boxShadow: `0 -8px 30px ${tint(good ? look.accent : look.bad, 0.3)}` })} />
+              <div style={abs({ left: 0, right: 0, top: 26, display: "flex", justifyContent: "center" })}>
+                <Glyph c={c} name={good ? "trending-up" : "trending-down"} size={92} card at={i ? T : s.from + 12} />
+              </div>
+            </div>
+            <div data-part="item" style={abs({ left: -60, width: bw + 120, top: bh + 24, textAlign: "center", fontFamily: familyOf(look.display), fontSize: label[i].size, fontWeight: 800, color: i ? blend(look.sub, look.ink, fill) : look.ink, lineHeight: 1.25, paddingTop: label[i].size * 0.1 })}>
+              {label[i].lines.map((l, k) => <div key={k}>{l}</div>)}
+            </div>
+          </div>
+        );
+      })}
+    </Place>
+  );
+}
+
+// ── funnel: stages narrowing, each as it is said; the last one lit ────────
+const FU = { dw: 720, dh: 700, row: 124, gap: 18 };
+export function funnelAt(s: Scene, i: number): number {
+  const said = s.said ?? [];
+  const n = Math.min(5, s.items.length);
+  const w = said.find((x) => bare(x.t) === first(s.items[i]?.text ?? ""));
+  const even = s.from + 10 + Math.round(((s.to - s.from) * 0.6 * i) / Math.max(1, n));
+  return Math.min(s.to - 34 - (n - 1 - i) * 6, Math.max(s.from + 8 + i * 8, w ? w.at - 2 : even));
+}
+function Funnel({ c }: { c: C }) {
+  const { dw, dh, row, gap } = FU;
+  const { s, f, look } = c;
+  const items = s.items.slice(0, 5);
+  const n = items.length;
+  const h = n * row + (n - 1) * gap, top = (dh - h) / 2;
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      {items.map((it, i) => {
+        const at = funnelAt(s, i);
+        const k = springAt(c, at);
+        const w = dw - 20 - (i * (dw * 0.36)) / Math.max(1, n - 1);
+        const last = i === n - 1;
+        // (each stage dims as the next one comes; the last stays lit)
+        const next = i < n - 1 ? clamp01((f - funnelAt(s, i + 1)) / 10) : 0;
+        return (
+          <div key={i} style={abs({ left: (dw - w) / 2, top: top + i * (row + gap), width: w, height: row, borderRadius: 28, background: last ? look.accentFill : tint(look.accent, 0.16 + 0.1 * i), boxShadow: last ? `0 14px 36px ${tint(look.accent, 0.35)}` : undefined, display: "flex", alignItems: "center", justifyContent: "center", gap: 18, padding: "0 28px", boxSizing: "border-box", opacity: clamp01(k * 2) * (1 - 0.35 * next), transform: `translateY(${((1 - k) * -40).toFixed(1)}px) scale(${(0.9 + 0.1 * k).toFixed(3)})` })}>
+            {it.icon && <Glyph c={c} name={it.icon} size={60} at={at} />}
+            <One part="item" face={look.text} fit={w - 56 - (it.icon ? 78 : 0)} style={{ fontFamily: familyOf(look.text), fontSize: TYPE.ITEM * 1.15, fontWeight: WEIGHT.item, color: last ? look.onAccent : look.ink }}>{it.text}</One>
+          </div>
+        );
+      })}
+    </Place>
+  );
+}
+
 export function Concept({ c }: { c: C }) {
   switch (c.s.concept) {
     case "trapped": return <Trapped c={c} />;
@@ -579,6 +689,9 @@ export function Concept({ c }: { c: C }) {
     case "hours": return <Hours c={c} />;
     case "barriers": return <Barriers c={c} />;
     case "progress": return <Progress c={c} />;
+    case "agenda": return <Agenda c={c} />;
+    case "versus": return <Versus c={c} />;
+    case "funnel": return <Funnel c={c} />;
     default: return null;
   }
 }
@@ -597,6 +710,9 @@ export function conceptSounds(s: Scene): { at: number; name: string; volume: num
     case "hours": return [...[0, 10, 20].map((d) => ({ at: s.from + 10 + d, name: "tick", volume: 0.2 })), ...(s.resolves ? [{ at: T, name: "whoosh", volume: 0.24 }, { at: T + 18, name: "ding", volume: 0.22 }] : [])];
     case "barriers": return [...s.items.slice(0, 3).map((_, i) => ({ at: barrierAt(s, i), name: "lock", volume: 0.22 })), ...(s.resolves ? [{ at: T + 6, name: "reveal", volume: 0.3 }] : [])];
     case "progress": return [{ at: s.from + 10, name: "rise", volume: 0.24 }, ...(s.resolves ? [{ at: progressArrival(s), name: "ding", volume: 0.22 }] : [])];
+    case "agenda": return (s.agenda ?? []).slice(0, 5).map((_, i) => ({ at: agendaAt(s, i), name: "soft_pop", volume: 0.2 }));
+    case "versus": return [{ at: s.from + 12, name: "whoosh", volume: 0.18 }, { at: T, name: "rise", volume: 0.24 }];
+    case "funnel": return s.items.slice(0, 5).map((_, i, a) => ({ at: funnelAt(s, i), name: i === a.length - 1 ? "ding" : "soft_pop", volume: 0.2 }));
     default: return [];
   }
 }
@@ -604,6 +720,9 @@ export function conceptSounds(s: Scene): { at: number; name: string; volume: num
 // when it has settled (check.ts)
 export function conceptSettled(s: Scene): number {
   if (s.concept === "truth") return turnOf(s) + 20;
+  if (s.concept === "agenda") return agendaAt(s, Math.max(0, Math.min(5, s.agenda?.length ?? 0) - 1)) + 20;
+  if (s.concept === "versus") return turnOf(s) + 26;
+  if (s.concept === "funnel") return funnelAt(s, Math.min(5, s.items.length) - 1) + 20;
   if (s.concept === "launch" && s.resolves) return arrivalOf(s) + 12;
   if (s.concept === "progress") return s.resolves ? progressArrival(s) + 12 : s.from + 54;
   if (s.concept === "cost" && !s.resolves) return costRowAt(s, costRows(s) - 1) + 20;

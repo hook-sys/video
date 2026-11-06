@@ -16,6 +16,16 @@ export function geoOf(W: number, H: number): Geo {
   return { W, H, shape, pad: shape === "wide" ? 140 : shape === "tall" ? 80 : 70, u: shape === "wide" ? 1 : shape === "tall" ? 0.86 : 0.74 };
 }
 
+// A scene inside a point (docs/video-spec.md, Points) is laid out below the
+// point's bar: the frame it has is the frame less the bar's height, `top` down.
+export const HEAD = { wide: 140, tall: 300, square: 170 } as const;
+export function geoFor(W: number, H: number, s?: { point?: unknown; template?: string }): { g: Geo; top: number } {
+  const g0 = geoOf(W, H);
+  if (!s?.point || s.template === "point") return { g: g0, top: 0 };
+  const top = HEAD[g0.shape];
+  return { g: geoOf(W, H - top), top };
+}
+
 // the words beside a hero (wide: the hero on the left when `left`), or above
 // it; `hw`: how wide the hero may be on a wide frame
 export const HERO_W = 1040;

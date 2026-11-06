@@ -1,6 +1,6 @@
 import { retimeScript } from "@/lib/voice-timing";
-import { asksBn } from "./bangla";
-import { type Beat, FPS, type Word } from "./types";
+import { asksBn, closesBn, ordinalOf } from "./bangla";
+import { type Beat, FPS, type Point, type Word } from "./types";
 
 // The voice cut into beats: one sentence each, a long one split at its
 // comma or pause nearest the middle, a short one joined to the next — so
@@ -34,8 +34,14 @@ export function beatsOf(words: Word[]): Beat[] {
     const commaAt = (i: number) => /[,;]["'”’)]*$/.test(words[i]?.text ?? "");
     // (Bangla scripts — the English test scripts keep the cuts their readings were made on)
     const inList = (i: number) => /[\u0980-\u09FF]/.test(words[i]?.text ?? "") && commaAt(i) && [1, 2, 3].some((d) => commaAt(i - d) || commaAt(i + d));
-    const soft1 = cuts.filter((i) => soft(words[i], words[i + 1]) && !inList(i));
-    const open = cuts.filter((i) => !inList(i));
+    // (nor between clauses said alike — "কতজন দেখছেন, কতজন কার্টে যোগ করছেন, আর কতজন…": the next opens on a word the last opened on)
+    const word = (i: number) => (words[i]?.text ?? "").replace(/[^\p{L}\p{M}\p{N}]/gu, "");
+    const alike = (i: number) => /[\u0980-\u09FF]/.test(words[i]?.text ?? "") && commaAt(i) && [1, 2].some((d) => [1, 2, 3, 4, 5].some((back) => word(i + d) !== "" && word(i + d) === word(i - back) && (i - back === 0 || commaAt(i - back - 1) || i - back === b.first)));
+    const inList2 = (i: number) => inList(i) || alike(i);
+    const soft1 = cuts.filter((i) => soft(words[i], words[i + 1]) && !inList2(i));
+    const open = cuts.filter((i) => !inList2(i));
+    // (a run of clauses said alike is one beat — a funnel, a list of questions — up to 8 s, rather than cut inside it)
+    if (!soft1.length && cuts.some(alike) && span(words, b) <= 8) return [b];
     const at = (soft1.length ? soft1 : open.length ? open : cuts).reduce((a, i) => (Math.abs(words[i].end - mid) < Math.abs(words[a].end - mid) ? i : a));
     return [...split({ first: b.first, last: at }), ...split({ first: at + 1, last: b.last })];
   };
@@ -43,10 +49,12 @@ export function beatsOf(words: Word[]): Beat[] {
   const lastSentence = out.at(-1)!;
   out = [...out.slice(0, -1).flatMap(split), lastSentence];
   const words2 = (b: Beat) => b.last - b.first + 1;
+  // (a point's opening — "প্রথমত, …" — is a beat of its own: never joined, nothing joined into it)
+  const opens = (b: Beat) => ordinalOf(words[b.first].text) != null;
   // a short one joins its shorter neighbour, never past MAX (else the other one; else it stays)
   for (let i = 0; i < out.length && out.length > 1; ) {
     const b = out[i];
-    if (span(words, b) >= SHORT) {
+    if (span(words, b) >= SHORT || opens(b)) {
       i++;
       continue;
     }
@@ -54,6 +62,7 @@ export function beatsOf(words: Word[]): Beat[] {
       .filter((j) => j >= 0 && j < out.length)
       // (into the last beat only a name said just before it; the last beat into none)
       .filter((j) => (i < out.length - 1 && j < out.length - 1) || (i === out.length - 2 && j === out.length - 1 && words2(b) <= 2))
+      .filter((j) => !opens(out[j]))
       .map((j) => ({ j, merged: { first: Math.min(b.first, out[j].first), last: Math.max(b.last, out[j].last) } }))
       .filter((x) => span(words, x.merged) <= MAX)
       .sort((x, y) => span(words, x.merged) - span(words, y.merged))[0];
@@ -99,4 +108,27 @@ export function scriptWords(script: string | null | undefined, voice: Word[]): W
   const text = (script ?? "").trim();
   if (!text || !heard.length) return voice;
   return retimeScript(text, heard) ?? voice;
+}
+
+// The points a script is told in (docs/video-spec.md, Points): each opens with its ordinal
+// ("প্রথমত, …") and runs to the next — the last to the script's conclusion ("কারণ…", "মনে রাখবেন…")
+// or the ask; its title the opening's words after the ordinal (at most five). Two points at least.
+export function pointsOf(words: Word[], beats: Beat[]): ({ point: Point; open: boolean } | null)[] {
+  const openers = beats.map((b, i) => (ordinalOf(words[b.first].text) != null ? i : -1)).filter((i) => i >= 0);
+  if (openers.length < 2) return beats.map(() => null);
+  const last = beats.length - 1;
+  const end = (k: number) => {
+    if (k + 1 < openers.length) return openers[k + 1] - 1;
+    // (the last point: to the beat before the conclusion, or before the ask)
+    const close = beats.findIndex((b, i) => i > openers[k] + 1 && i < last && closesBn(words[b.first].text));
+    return close > 0 ? close - 1 : last - 1;
+  };
+  const out: ({ point: Point; open: boolean } | null)[] = beats.map(() => null);
+  openers.forEach((o, k) => {
+    const said = words.slice(beats[o].first + 1, beats[o].last + 1).map((w) => w.text.replace(/[,;:।.!?]+$/u, ""));
+    const title = (said.length <= 6 ? said : said.slice(0, 5)).join(" ");
+    const point: Point = { n: k + 1, of: openers.length, title };
+    for (let i = o; i <= end(k); i++) out[i] = { point, open: i === o };
+  });
+  return out;
 }
