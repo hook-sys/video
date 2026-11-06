@@ -15,7 +15,7 @@ export type PlanEdit = { theme: Theme; scenes: SceneEdit[] };
 
 // names a customer reads
 export const TEMPLATE_NAME: Record<TemplateId, string> = { statement: "Big words", kinetic: "Moving words", trouble: "The problems", compare: "Before and after", reveal: "Brand reveal", feature: "Product card", screen: "Your product", messages: "Messages", bento: "Tiles", stat: "Big number", chart: "Chart", steps: "Steps", cta: "Ending", concept: "The idea" };
-export const TYPE_NAME = ["Clean", "Modern", "Characterful", "Soft", "Bold"];
+export const TYPE_NAME = ["Clean", "Modern", "Characterful", "Soft", "Classic"];
 // (the templates that show the things a scene names)
 export const SHOWS_THINGS: TemplateId[] = ["trouble", "compare", "reveal", "feature", "messages", "bento", "chart", "steps"];
 

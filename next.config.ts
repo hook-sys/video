@@ -10,9 +10,10 @@ const nextConfig: NextConfig = {
   // sandbox (built before `next build` by scripts/film/bundle.mjs).
   // The website capture (lib/website-capture.ts) runs its own serverless
   // Chromium and playwright-core, whose files (browsers.json, the packed
-  // browser) are read at run time by paths the tracer cannot follow.
+  // browser) are read at run time by paths the tracer cannot follow; so is
+  // the ffmpeg Remotion ships, which reads the voice's pauses (lib/voice-pcm.ts).
   outputFileTracingIncludes: {
-    "/*": ["./.remotion-bundle/**/*", "./node_modules/@sparticuz/chromium/bin/**/*", "./node_modules/playwright-core/**/*"],
+    "/*": ["./.remotion-bundle/**/*", "./node_modules/@sparticuz/chromium/bin/**/*", "./node_modules/playwright-core/**/*", "./node_modules/@remotion/compositor-linux-x64-gnu/**/*"],
   },
   experimental: {
     serverActions: { bodySizeLimit: uploadLimit },

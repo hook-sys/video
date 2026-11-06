@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { stemsBn } from "./bangla";
 
 // The icons' own motion and sound (docs/video-spec.md): an icon does what it
 // means once it is in — a check is drawn, a bell rings, a chart line rises —
@@ -124,7 +125,25 @@ const WORD_ICONS: Record<string, string> = {
   idea: "lightbulb", ideas: "lightbulb", learn: "graduation-cap", learning: "graduation-cap", course: "graduation-cap", courses: "graduation-cap",
   location: "map-pin", map: "map", store: "store", shop: "store", restaurant: "utensils", food: "utensils",
 };
+// Bangla: the word as written or its stem ("ডেলিভারির" → ডেলিভারি; bangla.ts); the same rule —
+// only an icon beyond doubt, never a person
+const BN_ICONS: Record<string, string> = {
+  ইনভয়েস: "receipt", রসিদ: "receipt", বিল: "receipt", পেমেন্ট: "credit-card", কার্ড: "credit-card", কার্ট: "shopping-cart", চেকআউট: "shopping-cart",
+  টাকা: "banknote", ক্যাশ: "banknote", খরচ: "piggy-bank", সঞ্চয়: "piggy-bank", সাশ্রয়: "piggy-bank", বাজেট: "wallet", দাম: "tag", মূল্য: "tag", অফার: "tag", ছাড়: "tag", ডিসকাউন্ট: "tag", ফ্রি: "gift", উপহার: "gift",
+  দ্রুত: "zap", তাড়াতাড়ি: "zap", মুহূর্তে: "zap", নিরাপদ: "shield-check", নিরাপত্তা: "shield-check", সুরক্ষিত: "shield-check", পাসওয়ার্ড: "key-round",
+  বিক্রি: "trending-up", সেলস: "trending-up", প্রফিট: "trending-up", লাভ: "trending-up", আয়: "trending-up", বৃদ্ধি: "trending-up", গ্রোথ: "trending-up",
+  রিপোর্ট: "chart-column", অ্যানালাইসিস: "chart-column", বিশ্লেষণ: "chart-column", ডেটা: "database", ডাটা: "database", ড্যাশবোর্ড: "layout-dashboard",
+  সময়: "clock", ঘণ্টা: "clock", মিনিট: "timer", সেকেন্ড: "timer", ডেডলাইন: "alarm-clock", শিডিউল: "calendar", ক্যালেন্ডার: "calendar", বুকিং: "calendar-check", অ্যাপয়েন্টমেন্ট: "calendar-check",
+  ইমেইল: "mail", মেইল: "mail", ইনবক্স: "inbox", মেসেজ: "message-circle", চ্যাট: "message-circle", নোটিফিকেশন: "bell", রিমাইন্ডার: "bell",
+  অর্ডার: "package", পার্সেল: "package", প্রোডাক্ট: "package", পণ্য: "package", স্টক: "boxes", ইনভেন্টরি: "boxes", গুদাম: "warehouse", ডেলিভারি: "truck", শিপিং: "truck",
+  ভুল: "circle-x", সফল: "circle-check", সম্পন্ন: "circle-check", ভেরিফাইড: "badge-check", কাজ: "list-checks", টাস্ক: "list-checks", চেকলিস্ট: "list-checks",
+  অটোমেশন: "workflow", অটোমেটিক: "workflow", স্বয়ংক্রিয়: "workflow", এআই: "sparkles", স্মার্ট: "sparkles",
+  সার্চ: "search", খুঁজুন: "search", ক্লাউড: "cloud", আপডেট: "refresh-cw", মোবাইল: "smartphone", ফোন: "smartphone", অ্যাপ: "smartphone", ওয়েবসাইট: "globe", অনলাইন: "globe",
+  ফাইল: "file-text", ডকুমেন্ট: "file-text", কাগজপত্র: "file-text", চুক্তি: "file-signature", লক্ষ্য: "target", টার্গেট: "target", টার্গেটিং: "target", ক্যাম্পেইন: "megaphone", বিজ্ঞাপন: "megaphone", অ্যাড: "megaphone",
+  লঞ্চ: "rocket", ভিডিও: "play", ছবি: "image", কনটেন্ট: "image", রেটিং: "star", রিভিউ: "star", পুরস্কার: "trophy", আইডিয়া: "lightbulb", শিক্ষা: "graduation-cap", কোর্স: "graduation-cap",
+  লোকেশন: "map-pin", এলাকা: "map-pin", ঠিকানা: "map-pin", দোকান: "store", শপ: "store", রেস্টুরেন্ট: "utensils", খাবার: "utensils", স্বাস্থ্য: "heart-pulse", ঘর: "house", বাড়ি: "house",
+};
 // the word as written ("Invoices," "AI-powered") made a key: lower case, letters only
 const keyOf = (word: string) => word.toLowerCase().replace(/[’']s$/, "").replace(/[^a-z]+/g, "");
-export const wordIcon = (word: string): string | null => WORD_ICONS[keyOf(word)] ?? null;
-export const WORD_ICON_NAMES = [...new Set(Object.values(WORD_ICONS))];
+export const wordIcon = (word: string): string | null => WORD_ICONS[keyOf(word)] ?? (stemsBn(word).map((s) => BN_ICONS[s]).find(Boolean) ?? null);
+export const WORD_ICON_NAMES = [...new Set([...Object.values(WORD_ICONS), ...Object.values(BN_ICONS)])];

@@ -1,4 +1,5 @@
 import { retimeScript } from "@/lib/voice-timing";
+import { asksBn } from "./bangla";
 import { type Beat, FPS, type Word } from "./types";
 
 // The voice cut into beats: one sentence each, a long one split at its
@@ -8,7 +9,8 @@ import { type Beat, FPS, type Word } from "./types";
 // swallowed by it, except a name of a word or two said just before ("Orin ERP.").
 
 const LONG = 5.5, SHORT = 2.2, MAX = 5.5;
-const ends = (w: Word) => /[.?!…]["'”’)]*$/.test(w.text);
+// (a sentence ends at . ? ! … and at Bangla's । ॥)
+const ends = (w: Word) => /[.?!…।॥]["'”’)]*$/.test(w.text);
 const soft = (w: Word, next?: Word) => /[,;:—–-]["'”’)]*$/.test(w.text) || (!!next && next.start - w.end > 0.35);
 const span = (words: Word[], b: Beat) => words[b.last].end - words[b.first].start;
 
@@ -28,8 +30,13 @@ export function beatsOf(words: Word[]): Beat[] {
     if (span(words, b) <= LONG || b.last - b.first < 5) return [b];
     const mid = (words[b.first].start + words[b.last].end) / 2;
     const cuts = Array.from({ length: b.last - b.first - 3 }, (_, k) => b.first + 2 + k);
-    const soft1 = cuts.filter((i) => soft(words[i], words[i + 1]));
-    const at = (soft1.length ? soft1 : cuts).reduce((a, i) => (Math.abs(words[i].end - mid) < Math.abs(words[a].end - mid) ? i : a));
+    // (never inside a list — "ওয়েবসাইট, অফার, কনটেন্ট": a comma with another within three words either side)
+    const commaAt = (i: number) => /[,;]["'”’)]*$/.test(words[i]?.text ?? "");
+    // (Bangla scripts — the English test scripts keep the cuts their readings were made on)
+    const inList = (i: number) => /[\u0980-\u09FF]/.test(words[i]?.text ?? "") && commaAt(i) && [1, 2, 3].some((d) => commaAt(i - d) || commaAt(i + d));
+    const soft1 = cuts.filter((i) => soft(words[i], words[i + 1]) && !inList(i));
+    const open = cuts.filter((i) => !inList(i));
+    const at = (soft1.length ? soft1 : open.length ? open : cuts).reduce((a, i) => (Math.abs(words[i].end - mid) < Math.abs(words[a].end - mid) ? i : a));
     return [...split({ first: b.first, last: at }), ...split({ first: at + 1, last: b.last })];
   };
   // (the last sentence keeps its own beat, however long)
@@ -60,7 +67,7 @@ export function beatsOf(words: Word[]): Beat[] {
   return out;
 }
 
-// The ask the voice ends on ("Book a free demo today.") — the button's words,
+// The ask the voice ends on ("Book a free demo today.", "আজই অর্ডার করুন।") — the button's words,
 // as said — or null when the last sentence asks nothing (no button then).
 const ASKS = new Set(["book", "try", "start", "get", "sign", "join", "download", "install", "visit", "call", "contact", "request", "schedule", "order", "buy", "shop", "claim", "grab", "register", "subscribe", "apply", "chat", "talk", "message", "email", "text", "discover", "explore", "learn", "see", "watch", "upgrade", "switch"]);
 export function askOf(words: Word[], b: Beat): string | null {
@@ -68,8 +75,9 @@ export function askOf(words: Word[], b: Beat): string | null {
   for (let i = b.first; i < b.last; i++) if (ends(words[i])) first = i + 1;
   const said = words.slice(first, b.last + 1).map((w) => w.text);
   const lead = said[0]?.toLowerCase().replace(/[^\p{L}]/gu, "") ?? "";
-  if (!said.length || said.length > 7 || !ASKS.has(lead)) return null;
-  return said.join(" ").replace(/[.!?…]+["'”’)]*$/, "");
+  // (Bangla asks with its last word: "এখনই অর্ডার করুন")
+  if (!said.length || said.length > 7 || !(ASKS.has(lead) || asksBn(said))) return null;
+  return said.join(" ").replace(/[.!?…।॥]+["'”’)]*$/, "");
 }
 
 // Each beat's frames: it starts a little before its first word (the first at

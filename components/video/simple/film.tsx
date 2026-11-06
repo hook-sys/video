@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { AbsoluteFill, Html5Audio, Img, Sequence, continueRender, delayRender, spring, staticFile, useCurrentFrame } from "remotion";
 import { Audio as MediaAudio } from "@remotion/media";
-import { type Face, familyOf, fontUrl } from "./faces";
+import { type Face, familyOf, fontFiles } from "./faces";
 import { type C, type Play, clamp01, ease, tint } from "./kit";
 import { SOUND_FRAMES, T, soundsOf } from "./sounds";
 import { TEMPLATE } from "./more";
@@ -26,13 +26,15 @@ function useFaces(faces: Face[]) {
     const handle = delayRender("Loading faces");
     Promise.all(
       todo.map((f) =>
-        new FontFace(f.family, `url(${staticFile(fontUrl(f))}) format("woff2")`, { weight: f.fixed ? String(f.fixed) : "100 900" })
-          .load()
-          .then((ff) => {
-            document.fonts.add(ff);
-            loaded.add(f.family);
-          })
-          .catch(() => loaded.add(f.family)),
+        // (a Bangla face: its Bangla file for the Bangla range, its Latin file for the rest, each weight)
+        Promise.all(
+          fontFiles(f).map((x) =>
+            new FontFace(f.family, `url(${staticFile(x.url)}) format("woff2")`, { weight: x.weight, ...(x.range ? { unicodeRange: x.range } : {}) })
+              .load()
+              .then((ff) => void document.fonts.add(ff))
+              .catch(() => undefined),
+          ),
+        ).then(() => void loaded.add(f.family)),
       ),
     )
       .then(() => setV((v) => v + 1))

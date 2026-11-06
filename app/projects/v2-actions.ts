@@ -23,7 +23,9 @@ const trialSecondsOf = (chars: number) => Math.ceil((chars / 250) * 15);
 // voice, a format, their name, and their website or pictures of the product.
 export async function createProjectV2(_prev: CreateProjectV2State, formData: FormData): Promise<CreateProjectV2State> {
   const mode = formData.get("voice_mode") === "upload" ? "upload" : "script";
-  const script = mode === "script" ? String(formData.get("script") ?? "").trim() : "";
+  // (a recording comes with its words, written: they are what is shown and timed — lib/voice-align.ts)
+  // (NFC: one way of writing each Bangla letter — "য়" as য and a nukta, however it was typed)
+  const script = String(formData.get(mode === "script" ? "script" : "upload_script") ?? "").normalize("NFC").trim();
   const voiceEntry = mode === "upload" ? formData.get("voice_file") : null;
   const voiceFile = voiceEntry instanceof File && voiceEntry.size > 0 ? voiceEntry : null;
   const heardSeconds = Number(formData.get("voice_seconds"));
@@ -42,6 +44,8 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
     if (script.length > VOICE_SCRIPT_MAX) return { error: `The voiceover script must be ${VOICE_SCRIPT_MAX} characters or less.` };
   } else {
     if (!voiceFile) return { error: "Upload your recording." };
+    if (!script) return { error: "Write the words of your recording, exactly as you say them." };
+    if (script.length > VOICE_SCRIPT_MAX) return { error: `The words of your recording must be ${VOICE_SCRIPT_MAX} characters or less.` };
     if (!V2_VOICE_TYPES[voiceFile.type]) return { error: `${voiceFile.name}: the recording must be an MP3, WAV or M4A file.` };
     if (!(heardSeconds > 0)) return { error: "Your recording's length could not be read. Try an MP3 file." };
     if (heardSeconds + LOCKUP_SECONDS > MAX_VIDEO_SECONDS) return { error: `Your recording must be ${Math.floor(MAX_VIDEO_SECONDS - LOCKUP_SECONDS)} seconds or shorter.` };
@@ -109,7 +113,7 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
       user_id: user.id,
       website_url: website,
       // (an uploaded voice: its words replace this once they are heard)
-      direction: mode === "script" ? script : "(your own recording)",
+      direction: script,
       duration_seconds: duration,
       format,
       voice_language: voiceLanguage,
@@ -168,7 +172,7 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
   const { error: libraryError } = await admin.from("direction_library").insert({
     project_id: data.id,
     user_id: user.id,
-    voice_script: mode === "script" ? script.slice(0, DIRECTION_MAX) : "",
+    voice_script: script.slice(0, DIRECTION_MAX),
     video_direction: "",
     visual_style: null,
     creative_direction: CREATIVE_DEFAULTS.creative_direction,

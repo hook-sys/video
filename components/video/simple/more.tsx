@@ -287,7 +287,7 @@ function Messages({ c }: { c: C }) {
               <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={72} solid card />
               <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                 <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={400} face={c.look.text}>{it.text}</One>
-                <One style={{ fontSize: TYPE.LABEL, color: c.look.panelSub }}>{c.brand.name} · now</One>
+                <One style={{ fontSize: TYPE.LABEL, color: c.look.panelSub }}>{c.brand.name} · এখন</One>
               </div>
             </div>
           );

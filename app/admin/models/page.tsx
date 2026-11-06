@@ -124,7 +124,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
                 );
               })()}
               <label className="flex flex-col gap-1">
-                <span className="text-zinc-400">Whisper model (times the voice; transcribes an uploaded voice)</span>
+                <span className="text-zinc-400">Whisper model (only a fallback: the voice is timed by its pauses, no AI)</span>
                 <input name="v2_whisper" defaultValue={c.v2.whisper} placeholder="e.g. fal-ai/whisper" className={input} />
               </label>
             </div>

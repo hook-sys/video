@@ -9,6 +9,9 @@ export const V2_VOICE_TYPES: Record<string, string> = {
   "audio/x-m4a": "m4a",
 };
 
+// (what a recording's project said for its script before the script was asked for with it)
+export const UPLOAD_NO_SCRIPT = "(your own recording)";
+
 // What a "New version" project keeps in projects.details (besides engine: "v2").
 export type V2Details = { engine: "v2"; voice: { source: "script" | "upload"; name: string | null; path: string | null } };
 

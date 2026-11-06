@@ -5,6 +5,7 @@ import { fitWords, noteHero } from "./fit";
 import { TYPE, WEIGHT, fitIn } from "./geo";
 import { type C, Glyph, One, clamp01, countUp, ease, panel, pop, rise, springAt, tint } from "./kit";
 import { Band, Side, abs } from "./scenes";
+import { toAscii } from "./bangla";
 import type { Scene } from "./types";
 
 // The ideas (docs/video-spec.md): a beat whose words picture one idea shows
@@ -524,7 +525,7 @@ function Barriers({ c }: { c: C }) {
 const PR = { dw: 900, dh: 560, bw: 760 };
 export const progressArrival = (s: Scene) => Math.min(s.to - 32, Math.max(turnOf(s) + 12, Math.round(s.from + 0.55 * (s.to - s.from))));
 const shareOf = (n: string | null) => {
-  const m = n ? /^(\d+(?:\.\d+)?)\s*%$/.exec(n.trim()) : null;
+  const m = n ? /^(\d+(?:\.\d+)?)\s*%$/.exec(toAscii(n.trim())) : null;
   return m ? Math.min(1, Math.max(0.05, parseFloat(m[1]) / 100)) : 1;
 };
 function Progress({ c }: { c: C }) {

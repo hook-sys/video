@@ -14,9 +14,11 @@ import { renderWithin } from "@/lib/render-server";
 import { prepareFilm } from "@/lib/film-snapshot";
 import { TIER_IDS, type TierId, refundVideo, settleVideo } from "@/lib/billing";
 import type { PipelineStep } from "@/lib/pipeline";
-import { v2DetailsOf, type V2Details } from "@/lib/v2/form";
-import { type RoleAi, v2DirectorModel, v2Role, v2Speak, v2TimeScript, v2Transcribe, v2Whisper } from "@/lib/v2/models";
+import { UPLOAD_NO_SCRIPT, v2DetailsOf, type V2Details } from "@/lib/v2/form";
+import { type RoleAi, v2DirectorModel, v2Role, v2Speak, v2TimeScript, v2Transcribe } from "@/lib/v2/models";
 import { readBeats, readStory } from "@/lib/simple/brain";
+import { guessReadings } from "@/components/video/simple/guess";
+import type { Reading } from "@/components/video/simple/types";
 import { askOf, beatsOf, scriptWords } from "@/components/video/simple/beats";
 import { frameOf } from "@/components/video/simple/geo";
 import { bestPlan } from "@/components/video/simple/check";
@@ -108,9 +110,10 @@ export async function runPipelineV2(projectId: string, userId: string) {
     const ai = await getAiConfig();
     // (one level: priced as Standard; a video made before keeps its level)
     const tierId: TierId = (TIER_IDS as readonly string[]).includes(project.quality) ? (project.quality as TierId) : "standard";
-    // every model this video needs is checked before anything is spent: the Director and Whisper (admin → AI models)
-    const director = await v2Role("director", { timeout: 120_000 });
-    await v2Whisper(ai);
+    // every model this video needs is checked before anything is spent: only the voice, when our voice speaks.
+    // The Director's AI is used when it is set; without it (or when it fails) the video is read by rule
+    // (guess.ts), and Whisper only times a voice whose pauses cannot (lib/voice-align.ts)
+    const director = await v2Role("director", { timeout: 120_000 }).catch(() => null);
     if (v2.voice.source === "script" && !ai.voice.model) throw new Error("No voice model is set. A super admin must choose it on /admin/models.");
     if (!project.brand_color) {
       project = { ...project, brand_color: COLOURS[seedFrom(projectId) % COLOURS.length] };
@@ -170,21 +173,31 @@ async function voiceOf(admin: Admin, projectId: string, userId: string, project:
       if (!path || !path.startsWith(`${userId}/${projectId}/`)) throw new Error("The uploaded recording is missing. Please create the video again.");
       const { data: signed } = await admin.storage.from(AUDIO_BUCKET).createSignedUrl(path, 900);
       if (!signed?.signedUrl) throw new Error("The uploaded recording could not be read.");
-      const heard = await v2Transcribe(signed.signedUrl);
-      await heardCost(heard);
-      ({ words, script } = heard);
+      // (the words the customer wrote are what the recording says; laid on it by its pauses —
+      // a recording made before the script was asked for: what Whisper hears)
+      const written = project.direction.normalize("NFC").trim();
+      if (written && written !== UPLOAD_NO_SCRIPT) {
+        const timed = await v2TimeScript(signed.signedUrl, written);
+        if (timed.heard) await heardCost({ model: timed.model, requestId: timed.requestId ?? "", seconds: timed.seconds });
+        words = timed.words;
+        script = written;
+      } else {
+        const heard = await v2Transcribe(signed.signedUrl);
+        await heardCost(heard);
+        ({ words, script } = heard);
+        await set({ direction: script.slice(0, DIRECTION_MAX) });
+      }
       storagePath = path;
       model = "upload";
       requestId = null;
-      await set({ direction: script.slice(0, DIRECTION_MAX) });
     } else {
-      script = project.direction.trim();
+      script = project.direction.normalize("NFC").trim();
       const spoken = await v2Speak({ script, language: project.voice_language, style: project.voice_style, gender: project.voice_gender, voice: v2.voice.name });
       await recordCost(admin, { ...owner, operation: "fal_voice", model: spoken.model, quantity: script.length, estimated_cost_usd: unitCost(ai, spoken.model, script.length, () => falCost(spoken.model, script.length)), metadata: { unit: "characters", request_id: spoken.requestId } });
       const kept = await storeVoiceAudio(admin, spoken.audioUrl, userId, projectId);
       await recordCost(admin, { ...owner, operation: "storage", quantity: kept.bytes, estimated_cost_usd: storageCost(kept.bytes), metadata: { kind: "voice", unit: "bytes" } });
       const timed = await v2TimeScript(spoken.audioUrl, script);
-      await heardCost(timed);
+      if (timed.heard) await heardCost({ model: timed.model, requestId: timed.requestId ?? "", seconds: timed.seconds });
       words = timed.words;
       storagePath = kept.path;
       model = spoken.model;
@@ -202,7 +215,7 @@ async function voiceOf(admin: Admin, projectId: string, userId: string, project:
 // The simple engine's video (docs/video-spec.md): the voice in beats, one AI
 // call reading them (the Director's model), the templates chosen unlike this
 // customer's last five videos, checked and mended. Throws when the reading fails.
-async function buildSimple(admin: Admin, projectId: string, userId: string, project: Project, voice: WordTiming[], brief: ProductBrief, director: RoleAi, left: () => number, shots: { names: string[]; note: string | null }) {
+async function buildSimple(admin: Admin, projectId: string, userId: string, project: Project, voice: WordTiming[], brief: ProductBrief, director: RoleAi | null, left: () => number, shots: { names: string[]; note: string | null }) {
   const usage: BriefUsage[] = [];
   const words = scriptWords(brief.script, voice);
   const started = Date.now();
@@ -210,21 +223,28 @@ async function buildSimple(admin: Admin, projectId: string, userId: string, proj
   const beats = beatsOf(words);
   const brand = { name: project.brand_name?.trim() || brief.product_name || "Your product", color: project.brand_color || COLOURS[0], cta: beats.length ? (askOf(words, beats[beats.length - 1]) ?? "") : "", icon: null, screens: shots.names, ...(siteOf(project.website_url) ? { site: siteOf(project.website_url)! } : {}) };
   try {
-    v2DirectorModel(director.model);
-    // (the Director's two calls: the story, then the beats read with it — the story failing leaves the beats read alone, noted)
+    // (the Director's two calls: the story, then the beats read with it — the story failing leaves the beats read alone, noted;
+    // no AI set, or the beats call failing: the beats read by rule — the video is made all the same, noted)
     const told: string[] = shots.note ? [shots.note] : [];
-    const story = await readStory(words, beats, brand.name, director, (u) => usage.push(u), Math.max(20_000, Math.min(60_000, left() - 120_000))).catch((e) => (told.push(`story plan not read — ${e instanceof Error ? e.message.slice(0, 160) : String(e)}`), null));
-    const { readings, problems: read } = await readBeats(words, beats, brand.name, director, (u) => usage.push(u), Math.max(30_000, Math.min(120_000, left() - 60_000)), story);
+    let readings: Reading[] | null = null;
+    let read: string[] = [];
+    if (director?.model.trim()) {
+      v2DirectorModel(director.model);
+      const story = await readStory(words, beats, brand.name, director, (u) => usage.push(u), Math.max(20_000, Math.min(60_000, left() - 120_000))).catch((e) => (told.push(`story plan not read — ${e instanceof Error ? e.message.slice(0, 160) : String(e)}`), null));
+      const ai = await readBeats(words, beats, brand.name, director, (u) => usage.push(u), Math.max(30_000, Math.min(120_000, left() - 60_000)), story).catch((e) => (told.push(`read by rule — the AI failed: ${e instanceof Error ? e.message.slice(0, 160) : String(e)}`), null));
+      if (ai) ({ readings, problems: read } = ai);
+    } else told.push("read by rule — no AI is set for the Director");
+    readings ??= guessReadings(words, beats, brand.name);
     const problems = [...told, ...read];
     const { data: last } = await admin.from("projects").select("print:brief->composer->simple->>print").eq("user_id", userId).neq("id", projectId).not("brief->composer->simple", "is", null).order("created_at", { ascending: false }).limit(5);
     const recent = (last ?? []).map((p) => p.print as string | null).filter((p): p is string => !!p);
     // (several drafts, each checked and mended by code before it is played, the best scored kept: check.ts)
     const { plan, report, scores } = bestPlan({ words, beats, readings, brand, seed: seedFrom(projectId), duration: Math.round(project.duration_seconds * 30), recent, size: frameOf(project.format) });
     const noted = [...problems, ...report.fixed.map((x) => `mended — ${x}`), ...report.left.map((x) => `left — ${x}`)];
-    console.info("simple engine:", { projectId, model: director.model, beats: beats.length, print: plan.print, drafts: scores, problems: noted.slice(0, 8) });
+    console.info("simple engine:", { projectId, model: director?.model ?? "rules", beats: beats.length, print: plan.print, drafts: scores, problems: noted.slice(0, 8) });
     return { simple: plan, problems: noted, at: new Date().toISOString() };
   } finally {
-    await price(admin, projectId, userId, director.model, usage, started);
+    if (director) await price(admin, projectId, userId, director.model, usage, started);
   }
 }
 

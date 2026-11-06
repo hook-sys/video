@@ -1,3 +1,4 @@
+import { bare, leadsBn, trailsBn } from "./bangla";
 import { litInTime, wordsAlone } from "./select";
 import type { Scene } from "./types";
 
@@ -14,8 +15,9 @@ const MOST = 5;
 // (a pause the voice makes, in frames)
 const PAUSE = 8;
 const LITTLE = new Set(["a", "an", "and", "the", "of", "to", "in", "on", "for", "with", "or", "by", "at", "from", "is", "are", "your", "our", "its", "that", "this", "but", "so", "as"]);
-const bare = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
-const ends = (t: string) => /[,.!?;:—–]$/.test(t);
+// (Bangla's । too; a word compared with its vowel signs — bangla.ts)
+const ends = (t: string) => /[,.!?;:—–।॥]$/.test(t);
+const little = (t: string) => LITTLE.has(bare(t)) || leadsBn(t);
 
 // where the lit word is in what the voice says (the words shown, found by their text)
 function litIn(s: Scene): number {
@@ -34,10 +36,12 @@ export function phrasesOf(s: Scene): Phrase[] {
   said.forEach((w, i) => {
     run.push(i);
     const next = said[i + 1];
-    const cut = !next || ends(w.t) || next.at - w.at >= PAUSE + 10 || run.length >= MOST;
+    // (a Bangla word that follows the one before — থেকে, জন্য — stays with it, a word over if need be)
+    const held = !!next && !ends(w.t) && trailsBn(next.t) && run.length <= MOST;
+    const cut = !next || ends(w.t) || (!held && (next.at - w.at >= PAUSE + 10 || run.length >= MOST));
     if (!cut) return;
     // (never ending on a little word: it goes on to the next phrase)
-    if (next && run.length > 1 && LITTLE.has(bare(w.t)) && !ends(w.t)) {
+    if (next && run.length > 1 && little(w.t) && !ends(w.t)) {
       run.pop();
       runs.push(run);
       run = [i];
@@ -48,7 +52,7 @@ export function phrasesOf(s: Scene): Phrase[] {
   });
   if (run.length) runs.push(run);
   // (a phrase of one little word joins the one before)
-  const merged = runs.reduce<number[][]>((out, r) => (out.length && r.length === 1 && LITTLE.has(bare(said[r[0]].t)) ? (out[out.length - 1].push(...r), out) : (out.push(r), out)), []);
+  const merged = runs.reduce<number[][]>((out, r) => (out.length && r.length === 1 && little(said[r[0]].t) ? (out[out.length - 1].push(...r), out) : (out.push(r), out)), []);
   // (the first phrase in by 4 frames into the scene — never an empty start — and each later
   // one's first word in as the phrase before goes: a cut, never an empty frame between)
   const late = Math.max(0, said[merged[0][0]].at - (s.from + (s.from ? 4 : 0)));
@@ -57,7 +61,7 @@ export function phrasesOf(s: Scene): Phrase[] {
     return {
       from,
       // (as said: its own capitals, a comma at its end dropped)
-      words: r.map((i, j) => ({ t: j === r.length - 1 ? said[i].t.replace(/[,;:—–]$/, "") : said[i].t, at: k ? (j ? said[i].at : from) : Math.max(s.from, said[i].at - late), key: i === lit })),
+      words: r.map((i, j) => ({ t: j === r.length - 1 ? said[i].t.replace(/[,;:—–।]$/, "") : said[i].t, at: k ? (j ? said[i].at : from) : Math.max(s.from, said[i].at - late), key: i === lit })),
     };
   });
   // (the phrase with the lit word in, sooner when the word would be on screen less than 1 s — select.ts litInTime)
