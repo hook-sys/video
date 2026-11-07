@@ -7,6 +7,8 @@ import { SOUND_FRAMES, T, soundsOf } from "./sounds";
 import { TEMPLATE } from "./more";
 import { geoFor, geoOf } from "./geo";
 import { PointBar } from "./points";
+// (the living icons drawn here, never on the server)
+import "./living-play";
 import { type Look, lookOf, themeOf } from "./theme";
 import { type FilmProps, GROUNDS, type SimplePlan } from "./types";
 

@@ -424,3 +424,16 @@ One picture is not shown twice close together: the words beside an icon seen
 in the last four scenes are told another way, or with another icon the beat's
 own words stand for.
 
+
+## Living icons (components/video/simple/living.tsx)
+
+Animated Lottie icons from Google's Noto Emoji animations (CC BY 4.0,
+public/lottie/LICENSE.md): 37 objects — rocket, megaphone, charts, package,
+cart, bulb, bell, alarm, hourglass, check, cross, warning, fire, target,
+trophy, gift, lock, laptop, gear, money, star, zap, truck, chat, clapper,
+camera, gem, battery, party, tv… Objects only: no face, person or animal
+(the coin, with a face on it, is left out). They are colour emoji, so they
+are used only where one big picture stands alone (a beat's single icon,
+statement B without cards); the cards keep the look's own icons. Each plays
+from its scene's start and holds its last frame; an icon with no living
+one keeps the look's glossy icon. The checks lay one out as a box of its size.

@@ -6,6 +6,7 @@ import { fitWords, measured } from "./fit";
 import { type Box, HERO_W, TYPE, WEIGHT, bandOf, sideOf, splitOf, stackOf, wordsFit } from "./geo";
 import { type C, Cursor, blend, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import { closeAt, phraseMode, phrasesOf } from "./rhythm";
+import { Living, livingOf } from "./living";
 import type { Scene } from "./types";
 
 // The templates (docs/video-spec.md), part 1: statement, trouble, reveal,
@@ -111,7 +112,7 @@ function Statement({ c }: { c: C }) {
     return (
       <Side c={c} dw={560} dh={560} hw={760}>
         <div style={{ ...center({ inset: 0 }), opacity: clamp01(k * 1.8), transform: `scale(${(0.6 + 0.4 * k).toFixed(4)}) translateY(${float.toFixed(1)}px) rotate(${((1 - k) * -14).toFixed(2)}deg)` }}>
-          <Glyph c={c} part="icon" name={c.s.icon} size={440} solid />
+          {livingOf(c.s.icon) ? <div data-part="icon"><Living name={livingOf(c.s.icon)!} size={440} at={c.s.from + 4} /></div> : <Glyph c={c} part="icon" name={c.s.icon} size={440} solid />}
         </div>
       </Side>
     );
