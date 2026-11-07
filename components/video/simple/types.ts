@@ -108,6 +108,8 @@ export type Scene = {
   point?: Point;
   // (the concept "agenda") the points' titles, previewed
   agenda?: string[];
+  // (the words beside their pictures — statement B) the things the words name, each a card that comes in as it is said
+  tiles?: { text: string; icon: string; at: number }[];
 };
 export type Point = { n: number; of: number; title: string };
 

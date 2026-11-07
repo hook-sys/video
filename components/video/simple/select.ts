@@ -50,6 +50,8 @@ function pickOf(list: [TemplateId, number][], prev: TemplateId | null, R: Return
   return from[from.length - 1][0];
 }
 
+const bareOf = (t: string) => t.normalize("NFC").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, "");
+
 // a colour too grey to fill the ground with
 export function grey(hex: string): boolean {
   const n = parseInt(hex.replace("#", "").padEnd(6, "0").slice(0, 6), 16);
@@ -149,13 +151,23 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
         else if (!wasAlone && alone < most && !r.hero) [template, variant] = ["kinetic", R.chance(0.5) ? 0 : 2];
       }
     }
+    // (the words beside their pictures: when the things the beat names are its own words — so they would only
+    // repeat the caption as cards of their own — the words are shown with a card for each, coming in as it is said,
+    // never words alone nor one icon)
+    const beatWords = words.slice(beats[i].first, beats[i].last + 1);
+    const tiles = read.items.flatMap((it) => {
+      const w = it.icon ? beatWords.find((x) => { const a = bareOf(x.text), b = bareOf(it.text); return a === b || (b.length >= 2 && a.startsWith(b)); }) : undefined;
+      return w ? [{ text: it.text, icon: it.icon!, at: Math.round(w.start * FPS) }] : [];
+    }).filter((t) => t.at <= frames[i].to - 45).slice(0, 4);
+    const tiled = i < readings.length - 1 && tiles.length >= 2 && (template === "statement" || template === "kinetic");
+    if (tiled) [template, variant] = ["statement", 1];
     // (words typed as a prompt only when they ask something)
     if (template === "kinetic" && variant === 1 && !/\?["'”’)]*$/.test(words[r.show[1]]?.text ?? "")) variant = R.chance(0.5) ? 0 : 2;
     wasAlone = wordsAlone(template, variant);
     if (wasAlone) alone++;
     const screen = template === "screen" ? pictured++ : undefined;
     prev = template;
-    recent.push(template === "statement" && variant === 1 ? (r.icon ?? "sparkles") : "");
+    recent.push(template === "statement" && variant === 1 && !tiled ? (r.icon ?? "sparkles") : "");
     prevIdea = template === "concept" ? read.concept : undefined;
     // (beside a hero — or under the brand's mark — the words are its caption: at most four of them, around the key one)
     const [start, end] = wasAlone || template === "cta" ? r.show : keyRun(words, r.show, r.key, 4);
@@ -173,6 +185,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       // (an idea's things as read: the truth's two words are among the words said)
       items: (template === "concept" ? read : r).items.slice(0, template === "concept" && read.concept === "funnel" ? 5 : 3),
       number: r.number,
+      ...(tiled ? { tiles } : {}),
       ...(screen != null ? { screen } : {}),
       ...(read.concept ? { concept: read.concept, resolves: r.intent !== "hook" && r.intent !== "problem" } : {}),
       said: words.slice(beats[i].first, beats[i].last + 1).map((w) => ({ t: w.text, at: Math.round(w.start * FPS) })),

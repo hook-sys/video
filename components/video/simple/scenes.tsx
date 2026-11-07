@@ -104,6 +104,7 @@ function Statement({ c }: { c: C }) {
   const { W, H, pad } = c.g;
   if (phraseMode(c.s)) return <Phrases c={c} />;
   if (c.s.variant === 0) return <WordsIn c={c} box={{ left: pad, top: 0, width: W - 2 * pad, height: H }} place="center" />;
+  if (c.s.variant === 1 && (c.s.tiles?.length ?? 0) >= 2) return <Tiles c={c} />;
   if (c.s.variant === 1) {
     const k = springAt(c, c.s.from + 4, 1.4);
     const float = Math.sin((c.f - c.s.from) / 22) * 10;
@@ -129,6 +130,41 @@ function Statement({ c }: { c: C }) {
         );
       })}
     </div>
+  );
+}
+
+// ── the words beside their pictures: a card for each thing they name ──────
+// (2 or 3 in a row, 4 two by two), each coming in as its word is said — its icon moving,
+// the card lit while its word is the last said — and floating gently after
+const TILE = { w: 330, h: 380, gap: 30, icon: 176 };
+export const tileAt = (s: Scene, i: number) => Math.max(s.from + 6 + i * 6, s.tiles![i].at - 3);
+function Tiles({ c }: { c: C }) {
+  const tiles = c.s.tiles!.slice(0, 4);
+  const n = tiles.length;
+  const cols = n === 4 ? 2 : n;
+  const rows = Math.ceil(n / cols);
+  const w = cols === 2 ? TILE.w * 1.25 : TILE.w;
+  const dw = cols * w + (cols - 1) * TILE.gap, dh = rows * TILE.h + (rows - 1) * TILE.gap;
+  return (
+    <Band c={c} dw={dw} dh={dh}>
+      {tiles.map((t, i) => {
+        const at = tileAt(c.s, i);
+        const k = springAt(c, at);
+        // (lit from its word to the next one's)
+        const next = i + 1 < n ? tileAt(c.s, i + 1) : c.s.to;
+        const lit = clamp01((c.f - at) / 6) * (1 - clamp01((c.f - next) / 8));
+        const float = Math.sin((c.f - at) / 24 + i * 1.7) * 6 * clamp01((c.f - at - 12) / 12);
+        const x = (i % cols) * (w + TILE.gap), y = Math.floor(i / cols) * (TILE.h + TILE.gap);
+        return (
+          <div key={i} style={abs({ left: x, top: y, width: w, height: TILE.h, opacity: clamp01(k * 1.8), filter: k < 0.99 ? `blur(${((1 - k) * 8).toFixed(1)}px)` : undefined, transform: `translateY(${((1 - k) * 60 + float).toFixed(1)}px) scale(${(0.86 + 0.14 * k + 0.04 * lit).toFixed(4)})` })}>
+            <div style={{ ...panel(c, 34), width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, boxSizing: "border-box", padding: "0 20px", boxShadow: `0 0 0 ${(3 * lit).toFixed(1)}px ${tint(c.look.accent, 0.55 * lit)}, ${panel(c).boxShadow}` }}>
+              <Glyph c={c} part="item-icon" name={t.icon} size={TILE.icon} card at={at} />
+              <One part="item" face={c.look.text} fit={w - 40} style={{ fontFamily: familyOf(c.look.text), fontSize: TYPE.ITEM * 1.3, fontWeight: WEIGHT.item, color: c.look.panelInk }}>{t.text}</One>
+            </div>
+          </div>
+        );
+      })}
+    </Band>
   );
 }
 

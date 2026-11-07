@@ -448,7 +448,7 @@ export async function runChecks(): Promise<Check[]> {
     // 6. an explainer told as points: each opening its own scene with its number, the agenda where the
     //    count is said, the bar over the rest and the scenes laid out below it; the conclusion and the ask
     //    outside the last point; 7. the recipes found by their words: versus, funnel, X নয় Y, shares as stops
-    const ex = "আপনার ব্যবসায় কম বিজ্ঞাপন খরচে বেশি সেলস পেতে এই তিনটি বিষয় জানুন। প্রথমত, সঠিক কাস্টমার চিনুন। তারা কোন এলাকায় থাকেন, কখন অর্ডার করেন, তা জানতে হবে। দ্বিতীয়ত, ওয়েবসাইট কনভার্শন দেখুন। কতজন প্রোডাক্ট দেখছেন, কতজন কার্টে যোগ করছেন, আর কতজন চেকআউট পর্যন্ত যাচ্ছেন, তা দেখুন। তৃতীয়ত, ভিডিও অ্যানালাইসিস করুন। যারা পঁচিশ, পঞ্চাশ, পঁচাত্তর অথবা একশো শতাংশ ভিডিও দেখছেন, তাদের আলাদা কনটেন্ট দিন। মনে রাখবেন, অনুমান নয়, ডেটা দেখে সিদ্ধান্ত নিন। কারণ ডেটাই আসল শিক্ষক। আজই শুরু করুন।";
+    const ex = "আপনার ব্যবসায় কম বিজ্ঞাপন খরচে বেশি সেলস পেতে এই তিনটি বিষয় জানুন। প্রথমত, সঠিক কাস্টমার চিনুন। তারা কোন এলাকায় থাকেন, কখন অর্ডার করেন, তা জানতে হবে। কতগুলো অর্ডার ক্যানসেল বা রিটার্ন হচ্ছে, তা দেখুন। দ্বিতীয়ত, ওয়েবসাইট কনভার্শন দেখুন। কতজন প্রোডাক্ট দেখছেন, কতজন কার্টে যোগ করছেন, আর কতজন চেকআউট পর্যন্ত যাচ্ছেন, তা দেখুন। তৃতীয়ত, ভিডিও অ্যানালাইসিস করুন। যারা পঁচিশ, পঞ্চাশ, পঁচাত্তর অথবা একশো শতাংশ ভিডিও দেখছেন, তাদের আলাদা কনটেন্ট দিন। মনে রাখবেন, অনুমান নয়, ডেটা দেখে সিদ্ধান্ত নিন। কারণ ডেটাই আসল শিক্ষক। আজই শুরু করুন।";
     let t2 = 0.3;
     const xw = ex.split(" ").map((w) => { const start = t2; t2 += 0.42 + (/[।?]$/.test(w) ? 0.5 : /,$/.test(w) ? 0.2 : 0); return { text: w, start, end: start + 0.36 }; });
     const xb = beatsOf(xw);
@@ -464,6 +464,11 @@ export async function runChecks(): Promise<Check[]> {
       closeOut &&= plan.scenes.slice(-3).every((x) => !x.point);
     }
     add("Points: each opens on its own scene, numbered, its title as said; the agenda where the count is said; the scenes inside below the bar; the conclusion and the ask outside the last", !pointLeft.length && opened === "1:সঠিক কাস্টমার চিনুন | 2:ওয়েবসাইট কনভার্শন দেখুন | 3:ভিডিও অ্যানালাইসিস করুন" && agendaOk && below && closeOut, pointLeft.slice(0, 3).join(" · ") || opened);
+    // 8. the words beside their pictures: a beat whose things are its own words shows a card for each, in as said
+    const tall = bestPlan({ words: xw, beats: xb, readings: xr, brand: { name: "দোকান", color: "#7C3AED", cta: "আজই শুরু করুন", icon: null }, seed: 5, duration: durationOf(xw), size: [1080, 1920], drafts: 3 }).plan;
+    const tiledScenes = tall.scenes.filter((x) => x.template === "statement" && x.variant === 1 && (x.tiles?.length ?? 0) >= 2);
+    const inOrder = tiledScenes.every((x) => x.tiles!.every((t, k, a) => t.at >= x.from && t.at < x.to && (!k || t.at >= a[k - 1].at)));
+    add("Bangla: a beat's things shown as cards beside its words, each in as it is said (never one icon alone when there are two)", tiledScenes.length >= 1 && inOrder, tiledScenes.map((x) => x.tiles!.map((t) => t.text).join("|")).join(" · ") || "none");
     const found = xr.map((r) => r.concept ? `${r.concept}[${r.items.map((x) => x.text).join("|")}]` : "").filter(Boolean).join(" ");
     const want = ["versus[কম বিজ্ঞাপন খরচ|বেশি সেলস]", "funnel[প্রোডাক্ট|কার্ট|চেকআউট]", "progress[২৫%|৫০%|৭৫%]", "truth[অনুমান|ডেটা]"];
     add("Bangla recipes found by their words: less for more (versus), stages narrowing (funnel), shares as a bar's stops, \"X নয়, Y\" (truth)", want.every((w) => found.includes(w)), found);

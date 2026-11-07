@@ -388,6 +388,22 @@ structure, so the viewer always knows where they are:
   ahead — numbered rows lighting one after another — when the count said is the
   count found.
 
+## Cards, not words and an icon
+
+A scene is the words with something to look at, never words and one icon
+when the beat names more. A beat's things are what it names that a picture
+stands for, in the order said (guess.ts thingsOf: nouns with an icon, each
+word and each icon once, the case ending off — "অডিয়েন্সের" → "অডিয়েন্স";
+never a verb's form, a light verb or an ask — "দিন" is give, not day): two
+to four of them. Shown as cards (feature, tiles, messages…) when they are
+not the caption's own words; when they are, the scene is the words beside
+their pictures (statement B with tiles, scenes.tsx Tiles): a glass card for
+each thing — its icon moving, its word under it — coming in as its word is
+said (a pop each), lit while it is the last said, floating after. 2 or 3 in a
+row, 4 two by two. A thing said too late to be read (in the scene's last
+1.5 s) gets no card. The Bangla icon words cover marketing and shop
+explainers (audience, age, area, visitors, purchase, return, conversion…).
+
 One picture is not shown twice close together: the words beside an icon seen
 in the last four scenes are told another way, or with another icon the beat's
 own words stand for.

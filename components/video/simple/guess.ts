@@ -1,5 +1,5 @@
 import { searchIcons } from "@/lib/icons";
-import { bare, hasDigit, leadsBn, numberInWords, stemsBn, trailsBn } from "./bangla";
+import { asksBn, bare, hasDigit, leadsBn, numberInWords, stemsBn, trailsBn } from "./bangla";
 import { wordIcon } from "./motion";
 import type { Beat, Concept, Intent, Item, Reading, Word } from "./types";
 
@@ -117,6 +117,22 @@ function funnelOf(ws: string[]): string[] | null {
   const out = ws.flatMap((w, k) => (bare(w) === "কতজন" && ws[k + 1] && content(ws[k + 1]) ? [stem1(ws[k + 1])] : []));
   return out.length >= 3 ? out.slice(0, 5) : null;
 }
+// The things a beat names that a picture stands for, in the order said: nouns (not a verb's form) with an
+// icon, each once and each icon once, the case ending off ("অডিয়েন্সের" → "অডিয়েন্স"); two to four, else none
+function thingsOf(ws: string[]): Item[] {
+  const out: Item[] = [];
+  for (const w of ws) {
+    // (nor a light verb or an ask — "দিন" is give, not day)
+    if (!content(w) || verbish(w) || LIGHT.has(bare(w)) || asksBn([w, w])) continue;
+    const icon = wordIcon(w);
+    if (!icon) continue;
+    // (the shortest stem the icon is found by: "অডিয়েন্সের" → "অডিয়েন্স", not "অডিয়েন্সে")
+    const text = stemsBn(w).filter((x) => x.length >= 2 && wordIcon(x) === icon).sort((x, y) => x.length - y.length)[0] ?? stem1(w);
+    if (out.some((x) => x.icon === icon || x.text === text)) continue;
+    out.push({ text, icon });
+  }
+  return out.length >= 2 ? out.slice(0, 4) : [];
+}
 const BN_NEED = /((?:\S+\s+)?\S+?)\s+(?:লাগবে না|লাগে না|দরকার নেই|দরকার হবে না|প্রয়োজন নেই)/gu;
 
 // a list said in the beat: its parts between commas and "এবং/ও/আর/বা/অথবা", each 1–3 words
@@ -203,6 +219,8 @@ function readBangla(words: Word[], beats: Beat[], brand: string): Reading[] {
         // (a number word listed — "পঁচিশ" — as its digits, with the sentence's % when it has one)
         return { text: n && unit ? n : x, icon: n ? null : iconOfBn(x.split(" ")) };
       });
+      // (no list said: the things its words stand for — "বয়স", "এলাকা", "সময়", "অর্ডার" — each a card with its icon)
+      if (!items.length && !last) items = thingsOf(ws);
       // (shares listed on the way to the one said last — "২৫, ৫০, ৭৫ … ১০০ শতাংশ" — are a bar's stops)
       if (!last && unit && items.length >= 2 && items.every((x) => /^[০-৯]+%$/.test(x.text))) concept = "progress";
     }
