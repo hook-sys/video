@@ -141,6 +141,10 @@ const BN_ICONS: Record<string, string> = {
   সার্চ: "search", খুঁজুন: "search", ক্লাউড: "cloud", আপডেট: "refresh-cw", মোবাইল: "smartphone", ফোন: "smartphone", অ্যাপ: "smartphone", ওয়েবসাইট: "globe", অনলাইন: "globe",
   ফাইল: "file-text", ডকুমেন্ট: "file-text", কাগজপত্র: "file-text", চুক্তি: "file-signature", লক্ষ্য: "target", টার্গেট: "target", টার্গেটিং: "target", ক্যাম্পেইন: "megaphone", বিজ্ঞাপন: "megaphone", অ্যাড: "megaphone",
   লঞ্চ: "rocket", ভিডিও: "play", ছবি: "image", কনটেন্ট: "image", রেটিং: "star", রিভিউ: "star", পুরস্কার: "trophy", আইডিয়া: "lightbulb", শিক্ষা: "graduation-cap", কোর্স: "graduation-cap",
+  বয়স: "cake", দিন: "sun", রাত: "moon", অ্যাক্টিভ: "activity", আগ্রহ: "heart", আগ্রহী: "heart", পছন্দ: "heart",
+  অডিয়েন্স: "radar", কাস্টমার: "id-card", গ্রাহক: "id-card", ক্রেতা: "id-card", ভিজিটর: "mouse-pointer-click", ক্লিক: "mouse-pointer-click", পেজ: "file", ল্যান্ডিং: "file",
+  পারচেজ: "shopping-bag", কেনাকাটা: "shopping-bag", ইকমার্স: "shopping-bag", রিটার্ন: "undo-2", ক্যানসেল: "circle-x", বাতিল: "circle-x", কনভার্শন: "repeat", ফানেল: "filter",
+  স্কেল: "trending-up", শতাংশ: "percent", সিদ্ধান্ত: "signpost", ডিসিশন: "signpost", অনুমান: "circle-help", মার্কেটিং: "megaphone", কপি: "file-text", বিজনেস: "briefcase", ব্যবসা: "briefcase", ব্যবসায়: "briefcase",
   লোকেশন: "map-pin", এলাকা: "map-pin", ঠিকানা: "map-pin", দোকান: "store", শপ: "store", রেস্টুরেন্ট: "utensils", খাবার: "utensils", স্বাস্থ্য: "heart-pulse", ঘর: "house", বাড়ি: "house",
 };
 // the word as written ("Invoices," "AI-powered") made a key: lower case, letters only

@@ -2,7 +2,7 @@ import { conceptSounds } from "./concept";
 import { keyIconOf } from "./kit";
 import { clickOf } from "./more";
 import { MOTION_DELAY, MOTION_SOUND, motionOf } from "./motion";
-import { thingAt } from "./scenes";
+import { thingAt, tileAt } from "./scenes";
 import type { Scene, SimplePlan } from "./types";
 
 // The film's sounds, as times (film.tsx plays them; the check counts them).
@@ -49,6 +49,8 @@ export function soundsOf(plan: SimplePlan): { at: number; name: string; volume: 
       out.push({ at: first.at, ...MOTION_SOUND[first.m] });
     }
     if (s.template === "concept") out.push(...conceptSounds(s));
+    // (a card for each thing named: a pop as each comes in)
+    if (s.tiles && s.template === "statement" && s.variant === 1) out.push(...s.tiles.slice(0, 4).map((_, k) => ({ at: tileAt(s, k), name: "soft_pop", volume: 0.2 })));
     // (a point opening: a hit as its number lands)
     if (s.template === "point") out.push({ at: s.from + 6, name: "subtle_impact", volume: 0.3 });
     if (s.template === "kinetic" && s.variant === 1 && s.words.length) out.push(...typed(s.words[0].at - 2, s.words.at(-1)!.at + s.words.at(-1)!.t.length * 1.6));

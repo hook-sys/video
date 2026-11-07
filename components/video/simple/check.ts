@@ -5,7 +5,7 @@ import { type FitNote, noting } from "./fit";
 import { geoFor } from "./geo";
 import { type C, ICON_SLOT, type Play, keyIconOf } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
-import { norm, thingAt } from "./scenes";
+import { norm, thingAt, tileAt } from "./scenes";
 import { choices, grey, planOf, printOf, variantOk, wordsAlone } from "./select";
 import { contrast, lookOf, themeOf } from "./theme";
 import { ideaNeedsThings, GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, VARIANTS } from "./types";
@@ -60,6 +60,7 @@ export function settledAt(s: Scene): number {
     : t === "screen" ? s.from + 30
     : t === "concept" ? conceptSettled(s)
     : t === "point" ? s.from + 30
+    : t === "statement" && v === 1 && s.tiles?.length ? tileAt(s, Math.min(4, s.tiles.length) - 1) + 20
     : s.from;
   return Math.max(lastWord, n ? lastThing + 18 : s.from, own);
 }
