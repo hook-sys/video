@@ -391,7 +391,9 @@ structure, so the viewer always knows where they are:
   under it — the opening's words after the ordinal, as said (at most five or six).
   Its beat is never joined to another, and a hit sounds as the number lands.
   A customer cannot turn another scene into one, nor one into another scene.
-- **The bar**: while a point lasts, its number in a pill and its title stay at
+- **No bar** (the owner's choice): nothing sits at the top of the frame; the
+  scenes have the whole of it (geo.ts BAR = false keeps the bar's code, off).
+- *(off)* **The bar**: while a point lasts, its number in a pill and its title stay at
   the top, with a mark for each point (the one we are in longer, those done
   lit); it slides in after the opening and out at the point's end. The scenes
   inside a point are laid out below it (geo.ts geoFor: the frame less the bar's
@@ -437,3 +439,23 @@ are used only where one big picture stands alone (a beat's single icon,
 statement B without cards); the cards keep the look's own icons. Each plays
 from its scene's start and holds its last frame; an icon with no living
 one keeps the look's glossy icon. The checks lay one out as a box of its size.
+
+## The panel: the hand-made look (components/video/simple/panel.tsx)
+
+The owner's reference is the hand-made reel: a frosted panel of rows, each a
+glossy tile in its own colour (violet, blue, orange, green, pink in turn), the
+thing as said, and a small picture of what it means — bars for an age or data,
+a map and a dropping pin for a place, a clock sweeping for a time, a line
+rising for orders and interest (falling for returns), a signal for a campaign,
+a page and a cursor for a site, a play bar for a video, ticks for what is done,
+else a meter filling. Each row comes in as its word is said (a pop), the last
+said lit. The words said run under the panel, small, sharpening from a blur;
+the panel and they are centred together.
+
+A Bangla beat naming two or more things is a panel. A beat naming more right
+after one goes on in the same panel (Scene.carry, cont): its rows stay, the new
+ones come in under them, the camera keeps moving, and there is no way out or
+in between them — one scene to the eye — up to five rows and never across a
+point. The panel is laid out for the most rows it will have (Scene.rows), so
+it never moves as rows come.
+

@@ -53,7 +53,7 @@ export type Concept = (typeof CONCEPTS)[number];
 export const ideaNeedsThings = (c: Concept | undefined, things: number) => (c === "truth" || c === "barriers" || c === "versus" || c === "split" || c === "few") && things < 2 || (c === "funnel" && things < 3);
 
 // (a new template goes last: a video's print keeps each template's place)
-export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta", "screen", "concept", "point"] as const;
+export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta", "screen", "concept", "point", "panel"] as const;
 export type TemplateId = (typeof TEMPLATES)[number];
 // every template has three designed variants
 export const VARIANTS = 3;
@@ -110,6 +110,11 @@ export type Scene = {
   agenda?: string[];
   // (the words beside their pictures — statement B) the things the words name, each a card that comes in as it is said
   tiles?: { text: string; icon: string; at: number }[];
+  // (the panel) the rows it had from the scene before it — already in — and that it goes on from it with no cut;
+  // and the rows the panel is laid out for (the most it will have), so it never moves as rows come
+  carry?: number;
+  cont?: boolean;
+  rows?: number;
 };
 export type Point = { n: number; of: number; title: string };
 

@@ -5,7 +5,7 @@ import { type Face, familyOf, fontFiles } from "./faces";
 import { type C, type Play, clamp01, ease, tint } from "./kit";
 import { SOUND_FRAMES, T, soundsOf } from "./sounds";
 import { TEMPLATE } from "./more";
-import { geoFor, geoOf } from "./geo";
+import { BAR, geoFor, geoOf } from "./geo";
 import { PointBar } from "./points";
 // (the living icons drawn here, never on the server)
 import "./living-play";
@@ -84,13 +84,19 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
     <AbsoluteFill style={{ background: look.bg, overflow: "hidden", fontFamily: familyOf(look.text) }}>
       <Ground look={look} f={f} />
       {scenes.map((s, i) => {
-        const start = i ? s.from - T / 2 : 0, end = i < n - 1 ? s.to + T / 2 : plan.duration;
+        // (a panel that goes on in the next scene: no way out of this one, none into that one — one scene to the eye)
+        const goesOn = (k: number) => k > 0 && k < n && !!scenes[k].cont && scenes[k].template === "panel" && scenes[k - 1].template === "panel";
+        const contIn = goesOn(i), contOut = goesOn(i + 1);
+        const start = contIn ? s.from : i ? s.from - T / 2 : 0, end = contOut ? s.to : i < n - 1 ? s.to + T / 2 : plan.duration;
         if (f < start || f >= end) return null;
-        const pin = i ? ease(clamp01((f - start) / T)) : 1;
-        const pout = i < n - 1 ? ease(clamp01((f - (s.to - T / 2)) / T)) : 0;
+        const pin = contIn ? 1 : i ? ease(clamp01((f - start) / T)) : 1;
+        const pout = contOut ? 0 : i < n - 1 ? ease(clamp01((f - (s.to - T / 2)) / T)) : 0;
         // the camera: a slow push and a drift one way, for the whole video — it
-        // keeps moving through the way out and into the next scene, never stops
-        const p = (f - s.from) / Math.max(1, s.to - s.from);
+        // keeps moving through the way out and into the next scene, never stops (over a panel's scenes, as one)
+        let c0 = i, c1 = i;
+        while (goesOn(c0)) c0--;
+        while (goesOn(c1 + 1)) c1++;
+        const p = (f - scenes[c0].from) / Math.max(1, scenes[c1].to - scenes[c0].from);
         const cam = `scale(${(1 + (lively ? 0.07 : 0.045) * p).toFixed(4)}) translateX(${((0.5 - p) * 28).toFixed(1)}px)`;
         let way = "";
         let opacity = 1;
@@ -132,7 +138,7 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
           </AbsoluteFill>
         );
       })}
-      <PointBar plan={plan} f={f} look={look} />
+      {BAR && <PointBar plan={plan} f={f} look={look} />}
       {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
       {plan.sfx !== false && <Sounds plan={plan} webAudio={webAudio} />}
     </AbsoluteFill>

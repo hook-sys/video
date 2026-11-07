@@ -460,15 +460,19 @@ export async function runChecks(): Promise<Check[]> {
       pointLeft.push(...checkPlan(plan).map((x) => `${size.join("x")} ${x.scene != null ? plan.scenes[x.scene].template : ""} ${x.detail}`));
       opened = plan.scenes.filter((x) => x.template === "point").map((x) => `${x.point!.n}:${x.words.map((w) => w.t).join(" ")}`).join(" | ");
       agendaOk = plan.scenes.some((x) => x.template === "concept" && x.concept === "agenda" && x.agenda?.length === 3);
-      below &&= plan.scenes.every((x) => !x.point || x.template === "point" || geoFor(size[0], size[1], x).top > 0);
+      // (no bar at the top — the owner's choice: every scene has the whole frame)
+      below &&= plan.scenes.every((x) => geoFor(size[0], size[1], x).top === 0);
       closeOut &&= plan.scenes.slice(-3).every((x) => !x.point);
     }
-    add("Points: each opens on its own scene, numbered, its title as said; the agenda where the count is said; the scenes inside below the bar; the conclusion and the ask outside the last", !pointLeft.length && opened === "1:সঠিক কাস্টমার চিনুন | 2:ওয়েবসাইট কনভার্শন দেখুন | 3:ভিডিও অ্যানালাইসিস করুন" && agendaOk && below && closeOut, pointLeft.slice(0, 3).join(" · ") || opened);
+    add("Points: each opens on its own scene, numbered, its title as said; the agenda where the count is said; no bar at the top; the conclusion and the ask outside the last", !pointLeft.length && opened === "1:সঠিক কাস্টমার চিনুন | 2:ওয়েবসাইট কনভার্শন দেখুন | 3:ভিডিও অ্যানালাইসিস করুন" && agendaOk && below && closeOut, pointLeft.slice(0, 3).join(" · ") || opened);
     // 8. the words beside their pictures: a beat whose things are its own words shows a card for each, in as said
     const tall = bestPlan({ words: xw, beats: xb, readings: xr, brand: { name: "দোকান", color: "#7C3AED", cta: "আজই শুরু করুন", icon: null }, seed: 5, duration: durationOf(xw), size: [1080, 1920], drafts: 3 }).plan;
-    const tiledScenes = tall.scenes.filter((x) => x.template === "statement" && x.variant === 1 && (x.tiles?.length ?? 0) >= 2);
-    const inOrder = tiledScenes.every((x) => x.tiles!.every((t, k, a) => t.at >= x.from && t.at < x.to && (!k || t.at >= a[k - 1].at)));
-    add("Bangla: a beat's things shown as cards beside its words, each in as it is said (never one icon alone when there are two)", tiledScenes.length >= 1 && inOrder, tiledScenes.map((x) => x.tiles!.map((t) => t.text).join("|")).join(" · ") || "none");
+    // the panel (the hand-made look): a beat's things as rows, each in as it is said; a beat naming more right after
+    // goes on in the same panel with the rows it had — never past five, never across a point
+    const panels = tall.scenes.filter((x) => x.template === "panel");
+    const inOrder = panels.every((x) => x.tiles!.every((t, k, a) => (k < (x.carry ?? 0) || (t.at >= x.from - 6 && t.at < x.to)) && (!k || t.at >= a[k - 1].at)) && x.tiles!.length <= 5);
+    const chains = tall.scenes.every((x, k) => !x.cont || (k > 0 && tall.scenes[k - 1].template === "panel" && (tall.scenes[k - 1].point?.n ?? 0) === (x.point?.n ?? 0) && (x.carry ?? 0) === tall.scenes[k - 1].tiles!.length));
+    add("Bangla: a beat's things as a panel's rows, each in as it is said; going on in the same panel without a cut inside a point", panels.length >= 1 && inOrder && chains, panels.map((x) => `${x.cont ? "+" : ""}${x.tiles!.map((t) => t.text).join("|")}`).join(" · ") || "none");
     const found = xr.map((r) => r.concept ? `${r.concept}[${r.items.map((x) => x.text).join("|")}]` : "").filter(Boolean).join(" ");
     const want = ["versus[কম বিজ্ঞাপন খরচ|বেশি সেলস]", "funnel[প্রোডাক্ট|কার্ট|চেকআউট]", "progress[২৫%|৫০%|৭৫%]", "truth[অনুমান|ডেটা]", "few[৫,০০০ ভিজিটর|৫ জন]", "exit[", "split[সফল|ক্যানসেল]", "retention["];
     add("Bangla recipes found by their words: less for more (versus), stages narrowing (funnel), shares as a bar's stops, \"X নয়, Y\" (truth), many against few, leaving a page, good against bad, a video watched less", want.every((w) => found.includes(w)), found);

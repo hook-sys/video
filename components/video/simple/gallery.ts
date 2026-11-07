@@ -18,6 +18,7 @@ const SAMPLE: Record<TemplateId, { words: string; key: number; icon: string; ite
   bento: { words: "One app for the floor", key: 1, icon: "layout-grid", items: [{ text: "Live orders", icon: "radio" }, { text: "Stock levels", icon: "boxes" }, { text: "Shift reports", icon: "file-text" }] },
   screen: { words: "Every order on one screen", key: 3, icon: "monitor", items: [] },
   point: { words: "সঠিক কাস্টমার চিনুন", key: 1, icon: "target", items: [] },
+  panel: { words: "এই সব ডেটা আপনাকে জানতে হবে", key: 2, icon: "database", items: [] },
   concept: { words: "Launch your new line today", key: 0, icon: "lightbulb", items: [{ text: "Design", icon: "pencil-ruler" }, { text: "Produce", icon: "factory" }, { text: "Ship", icon: "truck" }] },
 };
 
@@ -29,6 +30,8 @@ export function sampleScene(template: TemplateId, variant: number, from: number,
   const words = x.words.split(" ");
   // (an idea: one of them for each variant — shut in beside the words, waiting under them, taking off alone)
   const idea = template === "concept" ? { concept: (["trapped", "waiting", "launch"] as const)[variant % 3], resolves: true } : {};
+  // (a panel: its rows as said)
+  if (template === "panel") return { from, to: from + len, template, variant, left, words: words.map((t, i) => ({ t, at: from + 40 + i * 5, key: i === x.key })), icon: x.icon, items: [], number: null, tiles: [["বয়স", "cake"], ["এলাকা", "map-pin"], ["সময়", "clock"], ["অর্ডার", "shopping-cart"]].map(([text, icon], k) => ({ text, icon, at: from + 4 + k * 8 })) };
   // (a point's opening: its ordinal said first)
   if (template === "point") return { from, to: from + len, template, variant, left, words: words.map((t, i) => ({ t, at: from + 14 + i * 6, key: i === x.key })), said: [{ t: "প্রথমত,", at: from + 2 }, ...words.map((t, i) => ({ t, at: from + 14 + i * 6 }))], icon: x.icon, items: [], number: null, point: { n: 1, of: 3, title: x.words } };
   return { from, to: from + len, template, variant, left, words: words.map((t, i) => ({ t, at: from + 4 + i * 6, key: i === x.key })), icon: x.icon, items: x.items, number: x.number ?? null, ...idea };
