@@ -446,7 +446,7 @@ The owner's reference is the hand-made reel: a frosted panel of rows, each a
 glossy tile in its own colour (violet, blue, orange, green, pink in turn), the
 thing as said, and a small picture of what it means — bars for an age or data,
 a map and a dropping pin for a place, a clock sweeping for a time, a line
-rising for orders and interest (falling for returns), a signal for a campaign,
+rising for orders and interest (falling for returns), rings spreading from a campaign to the people it reaches (never a sound wave — it reads as a voice recording), a small table filling for data,
 a page and a cursor for a site, a play bar for a video, ticks for what is done,
 else a meter filling. Each row comes in as its word is said (a pop), the last
 said lit. The words said run under the panel, small, sharpening from a blur;

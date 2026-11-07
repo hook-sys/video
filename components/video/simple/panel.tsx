@@ -25,14 +25,14 @@ const MOST = 5;
 export const rowAt = (s: Scene, k: number) => (k < (s.carry ?? 0) ? s.from - 30 : Math.max(s.from + 6 + (k - (s.carry ?? 0)) * 6, (s.tiles?.[k]?.at ?? s.from) - 3));
 
 // what a row's picture is, by its icon
-type Kind = "bars" | "map" | "clock" | "rise" | "fall" | "signal" | "page" | "play" | "check" | "fill";
+type Kind = "bars" | "table" | "map" | "clock" | "rise" | "fall" | "reach" | "page" | "play" | "check" | "fill";
 const KIND: Record<string, Kind> = {
-  cake: "bars", "chart-column": "bars", database: "bars", calendar: "bars", "layout-dashboard": "bars", percent: "bars",
+  cake: "bars", "chart-column": "bars", database: "table", calendar: "bars", "layout-dashboard": "bars", percent: "bars",
   "map-pin": "map", store: "map", house: "map",
   clock: "clock", sun: "clock", moon: "clock", "alarm-clock": "clock", timer: "clock",
   "shopping-cart": "rise", package: "rise", heart: "rise", "trending-up": "rise", activity: "rise", star: "rise", "shopping-bag": "rise", banknote: "rise",
   "trending-down": "fall", "undo-2": "fall", "circle-x": "fall", "triangle-alert": "fall",
-  megaphone: "signal", radar: "signal", target: "signal", bell: "signal",
+  megaphone: "reach", radar: "reach", target: "reach", bell: "reach",
   globe: "page", file: "page", "file-text": "page", "mouse-pointer-click": "page", image: "page", smartphone: "page", "id-card": "page",
   play: "play", "circle-check": "check", "badge-check": "check", "list-checks": "check",
 };
@@ -95,12 +95,35 @@ function Mini({ kind, w, h, f, at, col, soft, line }: { kind: Kind; w: number; h
       </svg>
     );
   }
-  if (kind === "signal") {
+  if (kind === "reach") {
+    // a campaign going out: rings spreading from its source, the people it reaches lighting up
+    const cx = h * 0.5, cy = h / 2;
+    const dots = [[0.5, 0.3], [0.62, 0.72], [0.74, 0.42], [0.86, 0.2], [0.9, 0.74]];
     return (
-      <div style={{ ...box, display: "flex", alignItems: "center", gap: w * 0.035 }}>
-        {Array.from({ length: 9 }, (_, i) => {
-          const wave = 0.3 + 0.7 * Math.abs(Math.sin((f - at) / 7 + i * 0.8));
-          return <div key={i} style={{ flex: 1, height: `${(wave * t(i * 2, 10) * 90).toFixed(1)}%`, borderRadius: 99, background: i % 3 === 1 ? col : soft }} />;
+      <svg width={w} height={h} style={{ ...box, overflow: "hidden" }}>
+        {[0, 1, 2].map((k) => {
+          const u = (((f - at) / 40 + k / 3) % 1 + 1) % 1;
+          return <circle key={k} cx={cx} cy={cy} r={8 + u * h * 0.46} fill="none" stroke={col} strokeOpacity={0.45 * (1 - u) * t(0, 8)} strokeWidth={4} />;
+        })}
+        <circle cx={cx} cy={cy} r={12} fill={col} />
+        <line x1={cx + h * 0.5} y1={cy} x2={w * 0.42} y2={cy} stroke={soft} strokeWidth={4} strokeDasharray="6 8" />
+        {dots.map(([x, y], i) => {
+          const on = t(8 + i * 6, 8);
+          return <circle key={i} cx={w * x} cy={h * y} r={7 + 3 * on} fill={on > 0.5 ? col : soft} />;
+        })}
+      </svg>
+    );
+  }
+  if (kind === "table") {
+    // data gathering: a small table, its cells filling one by one
+    const cols = 4, rowsN = 3, gap = 6;
+    const cw = (w - gap * (cols - 1)) / cols, chh = (h - gap * (rowsN - 1)) / rowsN;
+    return (
+      <div style={box}>
+        {Array.from({ length: cols * rowsN }, (_, i) => {
+          const r = Math.floor(i / cols), q = i % cols;
+          const on = t(4 + i * 2, 8);
+          return <div key={i} style={{ position: "absolute", left: q * (cw + gap), top: r * (chh + gap), width: cw, height: chh, borderRadius: 6, background: r === 0 ? (on > 0.5 ? col : soft) : soft, opacity: 0.35 + 0.65 * on }}>{r > 0 && <div style={{ position: "absolute", left: 8, top: chh / 2 - 3, width: `${(on * (40 + ((i * 23) % 45))).toFixed(0)}%`, height: 6, borderRadius: 3, background: col, opacity: 0.6 }} />}</div>;
         })}
       </div>
     );
@@ -199,7 +222,7 @@ export function Panel({ c }: { c: C }) {
               <div style={{ width: labelW, flexShrink: 0 }}>
                 <One part="item" face={look.display} fit={labelW} style={{ fontFamily: familyOf(look.display), fontSize: Math.round(Math.min(TYPE.ITEM * 1.1, rh * 0.3)), fontWeight: WEIGHT.item, color: look.panelInk }}>{r.text}</One>
               </div>
-              <div style={{ position: "relative", width: miniW, height: rh * 0.62, flexShrink: 0 }}>
+              <div style={{ position: "relative", width: miniW, height: rh * 0.62, flexShrink: 0, overflow: "hidden" }}>
                 <Mini kind={kindOf(r.icon)} w={miniW} h={rh * 0.62} f={f} at={at} col={b} soft={tint(b, 0.2)} line={tint(look.panelInk, 0.12)} />
               </div>
             </div>
