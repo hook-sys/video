@@ -1,6 +1,4 @@
-import { Lottie, type LottieAnimationData } from "@remotion/lottie";
-import { useEffect, useState } from "react";
-import { Sequence, cancelRender, continueRender, delayRender, staticFile } from "remotion";
+import type { ReactNode } from "react";
 
 // Living icons (docs/video-spec.md, Living icons): Google's Noto animated emoji
 // (CC BY 4.0, public/lottie/LICENSE.md) — objects only, never a face, a person
@@ -20,30 +18,14 @@ export const LIVING: Record<string, string> = {
 };
 export const livingOf = (icon: string | null | undefined) => (icon ? LIVING[icon] ?? null : null);
 
-const cache = new Map<string, LottieAnimationData>();
-// One living icon, `size` square, playing from frame `at` (and held on its last frame)
-export function Living({ name, size, at }: { name: string; size: number; at: number }) {
-  const [data, setData] = useState<LottieAnimationData | null>(cache.get(name) ?? null);
-  const [handle] = useState(() => (cache.has(name) ? null : delayRender(`living icon ${name}`)));
-  useEffect(() => {
-    if (!handle) return;
-    fetch(staticFile(`lottie/${name}.json`))
-      .then((r) => r.json())
-      .then((j: LottieAnimationData) => {
-        cache.set(name, j);
-        setData(j);
-        continueRender(handle);
-      })
-      .catch((e) => cancelRender(e));
-  }, [handle, name]);
-  if (!data) return <div style={{ width: size, height: size }} />;
-  return (
-    <div style={{ width: size, height: size, position: "relative" }}>
-      <Sequence from={at} layout="none">
-        <Lottie animationData={data} loop={false} style={{ width: size, height: size }} />
-      </Sequence>
-    </div>
-  );
+// One living icon, `size` square, playing from frame `at` (and held on its last frame). Drawn by the
+// player and the renderer (living-play.tsx, loaded by film.tsx); the server's checks, which never load
+// Remotion, see a box of its size.
+type LivingProps = { name: string; size: number; at: number };
+let draw: ((p: LivingProps) => ReactNode) | null = null;
+export const setLivingDraw = (fn: (p: LivingProps) => ReactNode) => {
+  draw = fn;
+};
+export function Living(p: LivingProps) {
+  return draw ? draw(p) : <div style={{ width: p.size, height: p.size }} />;
 }
-// (laid out without a browser, check.ts: a box of its size)
-Living.noWalk = true;

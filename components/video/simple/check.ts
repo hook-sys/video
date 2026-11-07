@@ -72,8 +72,6 @@ function walk(node: ReactNode, icons: string[]): void {
   if (Array.isArray(node)) return node.forEach((n) => walk(n, icons));
   if (!isValidElement(node)) return;
   const props = node.props as { children?: ReactNode; name?: string; path?: unknown };
-  // (a living icon is a picture of its size: nothing in it to lay out)
-  if ((node.type as { noWalk?: boolean }).noWalk) return;
   if (node.type === Icon && !props.path && !resolveIcon(props.name ?? "")) icons.push(props.name ?? "");
   if (typeof node.type === "function") return walk((node.type as (p: unknown) => ReactNode)(props), icons);
   walk(props.children, icons);
