@@ -473,6 +473,14 @@ export async function runChecks(): Promise<Check[]> {
     const inOrder = panels.every((x) => x.tiles!.every((t, k, a) => (k < (x.carry ?? 0) || (t.at >= x.from - 6 && t.at < x.to)) && (!k || t.at >= a[k - 1].at)) && x.tiles!.length <= 5);
     const chains = tall.scenes.every((x, k) => !x.cont || (k > 0 && tall.scenes[k - 1].template === "panel" && (tall.scenes[k - 1].point?.n ?? 0) === (x.point?.n ?? 0) && (x.carry ?? 0) === tall.scenes[k - 1].tiles!.length));
     add("Bangla: a beat's things as a panel's rows, each in as it is said; going on in the same panel without a cut inside a point", panels.length >= 1 && inOrder && chains, panels.map((x) => `${x.cont ? "+" : ""}${x.tiles!.map((t) => t.text).join("|")}`).join(" · ") || "none");
+    // 9. cards, not screenshots (the owner's choice): a Bangla video has no product screen, phone or message
+    //    screen; cards are dealt as their words are said; panel and cards never the same look twice running
+    const shots = tall.scenes.filter((x) => x.template === "screen" || x.template === "messages" || (x.template === "feature" && x.variant === 1));
+    const decks = tall.scenes.filter((x) => x.template === "deck");
+    const dealtInOrder = decks.every((x) => x.tiles!.every((t, k, a) => t.at >= x.from - 6 && t.at < x.to && (!k || t.at >= a[k - 1].at)));
+    const looks = tall.scenes.filter((x) => (x.template === "panel" && !x.cont) || x.template === "deck").map((x) => x.template);
+    const twice = looks.some((t, k) => k > 0 && t === "deck" && looks[k - 1] === "deck");
+    add("Bangla: cards, not screenshots — no product screen or phone; cards dealt as said; never two decks running", !shots.length && dealtInOrder && !twice, `${shots.length} screens · ${decks.length} decks · ${looks.join(",") || "none"}`);
     const found = xr.map((r) => r.concept ? `${r.concept}[${r.items.map((x) => x.text).join("|")}]` : "").filter(Boolean).join(" ");
     const want = ["versus[কম বিজ্ঞাপন খরচ|বেশি সেলস]", "funnel[প্রোডাক্ট|কার্ট|চেকআউট]", "progress[২৫%|৫০%|৭৫%]", "truth[অনুমান|ডেটা]", "few[৫,০০০ ভিজিটর|৫ জন]", "exit[", "split[সফল|ক্যানসেল]", "retention["];
     add("Bangla recipes found by their words: less for more (versus), stages narrowing (funnel), shares as a bar's stops, \"X নয়, Y\" (truth), many against few, leaving a page, good against bad, a video watched less", want.every((w) => found.includes(w)), found);

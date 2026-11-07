@@ -7,6 +7,7 @@ import { type C, Glyph, One, blend, clamp01, countUp, ease, panel, pop, rise, sp
 import { Band, Side, abs } from "./scenes";
 import { toAscii } from "./bangla";
 import { numberOf } from "./points";
+import { TINTS } from "./panel";
 import type { Scene } from "./types";
 
 // The ideas (docs/video-spec.md): a beat whose words picture one idea shows
@@ -838,6 +839,110 @@ function Retention({ c }: { c: C }) {
   );
 }
 
+// ── cycle: things that feed each other round a loop — "ক্যাম্পেইন → ডেটা → আরও ভালো মার্কেটিং" ──
+// (each node a glossy tile as it is said, the arrows between them drawn, then a light going round)
+const CY = { dw: 820, dh: 820, r: 280, node: 190 };
+export function cycleAt(s: Scene, i: number): number {
+  const said = s.said ?? [];
+  const n = Math.min(4, s.items.length);
+  const w = said.find((x) => bare(x.t).startsWith(bare(s.items[i]?.text ?? "")));
+  const even = s.from + 8 + Math.round(((s.to - s.from) * 0.45 * i) / Math.max(1, n));
+  return Math.min(s.to - 40 - (n - 1 - i) * 6, Math.max(s.from + 6 + i * 8, w ? w.at - 2 : even));
+}
+function Cycle({ c }: { c: C }) {
+  const { dw, dh, r, node } = CY;
+  const { s, f, look } = c;
+  const items = s.items.slice(0, 4);
+  const n = items.length;
+  const cx = dw / 2, cy = dh / 2;
+  const ang = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
+  const last = cycleAt(s, n - 1);
+  const round = clamp01((f - last - 10) / 40);
+  const spin = (f - last - 10) / 60;
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      <svg width={dw} height={dh} style={abs({ left: 0, top: 0, overflow: "visible" })}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={tint(look.accent, 0.12)} strokeWidth={30} />
+        {items.map((_, i) => {
+          // the arc from node i to the next, drawn once both are in
+          const a0 = ang(i) + 0.36, a1 = ang(i + 1) - 0.36;
+          const t = ease(clamp01((f - cycleAt(s, Math.min(i + 1, n - 1)) - (i === n - 1 ? 10 : 0)) / 14));
+          const len = r * (a1 - a0);
+          const end = a0 + (a1 - a0) * t;
+          return (
+            <g key={i} opacity={t > 0 ? 1 : 0}>
+              <path d={`M ${cx + r * Math.cos(a0)} ${cy + r * Math.sin(a0)} A ${r} ${r} 0 0 1 ${cx + r * Math.cos(end)} ${cy + r * Math.sin(end)}`} fill="none" stroke={look.accent} strokeWidth={8} strokeLinecap="round" strokeDasharray={len > 0 ? undefined : undefined} />
+              {t > 0.9 && <path d={`M 0 -14 L 18 0 L 0 14 Z`} fill={look.accent} transform={`translate(${cx + r * Math.cos(a1)} ${cy + r * Math.sin(a1)}) rotate(${((a1 * 180) / Math.PI + 90).toFixed(1)})`} />}
+            </g>
+          );
+        })}
+        {round > 0 && <circle cx={cx + r * Math.cos(ang(0) + spin * 2 * Math.PI)} cy={cy + r * Math.sin(ang(0) + spin * 2 * Math.PI)} r={14} fill="#fff" stroke={look.accent} strokeWidth={6} opacity={round} />}
+      </svg>
+      {items.map((it, i) => {
+        const at = cycleAt(s, i);
+        const k = springAt(c, at);
+        const [a, b] = TINTS[i % TINTS.length];
+        const x = cx + r * Math.cos(ang(i)), y = cy + r * Math.sin(ang(i));
+        return (
+          <div key={i} style={abs({ left: x - 150, top: y - node / 2, width: 300, height: node + 70, display: "flex", flexDirection: "column", alignItems: "center", gap: 10, ...pop(k), ...(f < at - 2 ? { opacity: 0 } : {}) })}>
+            <div data-part="item-icon" style={{ width: node, height: node, borderRadius: node * 0.28, background: `linear-gradient(160deg, ${a}, ${b})`, boxShadow: `inset 0 7px 10px rgba(255,255,255,0.5), 0 16px 34px ${b}55`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name={it.icon ?? "sparkles"} size={node * 0.5} color="#ffffff" strokeWidth={2.2} />
+            </div>
+            <div style={{ padding: "6px 18px", borderRadius: 20, background: look.panelFill, boxShadow: `0 8px 20px ${look.shadow}` }}>
+              <One part="item" face={look.text} fit={260} style={{ fontFamily: familyOf(look.text), fontSize: 50, fontWeight: WEIGHT.item, color: look.panelInk }}>{it.text}</One>
+            </div>
+          </div>
+        );
+      })}
+    </Place>
+  );
+}
+
+// ── report: a report card — its rows the things the beat names, their bars filling as each is said ──
+// (its title the word as said — "রিপোর্ট", "হিসাব" — never a number that was not said)
+const RP = { dw: 820, dh: 700 };
+const REPORT = /^(রিপোর্ট|হিসাব|ড্যাশবোর্ড|ট্র্যাক)/;
+function Report({ c }: { c: C }) {
+  const { dw, dh } = RP;
+  const { s, f, look } = c;
+  const items = s.items.slice(0, 4);
+  const n = items.length;
+  const title = (s.said ?? []).find((w) => REPORT.test(bare(w.t)))?.t.replace(/[,;:।.!?]+$/u, "") ?? "";
+  const k = springAt(c, s.from + 2);
+  const head = 120, rh = Math.min(130, (dh - head - 60) / Math.max(1, n));
+  const lens = [0.86, 0.58, 0.72, 0.4];
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      <div style={abs({ left: 20, top: 20, width: dw - 40, height: head + n * rh + 40, ...panel(c, 36), overflow: "hidden", ...rise(k) })}>
+        <div style={abs({ left: 0, right: 0, top: 0, height: head, display: "flex", alignItems: "center", gap: 22, padding: "0 34px", borderBottom: `1px solid ${look.line}` })}>
+          <Glyph c={c} name="chart-column" size={72} solid at={s.from + 6} />
+          {title && <One face={look.display} fit={dw - 300} style={{ fontFamily: familyOf(look.display), fontSize: 50, fontWeight: 800, color: look.panelInk }}>{title}</One>}
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>{[0, 1, 2].map((d) => <div key={d} style={{ width: 12, height: 12, borderRadius: 6, background: tint(look.ink, 0.15) }} />)}</div>
+        </div>
+        {items.map((it, i) => {
+          const at = splitAt({ ...s, items }, i);
+          const kr = springAt(c, at - 4);
+          const fill = ease(clamp01((f - at) / 18));
+          const [a, b] = TINTS[i % TINTS.length];
+          return (
+            <div key={i} style={abs({ left: 34, right: 34, top: head + 20 + i * rh, height: rh - 14, display: "flex", alignItems: "center", gap: 22, opacity: clamp01(kr * 1.6), transform: `translateX(${((1 - kr) * 40).toFixed(1)}px)` })}>
+              <div data-part="item-icon" style={{ width: 64, height: 64, borderRadius: 18, background: `linear-gradient(160deg, ${a}, ${b})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <Icon name={it.icon ?? "circle"} size={34} color="#ffffff" strokeWidth={2.3} />
+              </div>
+              <div style={{ width: 230, flexShrink: 0 }}>
+                <One part="item" face={look.text} fit={230} style={{ fontFamily: familyOf(look.text), fontSize: 42, fontWeight: WEIGHT.item, color: look.panelInk }}>{it.text}</One>
+              </div>
+              <div style={{ flex: 1, height: 22, borderRadius: 11, background: tint(b, 0.15), position: "relative" }}>
+                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(fill * lens[i % 4] * 100).toFixed(1)}%`, borderRadius: 11, background: `linear-gradient(90deg, ${a}, ${b})` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Place>
+  );
+}
+
 export function Concept({ c }: { c: C }) {
   switch (c.s.concept) {
     case "trapped": return <Trapped c={c} />;
@@ -856,6 +961,8 @@ export function Concept({ c }: { c: C }) {
     case "few": return <Few c={c} />;
     case "exit": return <Exit c={c} />;
     case "retention": return <Retention c={c} />;
+    case "cycle": return <Cycle c={c} />;
+    case "report": return <Report c={c} />;
     default: return null;
   }
 }
@@ -881,6 +988,8 @@ export function conceptSounds(s: Scene): { at: number; name: string; volume: num
     case "few": return [{ at: s.from + 6, name: "soft_pop", volume: 0.2 }, { at: fewTurn(s), name: "subtle_impact", volume: 0.3 }];
     case "exit": return [{ at: s.from + 8, name: "whoosh", volume: 0.16 }, { at: T, name: "subtle_impact", volume: 0.26 }];
     case "retention": return [{ at: s.from + 8, name: "rise", volume: 0.2 }, { at: T, name: "subtle_impact", volume: 0.28 }];
+    case "cycle": return [...s.items.slice(0, 4).map((_, i) => ({ at: cycleAt(s, i), name: "soft_pop", volume: 0.2 })), { at: cycleAt(s, Math.min(4, s.items.length) - 1) + 12, name: "whoosh", volume: 0.16 }];
+    case "report": return s.items.slice(0, 4).map((_, i) => ({ at: splitAt({ ...s, items: s.items.slice(0, 4) }, i), name: "tick", volume: 0.2 }));
     default: return [];
   }
 }
@@ -894,6 +1003,8 @@ export function conceptSettled(s: Scene): number {
   if (s.concept === "split") return splitAt(s, Math.min(3, s.items.length) - 1) + 16;
   if (s.concept === "few") return fewTurn(s) + 22;
   if (s.concept === "exit" || s.concept === "retention") return turnOf(s) + 14;
+  if (s.concept === "cycle") return cycleAt(s, Math.min(4, s.items.length) - 1) + 30;
+  if (s.concept === "report") return splitAt({ ...s, items: s.items.slice(0, 4) }, Math.min(4, s.items.length) - 1) + 22;
   if (s.concept === "launch" && s.resolves) return arrivalOf(s) + 12;
   if (s.concept === "progress") return s.resolves ? progressArrival(s) + 12 : s.from + 54;
   if (s.concept === "cost" && !s.resolves) return costRowAt(s, costRows(s) - 1) + 20;

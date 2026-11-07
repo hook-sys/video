@@ -14,7 +14,7 @@ export type SceneEdit = { template: TemplateId; variant: number; show: [number, 
 export type PlanEdit = { theme: Theme; scenes: SceneEdit[] };
 
 // names a customer reads
-export const TEMPLATE_NAME: Record<TemplateId, string> = { statement: "Big words", kinetic: "Moving words", trouble: "The problems", compare: "Before and after", reveal: "Brand reveal", feature: "Product card", screen: "Your product", messages: "Messages", bento: "Tiles", stat: "Big number", chart: "Chart", steps: "Steps", cta: "Ending", concept: "The idea", point: "Point", panel: "Panel" };
+export const TEMPLATE_NAME: Record<TemplateId, string> = { statement: "Big words", kinetic: "Moving words", trouble: "The problems", compare: "Before and after", reveal: "Brand reveal", feature: "Product card", screen: "Your product", messages: "Messages", bento: "Tiles", stat: "Big number", chart: "Chart", steps: "Steps", cta: "Ending", concept: "The idea", point: "Point", panel: "Panel", deck: "Cards" };
 export const TYPE_NAME = ["Clean", "Modern", "Characterful", "Soft", "Classic"];
 // (the templates that show the things a scene names)
 export const SHOWS_THINGS: TemplateId[] = ["trouble", "compare", "reveal", "feature", "messages", "bento", "chart", "steps"];
@@ -69,7 +69,7 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
     // (an idea only where its words picture one, the truth with its two words)
     if (e.template === "concept" && !s.concept) return { error: `${n}: its words picture no idea to show.` };
     if ((e.template === "point") !== (s.template === "point")) return { error: `${n}: a point's opening stays one — and no other scene becomes one.` };
-    if (e.template === "panel" && (s.tiles?.length ?? 0) < 1) return { error: `${n}: a panel needs the things its words name.` };
+    if ((e.template === "panel" || e.template === "deck") && (s.tiles?.length ?? 0) < 1) return { error: `${n}: this needs the things its words name.` };
     if (e.template === "screen" && !(Number.isInteger(e.screen) && e.screen! >= 0 && e.screen! < shots)) return { error: `${n}: there is no such picture of the product.` };
     const items = Array.isArray(e.items) ? e.items : [];
     if (items.length > 3) return { error: `${n}: at most three things.` };

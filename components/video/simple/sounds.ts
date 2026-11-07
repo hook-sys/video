@@ -4,6 +4,7 @@ import { clickOf } from "./more";
 import { MOTION_DELAY, MOTION_SOUND, motionOf } from "./motion";
 import { thingAt, tileAt } from "./scenes";
 import { rowAt } from "./panel";
+import { dealAt } from "./deck";
 import type { Scene, SimplePlan } from "./types";
 
 // The film's sounds, as times (film.tsx plays them; the check counts them).
@@ -50,6 +51,8 @@ export function soundsOf(plan: SimplePlan): { at: number; name: string; volume: 
       out.push({ at: first.at, ...MOTION_SOUND[first.m] });
     }
     if (s.template === "concept") out.push(...conceptSounds(s));
+    // (the cards: a whoosh as each is dealt)
+    if (s.template === "deck" && s.tiles) out.push(...s.tiles.slice(0, 4).map((_, k) => ({ at: dealAt(s, k), name: k ? "soft_pop" : "whoosh", volume: 0.2 })));
     // (a panel's rows: a pop as each comes in — not those it carries)
     if (s.template === "panel" && s.tiles) out.push(...s.tiles.slice(0, 5).map((_, k) => k).filter((k) => k >= (s.carry ?? 0)).map((k) => ({ at: rowAt(s, k), name: "soft_pop", volume: 0.2 })));
     // (a card for each thing named: a pop as each comes in)
