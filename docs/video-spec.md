@@ -273,6 +273,19 @@ beat whose words plainly picture one idea is shown as that idea
 - **funnel** — stages narrowing ("কতজন প্রোডাক্ট দেখছেন, কতজন কার্টে…, কতজন
   চেকআউট…"): one bar each, each narrower, coming in as it is said, the one
   before dimming; the last lit. Three to five stages;
+- **split** — what went right against what went wrong ("সফলভাবে ডেলিভারড …
+  ক্যানসেল বা রিটার্ন"; the good said in the beat or just before): a card each,
+  the good stamped with a check, each bad with a red ✕ as it is said (shaking);
+- **few** — many against few: two numbers said, the first ten times the second
+  or more ("পাঁচ হাজার ভিজিটর … মাত্র পাঁচজন"): a field of dots under the
+  many; as the few is said most fade and a few (in proportion, at least one)
+  grow and glow, the few's number taking the lead;
+- **exit** — people leaving a page ("কোন পেজ থেকে চলে যাচ্ছেন"): a page, dots
+  coming in from one side and most drifting out the other, red as they go, the
+  spot they leave from lit at the turn;
+- **retention** — a video watched less and less ("কতদূর দেখছেন", "দেখা বন্ধ
+  করছেন"): a curve drawn as a play bar fills under it, its drop marked at the
+  turn (no numbers on its axes — none are said);
 - **agenda** — the points a script promises ("এই চারটি বিষয়"), numbered, one
   after another (see Points). Never chosen by the Director: the engine puts it
   on the beat whose count matches the points it finds.
@@ -289,7 +302,8 @@ ticks and a ding, the cut, the take-off).
 The Director names a beat's idea (or none — most beats); the rule guess finds
 one by its words ("stuck", "scattered", "waiting", "X is just Y", "launch",
 "hours", "expensive", "no X, no Y", "goal"; in Bangla also "X নয়, Y" for the
-truth, "কম X … বেশি Y", three "কতজন" and shares listed).
+truth, "কম X … বেশি Y", three "কতজন", shares listed, two numbers far apart,
+"চলে যাচ্ছেন", "কতদূর দেখছেন", a good word against "ক্যানসেল/রিটার্ন").
 A beat with an idea is shown as it most of the time, and of the drafts the one
 that shows more of its ideas scores higher.
 
@@ -395,7 +409,9 @@ when the beat names more. A beat's things are what it names that a picture
 stands for, in the order said (guess.ts thingsOf: nouns with an icon, each
 word and each icon once, the case ending off — "অডিয়েন্সের" → "অডিয়েন্স";
 never a verb's form, a light verb or an ask — "দিন" is give, not day): two
-to four of them. Shown as cards (feature, tiles, messages…) when they are
+to four of them (an imperative — "খুঁজুন" — is never one). A beat with one
+thing is the words with its icon, or a card it is clicked on — never a phone or a
+search with one line in it. Shown as cards (feature, tiles, messages…) when they are
 not the caption's own words; when they are, the scene is the words beside
 their pictures (statement B with tiles, scenes.tsx Tiles): a glass card for
 each thing — its icon moving, its word under it — coming in as its word is

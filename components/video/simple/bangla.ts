@@ -61,6 +61,11 @@ function partOf(w: string): { value?: number; power?: number } | null {
 }
 // The first number said in words in these words, as digits, with its unit; null when none
 export function numberInWords(words: string[]): string | null {
+  return numbersInWords(words)[0]?.text ?? null;
+}
+// Every number said in words, in order: as shown, its value, and the words it takes (first, past the last)
+export function numbersInWords(words: string[]): { text: string; value: number; first: number; end: number }[] {
+  const found: { text: string; value: number; first: number; end: number }[] = [];
   const ws = words.map((w) => bare(w));
   for (let i = 0; i < ws.length; i++) {
     // ("পাঁচজন" — a number with জন on it)
@@ -96,9 +101,10 @@ export function numberInWords(words: string[]): string | null {
     const make = unit ? UNITS[unit] : undefined;
     if (!make && !powered) continue;
     const digits = toBnDigits(group(total));
-    return make ? make(digits) : digits;
+    found.push({ text: make ? make(digits) : digits, value: total, first: i, end: unit && make ? j + (glued && VALUE.has(glued[1]) ? 0 : 1) : j });
+    i = Math.max(i, j - 1);
   }
-  return null;
+  return found;
 }
 
 // ── points: a script told as numbered points (docs/video-spec.md, Points) ──

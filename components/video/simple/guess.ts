@@ -1,5 +1,5 @@
 import { searchIcons } from "@/lib/icons";
-import { asksBn, bare, hasDigit, leadsBn, numberInWords, stemsBn, trailsBn } from "./bangla";
+import { asksBn, bare, hasDigit, leadsBn, numberInWords, numbersInWords, stemsBn, trailsBn } from "./bangla";
 import { wordIcon } from "./motion";
 import type { Beat, Concept, Intent, Item, Reading, Word } from "./types";
 
@@ -123,7 +123,7 @@ function thingsOf(ws: string[]): Item[] {
   const out: Item[] = [];
   for (const w of ws) {
     // (nor a light verb or an ask — "দিন" is give, not day)
-    if (!content(w) || verbish(w) || LIGHT.has(bare(w)) || asksBn([w, w])) continue;
+    if (!content(w) || verbish(w) || LIGHT.has(bare(w)) || asksBn([w, w]) || /ুন$/u.test(bare(w))) continue;
     const icon = wordIcon(w);
     if (!icon) continue;
     // (the shortest stem the icon is found by: "অডিয়েন্সের" → "অডিয়েন্স", not "অডিয়েন্সে")
@@ -132,6 +132,35 @@ function thingsOf(ws: string[]): Item[] {
     out.push({ text, icon });
   }
   return out.length >= 2 ? out.slice(0, 4) : [];
+}
+// what a beat shows as it is: people leaving a page, a video watched less and less
+const BN_SHOWN: [Concept, RegExp][] = [
+  ["retention", /(কতদূর|দেখা বন্ধ|বন্ধ করছেন|বন্ধ করে দেন|রিটেনশন|ড্রপ অফ)/],
+  ["exit", /(চলে যাচ্ছ|চলে যান|চলে যায়|ছেড়ে যা|বের হয়ে যা|লিভ কর)/],
+];
+// what went right against what went wrong: "সফলভাবে ডেলিভারড … ক্যানসেল বা রিটার্ন" — the good said here or
+// just before, the bad here; each as said, the case ending off
+const GOOD = /^(সফলভাবে|সফল|ডেলিভারড|সম্পন্ন|কমপ্লিট)/;
+const BAD: [RegExp, string][] = [[/^(ক্যানসেল|বাতিল)/, "circle-x"], [/^(রিটার্ন|ফেরত)/, "undo-2"], [/^(ব্যর্থ|ফেইল)/, "triangle-alert"]];
+function splitOf(ws: string[], before: string[]): Item[] | null {
+  const bad = ws.flatMap((w) => {
+    const hit = BAD.find(([re]) => re.test(bare(w)));
+    return hit ? [{ text: stem1(w), icon: hit[1] }] : [];
+  }).filter((x, k, a) => a.findIndex((y) => y.text === x.text) === k);
+  const good = ws.find((w) => GOOD.test(bare(w))) ?? before.find((w) => GOOD.test(bare(w)));
+  return good && bad.length ? [{ text: /ভাবে$/u.test(bare(good)) ? bare(good).replace(/ভাবে$/u, "") : stem1(good), icon: "circle-check" }, ...bad.slice(0, 2)] : null;
+}
+// many against few: two numbers said, the first ten times the second or more ("পাঁচ হাজার ভিজিটর … মাত্র পাঁচজন")
+function fewOf(ws: string[]): string[] | null {
+  const ns = numbersInWords(ws);
+  for (let a = 0; a < ns.length; a++)
+    for (let b = a + 1; b < ns.length; b++)
+      if (ns[b].value > 0 && ns[a].value / ns[b].value >= 10) {
+        const after = ws[ns[a].end];
+        const label = after && content(after) && !verbish(after) && !/[%৳]/.test(ns[a].text) ? `${ns[a].text} ${after.replace(/[,;।?!]+$/u, "")}` : ns[a].text;
+        return [label, ns[b].text];
+      }
+  return null;
 }
 const BN_NEED = /((?:\S+\s+)?\S+?)\s+(?:লাগবে না|লাগে না|দরকার নেই|দরকার হবে না|প্রয়োজন নেই)/gu;
 
@@ -211,8 +240,14 @@ function readBangla(words: Word[], beats: Beat[], brand: string): Reading[] {
     } else if (!last && funnelOf(ws)) {
       concept = "funnel";
       items = funnelOf(ws)!.map((x) => ({ text: x, icon: iconOfBn([x]) }));
+    } else if (!last && splitOf(ws, i ? words.slice(beats[i - 1].first, beats[i - 1].last + 1).map((w) => w.text) : [])) {
+      concept = "split";
+      items = splitOf(ws, i ? words.slice(beats[i - 1].first, beats[i - 1].last + 1).map((w) => w.text) : [])!;
+    } else if (!last && fewOf(ws)) {
+      concept = "few";
+      items = fewOf(ws)!.map((x) => ({ text: x, icon: null }));
     } else {
-      concept = last ? undefined : BN_IDEAS.find(([, re]) => re.test(text))?.[0];
+      concept = last ? undefined : [...BN_SHOWN, ...BN_IDEAS].find(([, re]) => re.test(text))?.[0];
       const unit = number?.endsWith("%") ? "%" : "";
       items = listOf(ws).map((x) => {
         const n = numberInWords([x, ...(unit ? ["শতাংশ"] : ["হাজার"])]);

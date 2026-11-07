@@ -18,7 +18,7 @@ export function choices(r: Reading): [TemplateId, number][] {
     case "hook": return only([["statement", 0.4], ["kinetic", 0.35], ["trouble", 0.25, many]]);
     case "problem": return only([["trouble", 0.45, many], ["compare", 0.2, many], ["kinetic", 0.2], ["statement", 0.15]]);
     case "solution": return only([["reveal", 0.5], ["compare", 0.2, many], ["bento", 0.15, three], ["statement", 0.15]]);
-    case "feature": return many ? only([["feature", 0.4], ["messages", 0.2], ["bento", 0.2, three], ["chart", 0.1, !!r.number], ["statement", 0.1]]) : r.items.length ? [["feature", 0.5], ["messages", 0.3], ["statement", 0.2]] : [["statement", 0.6], ["kinetic", 0.4]];
+    case "feature": return many ? only([["feature", 0.4], ["messages", 0.2], ["bento", 0.2, three], ["chart", 0.1, !!r.number], ["statement", 0.1]]) : r.items.length ? [["statement", 0.7], ["feature", 0.3]] : [["statement", 0.6], ["kinetic", 0.4]];
     // (a chart or a number only when the voice says one)
     case "proof": return r.number ? [["stat", 0.75], ["chart", 0.25]] : only([["bento", 0.3, three], ["feature", 0.3, r.items.length > 0], ["statement", 0.4]]);
     case "steps": return many ? only([["steps", 0.7], ["bento", 0.3, three]]) : [["statement", 1]];
@@ -198,7 +198,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
 
 // a variant that needs things (the things flying into the mark, bars of the things) only when there are some
 // (and a search that types one thing and shows the rest as results only with two or more)
-export const variantOk = (template: TemplateId, variant: number, items: number) => !(template === "reveal" && variant > 0 && items < 2) && !(template === "chart" && variant === 2 && items < 2) && !(template === "feature" && variant === 2 && items < 2);
+export const variantOk = (template: TemplateId, variant: number, items: number) => !(template === "reveal" && variant > 0 && items < 2) && !(template === "chart" && variant === 2 && items < 2) && !(template === "feature" && variant > 0 && items < 2);
 
 // The lit word on screen at least 1 s before its scene ends (a hero word seen for less is not read):
 // said later, it — and the words after it — come in that much sooner (the words already lead the voice)
