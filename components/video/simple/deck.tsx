@@ -47,7 +47,7 @@ export function Deck({ c }: { c: C }) {
           const sweep = clamp01((f - at - 14) / 22);
           const front = turn < 90;
           return (
-            <div key={k} style={abs({ left: cx, top: cy + float, width: cw, height: ch, opacity: f < at - 2 ? 0 : 1, transform: `rotateY(${turn.toFixed(1)}deg) rotateZ(${((1 - settle) * (k % 2 ? 5 : -5)).toFixed(2)}deg) scale(${(0.8 + 0.2 * settle).toFixed(4)})`, transformStyle: "preserve-3d" })}>
+            <div key={k} style={abs({ left: cx, top: cy + float, width: cw, height: ch, opacity: clamp01((f - at + 2) / 6), transform: `rotateY(${turn.toFixed(1)}deg) rotateZ(${((1 - settle) * (k % 2 ? 5 : -5)).toFixed(2)}deg) scale(${(0.8 + 0.2 * settle).toFixed(4)})`, transformStyle: "preserve-3d" })}>
               {front ? (
                 <div style={{ position: "absolute", inset: 0, borderRadius: 36, background: look.panelFill, border: `1px solid ${look.line}`, boxShadow: `0 0 0 1px ${look.ring ?? "transparent"}, 0 24px 60px ${look.shadow}`, overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center" }}>
                   <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: ch * 0.5, background: `linear-gradient(160deg, ${a}33, ${b}14)` }} />
