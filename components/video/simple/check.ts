@@ -7,6 +7,7 @@ import { type C, ICON_SLOT, type Play, keyIconOf } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
 import { norm, thingAt, tileAt } from "./scenes";
 import { rowAt } from "./panel";
+import { dealAt } from "./deck";
 import { choices, grey, planOf, printOf, variantOk, wordsAlone } from "./select";
 import { contrast, lookOf, themeOf } from "./theme";
 import { ideaNeedsThings, GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, VARIANTS } from "./types";
@@ -29,6 +30,7 @@ export function meaningOf(s: Scene): string | null {
   if (s.template === "concept" && !s.concept) return "an idea with no idea to show";
   if (s.template === "point" && !s.point) return "a point's opening with no point";
   if (s.template === "panel" && !(s.tiles?.length)) return "a panel with no rows";
+  if (s.template === "deck" && !(s.tiles?.length)) return "cards with nothing on them";
   if (s.concept === "agenda" && s.template === "concept" && !(s.agenda?.length)) return "an agenda with no points";
   if (s.template === "concept" && ideaNeedsThings(s.concept, s.items.length)) return `an idea (${s.concept}) without its two things`;
   if (s.template === "kinetic" && s.variant === 1 && !/\?["'”’)]*$/.test(s.words.at(-1)?.t ?? "")) return "words typed as a prompt that ask nothing";
@@ -63,6 +65,7 @@ export function settledAt(s: Scene): number {
     : t === "concept" ? conceptSettled(s)
     : t === "point" ? s.from + 30
     : t === "panel" ? rowAt(s, Math.min(5, s.tiles?.length ?? 1) - 1) + 24
+    : t === "deck" ? dealAt(s, Math.min(4, s.tiles?.length ?? 1) - 1) + 30
     : t === "statement" && v === 1 && s.tiles?.length ? tileAt(s, Math.min(4, s.tiles.length) - 1) + 20
     : s.from;
   return Math.max(lastWord, n ? lastThing + 18 : s.from, own);

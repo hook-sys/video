@@ -133,6 +133,8 @@ function thingsOf(ws: string[]): Item[] {
   }
   return out.length >= 2 ? out.slice(0, 4) : [];
 }
+const BN_CYCLE = /(শেখায়|বারবার|চক্র|আবার নতুন|ঘুরে ঘুরে)/;
+const BN_REPORT = /(রিপোর্ট|হিসাব|ড্যাশবোর্ড)/;
 // what a beat shows as it is: people leaving a page, a video watched less and less
 const BN_SHOWN: [Concept, RegExp][] = [
   ["retention", /(কতদূর|দেখা বন্ধ|বন্ধ করছেন|বন্ধ করে দেন|রিটেনশন|ড্রপ অফ)/],
@@ -256,6 +258,9 @@ function readBangla(words: Word[], beats: Beat[], brand: string): Reading[] {
       });
       // (no list said: the things its words stand for — "বয়স", "এলাকা", "সময়", "অর্ডার" — each a card with its icon)
       if (!items.length && !last) items = thingsOf(ws);
+      // (things that feed each other round — "ডেটা আপনাকে শেখায়", "পরবর্তী ক্যাম্পেইন" — a loop; a report said with its things — a report card)
+      if (!last && !concept && items.length >= 2 && items.every((x) => x.icon) && BN_CYCLE.test(text)) concept = "cycle";
+      else if (!last && !concept && items.length >= 2 && items.every((x) => x.icon) && BN_REPORT.test(text)) concept = "report";
       // (shares listed on the way to the one said last — "২৫, ৫০, ৭৫ … ১০০ শতাংশ" — are a bar's stops)
       if (!last && unit && items.length >= 2 && items.every((x) => /^[০-৯]+%$/.test(x.text))) concept = "progress";
     }

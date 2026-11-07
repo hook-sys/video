@@ -459,3 +459,23 @@ in between them — one scene to the eye — up to five rows and never across a
 point. The panel is laid out for the most rows it will have (Scene.rows), so
 it never moves as rows come.
 
+
+## Cards, moving (components/video/simple/deck.tsx)
+
+The owner's choice for Bangla videos: no product screenshots, phones or
+message screens — cards that move. A product screen, a phone of messages or
+a phone of notifications becomes cards (or one card clicked, or the words
+with their icon).
+
+- **The deck**: the things a beat names, dealt from a stack — each flies to its
+  place turning over (its back the colour of its tile), lands with a light
+  sweeping across it and floats; its glossy icon tile, its word under it. Two
+  side by side, three two-and-one, four two by two. A beat that would be a
+  panel is cards now and then (never the same look twice running; a panel
+  that goes on stays a panel).
+- **cycle** (concept.tsx): things that feed each other round ("ডেটা আপনাকে
+  শেখায়", "বারবার") — glossy tiles round a ring as each is said, the arrows
+  between them drawn, then a light going round.
+- **report**: a report said with its things ("রিপোর্ট", "হিসাব") — a report
+  card titled with the word as said, its rows the things, their bars filling
+  as each is said (no number that was not said).

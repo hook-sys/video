@@ -84,6 +84,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
   const firstPoint = points.findIndex((p) => p);
   const agendaAt = titles.length ? beats.findIndex((b, i) => i < firstPoint && countOf(words.slice(b.first, b.last + 1).map((w) => w.text)) === titles.length) : -1;
   let last: Scene | null = null;
+  let lastCards: "panel" | "deck" | null = null;
   const scenes: Scene[] = readings.map((read0, i) => {
     const pt = points[i];
     if (pt?.open) {
@@ -167,7 +168,14 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     const before = last?.template === "panel" && last.tiles && (last.point?.n ?? 0) === (pt?.point.n ?? 0) ? last : null;
     const goesOn = bn && !!before && tiles.length >= 1 && before.tiles!.length + tiles.length <= 5 && template !== "concept" && i < readings.length - 1;
     const panelled = bn && (goesOn || (tiles.length >= 2 && template !== "concept" && i < readings.length - 1));
-    if (panelled) [template, variant] = ["panel", 0];
+    // (cards dealt in place of a panel now and then — never the same look twice running — and in place of
+    // any screenshot or phone in a Bangla video: the owner's choice, cards that move)
+    const shotLike = template === "screen" || template === "messages" || (template === "feature" && variant === 1);
+    const dealt = bn && !goesOn && i < readings.length - 1 && tiles.length >= 2 && (panelled ? lastCards === "panel" : shotLike);
+    if (dealt) [template, variant] = ["deck", 0];
+    else if (panelled) [template, variant] = ["panel", 0];
+    else if (bn && shotLike) [template, variant] = r.items.length && !(template === "feature" && variant === 1) ? ["feature", 0] : ["statement", 1];
+    if (dealt || panelled) lastCards = dealt ? "deck" : "panel";
     const rows = goesOn ? [...before!.tiles!, ...tiles.filter((t) => !before!.tiles!.some((x) => x.text === t.text))] : tiles;
     const tiled = !panelled && i < readings.length - 1 && tiles.length >= 2 && (template === "statement" || template === "kinetic");
     if (tiled) [template, variant] = ["statement", 1];
@@ -196,7 +204,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       items: (template === "concept" ? read : r).items.slice(0, template === "concept" && read.concept === "funnel" ? 5 : 3),
       number: r.number,
       ...(tiled ? { tiles } : {}),
-      ...(panelled ? { tiles: rows, ...(goesOn ? { carry: before!.tiles!.length, cont: true } : {}) } : {}),
+      ...(dealt ? { tiles } : panelled ? { tiles: rows, ...(goesOn ? { carry: before!.tiles!.length, cont: true } : {}) } : {}),
       ...(screen != null ? { screen } : {}),
       ...(read.concept ? { concept: read.concept, resolves: r.intent !== "hook" && r.intent !== "problem" } : {}),
       said: words.slice(beats[i].first, beats[i].last + 1).map((w) => ({ t: w.text, at: Math.round(w.start * FPS) })),
