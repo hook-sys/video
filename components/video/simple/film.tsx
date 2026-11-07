@@ -5,7 +5,8 @@ import { type Face, familyOf, fontFiles } from "./faces";
 import { type C, type Play, clamp01, ease, tint } from "./kit";
 import { SOUND_FRAMES, T, soundsOf } from "./sounds";
 import { TEMPLATE } from "./more";
-import { geoOf } from "./geo";
+import { geoFor, geoOf } from "./geo";
+import { PointBar } from "./points";
 import { type Look, lookOf, themeOf } from "./theme";
 import { type FilmProps, GROUNDS, type SimplePlan } from "./types";
 
@@ -109,18 +110,27 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
         // (on one ground, the scene going out is wiped away where the next comes in)
         else if (pout > 0) clip = `inset(0 0 0 ${(pout * 100).toFixed(2)}%)`;
         const mine = s.ground && s.ground !== theme.ground ? own[s.ground] : null;
-        const c: C = { f, s, look: mine ?? look, pace: theme.pace, brand: plan.brand, g, play: PLAY };
+        // (inside a point: laid out below its bar)
+        const at = geoFor(g.W, g.H, s);
+        const c: C = { f, s, look: mine ?? look, pace: theme.pace, brand: plan.brand, g: at.g, play: PLAY };
         const Body = TEMPLATE[s.template];
         return (
           <AbsoluteFill key={i} data-scene={i} style={{ transform: way || undefined, opacity, clipPath: clip, filter: blur }}>
             {mine && <Ground look={mine} f={f} />}
             <AbsoluteFill style={{ transform: cam }}>
-              <Body c={c} />
+              {at.top ? (
+                <div style={{ position: "absolute", left: 0, top: at.top, width: at.g.W, height: at.g.H }}>
+                  <Body c={c} />
+                </div>
+              ) : (
+                <Body c={c} />
+              )}
             </AbsoluteFill>
             {pin < 1 && theme.way === "wipe" && <div style={{ position: "absolute", top: 0, bottom: 0, left: pin * W - 6, width: 12, background: (mine ?? look).accent }} />}
           </AbsoluteFill>
         );
       })}
+      <PointBar plan={plan} f={f} look={look} />
       {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
       {plan.sfx !== false && <Sounds plan={plan} webAudio={webAudio} />}
     </AbsoluteFill>

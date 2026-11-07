@@ -28,7 +28,7 @@ import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
 import { bestPlan, checkPlan, heroShares, repairPlan, scoreOf } from "@/components/video/simple/check";
 import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
-import { geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
+import { geoFor, geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/simple/faces";
 import { CONCEPTS, GROUNDS, type Scene, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
 import { conceptSounds, turnOf } from "@/components/video/simple/concept";
@@ -372,7 +372,7 @@ export async function runChecks(): Promise<Check[]> {
         const words = concept === "truth" ? "Busy is just stuck" : "Ideas stuck in your head";
         const s = sampleScene("concept", v, k * 150, 150, k % 2 === 0);
         const ws = words.split(" ");
-        return { ...s, concept, resolves, items: concept === "truth" ? [{ text: "Busy", icon: null }, { text: "Stuck", icon: null }] : s.items, words: ws.map((t, i) => ({ t, at: k * 150 + 4 + i * 9, key: i === ws.length - 1 })), said: ws.map((t, i) => ({ t, at: k * 150 + 4 + i * 9 })) };
+        return { ...s, concept, resolves, ...(concept === "agenda" ? { agenda: ["সঠিক কাস্টমার চিনুন", "ভালো কনটেন্ট", "নিয়মিত পোস্ট", "বিজ্ঞাপনের বাজেট"] } : {}), items: concept === "truth" ? [{ text: "Busy", icon: null }, { text: "Stuck", icon: null }] : concept === "versus" ? [{ text: "কম খরচ", icon: null }, { text: "বেশি বিক্রি", icon: null }] : s.items, words: ws.map((t, i) => ({ t, at: k * 150 + 4 + i * 9, key: i === ws.length - 1 })), said: ws.map((t, i) => ({ t, at: k * 150 + 4 + i * 9 })) };
       });
       const plan = { ...base, scenes, duration: scenes.length * 150 };
       left.push(...checkPlan(plan).map((x) => `${size.join("x")} ${x.scene != null ? `${scenes[x.scene].concept}${"ABC"[scenes[x.scene].variant]}` : ""} ${x.detail}`));
@@ -444,6 +444,29 @@ export async function runChecks(): Promise<Check[]> {
     const sentences = beats.length >= 4;
     add("Bangla read by rule (no AI): sentences at ।, captions never end on এবং/এই nor start on থেকে/জন্য, the number said as digits, the ask a button", sentences && !badRuns.length && readings.some((r) => r.number === "৩ দিনে") && ask === "আজই অর্ডার করুন", `${beats.length} beats · ask "${ask}" · ${readings.map((r) => r.intent).join(",")}`);
     add("Bangla plans clean on every frame (9:16, 16:9, 1:1): words fit their places in Bangla type", !left.length, left.slice(0, 3).join(" · ") || "3 frames");
+
+    // 6. an explainer told as points: each opening its own scene with its number, the agenda where the
+    //    count is said, the bar over the rest and the scenes laid out below it; the conclusion and the ask
+    //    outside the last point; 7. the recipes found by their words: versus, funnel, X নয় Y, shares as stops
+    const ex = "আপনার ব্যবসায় কম বিজ্ঞাপন খরচে বেশি সেলস পেতে এই তিনটি বিষয় জানুন। প্রথমত, সঠিক কাস্টমার চিনুন। তারা কোন এলাকায় থাকেন, কখন অর্ডার করেন, তা জানতে হবে। দ্বিতীয়ত, ওয়েবসাইট কনভার্শন দেখুন। কতজন প্রোডাক্ট দেখছেন, কতজন কার্টে যোগ করছেন, আর কতজন চেকআউট পর্যন্ত যাচ্ছেন, তা দেখুন। তৃতীয়ত, ভিডিও অ্যানালাইসিস করুন। যারা পঁচিশ, পঞ্চাশ, পঁচাত্তর অথবা একশো শতাংশ ভিডিও দেখছেন, তাদের আলাদা কনটেন্ট দিন। মনে রাখবেন, অনুমান নয়, ডেটা দেখে সিদ্ধান্ত নিন। কারণ ডেটাই আসল শিক্ষক। আজই শুরু করুন।";
+    let t2 = 0.3;
+    const xw = ex.split(" ").map((w) => { const start = t2; t2 += 0.42 + (/[।?]$/.test(w) ? 0.5 : /,$/.test(w) ? 0.2 : 0); return { text: w, start, end: start + 0.36 }; });
+    const xb = beatsOf(xw);
+    const xr = guessReadings(xw, xb, "দোকান");
+    const pointLeft: string[] = [];
+    let opened = "", agendaOk = false, below = true, closeOut = true;
+    for (const size of [[1080, 1920], [1920, 1080], [1080, 1080]] as [number, number][]) {
+      const { plan } = bestPlan({ words: xw, beats: xb, readings: xr, brand: { name: "দোকান", color: "#7C3AED", cta: "আজই শুরু করুন", icon: null }, seed: 5, duration: durationOf(xw), size, drafts: 3 });
+      pointLeft.push(...checkPlan(plan).map((x) => `${size.join("x")} ${x.scene != null ? plan.scenes[x.scene].template : ""} ${x.detail}`));
+      opened = plan.scenes.filter((x) => x.template === "point").map((x) => `${x.point!.n}:${x.words.map((w) => w.t).join(" ")}`).join(" | ");
+      agendaOk = plan.scenes.some((x) => x.template === "concept" && x.concept === "agenda" && x.agenda?.length === 3);
+      below &&= plan.scenes.every((x) => !x.point || x.template === "point" || geoFor(size[0], size[1], x).top > 0);
+      closeOut &&= plan.scenes.slice(-3).every((x) => !x.point);
+    }
+    add("Points: each opens on its own scene, numbered, its title as said; the agenda where the count is said; the scenes inside below the bar; the conclusion and the ask outside the last", !pointLeft.length && opened === "1:সঠিক কাস্টমার চিনুন | 2:ওয়েবসাইট কনভার্শন দেখুন | 3:ভিডিও অ্যানালাইসিস করুন" && agendaOk && below && closeOut, pointLeft.slice(0, 3).join(" · ") || opened);
+    const found = xr.map((r) => r.concept ? `${r.concept}[${r.items.map((x) => x.text).join("|")}]` : "").filter(Boolean).join(" ");
+    const want = ["versus[কম বিজ্ঞাপন খরচ|বেশি সেলস]", "funnel[প্রোডাক্ট|কার্ট|চেকআউট]", "progress[২৫%|৫০%|৭৫%]", "truth[অনুমান|ডেটা]"];
+    add("Bangla recipes found by their words: less for more (versus), stages narrowing (funnel), shares as a bar's stops, \"X নয়, Y\" (truth)", want.every((w) => found.includes(w)), found);
   }
 
   return checks;

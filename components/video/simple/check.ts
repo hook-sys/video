@@ -2,7 +2,7 @@ import { type ReactNode, isValidElement } from "react";
 import { Icon, resolveIcon } from "../icons";
 import { conceptSettled } from "./concept";
 import { type FitNote, noting } from "./fit";
-import { geoOf } from "./geo";
+import { geoFor } from "./geo";
 import { type C, ICON_SLOT, type Play, keyIconOf } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
 import { norm, thingAt } from "./scenes";
@@ -26,6 +26,8 @@ export type Problem = { scene: number | null; kind: "words" | "cut" | "icon" | "
 export function meaningOf(s: Scene): string | null {
   if ((s.template === "stat" || s.template === "chart") && !s.number) return `a ${s.template} with no number said`;
   if (s.template === "concept" && !s.concept) return "an idea with no idea to show";
+  if (s.template === "point" && !s.point) return "a point's opening with no point";
+  if (s.concept === "agenda" && s.template === "concept" && !(s.agenda?.length)) return "an agenda with no points";
   if (s.template === "concept" && ideaNeedsThings(s.concept, s.items.length)) return `an idea (${s.concept}) without its two things`;
   if (s.template === "kinetic" && s.variant === 1 && !/\?["'”’)]*$/.test(s.words.at(-1)?.t ?? "")) return "words typed as a prompt that ask nothing";
   return null;
@@ -57,6 +59,7 @@ export function settledAt(s: Scene): number {
     : t === "cta" ? (clickOf(s) ?? s.from) + 10
     : t === "screen" ? s.from + 30
     : t === "concept" ? conceptSettled(s)
+    : t === "point" ? s.from + 30
     : s.from;
   return Math.max(lastWord, n ? lastThing + 18 : s.from, own);
 }
@@ -78,7 +81,7 @@ function sceneProblems(plan: SimplePlan, i: number, look: ReturnType<typeof look
   const out: Problem[] = [];
   if (!s.words.length) out.push({ scene: i, kind: "empty", detail: "no words to show" });
   // laid out at its last frame (everything in)
-  const c: C = { f: s.to - 1, s, look, pace: plan.theme.pace, brand: { ...plan.brand, icon: null }, g: geoOf(plan.w ?? 1920, plan.h ?? 1080), play: SETTLED };
+  const c: C = { f: s.to - 1, s, look, pace: plan.theme.pace, brand: { ...plan.brand, icon: null }, g: geoFor(plan.w ?? 1920, plan.h ?? 1080, s).g, play: SETTLED };
   const icons: string[] = [];
   let notes: FitNote[] = [];
   let heroes: number[] = [];
@@ -133,7 +136,7 @@ function coloursOf(plan: SimplePlan): Problem[] {
 export function heroShares(plan: SimplePlan): (number | null)[] {
   return plan.scenes.map((s, i) => {
     const look = lookIn(plan, i);
-    const c: C = { f: s.to - 1, s, look, pace: plan.theme.pace, brand: { ...plan.brand, icon: null }, g: geoOf(plan.w ?? 1920, plan.h ?? 1080), play: SETTLED };
+    const c: C = { f: s.to - 1, s, look, pace: plan.theme.pace, brand: { ...plan.brand, icon: null }, g: geoFor(plan.w ?? 1920, plan.h ?? 1080, s).g, play: SETTLED };
     try {
       const { heroes } = noting(() => walk(TEMPLATE[s.template]({ c }), []));
       return heroes.length ? Math.max(...heroes) : null;

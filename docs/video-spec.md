@@ -265,6 +265,17 @@ beat whose words plainly picture one idea is shown as that idea
 - **progress** — a bar filling to its goal (to the share said — "90%" — else
   all the way), its stops lighting as it passes, a flag (or a target, short of
   100 %) lighting at the end; short of its goal it stalls a little past a third.
+  Shares said one after another ("২৫, ৫০, ৭৫ … একশো শতাংশ") are its stops;
+- **versus** — less of one thing for more of another ("কম অ্যাডভার্টাইজিং কস্টে
+  বেশি সেলস"): two meters side by side, the first (red, "কম …") falling to a
+  quarter as the scene opens, the second ("বেশি …") filling as it is said.
+  Its things are the two as said, the case ending off the last word;
+- **funnel** — stages narrowing ("কতজন প্রোডাক্ট দেখছেন, কতজন কার্টে…, কতজন
+  চেকআউট…"): one bar each, each narrower, coming in as it is said, the one
+  before dimming; the last lit. Three to five stages;
+- **agenda** — the points a script promises ("এই চারটি বিষয়"), numbered, one
+  after another (see Points). Never chosen by the Director: the engine puts it
+  on the beat whose count matches the points it finds.
 
 Each has a turn — its lit word said (the truth: its second word said), never in
 the scene's first 0.8 s or last 1.3 s (a take-off at no less than 60 % of it).
@@ -277,7 +288,8 @@ ticks and a ding, the cut, the take-off).
 
 The Director names a beat's idea (or none — most beats); the rule guess finds
 one by its words ("stuck", "scattered", "waiting", "X is just Y", "launch",
-"hours", "expensive", "no X, no Y", "goal").
+"hours", "expensive", "no X, no Y", "goal"; in Bangla also "X নয়, Y" for the
+truth, "কম X … বেশি Y", three "কতজন" and shares listed).
 A beat with an idea is shown as it most of the time, and of the drafts the one
 that shows more of its ideas scores higher.
 
@@ -352,3 +364,31 @@ of them 9:16 for reels. Everything a viewer reads is the script's own Bangla.
   for (hook, problem, solution, steps, proof, the ask), the words to show, the
   lit word, the icon, a list said as its things, the number said, the idea its
   words picture — and the video is made all the same, noted on it.
+
+## Points (an explainer told as numbered points)
+
+An explainer is mostly told as points: "প্রথমত, …", "দ্বিতীয়ত, …" (or "১.",
+"২)"). The engine finds them (beats.ts pointsOf, two at least) and shows the
+structure, so the viewer always knows where they are:
+
+- **The opening** of each point is a scene of its own (template "Point",
+  points.tsx): the ordinal as said, small; the number big in Bangla digits
+  (০১, ০২ — in the key colour, in a glossy tile, or as an outline); the title
+  under it — the opening's words after the ordinal, as said (at most five or six).
+  Its beat is never joined to another, and a hit sounds as the number lands.
+  A customer cannot turn another scene into one, nor one into another scene.
+- **The bar**: while a point lasts, its number in a pill and its title stay at
+  the top, with a mark for each point (the one we are in longer, those done
+  lit); it slides in after the opening and out at the point's end. The scenes
+  inside a point are laid out below it (geo.ts geoFor: the frame less the bar's
+  band — 300 px on 9:16, 170 on 1:1, 140 on 16:9), so nothing ever runs under it.
+- **The last point** ends where the script turns to its conclusion
+  ("কারণ…", "মনে রাখবেন…", "সবশেষে…", "তাই…") or before the ask.
+- **The agenda**: the beat that promises the points ("এই চারটি বিষয়") shows them
+  ahead — numbered rows lighting one after another — when the count said is the
+  count found.
+
+One picture is not shown twice close together: the words beside an icon seen
+in the last four scenes are told another way, or with another icon the beat's
+own words stand for.
+
