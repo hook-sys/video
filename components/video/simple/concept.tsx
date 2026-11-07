@@ -678,6 +678,166 @@ function Funnel({ c }: { c: C }) {
   );
 }
 
+// ── split: what went right against what went wrong — a card each, stamped as said ──
+// (items[0] the good — "সফল", "ডেলিভারড" — the rest the bad: "ক্যানসেল", "রিটার্ন")
+const SP = { dw: 760, dh: 640, card: 150, gap: 26 };
+export function splitAt(s: Scene, i: number): number {
+  const said = s.said ?? [];
+  const n = Math.min(3, s.items.length);
+  const w = said.find((x) => bare(x.t).startsWith(bare(s.items[i]?.text ?? "")));
+  const even = s.from + 12 + Math.round(((s.to - s.from) * 0.5 * i) / Math.max(1, n));
+  return Math.min(s.to - 36 - (n - 1 - i) * 6, Math.max(s.from + 10 + i * 8, w ? w.at + 2 : even));
+}
+function Split({ c }: { c: C }) {
+  const { dw, dh, card, gap } = SP;
+  const { s, f, look } = c;
+  const items = s.items.slice(0, 3);
+  const h = items.length * card + (items.length - 1) * gap, top = (dh - h) / 2;
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      {items.map((it, i) => {
+        const good = i === 0;
+        const at = splitAt(s, i);
+        const k = springAt(c, s.from + 4 + i * 6);
+        const x = springAt(c, at);
+        const on = clamp01((f - at) / 8);
+        const col = good ? look.accent : look.bad;
+        // (a bad one shakes as it is stamped)
+        const shake = good ? 0 : Math.sin((f - at) * 1.6) * 6 * clamp01(1 - (f - at) / 14) * (f >= at ? 1 : 0);
+        return (
+          <div key={i} style={abs({ left: 30, top: top + i * (card + gap), width: dw - 60, height: card, ...panel(c, 32), display: "flex", alignItems: "center", gap: 28, padding: "0 36px", boxSizing: "border-box", opacity: clamp01(k * 2), transform: `translate(${(shake + (1 - k) * (good ? -60 : 60)).toFixed(1)}px, 0)`, boxShadow: `0 0 0 ${(3 * on).toFixed(1)}px ${tint(col, 0.6 * on)}, ${panel(c).boxShadow}` })}>
+            <Glyph c={c} part="item-icon" name={it.icon ?? (good ? "circle-check" : "circle-x")} size={90} card at={at} />
+            <One part="item" face={look.text} fit={dw - 60 - 72 - 90 - 28 - 130} style={{ fontFamily: familyOf(look.text), fontSize: TYPE.ITEM * 1.2, fontWeight: WEIGHT.item, color: look.panelInk }}>{it.text}</One>
+            <div style={abs({ right: 30, top: (card - 92) / 2, width: 92, height: 92, borderRadius: 46, background: good ? look.accentFill : look.bad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 10px 26px ${tint(col, 0.35)}`, ...pop(x), ...(f < at - 2 ? { opacity: 0 } : {}) })}>
+              <Icon name={good ? "check" : "x"} size={56} color="#ffffff" strokeWidth={3.4} />
+            </div>
+          </div>
+        );
+      })}
+    </Place>
+  );
+}
+
+// ── few: many against few — a field of dots, most fading as the few is said ──
+// (items[0] the many as said — "৫,০০০ ভিজিটর" — items[1] the few: "৫ জন")
+const FW = { dw: 780, dh: 760, cols: 12, rows: 8 };
+const valueOf = (t: string) => Number(toAscii(t).replace(/[^\d.]/g, "")) || 0;
+export const fewTurn = (s: Scene) => {
+  const said = s.said ?? [];
+  const second = s.items[1] ? said.find((x) => bare(x.t).startsWith(bare(fromBnNumber(s.items[1].text)))) : undefined;
+  return Math.max(s.from + 30, Math.min(s.to - 40, second ? second.at : turnOf(s)));
+};
+// (the few as said: its first word — "৫ জন" was said "পাঁচজন")
+const fromBnNumber = (t: string) => t.split(" ")[0];
+function Few({ c }: { c: C }) {
+  const { dw, dh, cols, rows } = FW;
+  const { s, f, look } = c;
+  const T = fewTurn(s);
+  const n = cols * rows;
+  const a = valueOf(s.items[0]?.text ?? ""), b = valueOf(s.items[1]?.text ?? "");
+  const few = Math.max(1, Math.min(8, Math.round((n * b) / Math.max(1, a))));
+  const fade = ease(clamp01((f - T) / 18));
+  const cell = 52, gx = (dw - cols * cell) / 2, gy = 230;
+  // (the few: spread over the field, not in a row)
+  const lit = new Set(Array.from({ length: few }, (_, k) => (k * 37 + 17) % n));
+  const label = (t: string, on: number, big: boolean) => (
+    <div style={{ fontFamily: familyOf(look.display), fontWeight: 800, fontSize: big ? 96 : 64, lineHeight: 1.15, paddingTop: 8, ...(big ? (look.keyFill ? { backgroundImage: look.keyFill, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" } : { color: look.accent }) : { color: look.sub }), opacity: on }}>{t}</div>
+  );
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      <div style={abs({ left: 0, right: 0, top: 40, height: 160, display: "flex", alignItems: "center", justifyContent: "center", gap: 40 })}>
+        {label(s.items[0]?.text ?? "", 1 - 0.55 * fade, fade < 0.5)}
+        {fade > 0 && label(s.items[1]?.text ?? "", fade, true)}
+      </div>
+      {Array.from({ length: n }, (_, k) => {
+        const r = Math.floor(k / cols), q = k % cols;
+        const kin = springAt(c, s.from + 4 + Math.round((r + q) * 0.9));
+        const keep = lit.has(k);
+        const size = cell * 0.62 * (keep ? 1 + 0.45 * fade : 1 - 0.15 * fade);
+        return (
+          <div key={k} style={abs({ left: gx + q * cell + (cell - size) / 2, top: gy + r * cell + (cell - size) / 2, width: size, height: size, borderRadius: size / 2, background: keep ? look.accent : blend(look.accent, look.line, fade), opacity: clamp01(kin * 2) * (keep ? 1 : 1 - 0.5 * fade), boxShadow: keep && fade > 0.3 ? `0 0 ${(22 * fade).toFixed(0)}px ${tint(look.accent, 0.6)}` : undefined })} />
+        );
+      })}
+    </Place>
+  );
+}
+
+// ── exit: people leaving a page — dots come into a page and most drift out its side ──
+const EX = { dw: 820, dh: 640, pw: 560, ph: 470 };
+function Exit({ c }: { c: C }) {
+  const { dw, dh, pw, ph } = EX;
+  const { s, f, look } = c;
+  const T = turnOf(s);
+  const k = springAt(c, s.from + 2);
+  const px = 30, py = (dh - ph) / 2;
+  // (the spot they leave from, lit at the turn)
+  const spot = clamp01((f - T) / 10);
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      <div style={abs({ left: px, top: py, width: pw, height: ph, ...panel(c, 30), overflow: "hidden", ...rise(k) })}>
+        <div style={abs({ left: 0, right: 0, top: 0, height: 54, background: tint(look.ink, 0.05), display: "flex", alignItems: "center", gap: 10, padding: "0 22px" })}>
+          {[0, 1, 2].map((d) => <div key={d} style={{ width: 14, height: 14, borderRadius: 7, background: tint(look.ink, 0.18) }} />)}
+          <div style={{ marginLeft: 16, height: 20, flex: 1, borderRadius: 10, background: tint(look.ink, 0.08) }} />
+        </div>
+        <div style={abs({ left: 34, top: 84, width: pw - 68, height: 150, borderRadius: 20, background: tint(look.accent, 0.12) })} />
+        {[0, 1, 2].map((r) => <div key={r} style={abs({ left: 34, top: 262 + r * 44, width: (pw - 68) * [0.9, 0.7, 0.8][r], height: 22, borderRadius: 11, background: tint(look.ink, 0.08) })} />)}
+        <div style={abs({ right: 34, bottom: 30, width: 180, height: 56, borderRadius: 28, background: blend(tint(look.ink, 0.1), look.bad, spot), boxShadow: spot > 0 ? `0 0 0 ${(6 * spot).toFixed(1)}px ${tint(look.bad, 0.25)}` : undefined })} />
+      </div>
+      {Array.from({ length: 9 }, (_, i) => {
+        // each comes in from the left, into the page, and (all but two) out its right side
+        const t0 = s.from + 8 + i * 9;
+        const stays = i === 2 || i === 6;
+        const u = clamp01((f - t0) / 54);
+        const y = py + 110 + ((i * 53) % (ph - 170));
+        const x = stays ? -40 + ease(clamp01(u * 1.6)) * (px + pw * 0.45) : -40 + ease(u) * (dw + 40);
+        const leaving = !stays && x > px + pw - 20;
+        return (
+          <div key={i} style={abs({ left: x, top: y, width: 30, height: 30, borderRadius: 15, background: leaving ? look.bad : look.accent, opacity: f < t0 ? 0 : u >= 1 && !stays ? 0 : 0.9, boxShadow: `0 6px 16px ${tint(leaving ? look.bad : look.accent, 0.35)}` })} />
+        );
+      })}
+      <div style={abs({ left: px + pw + 40, top: dh / 2 - 60, opacity: clamp01((f - s.from - 30) / 10) })}>
+        <Glyph c={c} name="log-out" size={120} at={s.from + 30} />
+      </div>
+    </Place>
+  );
+}
+
+// ── retention: a video watched less and less — the curve drawn as it plays, the drop marked ──
+const RT = { dw: 840, dh: 620, cw: 700, ch: 400 };
+const curveAt = (u: number) => 0.92 * Math.exp(-1.1 * u) - (u > 0.28 ? 0.22 * Math.min(1, (u - 0.28) / 0.08) : 0) + 0.06;
+function Retention({ c }: { c: C }) {
+  const { dw, dh, cw, ch } = RT;
+  const { s, f, look } = c;
+  const T = turnOf(s);
+  const k = springAt(c, s.from + 2);
+  const x0 = (dw - cw) / 2, y0 = 90;
+  const drawn = ease(clamp01((f - s.from - 8) / Math.max(30, T - s.from + 10)));
+  const pts = Array.from({ length: 61 }, (_, i) => i / 60).filter((u) => u <= drawn + 1e-6).map((u) => `${(x0 + u * cw).toFixed(1)},${(y0 + ch - curveAt(u) * ch).toFixed(1)}`);
+  const area = pts.length > 1 ? `M${x0},${y0 + ch} L${pts.join(" L")} L${(x0 + drawn * cw).toFixed(1)},${y0 + ch} Z` : "";
+  const drop = clamp01((f - T) / 10);
+  const dx = x0 + 0.32 * cw, dy = y0 + ch - curveAt(0.32) * ch;
+  return (
+    <Place c={c} dw={dw} dh={dh}>
+      <div style={abs({ left: x0 - 40, top: y0 - 50, width: cw + 80, height: ch + 170, ...panel(c, 32), ...rise(k) })} />
+      <svg width={dw} height={dh} style={abs({ left: 0, top: 0, overflow: "visible", opacity: clamp01(k * 2) })}>
+        <line x1={x0} y1={y0 + ch} x2={x0 + cw} y2={y0 + ch} stroke={look.line} strokeWidth={3} />
+        <line x1={x0} y1={y0} x2={x0} y2={y0 + ch} stroke={look.line} strokeWidth={3} />
+        {area && <path d={area} fill={tint(look.accent, 0.14)} />}
+        {pts.length > 1 && <polyline points={pts.join(" ")} fill="none" stroke={look.accent} strokeWidth={9} strokeLinecap="round" strokeLinejoin="round" />}
+        {drop > 0 && <circle cx={dx} cy={dy} r={18 + 26 * drop} fill="none" stroke={look.bad} strokeOpacity={0.5 * (1 - drop) + 0.2} strokeWidth={5} />}
+        {drop > 0 && <circle cx={dx} cy={dy} r={8 + 8 * drop} fill={look.bad} opacity={drop} />}
+      </svg>
+      {/* the video playing along the bottom: its bar filling as the curve is drawn */}
+      <div style={abs({ left: x0, top: y0 + ch + 40, width: cw, height: 54, display: "flex", alignItems: "center", gap: 20, opacity: clamp01(k * 2) })}>
+        <Glyph c={c} name="play" size={54} at={s.from + 8} />
+        <div style={{ flex: 1, height: 14, borderRadius: 7, background: tint(look.ink, 0.1), position: "relative" }}>
+          <div style={abs({ left: 0, top: 0, bottom: 0, width: `${(drawn * 100).toFixed(1)}%`, borderRadius: 7, background: look.accentFill })} />
+        </div>
+      </div>
+    </Place>
+  );
+}
+
 export function Concept({ c }: { c: C }) {
   switch (c.s.concept) {
     case "trapped": return <Trapped c={c} />;
@@ -692,6 +852,10 @@ export function Concept({ c }: { c: C }) {
     case "agenda": return <Agenda c={c} />;
     case "versus": return <Versus c={c} />;
     case "funnel": return <Funnel c={c} />;
+    case "split": return <Split c={c} />;
+    case "few": return <Few c={c} />;
+    case "exit": return <Exit c={c} />;
+    case "retention": return <Retention c={c} />;
     default: return null;
   }
 }
@@ -713,6 +877,10 @@ export function conceptSounds(s: Scene): { at: number; name: string; volume: num
     case "agenda": return (s.agenda ?? []).slice(0, 5).map((_, i) => ({ at: agendaAt(s, i), name: "soft_pop", volume: 0.2 }));
     case "versus": return [{ at: s.from + 12, name: "whoosh", volume: 0.18 }, { at: T, name: "rise", volume: 0.24 }];
     case "funnel": return s.items.slice(0, 5).map((_, i, a) => ({ at: funnelAt(s, i), name: i === a.length - 1 ? "ding" : "soft_pop", volume: 0.2 }));
+    case "split": return s.items.slice(0, 3).map((_, i) => ({ at: splitAt(s, i), name: i ? "lock" : "ding", volume: 0.22 }));
+    case "few": return [{ at: s.from + 6, name: "soft_pop", volume: 0.2 }, { at: fewTurn(s), name: "subtle_impact", volume: 0.3 }];
+    case "exit": return [{ at: s.from + 8, name: "whoosh", volume: 0.16 }, { at: T, name: "subtle_impact", volume: 0.26 }];
+    case "retention": return [{ at: s.from + 8, name: "rise", volume: 0.2 }, { at: T, name: "subtle_impact", volume: 0.28 }];
     default: return [];
   }
 }
@@ -723,6 +891,9 @@ export function conceptSettled(s: Scene): number {
   if (s.concept === "agenda") return agendaAt(s, Math.max(0, Math.min(5, s.agenda?.length ?? 0) - 1)) + 20;
   if (s.concept === "versus") return turnOf(s) + 26;
   if (s.concept === "funnel") return funnelAt(s, Math.min(5, s.items.length) - 1) + 20;
+  if (s.concept === "split") return splitAt(s, Math.min(3, s.items.length) - 1) + 16;
+  if (s.concept === "few") return fewTurn(s) + 22;
+  if (s.concept === "exit" || s.concept === "retention") return turnOf(s) + 14;
   if (s.concept === "launch" && s.resolves) return arrivalOf(s) + 12;
   if (s.concept === "progress") return s.resolves ? progressArrival(s) + 12 : s.from + 54;
   if (s.concept === "cost" && !s.resolves) return costRowAt(s, costRows(s) - 1) + 20;
