@@ -8,6 +8,7 @@ import { TYPE, WEIGHT } from "./geo";
 import { Band, Phrases, Side, TEMPLATES_1, WordsIn, abs, center, display, itemAt, thingAt } from "./scenes";
 import { phraseMode } from "./rhythm";
 import { PointOpen } from "./points";
+import { Panel } from "./panel";
 import type { Item, Scene, TemplateId } from "./types";
 
 // The templates, part 2: compare (before → after), chart (it grows),
@@ -436,7 +437,7 @@ function Screen({ c }: { c: C }) {
   );
 }
 
-export const TEMPLATE: Record<TemplateId, (p: { c: C }) => ReactNode> = { ...TEMPLATES_1, kinetic: Kinetic, compare: Compare, chart: Chart, messages: Messages, bento: Bento, screen: Screen, concept: Concept, point: PointOpen };
+export const TEMPLATE: Record<TemplateId, (p: { c: C }) => ReactNode> = { ...TEMPLATES_1, kinetic: Kinetic, compare: Compare, chart: Chart, messages: Messages, bento: Bento, screen: Screen, concept: Concept, point: PointOpen, panel: Panel };
 
 // the scene's click (its cursor's or its button's — the last scene has a button only when the voice asks), for its sound
 export function clickOf(s: Scene, asks = true): number | null {

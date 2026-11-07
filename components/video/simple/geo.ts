@@ -19,9 +19,11 @@ export function geoOf(W: number, H: number): Geo {
 // A scene inside a point (docs/video-spec.md, Points) is laid out below the
 // point's bar: the frame it has is the frame less the bar's height, `top` down.
 export const HEAD = { wide: 140, tall: 300, square: 170 } as const;
+export const BAR = false;
 export function geoFor(W: number, H: number, s?: { point?: unknown; template?: string }): { g: Geo; top: number } {
   const g0 = geoOf(W, H);
-  if (!s?.point || s.template === "point") return { g: g0, top: 0 };
+  // (no bar at the top: the owner's choice — the frame is the scene's whole)
+  if (!s?.point || s.template === "point" || !BAR) return { g: g0, top: 0 };
   const top = HEAD[g0.shape];
   return { g: geoOf(W, H - top), top };
 }

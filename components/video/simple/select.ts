@@ -83,6 +83,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
   const titles = [...new Map(points.filter((p) => p).map((p) => [p!.point.n, p!.point.title])).values()];
   const firstPoint = points.findIndex((p) => p);
   const agendaAt = titles.length ? beats.findIndex((b, i) => i < firstPoint && countOf(words.slice(b.first, b.last + 1).map((w) => w.text)) === titles.length) : -1;
+  let last: Scene | null = null;
   const scenes: Scene[] = readings.map((read0, i) => {
     const pt = points[i];
     if (pt?.open) {
@@ -92,6 +93,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       const shown = words.slice(b.first + 1, Math.min(b.last, b.first + n) + 1);
       prev = "point";
       prevIdea = undefined;
+      last = null;
       recent.push("");
       return {
         ...frames[i],
@@ -159,7 +161,15 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       const w = it.icon ? beatWords.find((x) => { const a = bareOf(x.text), b = bareOf(it.text); return a === b || (b.length >= 2 && a.startsWith(b)); }) : undefined;
       return w ? [{ text: it.text, icon: it.icon!, at: Math.round(w.start * FPS) }] : [];
     }).filter((t) => t.at <= frames[i].to - 45).slice(0, 4);
-    const tiled = i < readings.length - 1 && tiles.length >= 2 && (template === "statement" || template === "kinetic");
+    // (the panel — the hand-made look, Bangla: the things a beat names as rows, each with its picture; a beat that
+    // names more right after one goes on in the same panel, no cut — up to five rows, inside one point)
+    const bn = /[\u0980-\u09FF]/.test(beatWords.map((w) => w.text).join(""));
+    const before = last?.template === "panel" && last.tiles && (last.point?.n ?? 0) === (pt?.point.n ?? 0) ? last : null;
+    const goesOn = bn && !!before && tiles.length >= 1 && before.tiles!.length + tiles.length <= 5 && template !== "concept" && i < readings.length - 1;
+    const panelled = bn && (goesOn || (tiles.length >= 2 && template !== "concept" && i < readings.length - 1));
+    if (panelled) [template, variant] = ["panel", 0];
+    const rows = goesOn ? [...before!.tiles!, ...tiles.filter((t) => !before!.tiles!.some((x) => x.text === t.text))] : tiles;
+    const tiled = !panelled && i < readings.length - 1 && tiles.length >= 2 && (template === "statement" || template === "kinetic");
     if (tiled) [template, variant] = ["statement", 1];
     // (words typed as a prompt only when they ask something)
     if (template === "kinetic" && variant === 1 && !/\?["'”’)]*$/.test(words[r.show[1]]?.text ?? "")) variant = R.chance(0.5) ? 0 : 2;
@@ -175,7 +185,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // (the words come in as they are said — the first never later than 4 frames into the scene, the
     // video's very first at once: no empty start)
     const late = Math.max(0, Math.round((shown[0]?.start ?? 0) * FPS) - (frames[i].from + (frames[i].from ? 4 : 0)));
-    return {
+    const made: Scene = {
       ...frames[i],
       template,
       variant,
@@ -186,13 +196,22 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       items: (template === "concept" ? read : r).items.slice(0, template === "concept" && read.concept === "funnel" ? 5 : 3),
       number: r.number,
       ...(tiled ? { tiles } : {}),
+      ...(panelled ? { tiles: rows, ...(goesOn ? { carry: before!.tiles!.length, cont: true } : {}) } : {}),
       ...(screen != null ? { screen } : {}),
       ...(read.concept ? { concept: read.concept, resolves: r.intent !== "hook" && r.intent !== "problem" } : {}),
       said: words.slice(beats[i].first, beats[i].last + 1).map((w) => ({ t: w.text, at: Math.round(w.start * FPS) })),
       ...(pt ? { point: pt.point } : {}),
       ...(template === "concept" && read.concept === "agenda" ? { agenda: titles } : {}),
     };
+    last = made;
+    return made;
   });
+  // (a panel's scenes laid out for the most rows they come to: it never moves as rows are added)
+  for (let i = scenes.length - 1; i >= 0; i--) {
+    const s = scenes[i];
+    if (s.template !== "panel") continue;
+    s.rows = Math.max(s.tiles?.length ?? 0, scenes[i + 1]?.cont ? (scenes[i + 1].rows ?? 0) : 0);
+  }
   return { engine: "simple", v: 1, duration, seed, brand, theme, scenes, print: printOf(theme, scenes) };
 }
 
