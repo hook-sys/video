@@ -1,4 +1,6 @@
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+import { loadAiKeys, providerKey } from "@/lib/ai/keys";
 import type { BriefUsage } from "@/lib/ai/product-brief";
 
 // Which AI model does each job, and whether the job runs at all — chosen by a
@@ -17,7 +19,13 @@ export const TEXT_TASKS = [
   { id: "composer", label: "Motion Director", help: "Directs the whole video in one plan: the brand, the idea, the camera and dark/light, the art and every scene; reviews its plan once the voice is timed. Off: the video is composed by rule.", canOff: true },
 ] as const;
 export type TextTask = (typeof TEXT_TASKS)[number]["id"];
-export type Provider = "fal" | "openai";
+// fal (its OpenRouter router), or a provider's own API — Google's Gemini, OpenAI, Anthropic's Claude —
+// with the key saved on /admin/models or the environment's (lib/ai/keys.ts)
+export type Provider = "fal" | "openai" | "google" | "anthropic";
+export const TEXT_PROVIDERS: Provider[] = ["google", "openai", "anthropic", "fal"];
+// the voice: a fal model, Google's Gemini TTS or OpenAI's speech
+export type VoiceProvider = "fal" | "google" | "openai";
+export const VOICE_PROVIDERS: VoiceProvider[] = ["google", "openai", "fal"];
 
 export type ModelPrice = { in?: number; out?: number; unit?: number };
 export type AiConfig = {
@@ -26,7 +34,7 @@ export type AiConfig = {
   tasks: Record<TextTask, { on: boolean; provider: Provider | ""; model: string }>;
   // empty strings mean the environment's values
   // fallback: when the chosen model fails, the environment's voice speaks (it is paid too)
-  voice: { on: boolean; model: string; template: string; female: string; male: string; choices: VoiceChoice[]; fallback: boolean };
+  voice: { on: boolean; provider: VoiceProvider; model: string; template: string; female: string; male: string; choices: VoiceChoice[]; fallback: boolean };
   // USD: per 1M input / output tokens (text), per character (voice)
   prices: Record<string, ModelPrice>;
   // "New version" only (lib/v2): each role's model (through fal's OpenRouter
@@ -47,7 +55,7 @@ export type V2Role = (typeof V2_ROLES)[number]["id"];
 export const REASONINGS = ["default", "none", "low", "medium", "high"] as const;
 export type Reasoning = (typeof REASONINGS)[number];
 // temperature: null = the model's own (the Director starts at 0.9)
-export type V2RoleConfig = { model: string; reasoning: Reasoning; on: boolean; temperature: number | null };
+export type V2RoleConfig = { provider: Provider; model: string; reasoning: Reasoning; on: boolean; temperature: number | null };
 // The temperature a call may carry: only where the model takes one — never
 // OpenAI's reasoning models (gpt-5, o-series), never with a reasoning effort asked.
 export const temperatureFor = (model: string, reasoning: Reasoning | null | undefined, t: number | null | undefined) =>
@@ -76,15 +84,16 @@ export function defaultConfig(): AiConfig {
   return {
     text: { provider: "openai", model: "", backup: false, openaiDirect: false },
     tasks: Object.fromEntries(TEXT_TASKS.map((t) => [t.id, { on: true, provider: "", model: "" }])) as AiConfig["tasks"],
-    voice: { on: true, model: "", template: "", female: "", male: "", choices: [], fallback: false },
+    voice: { on: true, provider: "fal", model: "", template: "", female: "", male: "", choices: [], fallback: false },
     prices: {},
-    v2: { whisper: "", roles: Object.fromEntries(V2_ROLES.map((r) => [r.id, { model: "", reasoning: "default", on: r.id !== "reviewer", temperature: r.id === "director" ? 0.9 : null }])) as AiConfig["v2"]["roles"] },
+    v2: { whisper: "", roles: Object.fromEntries(V2_ROLES.map((r) => [r.id, { provider: "fal", model: "", reasoning: "default", on: r.id !== "reviewer", temperature: r.id === "director" ? 0.9 : null }])) as AiConfig["v2"]["roles"] },
   };
 }
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const bool = (v: unknown, d: boolean) => (typeof v === "boolean" ? v : d);
-const provider = (v: unknown): Provider | "" => (v === "fal" || v === "openai" ? v : "");
+const provider = (v: unknown): Provider | "" => (v === "fal" || v === "openai" || v === "google" || v === "anthropic" ? v : "");
+const voiceProvider = (v: unknown): VoiceProvider => (v === "google" || v === "openai" ? v : "fal");
 const price = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined);
 
 // Whatever is stored, read defensively over the defaults.
@@ -98,7 +107,7 @@ export function normalizeConfig(raw: unknown): AiConfig {
     tasks: Object.fromEntries(
       TEXT_TASKS.map((t) => [t.id, { on: t.canOff ? bool(tasks[t.id]?.on, true) : true, provider: provider(tasks[t.id]?.provider), model: str(tasks[t.id]?.model) }]),
     ) as AiConfig["tasks"],
-    voice: { on: bool(r.voice?.on, true), model: str(r.voice?.model), template: str(r.voice?.template, 2000), female: str(r.voice?.female, 80), male: str(r.voice?.male, 80), choices: parseVoiceChoices(r.voice?.choices), fallback: bool(r.voice?.fallback, false) },
+    voice: { on: bool(r.voice?.on, true), provider: voiceProvider(r.voice?.provider), model: str(r.voice?.model), template: str(r.voice?.template, 2000), female: str(r.voice?.female, 80), male: str(r.voice?.male, 80), choices: parseVoiceChoices(r.voice?.choices), fallback: bool(r.voice?.fallback, false) },
     prices: Object.fromEntries(
       Object.entries(prices)
         .filter(([k]) => k.trim())
@@ -115,7 +124,7 @@ export function normalizeConfig(raw: unknown): AiConfig {
           // (the vision reviewer stays off until the Vercel Sandbox is back)
           const t = v?.temperature;
           const temperature = t === null ? null : typeof t === "number" && Number.isFinite(t) ? Math.max(0, Math.min(2, t)) : role.id === "director" ? 0.9 : null;
-          return [role.id, { model, reasoning, on: role.id === "reviewer" ? false : bool(v?.on, true), temperature }];
+          return [role.id, { provider: provider(v?.provider) || "fal", model, reasoning, on: role.id === "reviewer" ? false : bool(v?.on, true), temperature }];
         }),
       ) as AiConfig["v2"]["roles"],
     },
@@ -130,6 +139,8 @@ export async function getAiConfig(): Promise<AiConfig> {
 }
 // (as saved on /admin/models, before "AI only for the voice" turns jobs off)
 export async function getStoredAiConfig(): Promise<AiConfig> {
+  // (the providers' saved keys, read with the settings: a call made after these finds them)
+  await loadAiKeys();
   if (cached && Date.now() - cached.at < 15_000) return cached.config;
   let config = defaultConfig();
   try {
@@ -206,18 +217,32 @@ export async function textAi(task: TextTask, opts: { timeout?: number; maxRetrie
 
 // A client for any provider and model (also used by the admin page's test).
 export function textClient(prov: Provider, model: string, backupOn: boolean, opts: { timeout?: number; maxRetries?: number } = {}, direct = false): TextAi {
+  // Google's Gemini (its OpenAI-compatible endpoint) and Anthropic's Claude (its own SDK), each with its own key
+  if (prov === "google") {
+    const key = providerKey("google");
+    if (!key) throw new Error("No Google (Gemini) API key: save one on /admin/models or set GEMINI_API_KEY.");
+    const g = chatResponses(opts, { baseURL: GEMINI_OPENAI_URL, apiKey: key, effort: "reasoning_effort" });
+    return { client: { responses: g.responses as OpenAI["responses"] }, model: model.replace(/^google\//, ""), provider: prov, quick: false };
+  }
+  if (prov === "anthropic") {
+    const key = providerKey("anthropic");
+    if (!key) throw new Error("No Anthropic API key: save one on /admin/models or set ANTHROPIC_API_KEY.");
+    return { client: anthropicResponses(key, opts), model: model.replace(/^anthropic\//, ""), provider: prov, quick: false };
+  }
   // OpenAI direct off: the OpenAI model through fal, and no OpenAI backup
   if (prov === "openai" && !direct) return textClient("fal", model.includes("/") ? model : `openai/${model}`, false, opts, false);
   if (!direct) backupOn = false;
   if (prov === "openai") {
-    if (!process.env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured.");
-    return { client: new OpenAI({ timeout: opts.timeout, maxRetries: opts.maxRetries ?? 0 }), model, provider: prov, quick: reasoning(model) };
+    const key = providerKey("openai");
+    if (!key) throw new Error("No OpenAI API key: save one on /admin/models or set OPENAI_API_KEY.");
+    return { client: new OpenAI({ apiKey: key, timeout: opts.timeout, maxRetries: opts.maxRetries ?? 0 }), model: model.replace(/^openai\//, ""), provider: prov, quick: reasoning(model) };
   }
-  if (!process.env.FAL_KEY) throw new Error("FAL_KEY is not configured.");
-  const fal = falResponses(opts);
+  const falKey = providerKey("fal");
+  if (!falKey) throw new Error("No fal API key: save one on /admin/models or set FAL_KEY.");
+  const fal = chatResponses(opts, { baseURL: process.env.FAL_LLM_BASE_URL || FAL_LLM_URL, apiKey: "fal", headers: { Authorization: `Key ${falKey}` }, effort: "reasoning" });
   // (the backup runs the job's own model on OpenAI: only an OpenAI model can have one)
   const fallbackModel = /^(openai\/)?(gpt|o\d)/.test(model) ? model.replace(/^openai\//, "") : "";
-  const backup = backupOn && fallbackModel && process.env.OPENAI_API_KEY ? new OpenAI({ timeout: opts.timeout, maxRetries: 0 }) : null;
+  const backup = backupOn && fallbackModel && providerKey("openai") ? new OpenAI({ apiKey: providerKey("openai")!, timeout: opts.timeout, maxRetries: 0 }) : null;
   const viaBackup = (body: Parameters<OpenAI["responses"]["parse"]>[0], options?: { timeout?: number }) =>
     backup!.responses.parse({ ...body, model: fallbackModel, ...(reasoning(fallbackModel) ? { reasoning: { effort: "low" } } : { reasoning: undefined }) } as typeof body, options);
   const client: ResponsesClient = {
@@ -267,11 +292,70 @@ function toMessages(input: unknown): Msg[] {
 
 const stripFences = (s: string) => s.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
 
-function falResponses(opts: { timeout?: number; maxRetries?: number }) {
+// ── Anthropic: the Messages API (its own SDK) behind the same `responses.parse` shim ──
+// Structured output through output_config.format (JSON schema); depth through output_config.effort (the
+// role's reasoning: none/low → low). No temperature (the API refuses sampling settings) and no thinking
+// setting (the model's own). Conversation state kept here, as for fal (the API keeps none).
+function anthropicResponses(apiKey: string, opts: { timeout?: number; maxRetries?: number }) {
+  const client = new Anthropic({ apiKey, timeout: opts.timeout, maxRetries: opts.maxRetries ?? 0 });
+  const threads = new Map<string, Anthropic.MessageParam[]>();
+  // chat messages → the system text and Claude's messages (text and image parts)
+  const toClaude = (msgs: Msg[]): { system: string; messages: Anthropic.MessageParam[] } => {
+    const system: string[] = [];
+    const messages: Anthropic.MessageParam[] = [];
+    for (const m of msgs) {
+      if (m.role === "system" || m.role === "developer") {
+        system.push(typeof m.content === "string" ? m.content : (m.content as { text?: string }[]).map((x) => x.text ?? "").join("\n"));
+        continue;
+      }
+      const role = m.role === "assistant" ? "assistant" : "user";
+      if (typeof m.content === "string") {
+        messages.push({ role, content: m.content });
+        continue;
+      }
+      const blocks: Anthropic.ContentBlockParam[] = ((m.content ?? []) as { type: string; text?: string; image_url?: { url: string } }[]).flatMap((x): Anthropic.ContentBlockParam[] =>
+        x.type === "text" ? [{ type: "text", text: x.text ?? "" }] : x.type === "image_url" && x.image_url?.url ? [{ type: "image", source: { type: "url", url: x.image_url.url } }] : [],
+      );
+      if (blocks.length) messages.push({ role, content: blocks });
+    }
+    return { system: system.join("\n\n"), messages };
+  };
+  async function parse(body: Record<string, unknown>, options?: { timeout?: number }) {
+    const model = String(body.model);
+    const format = ((body.text as { format?: ParseFormat } | undefined)?.format ?? null) as ParseFormat | null;
+    const prior = typeof body.previous_response_id === "string" ? (threads.get(body.previous_response_id) ?? []) : [];
+    const asked = toClaude([...(body.instructions ? [{ role: "system", content: String(body.instructions) } as Msg] : []), ...toMessages(body.input)]);
+    const messages = [...prior, ...asked.messages];
+    const want = (body.reasoning as { effort?: string } | undefined)?.effort;
+    const effort = want === "high" || want === "medium" ? want : want ? "low" : undefined;
+    const res = await client.messages.create(
+      {
+        model,
+        max_tokens: 16000,
+        ...(asked.system ? { system: asked.system } : {}),
+        messages,
+        ...(format?.schema || effort ? { output_config: { ...(format?.schema ? { format: { type: "json_schema" as const, schema: format.schema } } : {}), ...(effort ? { effort } : {}) } } : {}),
+      },
+      options?.timeout ? { timeout: options.timeout } : undefined,
+    );
+    if (res.stop_reason === "refusal") throw new Error(`${model} declined the request.`);
+    const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
+    threads.set(res.id, [...messages, { role: "assistant", content: text }]);
+    const parsed = format?.$parseRaw && text.trim() ? format.$parseRaw(stripFences(text)) : null;
+    return { id: res.id, model, output_text: text, output_parsed: parsed, usage: { input_tokens: res.usage.input_tokens, output_tokens: res.usage.output_tokens, total_tokens: res.usage.input_tokens + res.usage.output_tokens } };
+  }
+  return { responses: { parse: parse as unknown as OpenAI["responses"]["parse"] } as OpenAI["responses"] };
+}
+
+// Gemini's OpenAI-compatible endpoint
+export const GEMINI_OPENAI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+// Chat Completions (fal's OpenRouter router, Gemini's OpenAI-compatible endpoint) behind a `responses.parse` shim;
+// `effort`: how the endpoint takes a reasoning effort (OpenRouter: reasoning.effort; Gemini: reasoning_effort)
+function chatResponses(opts: { timeout?: number; maxRetries?: number }, at: { baseURL: string; apiKey: string; headers?: Record<string, string>; effort: "reasoning" | "reasoning_effort" }) {
   const chat = new OpenAI({
-    baseURL: process.env.FAL_LLM_BASE_URL || FAL_LLM_URL, // (a local stand-in in the checks)
-    apiKey: "fal",
-    defaultHeaders: { Authorization: `Key ${process.env.FAL_KEY}` },
+    baseURL: at.baseURL, // (fal: a local stand-in in the checks)
+    apiKey: at.apiKey,
+    ...(at.headers ? { defaultHeaders: at.headers } : {}),
     timeout: opts.timeout,
     maxRetries: opts.maxRetries ?? 0,
   });
@@ -294,7 +378,7 @@ function falResponses(opts: { timeout?: number; maxRetries?: number }) {
           ...(format?.schema
             ? { response_format: strict ? { type: "json_schema", json_schema: { name: format.name ?? "output", strict: true, schema: format.schema } } : { type: "json_object" } }
             : {}),
-          ...(effort ? { reasoning: { effort } } : {}),
+          ...(effort ? (at.effort === "reasoning" ? { reasoning: { effort } } : { reasoning_effort: effort === "none" ? "none" : effort }) : {}),
           ...(typeof body.temperature === "number" ? { temperature: body.temperature } : {}),
         } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         options?.timeout ? { timeout: options.timeout } : undefined,

@@ -1,4 +1,5 @@
 import "server-only";
+import { providerKey } from "@/lib/ai/keys";
 import { createFalClient } from "@fal-ai/client";
 import { parseWordTimings, retimeScript, type WordTiming } from "@/lib/voice-timing";
 import { type AiConfig, getAiConfig } from "@/lib/ai/models";
@@ -62,8 +63,9 @@ function findMediaUrl(
 }
 
 function falClient() {
-  const credentials = process.env.FAL_KEY;
-  if (!credentials) throw new Error("FAL_KEY is not configured.");
+  // (the key saved on /admin/models, else the environment's — lib/ai/keys.ts)
+  const credentials = providerKey("fal");
+  if (!credentials) throw new Error("No fal API key: save one on /admin/models or set FAL_KEY.");
   return createFalClient({ credentials });
 }
 

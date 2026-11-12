@@ -8,7 +8,7 @@ import { falCost, openaiCost, storageCost } from "@/lib/costs/pricing";
 import { recordCost } from "@/lib/costs/record";
 import { ruleBrief } from "@/lib/rule-brief";
 import { parseWordTimings, type WordTiming } from "@/lib/voice-timing";
-import { AUDIO_BUCKET, storeVoiceAudio } from "@/lib/voice-audio";
+import { AUDIO_BUCKET, storeVoiceAudio, storeVoiceBytes } from "@/lib/voice-audio";
 import { getSettings } from "@/lib/app-settings";
 import { renderWithin } from "@/lib/render-server";
 import { prepareFilm } from "@/lib/film-snapshot";
@@ -193,10 +193,13 @@ async function voiceOf(admin: Admin, projectId: string, userId: string, project:
     } else {
       script = project.direction.normalize("NFC").trim();
       const spoken = await v2Speak({ script, language: project.voice_language, style: project.voice_style, gender: project.voice_gender, voice: v2.voice.name });
-      await recordCost(admin, { ...owner, operation: "fal_voice", model: spoken.model, quantity: script.length, estimated_cost_usd: unitCost(ai, spoken.model, script.length, () => falCost(spoken.model, script.length)), metadata: { unit: "characters", request_id: spoken.requestId } });
-      const kept = await storeVoiceAudio(admin, spoken.audioUrl, userId, projectId);
+      await recordCost(admin, { ...owner, operation: "fal_voice", model: spoken.model, quantity: spoken.units, estimated_cost_usd: unitCost(ai, spoken.model, spoken.units, () => (spoken.audio ? 0 : falCost(spoken.model, script.length))), metadata: { unit: ai.voice.provider === "google" ? "audio tokens" : "characters", provider: ai.voice.provider, request_id: spoken.requestId } });
+      // (fal: a URL to keep; Google, OpenAI: the audio itself — kept, then read back by a signed URL to be timed)
+      const kept = spoken.audio ? await storeVoiceBytes(admin, spoken.audio.bytes, spoken.audio.type, userId, projectId) : await storeVoiceAudio(admin, spoken.audioUrl!, userId, projectId);
       await recordCost(admin, { ...owner, operation: "storage", quantity: kept.bytes, estimated_cost_usd: storageCost(kept.bytes), metadata: { kind: "voice", unit: "bytes" } });
-      const timed = await v2TimeScript(spoken.audioUrl, script);
+      const audioUrl = spoken.audioUrl ?? (await admin.storage.from(AUDIO_BUCKET).createSignedUrl(kept.path, 900)).data?.signedUrl;
+      if (!audioUrl) throw new Error("The voice was kept but could not be read back.");
+      const timed = await v2TimeScript(audioUrl, script);
       if (timed.heard) await heardCost({ model: timed.model, requestId: timed.requestId ?? "", seconds: timed.seconds });
       words = timed.words;
       storagePath = kept.path;

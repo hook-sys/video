@@ -7,7 +7,7 @@ const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 te
 const btn = "inline-flex items-center justify-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:opacity-50";
 
 // One real call with the typed model: output, time and cost side by side.
-export function ModelTest({ defaults }: { defaults: { text: { provider: string; model: string }; voice: { model: string; template: string } } }) {
+export function ModelTest({ defaults }: { defaults: { text: { provider: string; model: string }; voice: { provider: string; model: string; template: string } } }) {
   const [kind, setKind] = useState<"text" | "voice">("text");
   const [result, action, pending] = useActionState<TestResult | null, FormData>(testAiModel, null);
   return (
@@ -23,14 +23,21 @@ export function ModelTest({ defaults }: { defaults: { text: { provider: string; 
       {kind === "text" && (
         <div className="grid gap-2 md:grid-cols-[140px_1fr]">
           <select key="p" name="provider" defaultValue={defaults.text.provider} className={input}>
-            <option value="fal">fal</option>
+            <option value="google">Google (Gemini)</option>
             <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="fal">fal</option>
           </select>
           <input key="m" name="model" list="text-models" defaultValue={defaults.text.model} placeholder="google/gemini-2.5-flash" className={input} />
         </div>
       )}
       {kind === "voice" && (
         <>
+          <select key="vp" name="provider" defaultValue={defaults.voice.provider} className={input}>
+            <option value="google">Google (Gemini TTS)</option>
+            <option value="openai">OpenAI (speech)</option>
+            <option value="fal">fal</option>
+          </select>
           <input key="vm" name="model" list="voice-models" defaultValue={defaults.voice.model} placeholder="empty = the saved / environment model" className={input} />
           <textarea key="vt" name="template" rows={2} defaultValue={defaults.voice.template} placeholder='Input template, e.g. {"text":"{{text}}","voice":"{{voice}}"} (empty = saved / environment)' className={`${input} font-mono text-xs`} />
           <div className="grid gap-2 md:grid-cols-3">

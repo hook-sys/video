@@ -3,6 +3,7 @@ import { type AiConfig, type Reasoning, type TextAi, type V2Role, V2_ROLES, getA
 import { buildInput, falRun, heardWords } from "@/lib/ai/fal";
 import { retimeScript, type WordTiming } from "@/lib/voice-timing";
 import { alignVoice } from "@/lib/voice-pcm";
+import { geminiSpeak, openaiSpeak } from "@/lib/ai/speech";
 
 // "New version" models: only what a super admin chose on /admin/models —
 // no OPENAI_MODEL, no gpt-5-mini, no OpenAI direct, no backup or fallback
@@ -18,7 +19,8 @@ export async function v2Role(role: V2Role, opts: { timeout?: number; maxRetries?
   const c = (config ?? (await getAiConfig())).v2.roles[role];
   const label = V2_ROLES.find((r) => r.id === role)?.label ?? role;
   if (!c.model.trim()) throw new Error(`No ${label} model is set. ${SET_IT}`);
-  return { ...textClient("fal", c.model.trim(), false, opts, false), reasoning: c.reasoning, temperature: c.temperature };
+  // (its provider as chosen: fal's router, or Google's, OpenAI's or Anthropic's own API)
+  return { ...textClient(c.provider, c.model.trim(), false, opts, true), reasoning: c.reasoning, temperature: c.temperature };
 }
 
 // The Director's model, checked right before each call: an empty one would
@@ -45,14 +47,29 @@ export function v2VoiceName(voice: AiConfig["voice"], gender: string, picked?: s
 }
 
 // The script spoken by the voice model on /admin/models (its own template).
-export async function v2Speak(input: { script: string; language: string; style: string; gender: string; voice?: string | null }) {
+// The voice's provider: a fal model (it answers with a URL), or Google's Gemini TTS or OpenAI's speech (they
+// answer with the audio itself, `audio`) — `units` priced per the admin's per-unit price: characters (fal,
+// OpenAI) or audio tokens (Gemini).
+export async function v2Speak(input: { script: string; language: string; style: string; gender: string; voice?: string | null }): Promise<{ model: string; requestId: string | null; audioUrl?: string; audio?: { bytes: Uint8Array; type: string }; units: number }> {
   const voice = (await getAiConfig()).voice;
   if (!voice.model) throw new Error(`No voice model is set. ${SET_IT}`);
   const text = input.script.trim();
   if (!text) throw new Error("There is no script to speak.");
+  const name = v2VoiceName(voice, input.gender, input.voice);
+  const fill = (t: string) => t.replace(/\{\{text\}\}/g, text).replace(/\{\{style\}\}/g, input.style).replace(/\{\{language\}\}/g, input.language).replace(/\{\{gender\}\}/g, input.gender).replace(/\{\{voice\}\}/g, name);
+  if (voice.provider === "google") {
+    // (the template is Gemini's whole instruction, the script in it — "Say it warmly and fast: {{text}}"; none: the script alone)
+    const prompt = voice.template.includes("{{text}}") ? fill(voice.template) : text;
+    const spoken = await geminiSpeak(voice.model, prompt, name);
+    return { model: voice.model, requestId: null, audio: spoken, units: spoken.units };
+  }
+  if (voice.provider === "openai") {
+    const spoken = await openaiSpeak(voice.model, text, name, fill(voice.template.replace(/\{\{text\}\}/g, "")));
+    return { model: voice.model, requestId: null, audio: spoken, units: spoken.units };
+  }
   const body = buildInput(voice.template || '{"text":"{{text}}"}', { text, language: input.language, style: input.style, gender: input.gender, voice: v2VoiceName(voice, input.gender, input.voice) });
   const result = await falRun(voice.model, body, "audio");
-  return { model: voice.model, requestId: result.requestId, audioUrl: result.url };
+  return { model: voice.model, requestId: result.requestId, audioUrl: result.url, units: text.length };
 }
 
 // The script's own words on its voice: by the voice's pauses (no AI — lib/voice-align.ts: Whisper

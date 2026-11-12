@@ -9,13 +9,19 @@ const tone = (n: number) => (n >= 85 ? "text-emerald-300" : n >= 70 ? "text-ambe
 
 // The Director's test set: real scripts read by the typed model, every beat
 // scored against a good reading — choose the model by its score.
-export function DirectorTest({ defaults, reasonings }: { defaults: { model: string; reasoning: string; temperature: number | null }; reasonings: readonly string[] }) {
+export function DirectorTest({ defaults, reasonings }: { defaults: { provider: string; model: string; reasoning: string; temperature: number | null }; reasonings: readonly string[] }) {
   const [result, action, pending] = useActionState<DirectorTestResult | null, FormData>(testDirector, null);
   const run = result?.run;
   return (
     <form action={action} className="flex flex-col gap-3 text-sm">
       <p className="text-zinc-400">10 real scripts (60 beats). Each beat scores 100 when the reading is right: the intent (30), the words shown (25), the key word (15), the things named (20), the number said (10).</p>
-      <div className="grid gap-2 md:grid-cols-[1fr_140px_120px]">
+      <div className="grid gap-2 md:grid-cols-[160px_1fr_140px_120px]">
+        <select name="provider" defaultValue={defaults.provider} className={input}>
+          <option value="google">Google (Gemini)</option>
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="fal">fal</option>
+        </select>
         <input name="model" list="text-models" defaultValue={defaults.model} placeholder="google/gemini-2.5-flash" className={input} />
         <select name="reasoning" defaultValue={defaults.reasoning} className={input}>
           {reasonings.map((r) => (
