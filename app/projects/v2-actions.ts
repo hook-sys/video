@@ -7,6 +7,7 @@ import { BRAND_NAME_MAX, CREATIVE_DEFAULTS, DIRECTION_MAX, FORMATS, LOGO_MAX_BYT
 import { getAiConfig } from "@/lib/ai/models";
 import { AUDIO_BUCKET } from "@/lib/voice-audio";
 import { userAccess } from "@/lib/admin";
+import { BRAND_KITS_MAX, brandKitOf, kitLogoPath } from "@/lib/brand-kits";
 import { getSettings } from "@/lib/app-settings";
 import { balanceOf, chargeVideo, creditsFor, getBilling, hasPaid, refundVideo } from "@/lib/billing";
 import { V2_VOICE_TYPES, type V2Details } from "@/lib/v2/form";
@@ -56,8 +57,13 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
   if (!format || !voiceLanguage || !voiceStyle) return { error: "Please choose a valid option for every field." };
   const logoEntry = formData.get("logo");
   const logo = logoEntry instanceof File && logoEntry.size > 0 ? logoEntry : null;
-  const logoError = validateLogo(logo);
-  if (logoError || !logo) return { error: logoError ?? "Please upload your icon." };
+  // a saved brand kit (/brand) brings its icon: no upload needed (read once the user is known)
+  const kitId = String(formData.get("brand_kit_id") ?? "").trim();
+  const saveKit = !kitId && formData.get("save_kit") === "1";
+  if (logo || !kitId) {
+    const logoError = validateLogo(logo);
+    if (logoError || !logo) return { error: logoError ?? "Please upload your icon." };
+  }
   // the website (pictures of the product are taken from it when the video is made), or pictures of it uploaded
   const websiteRaw = String(formData.get("website_url") ?? "").trim();
   const website = websiteUrlOf(websiteRaw);
@@ -66,7 +72,7 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
   if (screens.length > SCREENS_MAX) return { error: `Add up to ${SCREENS_MAX} pictures of your product.` };
   for (const f of screens) if (!SCREENSHOT_TYPES[f.type] || f.size > LOGO_MAX_BYTES) return { error: `${f.name}: a picture must be a PNG, JPG or WebP image of ${LOGO_MAX_BYTES / 1024 / 1024} MB or less.` };
   // (one request on Vercel carries every file)
-  if (process.env.VERCEL && logo.size + (voiceFile?.size ?? 0) + screens.reduce((a, f) => a + f.size, 0) > VERCEL_SCREENSHOT_TOTAL_BYTES)
+  if (process.env.VERCEL && (logo?.size ?? 0) + (voiceFile?.size ?? 0) + screens.reduce((a, f) => a + f.size, 0) > VERCEL_SCREENSHOT_TOTAL_BYTES)
     return { error: `The recording, the icon and the pictures together must be ${VERCEL_SCREENSHOT_TOTAL_BYTES / 1024 / 1024} MB or smaller.` };
   const duration = mode === "script" ? estimateVideoSeconds(script) : voiceVideoSeconds(heardSeconds);
 
@@ -107,6 +113,9 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
   const chosen = mode === "script" ? (await getAiConfig()).voice.choices.find((c) => c.name === String(formData.get("voice_name") ?? "")) : undefined;
   const details: V2Details = { engine: "v2", voice: { source: mode, name: chosen?.name ?? null, path: null } };
   const admin = createAdminClient();
+  const kit = kitId ? await brandKitOf(admin, user.id, kitId) : null;
+  if (kitId && !kit) return { error: "That brand kit was not found. Pick another or upload your icon." };
+  if (!logo && !kit?.logoPath) return { error: "That brand kit has no icon. Upload your icon." };
   const { data, error } = await admin
     .from("projects")
     .insert({
@@ -149,8 +158,11 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
     await admin.from("projects").delete().eq("id", data.id).eq("user_id", user.id);
     return { error: message };
   };
-  const logoAt = logoPath(user.id, data.id, SCREENSHOT_TYPES[logo.type]);
-  const logoUpload = await admin.storage.from(SCREENSHOTS_BUCKET).upload(logoAt, logo, { contentType: logo.type });
+  // the icon uploaded, or the saved kit's copied in (the video reads it from the project's folder)
+  const logoAt = logoPath(user.id, data.id, logo ? SCREENSHOT_TYPES[logo.type] : kit!.logoPath!.split(".").pop()!);
+  const logoUpload = logo
+    ? await admin.storage.from(SCREENSHOTS_BUCKET).upload(logoAt, logo, { contentType: logo.type })
+    : await admin.storage.from(SCREENSHOTS_BUCKET).copy(kit!.logoPath!, logoAt);
   if (logoUpload.error) return undo("Icon upload failed. Please try again.");
   uploaded.push({ bucket: SCREENSHOTS_BUCKET, path: logoAt });
   for (const [i, f] of screens.entries()) {
@@ -190,6 +202,24 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
   });
   if (libraryError) console.error("direction library insert failed:", data.id, libraryError.message);
 
+  // "Save this brand for my next videos": a kit from what was given (never fails the video)
+  if (saveKit) await keepBrandKit(admin, user.id, { name: brandName, color: brandColor, website, logoAt }).catch((e) => console.error("brand kit save failed:", e));
+
   await startPipelineV2(data.id, user.id);
   redirect(`/projects/${data.id}`);
+}
+
+// A brand kit made from a new video's brand, unless one of that name is kept or the customer has the most
+async function keepBrandKit(admin: ReturnType<typeof createAdminClient>, userId: string, b: { name: string; color: string | null; website: string | null; logoAt: string }) {
+  const { data: kits } = await admin.from("brand_kits").select("name").eq("user_id", userId);
+  if ((kits ?? []).length >= BRAND_KITS_MAX || (kits ?? []).some((k) => k.name.trim().toLowerCase() === b.name.toLowerCase())) return;
+  const { data, error } = await admin
+    .from("brand_kits")
+    .insert({ user_id: userId, name: b.name, color: b.color, website_url: b.website, is_default: !(kits ?? []).length })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(error?.message ?? "no kit");
+  const at = kitLogoPath(userId, data.id, b.logoAt.split(".").pop()!);
+  const copied = await admin.storage.from(SCREENSHOTS_BUCKET).copy(b.logoAt, at);
+  if (!copied.error) await admin.from("brand_kits").update({ logo_path: at }).eq("id", data.id).eq("user_id", userId);
 }

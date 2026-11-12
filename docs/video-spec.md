@@ -15,6 +15,19 @@ Bank** (soft glass, phone UI).
 A script (or the customer's own recording) in, a video out. Nothing else is
 asked. The same script made twice gives two visibly different videos.
 
+**Brand kits** (`/brand`, `lib/brand-kits.ts`, table `brand_kits`): a customer
+keeps up to 10 brands (name, colour, icon, website, phone, tagline), one the
+default. The new-video form starts on the default kit; a kit's icon is copied
+into the video's folder, so it is never uploaded again. A brand typed on the
+form can be kept as a kit with one tick. Kits are read by their owner and
+written by the server only.
+
+**AI providers** (`lib/ai/keys.ts`, `/admin/models`): Google (Gemini), OpenAI,
+Anthropic (Claude) and fal. Each key comes from the environment or is saved by
+a super admin (encrypted, only its last four shown). Each role (Director,
+voice…) picks its provider and model; the voice can be fal, Gemini TTS or
+OpenAI speech.
+
 ## What a good video is
 
 1. **One idea per 2.5–5 s.** A scene is a beat of the voice: one sentence or

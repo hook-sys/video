@@ -8,6 +8,8 @@ import { BRAND_NAME_MAX, FORMATS, LOGO_MAX_BYTES, SCREENS_MAX, VERCEL_SCREENSHOT
 import { V2_VOICE_TYPES } from "@/lib/v2/form";
 import { Field, Step, Upload, VoicePicker, colourOf, smaller, type Prefill } from "./form-parts";
 
+export type KitOption = { id: string; name: string; color: string | null; logoUrl: string | null; websiteUrl: string | null; isDefault: boolean };
+
 const input =
   "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
 const area =
@@ -32,7 +34,18 @@ function secondsOf(file: File): Promise<number> {
 // name, the website (pictures of the product are taken from it) or pictures
 // of it uploaded, the voice and the format. No call to action (the button
 // says the ask the voice ends on), no questions, one quality level.
-export function CreateProjectFormV2({ prefill, voices = [], credits = null, scriptMax = VOICE_SCRIPT_MAX }: { prefill?: Prefill; voices?: VoiceOption[]; credits?: number | null; scriptMax?: number }) {
+export function CreateProjectFormV2({ prefill, voices = [], credits = null, scriptMax = VOICE_SCRIPT_MAX, kits = [] }: { prefill?: Prefill; voices?: VoiceOption[]; credits?: number | null; scriptMax?: number; kits?: KitOption[] }) {
+  // a saved brand kit (/brand): its name, colour, website and icon, so nothing is uploaded again
+  const first = prefill ? undefined : (kits.find((k) => k.isDefault) ?? kits[0]);
+  const [kitId, setKitId] = useState(first?.id ?? "");
+  const kit = kits.find((k) => k.id === kitId);
+  const [brandName, setBrandName] = useState(first?.name ?? prefill?.brandName ?? "");
+  const [website, setWebsite] = useState(first?.websiteUrl ?? prefill?.websiteUrl ?? "");
+  const pick = (k?: KitOption) => {
+    setKitId(k?.id ?? "");
+    setBrandName(k?.name ?? "");
+    setWebsite(k?.websiteUrl ?? "");
+  };
   const [state, action, pending] = useActionState(createProjectV2, {});
   const [mode, setMode] = useState<"script" | "upload">("script");
   const [script, setScript] = useState(prefill?.script ?? "");
@@ -58,7 +71,8 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
         <input type="hidden" name="voice_mode" value={mode} />
         <input type="hidden" name="voice_seconds" value={voiceFile?.seconds ? voiceFile.seconds.toFixed(2) : ""} />
         <input type="hidden" name="format" value={format} />
-        <input type="hidden" name="brand_color" value={logo?.colour ?? ""} />
+        <input type="hidden" name="brand_color" value={logo ? (logo.colour ?? "") : (kit?.color ?? "")} />
+        <input type="hidden" name="brand_kit_id" value={kitId} />
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
 
         <Step n={1} title="Your voice-over" sub="Type the script for our voice to read, or upload your own recording.">
@@ -112,18 +126,35 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
         </Step>
 
         <Step n={2} title="Your brand" sub="Your icon and name reveal the product and close the video.">
+          {kits.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {kits.map((k) => (
+                <button key={k.id} type="button" onClick={() => pick(k)} aria-pressed={kitId === k.id} className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${kitId === k.id ? "border-[#0a66d6] bg-[#0a66d6]/10 font-medium text-[#0a66d6]" : "border-foreground/12 bg-white/70 hover:border-foreground/30"}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {k.logoUrl ? <img src={k.logoUrl} alt="" className="size-5 object-contain" /> : <span className="size-3 rounded-full" style={{ background: k.color ?? "#0a66d6" }} />}
+                  {k.name}
+                </button>
+              ))}
+              <button type="button" onClick={() => pick()} aria-pressed={!kitId} className={`rounded-full border px-3 py-1.5 text-sm ${!kitId ? "border-[#0a66d6] bg-[#0a66d6]/10 font-medium text-[#0a66d6]" : "border-foreground/12 bg-white/70 hover:border-foreground/30"}`}>
+                + Another brand
+              </button>
+              <Link href="/brand" className="text-xs font-medium text-[#0a66d6] hover:underline">
+                Manage brand kits
+              </Link>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Upload
               title="Icon"
-              text={logo ? logo.name : "Upload your icon"}
+              text={logo ? logo.name : kit?.logoUrl ? "Your saved icon · tap to change" : "Upload your icon"}
               sub={`PNG, JPG or WebP · up to ${LOGO_MAX_BYTES / 1024 / 1024} MB`}
               // eslint-disable-next-line @next/next/no-img-element
-              preview={logo ? <img src={logo.url} alt="" className="max-h-12 max-w-[70%] object-contain" /> : undefined}
+              preview={logo || kit?.logoUrl ? <img src={logo?.url ?? kit!.logoUrl!} alt="" className="max-h-12 max-w-[70%] object-contain" /> : undefined}
             >
               <input
                 name="logo"
                 type="file"
-                required
+                required={!kit?.logoUrl}
                 accept="image/png,image/jpeg,image/webp"
                 className="sr-only"
                 onChange={(e) => {
@@ -143,14 +174,20 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
             </Upload>
             <div className="flex flex-col gap-4">
               <Field title="Company name">
-                <input name="brand_name" required defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="Your company name" className={input} />
+                <input name="brand_name" required value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={BRAND_NAME_MAX} placeholder="Your company name" className={input} />
               </Field>
               <Field title="Website (optional)">
-                <input name="website_url" type="text" inputMode="url" defaultValue={prefill?.websiteUrl} maxLength={300} placeholder="yourcompany.com" className={input} />
+                <input name="website_url" type="text" inputMode="url" value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={300} placeholder="yourcompany.com" className={input} />
               </Field>
               <span className={hint}>We take pictures of your product from it for the video.</span>
             </div>
           </div>
+          {!kitId && (
+            <label className="flex items-center gap-2 text-sm text-foreground/75">
+              <input type="checkbox" name="save_kit" value="1" defaultChecked className="size-4 accent-[#0a66d6]" />
+              Save this brand for my next videos
+            </label>
+          )}
           <Upload
             title="Pictures of your product (optional)"
             text={screens.length ? `${screens.length} picture${screens.length > 1 ? "s" : ""} added` : "Add up to 3 pictures"}

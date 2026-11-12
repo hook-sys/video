@@ -163,6 +163,9 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
               <Link href="/billing" onClick={remember} className="gs-btn">
                 Buy credits
               </Link>
+              <Link href="/brand" onClick={remember} className="gs-btn ghost">
+                Brand kits
+              </Link>
               {admin && (
                 <Link href="/admin" onClick={remember} className="gs-btn ghost">
                   Admin panel

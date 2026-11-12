@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { listBrandKits } from "@/lib/brand-kits";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { VOICE_SCRIPT_MAX, voiceChoiceOf } from "@/lib/projects";
 import { AppShell } from "@/components/site/app-shell";
 import { userAccess } from "@/lib/admin";
@@ -36,6 +38,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
   const paid = admin || (user ? await hasPaid(user.id) : false);
   if (user) await grantSignupCredits(user.id, !!user.email_confirmed_at).catch(() => {});
   const credits = user && !admin ? await balanceOf(user.id) : null;
+  const kits = user ? (await listBrandKits(createAdminClient(), user.id).catch(() => [])).map(({ id, name, color, logoUrl, websiteUrl, isDefault }) => ({ id, name, color, logoUrl, websiteUrl, isDefault })) : [];
   return (
     <AppShell title="New video" admin={admin} active="new" initial={(user?.email ?? "?")[0]} wide action={<span />}>
       <div className="mb-6 flex flex-col gap-2">
@@ -46,7 +49,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
         <p className="mb-6 rounded-2xl border border-amber-500/25 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">Your account is waiting for approval. You can look around and fill in your video now — your welcome credits arrive as soon as it&apos;s approved.</p>
       )}
       {/* (only welcome credits so far: a script short enough for them) */}
-      <CreateProjectFormV2 prefill={prefill} voices={voices} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} />
+      <CreateProjectFormV2 prefill={prefill} voices={voices} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} kits={kits} />
     </AppShell>
   );
 }
