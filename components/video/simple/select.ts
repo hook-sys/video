@@ -119,7 +119,12 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // (a thing that only repeats the words shown beside it is not shown again)
     const [c0, c1] = keyRun(words, read.show, read.key, 4);
     const said = words.slice(c0, c1 + 1).map((w) => w.text).join(" ");
-    const r = { ...read, items: read.items.filter((it) => !repeats(it.text, said)) };
+    // the scene's picture: the icon of a word the voice says in this beat — the lit word's first, then
+    // the words on screen, then the rest of the beat — coming in as that word is said; no such word, no
+    // picture (never a stand-in: the owner's rule — the icon is what is being said)
+    const spoken = spokenIcon(words, beats[i], [c0, c1], read.key);
+    const r = { ...read, icon: spoken?.icon ?? read.icon, items: read.items.filter((it) => !repeats(it.text, said)) };
+    let iconAt = spoken ? spoken.at : undefined;
     // (the last beat is always the brand and the ask)
     const about = r.intent === "feature" || r.intent === "solution" || r.shows === "product";
     const base: [TemplateId, number][] = i === readings.length - 1 ? [["cta", 1]] : [...choices(r).filter(([t]) => t !== "cta"), ...(pictured < shots && about ? [["screen", r.intent === "solution" ? 0.35 : 0.6] as [TemplateId, number]] : [])];
@@ -154,8 +159,8 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
         if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
       } else {
         // (another picture the beat's own words stand for — "ডেটা", "অর্ডার" — else moving words when they may come)
-        const alt = words.slice(beats[i].first, beats[i].last + 1).map((w) => wordIcon(w.text)).find((x) => x && !recent.slice(-4).includes(x));
-        if (alt) r.icon = alt;
+        const altWord = words.slice(beats[i].first, beats[i].last + 1).find((w) => { const x = wordIcon(w.text); return x && !recent.slice(-4).includes(x); });
+        if (altWord) [r.icon, iconAt] = [wordIcon(altWord.text), Math.round(altWord.start * FPS)];
         else if (!wasAlone && alone < most && !r.hero) [template, variant] = ["kinetic", R.chance(0.5) ? 0 : 2];
       }
     }
@@ -184,6 +189,19 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     const rows = goesOn ? [...before!.tiles!, ...tiles.filter((t) => !before!.tiles!.some((x) => x.text === t.text))] : tiles;
     const tiled = !panelled && i < readings.length - 1 && tiles.length >= 2 && (template === "statement" || template === "kinetic");
     if (tiled) [template, variant] = ["statement", 1];
+    // (no word said here has a picture: never a scene whose hero is one — another way its beat can be shown
+    // that has a hero of its own, else the words move)
+    if (!r.icon && !tiled && !panelled && !dealt && showsIcon(template, variant, read.concept)) {
+      const other = list.filter(([t]) => t !== "statement" && t !== "kinetic" && !showsIcon(t, 0, read.concept) && !(t === "concept" && !idea));
+      // (a beat that names the brand: its picture is the brand's own mark)
+      const named = bareOf(brand.name).length >= 3 && beatWords.some((w) => bareOf(w.text).includes(bareOf(brand.name).slice(0, Math.max(3, bareOf(brand.name).length - 2))));
+      if (named && prev !== "reveal") [template, variant] = ["reveal", R.int(0, VARIANTS - 1)];
+      else if (other.length) {
+        template = pickOf(other, prev, R);
+        variant = R.int(0, VARIANTS - 1);
+        if (!variantOk(template, variant, r.items.length)) variant = 0;
+      } else [template, variant] = ["kinetic", R.chance(0.5) ? 0 : 2];
+    }
     // (words typed as a prompt only when they ask something)
     if (template === "kinetic" && variant === 1 && !/\?["'”’)]*$/.test(words[r.show[1]]?.text ?? "")) variant = R.chance(0.5) ? 0 : 2;
     wasAlone = wordsAlone(template, variant);
@@ -204,7 +222,8 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       variant,
       left: R.chance(0.5),
       words: litInTime(shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS) - late), key: start + k === r.key })), frames[i].from, frames[i].to),
-      icon: r.icon ?? "sparkles",
+      icon: r.icon ?? "",
+      ...(r.icon && iconAt !== undefined ? { iconAt } : {}),
       // (an idea's things as read: the truth's two words are among the words said)
       items: (template === "concept" ? read : r).items.slice(0, template === "concept" && read.concept === "funnel" ? 5 : 3),
       number: r.number,
@@ -242,6 +261,18 @@ export function litInTime<W extends { at: number; key: boolean }>(words: W[], fr
   const at = words[k].at - by;
   return words.map((w, j) => (j < k ? { ...w, at: Math.min(w.at, at) } : { ...w, at: Math.max(from, w.at - by) }));
 }
+
+// The icon of a word said in the beat, and when it is said: the lit word's, then the words shown, then the beat's others
+function spokenIcon(words: Word[], beat: Beat, [a, b]: [number, number], key: number | null): { icon: string; at: number } | null {
+  const order = [...(key !== null && key >= beat.first && key <= beat.last ? [key] : []), ...Array.from({ length: b - a + 1 }, (_, k) => a + k), ...Array.from({ length: beat.last - beat.first + 1 }, (_, k) => beat.first + k)];
+  for (const k of order) {
+    const icon = words[k] ? wordIcon(words[k].text) : null;
+    if (icon) return { icon, at: Math.round(words[k].start * FPS) };
+  }
+  return null;
+}
+// the templates (and variants) whose hero is the scene's own icon
+export const showsIcon = (t: TemplateId, v: number, concept?: string) => (t === "statement" && v === 1) || t === "feature" || t === "stat" || t === "chart" || t === "messages" || t === "screen" || (t === "concept" && concept === "trapped");
 
 // a look by weight: soft 0.28, the others 0.18 each
 export const styleOf = (x: number): Style => (x < 0.28 ? "soft" : STYLES[1 + Math.min(3, Math.floor((x - 0.28) / 0.18))]);

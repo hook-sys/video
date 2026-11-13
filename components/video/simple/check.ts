@@ -8,7 +8,7 @@ import { TEMPLATE, clickOf } from "./more";
 import { norm, thingAt, tileAt } from "./scenes";
 import { rowAt } from "./panel";
 import { dealAt } from "./deck";
-import { choices, grey, planOf, printOf, variantOk, wordsAlone } from "./select";
+import { choices, grey, planOf, printOf, showsIcon, variantOk, wordsAlone } from "./select";
 import { contrast, lookOf, themeOf } from "./theme";
 import { ideaNeedsThings, GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, VARIANTS } from "./types";
 
@@ -173,8 +173,8 @@ function fewerWords(s: Scene, most: number): Scene {
   const words = s.words.slice(from, from + most);
   return { ...s, words: words.map((w, j) => ({ ...w, t: j === 0 ? w.t.charAt(0).toUpperCase() + w.t.slice(1) : w.t })) };
 }
-// icons the library has (a thing without one shows the scene's)
-const knownIcons = (s: Scene): Scene => ({ ...s, icon: resolveIcon(s.icon) ? s.icon : "sparkles", items: s.items.map((it) => (it.icon && !resolveIcon(it.icon) ? { ...it, icon: null } : it)) });
+// icons the library has (an unknown one is none: never a stand-in for what is said)
+const knownIcons = (s: Scene): Scene => ({ ...s, icon: resolveIcon(s.icon) ? s.icon : "", items: s.items.map((it) => (it.icon && !resolveIcon(it.icon) ? { ...it, icon: null } : it)) });
 const unique = (s: Scene): Scene => {
   const said = norm(s.words.map((w) => w.t).join(" "));
   return { ...s, items: s.items.filter((it, k) => norm(it.text) !== said && s.items.findIndex((x) => norm(x.text) === norm(it.text)) === k) };
@@ -199,7 +199,8 @@ function candidates(plan: SimplePlan, i: number, kinds: Set<Problem["kind"]>, re
     // (the last resort: the words beside its icon, then the words alone)
     if (!near.has("statement")) out.push({ ...fewerWords(base, 4), template: "statement", variant: 1, items: [] }, { ...fewerWords(base, 4), template: "statement", variant: 0, items: [] });
   }
-  return out;
+  // (a scene with no word whose picture is said is never one whose hero is its icon)
+  return out.filter((x) => x.icon || (x.tiles?.length ?? 0) >= 2 || !showsIcon(x.template, x.variant, x.concept));
 }
 
 // The lit word's icon kept only where it fits: a scene whose words fit

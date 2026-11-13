@@ -1,4 +1,3 @@
-import { searchIcons } from "@/lib/icons";
 import { asksBn, bare, hasDigit, leadsBn, numberInWords, numbersInWords, stemsBn, trailsBn } from "./bangla";
 import { wordIcon } from "./motion";
 import type { Beat, Concept, Intent, Item, Reading, Word } from "./types";
@@ -33,7 +32,7 @@ function ideaOf(text: string): { concept: Concept; items?: Item[] } | null {
   const t = TRUTH.exec(text);
   if (t && !STOP.has(t[1].toLowerCase()) && !STOP.has(t[2].toLowerCase())) return { concept: "truth", items: [t[1], t[2]].map((x) => ({ text: x.charAt(0).toUpperCase() + x.slice(1), icon: null })) };
   const b = BARRIERS.exec(text);
-  if (b) return { concept: "barriers", items: b.slice(1).filter(Boolean).map((x) => x.replace(/[.,;!?]+$/, "")).map((x) => ({ text: x.charAt(0).toUpperCase() + x.slice(1), icon: searchIcons(x, 1)[0] ?? null })) };
+  if (b) return { concept: "barriers", items: b.slice(1).filter(Boolean).map((x) => x.replace(/[.,;!?]+$/, "")).map((x) => ({ text: x.charAt(0).toUpperCase() + x.slice(1), icon: x.split(/\s+/).map((w) => wordIcon(w)).find(Boolean) ?? null })) };
   const hit = IDEAS.find(([, re]) => re.test(text));
   return hit ? { concept: hit[0] } : null;
 }
@@ -64,10 +63,11 @@ export function guessReadings(words: Word[], beats: Beat[], brand: string): Read
     const shown = words.slice(best[0], best[1] + 1);
     const key = best[0] + shown.reduce((k, w, j) => (clean(w.text).length > clean(shown[k].text).length ? j : k), 0);
     const things = [...new Set(words.slice(b.first, b.last + 1).map((w) => clean(w.text)).filter((t) => isWord(t) && !/\d/.test(t)))];
-    const items: Item[] = things.slice(0, 3).map((t) => ({ text: t.charAt(0).toUpperCase() + t.slice(1), icon: searchIcons(t, 1)[0] ?? null }));
+    // (a thing's picture is its own word's: the owner's rule — never a guess near it)
+    const items: Item[] = things.slice(0, 3).map((t) => ({ text: t.charAt(0).toUpperCase() + t.slice(1), icon: wordIcon(t) }));
     const number = words.slice(b.first, b.last + 1).map((w) => clean(w.text)).find((t) => /\d/.test(t)) ?? null;
     const idea = i < beats.length - 1 ? ideaOf(text) : null;
-    return { intent: intentOf(text, i, beats.length, brand), show: best, key, icon: searchIcons(text, 1)[0] ?? "sparkles", items: idea ? (idea.items ?? []) : items, number, ...(idea ? { concept: idea.concept } : {}) };
+    return { intent: intentOf(text, i, beats.length, brand), show: best, key, icon: words.slice(b.first, b.last + 1).map((w) => wordIcon(w.text)).find(Boolean) ?? null, items: idea ? (idea.items ?? []) : items, number, ...(idea ? { concept: idea.concept } : {}) };
   });
 }
 
@@ -127,7 +127,8 @@ function thingsOf(ws: string[]): Item[] {
     const icon = wordIcon(w);
     if (!icon) continue;
     // (the shortest stem the icon is found by: "অডিয়েন্সের" → "অডিয়েন্স", not "অডিয়েন্সে")
-    const text = stemsBn(w).filter((x) => x.length >= 2 && wordIcon(x) === icon).sort((x, y) => x.length - y.length)[0] ?? stem1(w);
+    // (a word known only by its own forms — "দিনের", "দিনে": the card says "দিন")
+    const text = stemsBn(w).filter((x) => x.length >= 2 && (wordIcon(x) === icon || wordIcon(`${x}ের`) === icon)).sort((x, y) => x.length - y.length)[0] ?? stem1(w);
     if (out.some((x) => x.icon === icon || x.text === text)) continue;
     out.push({ text, icon });
   }
@@ -264,7 +265,8 @@ function readBangla(words: Word[], beats: Beat[], brand: string): Reading[] {
       // (shares listed on the way to the one said last — "২৫, ৫০, ৭৫ … ১০০ শতাংশ" — are a bar's stops)
       if (!last && unit && items.length >= 2 && items.every((x) => /^[০-৯]+%$/.test(x.text))) concept = "progress";
     }
-    const icon = iconOfBn(ws) ?? ({ hook: "sparkles", problem: "triangle-alert", solution: "rocket", feature: "circle-check", proof: "trending-up", steps: "list-checks", cta: "arrow-right" } as Record<Intent, string>)[intent];
+    // (the picture is a word said — none said, none: never a stand-in for the beat's kind)
+    const icon = iconOfBn(ws);
     return { intent, show: best, key, icon, items, number, ...(concept ? { concept } : {}) };
   });
 }

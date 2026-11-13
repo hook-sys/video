@@ -107,7 +107,10 @@ export type Scene = {
   left: boolean;
   // the words shown, each when it is said; `key` lit
   words: { t: string; at: number; key: boolean }[];
+  // its picture: the icon of a word said in it ("" when none is — then no template shows one), and the
+  // frame that word is said (the icon comes in with it)
   icon: string;
+  iconAt?: number;
   items: Item[];
   number: string | null;
   // (a screen scene) which picture of the product it shows

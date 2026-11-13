@@ -94,7 +94,8 @@ export function motionStyle(m: Motion | null, t: number): CSSProperties {
 
 // ── the icon a word plainly stands for ────────────────────────────────────
 // Only words whose icon is beyond doubt; any other word gets none (never a
-// stand-in). No people, faces or animals (icons/living.ts).
+// stand-in): the picture is the word said (the owner's rule). No faces, bodies
+// or animals; a word about people is the outline of a person or people (icons/living.ts).
 const WORD_ICONS: Record<string, string> = {
   invoice: "receipt", invoices: "receipt", receipt: "receipt", receipts: "receipt", billing: "receipt", bill: "receipt", bills: "receipt",
   payment: "credit-card", payments: "credit-card", pay: "credit-card", paid: "credit-card", card: "credit-card", checkout: "shopping-cart", cart: "shopping-cart",
@@ -124,6 +125,21 @@ const WORD_ICONS: Record<string, string> = {
   rated: "star", rating: "star", reviews: "star", favorite: "heart", love: "heart", award: "trophy", winning: "trophy", win: "trophy",
   idea: "lightbulb", ideas: "lightbulb", learn: "graduation-cap", learning: "graduation-cap", course: "graduation-cap", courses: "graduation-cap",
   location: "map-pin", map: "map", store: "store", shop: "store", restaurant: "utensils", food: "utensils",
+  // people (the outline of a person or people)
+  audience: "users", audiences: "users", customer: "user-round", customers: "users", client: "user-round", clients: "users", user: "user-round", users: "users", people: "users",
+  team: "users", teams: "users", visitor: "users", visitors: "users", follower: "users", followers: "users", community: "users-round", lead: "user-plus", leads: "user-plus", age: "user-round", gender: "venus-and-mars",
+  day: "sun", days: "calendar-days", daily: "sun", night: "moon", week: "calendar-days", weekly: "calendar-days", month: "calendar", monthly: "calendar", year: "calendar", yearly: "calendar",
+  views: "eye", view: "eye", impressions: "eye", reach: "radio-tower", share: "share-2", shares: "share-2", comment: "message-square", comments: "message-square", likes: "heart",
+  loss: "trending-down", losses: "trending-down", drop: "trending-down", problem: "triangle-alert", problems: "triangle-alert", risk: "triangle-alert", question: "circle-help", questions: "circle-help",
+  trust: "shield-check", quality: "badge-check", competitor: "swords", competitors: "swords", service: "concierge-bell", services: "concierge-bell", office: "building-2", company: "building-2", companies: "building-2",
+  meeting: "presentation", meetings: "presentation", training: "graduation-cap", job: "briefcase", jobs: "briefcase", business: "briefcase", bank: "landmark", loan: "landmark", invest: "coins", investment: "coins", coins: "coins",
+  design: "palette", creative: "palette", creatives: "palette", copy: "pen-line", copywriting: "pen-line", write: "pen-line", writing: "pen-line", content: "image", post: "image", posts: "image", photo: "camera", photos: "camera", video: "play", videos: "play",
+  product: "package", products: "package", software: "app-window", platform: "app-window", factory: "factory", factories: "factory", manufacturer: "factory", manufacturers: "factory", manufacturing: "factory",
+  script: "file-text", scripts: "file-text", story: "book-open", stories: "book-open", storytelling: "book-open", timing: "clock", animation: "film", animations: "film", scene: "clapperboard", scenes: "clapperboard", transitions: "arrow-right-left",
+  install: "download", download: "download", today: "calendar-check", tomorrow: "calendar", saturday: "calendar-days", sunday: "calendar-days", weekend: "calendar-days", shift: "calendar-clock", shifts: "calendar-clock",
+  clinic: "hospital", clinics: "hospital", hospital: "hospital", doctor: "stethoscope", patients: "users", patient: "user-round", direction: "compass", forward: "arrow-right", improve: "trending-up", difference: "arrow-right-left",
+  numbers: "calculator", accounting: "calculator", tax: "calculator", taxes: "calculator", visual: "eye", visuals: "eye",
+  call: "phone-call", calls: "phone-call", whatsapp: "message-circle", offer: "tag", offers: "tag", discount: "tag", free: "gift", gift: "gift", conversion: "repeat", conversions: "repeat", funnel: "filter", campaign: "megaphone", campaigns: "megaphone", ad: "megaphone", ads: "megaphone", marketing: "megaphone",
 };
 // Bangla: the word as written or its stem ("ডেলিভারির" → ডেলিভারি; bangla.ts); the same rule —
 // only an icon beyond doubt, never a person
@@ -141,8 +157,16 @@ const BN_ICONS: Record<string, string> = {
   সার্চ: "search", খুঁজুন: "search", ক্লাউড: "cloud", আপডেট: "refresh-cw", মোবাইল: "smartphone", ফোন: "smartphone", অ্যাপ: "smartphone", ওয়েবসাইট: "globe", অনলাইন: "globe",
   ফাইল: "file-text", ডকুমেন্ট: "file-text", কাগজপত্র: "file-text", চুক্তি: "file-signature", লক্ষ্য: "target", টার্গেট: "target", টার্গেটিং: "target", ক্যাম্পেইন: "megaphone", বিজ্ঞাপন: "megaphone", অ্যাড: "megaphone",
   লঞ্চ: "rocket", ভিডিও: "play", ছবি: "image", কনটেন্ট: "image", রেটিং: "star", রিভিউ: "star", পুরস্কার: "trophy", আইডিয়া: "lightbulb", শিক্ষা: "graduation-cap", কোর্স: "graduation-cap",
-  বয়স: "cake", দিন: "sun", রাত: "moon", অ্যাক্টিভ: "activity", আগ্রহ: "heart", আগ্রহী: "heart", পছন্দ: "heart",
-  অডিয়েন্স: "radar", কাস্টমার: "id-card", গ্রাহক: "id-card", ক্রেতা: "id-card", ভিজিটর: "mouse-pointer-click", ক্লিক: "mouse-pointer-click", পেজ: "file", ল্যান্ডিং: "file",
+  // people: the outline of a person or people (the owner's rule: the picture is the word said)
+  বয়স: "user-round", জেন্ডার: "venus-and-mars", লিঙ্গ: "venus-and-mars", মানুষ: "users", লোক: "users", লোকজন: "users", টিম: "users", কর্মী: "users", ফলোয়ার: "users", কমিউনিটি: "users-round", লিড: "user-plus", ইউজার: "user-round",
+  // ("দিন" alone is also "give" — "তথ্য দিন": only the day's own forms are the sun)
+  দিনের: "sun", দিনে: "sun", প্রতিদিন: "sun", সারাদিন: "sun", রাত: "moon", সপ্তাহ: "calendar-days", মাস: "calendar", বছর: "calendar", সকাল: "sun", বিকাল: "sun", সন্ধ্যা: "moon",
+  ভিউ: "eye", ইমপ্রেশন: "eye", দেখা: "eye", রিচ: "radio-tower", শেয়ার: "share-2", কমেন্ট: "message-square", লাইক: "heart", পোস্ট: "image",
+  লস: "trending-down", ক্ষতি: "trending-down", কমে: "trending-down", সমস্যা: "triangle-alert", ঝুঁকি: "triangle-alert", প্রশ্ন: "circle-help", সমাধান: "lightbulb",
+  বিশ্বাস: "shield-check", ট্রাস্ট: "shield-check", কোয়ালিটি: "badge-check", প্রতিযোগী: "swords", কম্পিটিটর: "swords", সেবা: "concierge-bell", সার্ভিস: "concierge-bell", অফিস: "building-2", কোম্পানি: "building-2", প্রতিষ্ঠান: "building-2",
+  মিটিং: "presentation", ট্রেনিং: "graduation-cap", চাকরি: "briefcase", ব্যাংক: "landmark", লোন: "landmark", বিনিয়োগ: "coins", ইনভেস্ট: "coins", বিকাশ: "wallet",
+  ডিজাইন: "palette", ক্রিয়েটিভ: "palette", কপিরাইটিং: "pen-line", লেখা: "pen-line", ক্যামেরা: "camera", ফটো: "camera", কল: "phone-call", হোয়াটসঅ্যাপ: "message-circle", অ্যাক্টিভ: "activity", আগ্রহ: "heart", আগ্রহী: "heart", পছন্দ: "heart",
+  অডিয়েন্স: "users", কাস্টমার: "user-round", গ্রাহক: "user-round", ক্রেতা: "user-round", ভিজিটর: "users", ক্লিক: "mouse-pointer-click", পেজ: "file", ল্যান্ডিং: "file",
   পারচেজ: "shopping-bag", কেনাকাটা: "shopping-bag", ইকমার্স: "shopping-bag", রিটার্ন: "undo-2", ক্যানসেল: "circle-x", বাতিল: "circle-x", কনভার্শন: "repeat", ফানেল: "filter",
   স্কেল: "trending-up", শতাংশ: "percent", সিদ্ধান্ত: "signpost", ডিসিশন: "signpost", অনুমান: "circle-help", মার্কেটিং: "megaphone", কপি: "file-text", বিজনেস: "briefcase", ব্যবসা: "briefcase", ব্যবসায়: "briefcase",
   লোকেশন: "map-pin", এলাকা: "map-pin", ঠিকানা: "map-pin", দোকান: "store", শপ: "store", রেস্টুরেন্ট: "utensils", খাবার: "utensils", স্বাস্থ্য: "heart-pulse", ঘর: "house", বাড়ি: "house",

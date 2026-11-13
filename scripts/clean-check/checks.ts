@@ -23,18 +23,35 @@ import { askOf, beatsOf, durationOf } from "@/components/video/simple/beats";
 import { isPublicHost, websiteUrlOf } from "@/lib/website-url";
 import { applyEdit, editOf } from "@/components/video/simple/edit";
 import { guessReadings } from "@/components/video/simple/guess";
-import { differs, planOf, repeats, wordsAlone } from "@/components/video/simple/select";
+import { differs, planOf, repeats, showsIcon, wordsAlone } from "@/components/video/simple/select";
 import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
 import { bestPlan, checkPlan, colourProblemsOf, heroShares, repairPlan, scoreOf } from "@/components/video/simple/check";
 import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
 import { geoFor, geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/simple/faces";
-import { CONCEPTS, GROUNDS, type Scene, STYLES, STYLE_GROUNDS, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
+import { CONCEPTS, GROUNDS, type Scene, type SimplePlan, STYLES, STYLE_GROUNDS, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
 import { conceptSounds, turnOf } from "@/components/video/simple/concept";
 import { PUNCH } from "@/components/video/simple/scenes";
 import { alignScript, pausesOf } from "@/lib/voice-align";
 import { numberInWords, leadsBn, trailsBn } from "@/components/video/simple/bangla";
+
+// Every icon on screen — a scene's, a card's or a row's — is the icon of a word said in its beat, and a
+// scene's comes in with that word; a scene whose hero is its icon always has one (the owner's rule)
+function iconsOff(pl: SimplePlan): string[] {
+  return pl.scenes.flatMap((x, k) => {
+    if (x.template === "cta" || x.template === "point") return [];
+    const heard = new Set((x.said ?? []).map((w) => wordIcon(w.t)).filter(Boolean));
+    const hero = showsIcon(x.template, x.variant, x.concept) && !(x.tiles?.length ?? 0);
+    const bad: string[] = [];
+    if (hero && !x.icon) bad.push(`scene ${k + 1} ${x.template}: no picture`);
+    if (hero && x.icon && !heard.has(x.icon)) bad.push(`scene ${k + 1} ${x.template}: ${x.icon} not said`);
+    if (x.icon && x.iconAt !== undefined && !(x.said ?? []).some((w) => wordIcon(w.t) === x.icon && Math.abs(w.at - x.iconAt!) <= 1)) bad.push(`scene ${k + 1}: ${x.icon} not timed to its word`);
+    // (a panel going on keeps the rows said in the beat before: those are checked there)
+    for (const t of (x.tiles ?? []).slice(x.carry ?? 0)) if (!heard.has(t.icon)) bad.push(`scene ${k + 1} card ${t.text}: ${t.icon} not said`);
+    return bad;
+  });
+}
 import { TYPE_PAIRS } from "@/components/video/simple/types";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
@@ -268,6 +285,8 @@ export async function runChecks(): Promise<Check[]> {
       return [11, 222, 3333, 44444].map((seed) => repairPlan(planOf({ words: c.words, beats, readings, brand: { name: c.brand, color: "#6a5bff", cta: "Get started" }, seed, duration: durationOf(c.words) }), readings).plan);
     });
     const body = drawn.flatMap((p) => p.scenes.slice(0, -1).map((sc, i) => ({ sc, alone: wordsAlone(sc.template, sc.variant), before: i ? wordsAlone(p.scenes[i - 1].template, p.scenes[i - 1].variant) : false })));
+    const iconLeft = drawn.flatMap(iconsOff);
+    add("the picture is the word said: every icon on screen is a word said in its beat, and comes in with it; none said, none shown", !iconLeft.length, iconLeft.slice(0, 3).join(" · ") || `${drawn.reduce((n, p) => n + p.scenes.length, 0)} scenes`);
     const aloneShare = body.filter((x) => x.alone).length / body.length;
     const heroes = drawn.flatMap((p) => heroShares(p)).filter((x): x is number => x != null);
     const heroMean = heroes.reduce((a, x) => a + x, 0) / heroes.length;
@@ -364,8 +383,8 @@ export async function runChecks(): Promise<Check[]> {
     const together = Math.max(...heard.map((list) => Math.max(0, ...list.map((e) => list.filter((x) => x.at <= e.at && x.at + SOUND_FRAMES[x.name] > e.at).length))));
     const keyed = body.filter((x) => x.alone && keyIconOf(x.sc)).length;
     const moving = heard.flat().filter((e) => ["tick", "ding", "rise", "shimmer", "lock", "digital_processing", "typing"].includes(e.name)).length;
-    const plain = wordIcon("Invoices,") === "receipt" && wordIcon("fast") === "zap" && wordIcon("the") === null && wordIcon("team") === null && motionOf("circle-check") === "draw" && motionOf("bell") === "ring" && motionOf("house") === null;
-    add("icons that move, with their own sound: a word gets an icon only when it plainly stands for one (none for the rest, never a person); every icon and sound is there; never more than 3 sounds in a second, nor more than 3 sounding at once", !badIcons.length && !sounds.length && !unknown && crowd <= 3 && together <= MOST_AT_ONCE && plain, `${badIcons.length ? `no icon ${badIcons.join(", ")} · ` : ""}${sounds.length ? `no sound ${sounds.join(", ")} · ` : ""}${keyed}/${body.filter((x) => x.alone).length} words-alone scenes with an icon · ${moving} icon/typing sounds in ${drawn.length} videos · at most ${crowd} sounds a second, ${together} at once`);
+    const plain = wordIcon("Invoices,") === "receipt" && wordIcon("fast") === "zap" && wordIcon("the") === null && wordIcon("team") === "users" && wordIcon("বয়সের") === "user-round" && wordIcon("দিনের") === "sun" && wordIcon("দিন") === null && wordIcon("মানে") === null && motionOf("circle-check") === "draw" && motionOf("bell") === "ring" && motionOf("house") === null;
+    add("icons that move, with their own sound: a word gets an icon only when it plainly stands for one (none for the rest; people only as an outline, never a face or an animal); every icon and sound is there; never more than 3 sounds in a second, nor more than 3 sounding at once", !badIcons.length && !sounds.length && !unknown && crowd <= 3 && together <= MOST_AT_ONCE && plain, `${badIcons.length ? `no icon ${badIcons.join(", ")} · ` : ""}${sounds.length ? `no sound ${sounds.join(", ")} · ` : ""}${keyed}/${body.filter((x) => x.alone).length} words-alone scenes with an icon · ${moving} icon/typing sounds in ${drawn.length} videos · at most ${crowd} sounds a second, ${together} at once`);
   }
 
   {
@@ -480,6 +499,9 @@ export async function runChecks(): Promise<Check[]> {
     const panels = tall.scenes.filter((x) => x.template === "panel");
     const inOrder = panels.every((x) => x.tiles!.every((t, k, a) => (k < (x.carry ?? 0) || (t.at >= x.from - 6 && t.at < x.to)) && (!k || t.at >= a[k - 1].at)) && x.tiles!.length <= 5);
     const chains = tall.scenes.every((x, k) => !x.cont || (k > 0 && tall.scenes[k - 1].template === "panel" && (tall.scenes[k - 1].point?.n ?? 0) === (x.point?.n ?? 0) && (x.carry ?? 0) === tall.scenes[k - 1].tiles!.length));
+    // the picture is the word said (the owner's rule), in Bangla too
+    const iconLeftBn = iconsOff(tall);
+    add("the picture is the word said (Bangla): every icon on screen is a word said in its beat, and comes in with it; none said, none shown", !iconLeftBn.length, iconLeftBn.slice(0, 3).join(" · ") || `${tall.scenes.length} scenes`);
     add("Bangla: a beat's things as a panel's rows, each in as it is said; going on in the same panel without a cut inside a point", panels.length >= 1 && inOrder && chains, panels.map((x) => `${x.cont ? "+" : ""}${x.tiles!.map((t) => t.text).join("|")}`).join(" · ") || "none");
     // 9. cards, not screenshots (the owner's choice): a Bangla video has no product screen, phone or message
     //    screen; cards are dealt as their words are said; panel and cards never the same look twice running

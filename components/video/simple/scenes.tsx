@@ -107,12 +107,14 @@ function Statement({ c }: { c: C }) {
   if (c.s.variant === 0) return <WordsIn c={c} box={{ left: pad, top: 0, width: W - 2 * pad, height: H }} place="center" />;
   if (c.s.variant === 1 && (c.s.tiles?.length ?? 0) >= 2) return <Tiles c={c} />;
   if (c.s.variant === 1) {
-    const k = springAt(c, c.s.from + 4, 1.4);
+    // (the icon comes in just before its word is said — the voice and the picture together)
+    const inAt = Math.max(c.s.from + 4, (c.s.iconAt ?? 0) - 6);
+    const k = springAt(c, inAt, 1.4);
     const float = Math.sin((c.f - c.s.from) / 22) * 10;
     return (
       <Side c={c} dw={560} dh={560} hw={760}>
         <div style={{ ...center({ inset: 0 }), opacity: clamp01(k * 1.8), transform: `scale(${(0.6 + 0.4 * k).toFixed(4)}) translateY(${float.toFixed(1)}px) rotate(${((1 - k) * -14).toFixed(2)}deg)` }}>
-          {livingOf(c.s.icon) ? <div data-part="icon"><Living name={livingOf(c.s.icon)!} size={440} at={c.s.from + 4} /></div> : <Glyph c={c} part="icon" name={c.s.icon} size={440} solid />}
+          {livingOf(c.s.icon) ? <div data-part="icon"><Living name={livingOf(c.s.icon)!} size={440} at={inAt} /></div> : <Glyph c={c} part="icon" name={c.s.icon} size={440} solid at={inAt} />}
         </div>
       </Side>
     );

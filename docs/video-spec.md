@@ -236,6 +236,19 @@ video's own ground stays under the rest.
 
 ## Icons that move, with their own sound (components/video/simple/motion.ts)
 
+**The picture is the word said (the owner's rule).** Every icon on screen — a
+scene's hero, a card's, a panel row's — is the icon of a word the voice says in
+that beat (`wordIcon`: English and Bangla word lists, Bangla by its stems), and
+a scene's comes in with that word (`Scene.iconAt`, the lit word's first, then
+the words on screen, then the rest of the beat). A beat with no such word has no
+picture of its own: it is never shown by a template whose hero is its icon
+(`showsIcon`) — another way with a hero of its own is chosen (the brand's mark
+when the beat names the brand), else the words move. Never a stand-in icon.
+Ambiguous words map only in their clear forms ("দিনের" is the sun; "দিন" alone
+is also "give"). A word about people is the plain outline of a person or people
+(user, users — the owner's exception of 13 Nov 2026); never a face, a body or an
+animal. Checked on every test script, English and Bangla.
+
 Every icon on a tile (kit.tsx Glyph) does what it means once it has come in:
 a check is drawn, a bell rings, a chart line rises, a bolt flashes, a letter
 flies off and back, a lock shuts, a cog turns, a clock ticks, a truck drives
