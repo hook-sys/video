@@ -24,7 +24,7 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
   const editing = typeof edit === "string" ? kits.find((k) => k.id === edit) : undefined;
 
   return (
-    <AppShell title="Brand kits" admin={admin} active="account" initial={(user.email ?? "?")[0]}>
+    <AppShell title="Brand kits" admin={admin} active="brand" initial={(user.email ?? "?")[0]}>
       <div className="flex flex-col gap-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Your brand kits</h1>

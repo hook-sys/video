@@ -62,7 +62,7 @@
 .gs-btn.big { font-size: 16px; padding: 13px 22px; }
 
 /* the windows: one at a time */
-.gs-stage { position: relative; z-index: 1; width: min(1080px, calc(100% - 32px)); margin: 28px auto 130px; }
+.gs-stage { position: relative; z-index: 1; width: min(1080px, calc(100% - 32px)); margin: 28px auto 56px; }
 .gs-win { position: relative; z-index: 1; border-radius: var(--gs-radius); overflow: hidden; transform-origin: 50% 50%; }
 .gs-win.leaving { position: absolute; left: 0; top: 0; width: 100%; z-index: 0; pointer-events: none; }
 .gs-titlebar { display: flex; align-items: center; padding: 14px 18px; border-bottom: 1px solid rgba(29, 29, 31, 0.06); }
@@ -142,7 +142,7 @@
 .gs-dock button:hover .gs-tile, .gs-dock a:hover .gs-tile { filter: brightness(1.08); }
 .gs-sep { width: 1px; background: rgba(29, 29, 31, 0.12); margin: 4px 2px 18px; }
 
-.gs-footer { position: relative; z-index: 1; width: min(1080px, calc(100% - 32px)); margin: -100px auto 0; padding-bottom: 120px; font-size: 13px; color: var(--gs-ink-2); }
+.gs-footer { position: relative; z-index: 1; width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding-bottom: 40px; font-size: 13px; color: var(--gs-ink-2); }
 
 @media (max-width: 760px) {
   .gs-bar { padding: 8px 8px 8px 12px; }
@@ -249,25 +249,12 @@
 .gs-wait-steps li.now .dot { background: var(--gs-accent); color: #fff; }
 .gs-wait-steps li.now em { color: var(--gs-accent); font-weight: 600; }
 
-/* ── a computer: the dock stands on the left (every button in it), no bar on
-   top; on a phone the bar stays on top and the dock below ── */
+/* ── a computer: the menu bar on top (top-nav.tsx); the dock is gone ── */
 .gs-only-wide { display: none !important; }
 @media (min-width: 1024px) {
   .gs-only-wide { display: flex !important; }
-  .gs-bar:not(.admin) { display: none; }
-  .gs-dock {
-    left: 20px; top: 50%; bottom: auto; transform: translateY(-50%);
-    flex-direction: column; align-items: center; gap: 12px; padding: 14px 10px; border-radius: 26px;
-    max-height: calc(100vh - 40px); overflow-y: auto; scrollbar-width: none;
-  }
-  .gs-dock small { font-size: 10.5px; }
-  .gs-dock [aria-current="page"]::after { bottom: auto; top: 24px; left: -8px; }
-  .gs-sep { width: 36px; height: 1px; margin: 2px 0; }
-  .gs-dock .gs-dock-brand .gs-mark { width: 32px; height: 32px; }
-  .gs-stage { margin-top: 40px; width: min(1080px, calc(100% - 260px)); }
-  .gs-stage.wide, .gs-footer.wide { width: min(1200px, calc(100% - 260px)); }
-  .gs-footer { width: min(1080px, calc(100% - 260px)); margin-top: -96px; }
-  .gs-wait-win { margin-top: 12vh; }
+  .gs-stage { margin-top: 40px; }
+  .gs-wait-win { margin-top: 10vh; }
 }
 
 /* while a video is made: how far along (still), and a way back */
@@ -280,4 +267,75 @@
 @media (max-width: 760px) {
   .gs-wait-win { margin-top: 20px; }
   .gs-wait-steps li { padding: 12px 14px; }
+}
+
+/* ══ MotionDots (13 Nov 2026): the brand's gradient, the display face, the menu bar on top ══ */
+.gs {
+  --md-grad: linear-gradient(120deg, #5b5bf6 0%, #a445f2 55%, #ff5c9d 100%);
+  --md-ink: #14121f;
+  --gs-accent: #6d4cf5;
+  --gs-accent-hover: #5b3ae8;
+  --gs-page: #f1f0f7;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+.gs h1, .gs h2, .gs h3, .gs-word, .gs .gs-kicker { font-family: var(--font-display), var(--font-geist-sans), system-ui, sans-serif; }
+.gs-desk .d1 { background: #d6d2fb; }
+.gs-desk .d2 { background: #fbd6e6; }
+.gs-desk .d3 { background: #d9e8fb; }
+
+/* the name */
+.gs-word { font-weight: 800; font-size: 18px; letter-spacing: -0.03em; color: var(--md-ink); }
+.gs-word b { font-weight: 800; background: var(--md-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* the mark: its dots bounce once, one after another, under the pointer */
+.gs-mark circle { transform-box: fill-box; transform-origin: 50% 100%; }
+.gs-brand:hover .gs-mark .d1 { animation: md-bounce 0.62s cubic-bezier(.3,.7,.4,1.4) 0s; }
+.gs-brand:hover .gs-mark .d2 { animation: md-bounce 0.62s cubic-bezier(.3,.7,.4,1.4) 0.07s; }
+.gs-brand:hover .gs-mark .d3 { animation: md-bounce 0.62s cubic-bezier(.3,.7,.4,1.4) 0.14s; }
+@keyframes md-bounce { 0% { transform: translateY(0) scale(1); } 35% { transform: translateY(-5px) scale(1.12, 0.9); } 60% { transform: translateY(0) scale(0.92, 1.08); } 100% { transform: translateY(0) scale(1); } }
+.gs-brand .gs-mark { width: 30px; height: 30px; filter: drop-shadow(0 4px 10px rgba(164, 69, 242, 0.35)); }
+
+/* buttons: the gradient, a light that crosses on hover, a press that gives */
+.gs-btn {
+  position: relative; overflow: hidden; background: var(--md-grad); background-size: 140% 100%; background-position: 0 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 8px 22px -10px rgba(164, 69, 242, 0.7);
+  transition: transform 0.18s cubic-bezier(.3,.7,.4,1.3), box-shadow 0.2s, background-position 0.5s;
+}
+.gs-btn:hover { background: var(--md-grad); background-size: 140% 100%; background-position: 100% 0; transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 12px 28px -10px rgba(164, 69, 242, 0.8); }
+.gs-btn:active { transform: translateY(0) scale(0.96); }
+.gs-btn::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%); transform: translateX(-120%); }
+.gs-btn:hover::after { transform: translateX(120%); transition: transform 0.7s ease; }
+.gs-btn.ghost { background: var(--gs-glass-strong); }
+.gs-btn.ghost::after { display: none; }
+
+/* the menu bar */
+.md-nav { position: sticky; top: 0; z-index: 40; padding: 12px 16px 0; }
+.md-nav-in {
+  width: min(1180px, 100%); margin: 0 auto; display: flex; align-items: center; gap: 18px;
+  padding: 8px 8px 8px 14px; border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6);
+  border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: inset 0 -1px 0 rgba(20, 18, 31, 0.05), 0 10px 30px -18px rgba(40, 20, 90, 0.35);
+}
+.md-nav-in.wide { width: min(1280px, 100%); }
+.md-nav .gs-brand { margin-right: 6px; }
+.md-links { display: flex; gap: 2px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.md-links::-webkit-scrollbar { display: none; }
+.md-link { position: relative; padding: 8px 13px; border-radius: 12px; font-size: 14px; font-weight: 500; color: #57546a; text-decoration: none; white-space: nowrap; transition: color 0.15s, background 0.15s; }
+.md-link:hover { color: var(--md-ink); background: rgba(20, 18, 31, 0.05); }
+.md-link.on { color: var(--md-ink); }
+.md-link.on::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: var(--md-grad); box-shadow: 0 0 8px rgba(164, 69, 242, 0.7); animation: md-dot 0.4s cubic-bezier(.3,.7,.4,1.5); }
+@keyframes md-dot { from { transform: scale(0) translateY(4px); } to { transform: scale(1) translateY(0); } }
+.md-right { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.md-avatar { width: 38px; height: 38px; border-radius: 50%; padding: 2px; background: var(--md-grad); display: grid; text-decoration: none; transition: transform 0.18s cubic-bezier(.3,.7,.4,1.4); }
+.md-avatar span { display: grid; place-items: center; border-radius: 50%; background: #fff; color: var(--md-ink); font-weight: 700; font-size: 15px; }
+.md-avatar:hover { transform: scale(1.07) rotate(-4deg); }
+.md-avatar.on span { background: transparent; color: #fff; }
+.md-credits { font-size: 13px; font-weight: 600; color: #57546a; padding: 7px 11px; border-radius: 999px; background: rgba(20, 18, 31, 0.05); text-decoration: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.md-credits:hover { background: rgba(20, 18, 31, 0.08); color: var(--md-ink); }
+@media (max-width: 760px) {
+  .md-nav { padding: 8px 8px 0; }
+  .md-nav-in { flex-wrap: wrap; gap: 6px 10px; padding: 8px 8px 6px 12px; border-radius: 18px; }
+  .md-links { order: 3; flex-basis: 100%; }
+  .gs-word { font-size: 16px; }
+  .md-credits { display: none; }
 }

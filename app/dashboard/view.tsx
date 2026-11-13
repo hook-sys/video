@@ -5,6 +5,7 @@ import { logout } from "@/app/auth/actions";
 import { projectTitle, videoState } from "@/lib/project-status";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Desk, Mark, remember, useWindows } from "@/components/site/windows";
+import { Avatar, TopNav } from "@/components/site/top-nav";
 import { STATE_UI, ago, monthStart, pipelineProgress } from "./helpers";
 import type { DashboardRow } from "./page";
 import { LegalFooterLinks } from "@/components/site/legal-links";
@@ -34,15 +35,27 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
       <AutoRefresh active={active.length > 0} intervalMs={8000} />
       <Desk />
 
-      <header className="gs-bar gs-glass">
-        <Link href="/dashboard" className="gs-brand" onClick={open("videos")}>
-          <Mark />
-          MotionDots
-        </Link>
-        <Link href="/projects/new" onClick={remember} className="gs-btn">
-          New video
-        </Link>
-      </header>
+      <TopNav
+        home="/dashboard"
+        onHome={open("videos")}
+        items={[
+          { href: PATH.videos, label: "Videos", active: current === "videos", onClick: open("videos"), anchor: iconRef("videos") },
+          { href: "/brand", label: "Brand kits", onClick: remember },
+          { href: "/billing", label: "Credits", onClick: remember },
+          ...(admin ? [{ href: "/admin", label: "Admin", onClick: remember }] : []),
+        ]}
+        right={
+          <>
+            <Link href="/billing" className="md-credits" onClick={remember}>
+              {admin ? "∞" : credits.toLocaleString("en-US")} credits
+            </Link>
+            <Link href="/projects/new" onClick={remember} className="gs-btn">
+              + New video
+            </Link>
+            <Avatar href={PATH.account} initial={initial} onClick={open("account")} active={current === "account"} />
+          </>
+        }
+      />
 
       <main className="gs-stage">
         {win(
@@ -184,59 +197,6 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
         <LegalFooterLinks />
       </footer>
 
-      <nav className="gs-dock gs-glass" aria-label="Main">
-        <Link href="/" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionDots home">
-          <Mark />
-        </Link>
-        <Link href={PATH.videos} onClick={open("videos")} aria-current={current === "videos" ? "page" : undefined}>
-          <span ref={iconRef("videos")} className="gs-tile t1">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" aria-hidden="true">
-              <rect x="4" y="5" width="7" height="6" rx="1.5" />
-              <rect x="13" y="5" width="7" height="6" rx="1.5" />
-              <rect x="4" y="13" width="7" height="6" rx="1.5" />
-              <rect x="13" y="13" width="7" height="6" rx="1.5" />
-            </svg>
-          </span>
-          <small>Videos</small>
-        </Link>
-        <Link href={PATH.account} onClick={open("account")} aria-current={current === "account" ? "page" : undefined}>
-          <span ref={iconRef("account")} className="gs-tile t5">
-            <span className="initial">{initial}</span>
-          </span>
-          <small>Account</small>
-        </Link>
-        <Link href="/billing" onClick={remember}>
-          <span className="gs-tile t6">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="8" />
-              <path d="M14.5 9.5c-.5-.9-1.5-1.3-2.5-1.3-1.5 0-2.6.8-2.6 1.9 0 2.6 5.3 1.3 5.3 4 0 1.1-1.2 1.9-2.7 1.9-1.1 0-2.1-.4-2.6-1.3M12 6.8v1.4M12 15.8v1.4" />
-            </svg>
-          </span>
-          <small>Credits</small>
-        </Link>
-        {admin && (
-          <Link href="/admin" onClick={remember}>
-            <span className="gs-tile t3">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <path d="M5 7h14M5 12h14M5 17h14" />
-                <circle cx="9" cy="7" r="1.6" fill="#fff" />
-                <circle cx="15" cy="12" r="1.6" fill="#fff" />
-                <circle cx="8" cy="17" r="1.6" fill="#fff" />
-              </svg>
-            </span>
-            <small>Admin</small>
-          </Link>
-        )}
-        <span className="gs-sep" aria-hidden="true" />
-        <Link href="/projects/new" onClick={remember}>
-          <span className="gs-tile t4">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#0a66d6" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-              <path d="M12 6v12M6 12h12" />
-            </svg>
-          </span>
-          <small>New video</small>
-        </Link>
-      </nav>
     </div>
   );
 }

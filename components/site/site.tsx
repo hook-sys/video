@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { login, signup } from "@/app/auth/actions";
 import { DEMOS } from "@/components/landing/demos";
-import { Desk, Mark, remember, useWindows } from "./windows";
+import { Desk, remember, useWindows } from "./windows";
+import { TopNav } from "./top-nav";
 import { LegalFooterLinks } from "./legal-links";
 import "./site.css";
 
@@ -30,31 +31,30 @@ export function Site({ initial, signedIn, error, message }: Props) {
     <div className="gs">
       <Desk />
 
-      <header className="gs-bar gs-glass">
-        <Link href="/" className="gs-brand" onClick={open("overview")}>
-          <Mark />
-          MotionDots
-        </Link>
-        {signedIn ? (
-          <Link href="/dashboard" className="gs-btn" onClick={remember}>
-            Dashboard
-          </Link>
-        ) : (
-          <>
-            <Link
-              href="/login"
-              ref={iconRef("login")}
-              className="gs-plain"
-              onClick={open("login")}
-            >
-              Log in
+      <TopNav
+        onHome={open("overview")}
+        items={[
+          { href: PATH.overview, label: "Overview", active: current === "overview", onClick: open("overview"), anchor: iconRef("overview") },
+          { href: PATH.how, label: "How it works", active: current === "how", onClick: open("how"), anchor: iconRef("how") },
+          { href: PATH.examples, label: "Examples", active: current === "examples", onClick: open("examples"), anchor: iconRef("examples") },
+        ]}
+        right={
+          signedIn ? (
+            <Link href="/dashboard" className="gs-btn" onClick={remember}>
+              Dashboard
             </Link>
-            <Link href="/signup" className="gs-btn" onClick={open("signup")}>
-              Start free
-            </Link>
-          </>
-        )}
-      </header>
+          ) : (
+            <>
+              <Link href="/login" ref={iconRef("login")} className="gs-plain" onClick={open("login")}>
+                Log in
+              </Link>
+              <Link href="/signup" ref={iconRef("signup")} className="gs-btn" onClick={open("signup")}>
+                Start free
+              </Link>
+            </>
+          )
+        }
+      />
 
       <main className="gs-stage">
         {win(
@@ -215,86 +215,6 @@ export function Site({ initial, signedIn, error, message }: Props) {
 
       <footer className="gs-footer"><LegalFooterLinks /></footer>
 
-      <nav className="gs-dock gs-glass" aria-label="Main">
-        {(
-          [
-            // (the black one carries the MotionDots mark: the brand is not repeated above it)
-            ["overview", "t1", null],
-            ["how", "t2", <path key="p" d="M6 7h12M6 12h8M6 17h10" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />],
-            [
-              "examples",
-              "t3",
-              <g key="p" fill="none" stroke="#fff" strokeWidth="2">
-                <rect x="4" y="5" width="7" height="6" rx="1.5" />
-                <rect x="13" y="5" width="7" height="6" rx="1.5" />
-                <rect x="4" y="13" width="7" height="6" rx="1.5" />
-                <rect x="13" y="13" width="7" height="6" rx="1.5" />
-              </g>,
-            ],
-          ] as const
-        ).map(([id, tone, glyph]) => (
-          <Link key={id} href={PATH[id]} onClick={open(id)} aria-current={current === id ? "page" : undefined}>
-              <span
-              ref={iconRef(id)}
-              className={`gs-tile ${tone}`}
-            >
-              {glyph ? (
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  {glyph}
-                </svg>
-              ) : (
-                <Mark />
-              )}
-            </span>
-            <small>{TITLE[id]}</small>
-          </Link>
-        ))}
-        <span className="gs-sep" aria-hidden="true" />
-        {signedIn ? (
-          <Link href="/dashboard" onClick={remember} className="gs-only-wide">
-            <span className="gs-tile t1">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" aria-hidden="true">
-                <rect x="4" y="5" width="7" height="6" rx="1.5" />
-                <rect x="13" y="5" width="7" height="6" rx="1.5" />
-                <rect x="4" y="13" width="7" height="6" rx="1.5" />
-                <rect x="13" y="13" width="7" height="6" rx="1.5" />
-              </svg>
-            </span>
-            <small>Dashboard</small>
-          </Link>
-        ) : (
-          <Link href="/login" onClick={open("login")} className="gs-only-wide" aria-current={current === "login" ? "page" : undefined}>
-            <span ref={iconRef("login")} className="gs-tile t2">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l4-4-4-4M14 12H4" />
-              </svg>
-            </span>
-            <small>Log in</small>
-          </Link>
-        )}
-        {signedIn ? (
-          <Link href="/projects/new" onClick={remember}>
-            <span className="gs-tile t4">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#0a66d6" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                <path d="M12 6v12M6 12h12" />
-              </svg>
-            </span>
-            <small>New video</small>
-          </Link>
-        ) : (
-          <Link href="/signup" onClick={open("signup")} aria-current={current === "signup" ? "page" : undefined}>
-            <span
-              ref={iconRef("signup")}
-              className="gs-tile t4"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="#0a66d6" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-                <path d="M12 6v12M6 12h12" />
-              </svg>
-            </span>
-            <small>Start free</small>
-          </Link>
-        )}
-      </nav>
     </div>
   );
 }
