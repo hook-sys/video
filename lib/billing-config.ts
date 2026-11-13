@@ -1,9 +1,12 @@
 // Pricing, set by the super admin on /admin/billing (app_settings "billing").
 // Pure: used by the server (lib/billing.ts) and the forms alike.
 //
-// A video costs credits per second of its length, at its quality level's
-// rate (1 credit = $0.01). Each level runs the Motion Director on its own
-// model (empty: the model chosen on /admin/models).
+// Pay per use, no subscription: the customer loads credits (bKash, Nagad or
+// Rocket, checked by the team) and each video takes from them — a set price
+// for the first seconds (30 credits up to 20 s), then its level's rate for
+// every second after. A credit's price is set here (1 cent to start), shown
+// in taka at the rate set beside it. Each level runs the Motion Director on
+// its own model (empty: the model chosen on /admin/models).
 
 export const BILLING_KEY = "billing";
 export const TIER_IDS = ["standard", "pro", "ultra"] as const;
@@ -13,13 +16,32 @@ export type TierStatus = "on" | "soon" | "off";
 // paidOnly: only for customers who have bought credits (or were given them by the team)
 export type Tier = { name: string; blurb: string; badge: string; perSecond: number; model: string; status: TierStatus; paidOnly: boolean };
 export type Pack = { usd: number; credits: number };
+export const WALLETS = ["bkash", "nagad", "rocket"] as const;
+export type WalletId = (typeof WALLETS)[number];
+export const WALLET_NAME: Record<WalletId, string> = { bkash: "bKash", nagad: "Nagad", rocket: "Rocket" };
+// the number customers send to, and its kind ("Personal", "Agent", "Merchant"); no number: not offered
+export type Wallet = { number: string; kind: string };
 // trialScriptMax: the longest script (characters) a customer who hasn't bought
 // credits may write — enough for a video their welcome credits pay for
-export type Billing = { tiers: Record<TierId, Tier>; packs: Pack[]; signupCredits: number; minSeconds: number; trialScriptMax: number };
+// baseSeconds/baseCredits: the first seconds' set price · creditUsd: one credit's price ·
+// bdtPerUsd: taka for a dollar (prices shown in taka) · minLoad: the fewest credits loaded at once
+export type Billing = {
+  tiers: Record<TierId, Tier>;
+  packs: Pack[];
+  signupCredits: number;
+  minSeconds: number;
+  trialScriptMax: number;
+  baseSeconds: number;
+  baseCredits: number;
+  creditUsd: number;
+  bdtPerUsd: number;
+  minLoad: number;
+  wallets: Record<WalletId, Wallet>;
+};
 
 export const DEFAULT_BILLING: Billing = {
   tiers: {
-    standard: { name: "Standard", blurb: "Clean motion video, fast.", badge: "", perSecond: 3, model: "anthropic/claude-opus-5.5", status: "on", paidOnly: false },
+    standard: { name: "Standard", blurb: "Clean motion video, fast.", badge: "", perSecond: 1, model: "anthropic/claude-opus-5.5", status: "on", paidOnly: false },
     pro: { name: "Pro", blurb: "A smarter director: richer story, smoother motion.", badge: "Best result", perSecond: 4, model: "anthropic/claude-opus-5.5", status: "on", paidOnly: true },
     ultra: { name: "Ultra", blurb: "Our most advanced director.", badge: "", perSecond: 5, model: "", status: "soon", paidOnly: true },
   },
@@ -35,6 +57,12 @@ export const DEFAULT_BILLING: Billing = {
   minSeconds: 15,
   // ~33 words ≈ a 16 s video ≈ 48 Standard credits
   trialScriptMax: 200,
+  baseSeconds: 20,
+  baseCredits: 30,
+  creditUsd: 0.01,
+  bdtPerUsd: 122,
+  minLoad: 100,
+  wallets: { bkash: { number: "", kind: "Personal" }, nagad: { number: "", kind: "Personal" }, rocket: { number: "", kind: "Personal" } },
 };
 
 const num = (v: unknown, d: number, min = 0, max = 1e6) => {
@@ -61,11 +89,31 @@ export function normalizeBilling(raw: unknown): Billing {
     .filter((p) => p.usd >= 1 && p.credits > 0)
     .sort((a, b) => a.usd - b.usd)
     .slice(0, 8);
-  return { tiers, packs: packs.length ? packs : DEFAULT_BILLING.packs, signupCredits: Math.round(num(r.signupCredits, DEFAULT_BILLING.signupCredits, 0, 100000)), minSeconds: Math.round(num(r.minSeconds, DEFAULT_BILLING.minSeconds, 0, 120)), trialScriptMax: Math.round(num(r.trialScriptMax, DEFAULT_BILLING.trialScriptMax, 50, 1000)) };
+  const w = (r.wallets ?? {}) as Partial<Record<WalletId, Partial<Wallet>>>;
+  const wallets = Object.fromEntries(
+    WALLETS.map((id) => [id, { number: text(w[id]?.number, "", 20).replace(/[^0-9+]/g, ""), kind: text(w[id]?.kind, "Personal", 20) || "Personal" }]),
+  ) as Billing["wallets"];
+  return {
+    baseSeconds: Math.round(num(r.baseSeconds, DEFAULT_BILLING.baseSeconds, 0, 600)),
+    baseCredits: Math.round(num(r.baseCredits, DEFAULT_BILLING.baseCredits, 0, 1_000_000)),
+    creditUsd: num(r.creditUsd, DEFAULT_BILLING.creditUsd, 0.0001, 100),
+    bdtPerUsd: num(r.bdtPerUsd, DEFAULT_BILLING.bdtPerUsd, 1, 10_000),
+    minLoad: Math.round(num(r.minLoad, DEFAULT_BILLING.minLoad, 1, 1_000_000)),
+    wallets,
+    tiers, packs: packs.length ? packs : DEFAULT_BILLING.packs, signupCredits: Math.round(num(r.signupCredits, DEFAULT_BILLING.signupCredits, 0, 100000)), minSeconds: Math.round(num(r.minSeconds, DEFAULT_BILLING.minSeconds, 0, 120)), trialScriptMax: Math.round(num(r.trialScriptMax, DEFAULT_BILLING.trialScriptMax, 50, 1000)) };
 }
 
-// The credits a video of this length costs at this level.
-export const creditsFor = (b: Billing, tier: TierId, seconds: number) => Math.ceil(Math.max(b.minSeconds, Math.ceil(seconds)) * b.tiers[tier].perSecond);
+// The credits a video of this length costs at this level: the set price for the
+// first seconds, then the level's rate for each second after (a part second counts as one).
+export const creditsFor = (b: Billing, tier: TierId, seconds: number) => {
+  const s = Math.max(0, Math.ceil(seconds));
+  return b.baseCredits + Math.ceil(Math.max(0, s - b.baseSeconds) * b.tiers[tier].perSecond);
+};
+// What credits cost, in dollars and in taka (rounded up to the taka)
+export const priceOf = (b: Billing, credits: number) => ({ usd: Math.round(credits * b.creditUsd * 100) / 100, bdt: Math.ceil(credits * b.creditUsd * b.bdtPerUsd - 1e-9) });
+// The credits an amount of taka buys (rounded down)
+export const creditsForBdt = (b: Billing, bdt: number) => Math.floor(bdt / (b.creditUsd * b.bdtPerUsd) + 1e-9);
+export const walletsOffered = (b: Billing) => WALLETS.filter((id) => b.wallets[id].number.length >= 6);
 
 export const offered = (b: Billing) => TIER_IDS.filter((id) => b.tiers[id].status !== "off");
 // a level this customer may choose (`paid`: has bought credits, or the team gave them some)

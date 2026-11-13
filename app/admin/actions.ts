@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { ADMIN_ROLES, type AdminRole, audit, isAdminRole, requireAdmin, requireSuperAdmin } from "@/lib/admin";
 import { SETTINGS } from "@/lib/app-settings";
 import { VIDEOS_BUCKET } from "@/lib/projects";
-import { BILLING_KEY, TIER_IDS, changeCredits, getBilling, grantSignupCredits, normalizeBilling, refundVideo } from "@/lib/billing";
+import { BILLING_KEY, TIER_IDS, WALLETS, changeCredits, getBilling, grantSignupCredits, normalizeBilling, refundVideo } from "@/lib/billing";
+import { reviewManualPayment } from "@/lib/manual-payment";
 
 // Admin actions. Each re-checks the caller's role (and that the role may
 // use the section) on the server, runs with the service role, and is
@@ -215,19 +216,37 @@ export async function saveBilling(formData: FormData) {
   const s = await requireAdmin("billing");
   const before = await getBilling();
   const f = (k: string) => formData.get(k);
-  const packs = Array.from({ length: 8 }, (_, i) => ({ usd: Number(f(`pack_usd_${i}`)), credits: Number(f(`pack_credits_${i}`)) })).filter((p) => p.usd > 0 && p.credits > 0);
   const next = normalizeBilling({
+    ...before,
     tiers: Object.fromEntries(TIER_IDS.map((id) => [id, { name: f(`${id}_name`), blurb: f(`${id}_blurb`), badge: f(`${id}_badge`), perSecond: f(`${id}_rate`), model: f(`${id}_model`), status: f(`${id}_status`), paidOnly: f(`${id}_paid`) === "on" }])),
-    packs,
     signupCredits: f("signup_credits"),
-    minSeconds: f("min_seconds"),
     trialScriptMax: f("trial_script_max"),
+    baseSeconds: f("base_seconds"),
+    baseCredits: f("base_credits"),
+    creditUsd: f("credit_usd"),
+    bdtPerUsd: f("bdt_per_usd"),
+    minLoad: f("min_load"),
+    wallets: Object.fromEntries(WALLETS.map((id) => [id, { number: f(`${id}_number`), kind: f(`${id}_kind`) }])),
   });
   const { error } = await s.db.from("app_settings").upsert({ key: BILLING_KEY, value: next, updated_at: new Date().toISOString(), updated_by: s.userId });
   if (error) back("/admin/billing", error.message);
   await audit(s, "billing.update", { type: "settings", id: BILLING_KEY }, { from: before, to: next });
   revalidatePath("/admin/billing");
   redirect("/admin/billing?saved=1");
+}
+
+// ── manual payments (bKash, Nagad, Rocket): approved or rejected ───────────
+export async function reviewPayment(formData: FormData) {
+  const s = await requireAdmin("billing");
+  const id = String(formData.get("id") ?? "");
+  const approve = formData.get("decision") === "approve";
+  const raw = String(formData.get("credits") ?? "").trim();
+  const note = String(formData.get("note") ?? "");
+  const r = await reviewManualPayment(id, s.userId, approve, { credits: raw ? Number(raw) : undefined, note });
+  if ("error" in r) back("/admin/billing", r.error);
+  await audit(s, approve ? "payment.approve" : "payment.reject", { type: "payment", id }, { credits: "credits" in r ? r.credits : null, note: note || null });
+  revalidatePath("/admin/billing");
+  redirect(`/admin/billing?reviewed=${approve ? "approved" : "rejected"}`);
 }
 
 // ── coupons ────────────────────────────────────────────────────────────────

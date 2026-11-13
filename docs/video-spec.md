@@ -22,6 +22,15 @@ into the video's folder, so it is never uploaded again. A brand typed on the
 form can be kept as a kit with one tick. Kits are read by their owner and
 written by the server only.
 
+**Credits and payments** (`lib/billing-config.ts`, `lib/manual-payment.ts`,
+`/billing`, `/admin/billing`): pay per use, no subscription. A video costs a set
+price for its first seconds (30 credits up to 20 s), then 1 credit a second; a
+credit is 1 cent, shown in taka at the rate the admin sets. Customers load
+credits by bKash, Nagad or Rocket: they send to the number on /billing and
+submit the amount, their number and the transaction ID; the team checks it and
+approves (the credits added once) or rejects it. All of it is set on
+/admin/billing.
+
 **AI providers** (`lib/ai/keys.ts`, `/admin/models`): Google (Gemini), OpenAI,
 Anthropic (Claude) and fal. Each key comes from the environment or is saved by
 a super admin (encrypted, only its last four shown). Each role (Director,

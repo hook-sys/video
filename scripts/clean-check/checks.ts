@@ -9,7 +9,7 @@ import { retimeScript } from "@/lib/voice-timing";
 import { ownedPath } from "@/lib/projects";
 import { v2DetailsOf } from "@/lib/v2/form";
 import { v2DirectorModel, v2Role, v2VoiceName } from "@/lib/v2/models";
-import { creditsFor, normalizeBilling, pickable, withCoupon } from "@/lib/billing-config";
+import { creditsFor, creditsForBdt, normalizeBilling, pickable, priceOf, walletsOffered, withCoupon } from "@/lib/billing-config";
 import { SETTINGS } from "@/lib/app-settings";
 import { iconFor } from "@/lib/simple/brain";
 import { resolveIcon } from "@/components/video/icons";
@@ -149,9 +149,11 @@ export async function runChecks(): Promise<Check[]> {
     const u = "11111111-1111-1111-1111-111111111111", p = "22222222-2222-2222-2222-222222222222";
     const owned = [ownedPath(`${u}/${p}/voice/narration.mp3`, u, p), ownedPath(`99999999-9999-9999-9999-999999999999/${p}/x.png`, u, p), ownedPath(`${u}/33333333-3333-3333-3333-333333333333/x.png`, u, p), ownedPath(`${u}/${p}/../other/x.png`, u, p), ownedPath(null, u, p), ownedPath(`${u}/${p}/x.png`, undefined, p)];
     add("only this project's own files are signed", owned.join(",") === "true,false,false,false,false,false", owned.join(","));
-    // credits: per second at each level's rate, a shortest charge; coupons on a pack; pricing mended
+    // credits: a set price for the first 20 s (30), then each level's rate a second; taka; coupons on a pack; pricing mended
     const bill = normalizeBilling(null);
-    const fair = creditsFor(bill, "standard", 30) === 90 && creditsFor(bill, "pro", 30) === 120 && creditsFor(bill, "standard", 4) === 45 && creditsFor(bill, "standard", 30.2) === 93;
+    const fair =
+      creditsFor(bill, "standard", 20) === 30 && creditsFor(bill, "standard", 4) === 30 && creditsFor(bill, "standard", 20.2) === 31 && creditsFor(bill, "standard", 30) === 40 && creditsFor(bill, "pro", 30) === 70 &&
+      priceOf(bill, 100).usd === 1 && priceOf(bill, 100).bdt === 122 && creditsForBdt(bill, 500) === 409 && walletsOffered(bill).length === 0 && walletsOffered(normalizeBilling({ wallets: { bkash: { number: "01712-345678" } } })).join() === "bkash";
     const pack = bill.packs[0];
     const deals = [withCoupon(pack, { kind: "discount", value: 10 }), withCoupon(pack, { kind: "bonus", value: 100 }), withCoupon(pack, { kind: "discount", value: 100 })];
     const mendedBill = normalizeBilling({ tiers: { standard: { status: "off", perSecond: -3 }, ultra: { status: "nope" } }, packs: [{ usd: 0, credits: 5 }], signupCredits: "x" });
