@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import { login, signup } from "@/app/auth/actions";
 import { Desk, remember, useWindows } from "./windows";
 import { TopNav } from "./top-nav";
@@ -17,9 +18,18 @@ const PATH: Record<SiteWindow, string> = { overview: "/", how: "/#how", examples
 const TITLE: Record<SiteWindow, string> = { overview: "Overview", how: "How it works", examples: "Examples", login: "Log in", signup: "Start free" };
 const windowAt = (l: Location): SiteWindow => (l.pathname.startsWith("/login") ? "login" : l.pathname.startsWith("/signup") ? "signup" : l.hash === "#how" ? "how" : l.hash === "#examples" ? "examples" : "overview");
 
-type Props = { initial: SiteWindow; signedIn: boolean; error?: string; message?: string };
+// What only the browser knows, read once the page is there (the page itself is
+// made once for everyone): a session cookie of Supabase's (sb-…-auth-token; a
+// stale one only shows "Dashboard", which sends you to log in), and the note
+// after a try to log in or sign up (?error=, ?message=).
+const none = () => () => {};
+const browserState = () => {
+  const q = new URLSearchParams(location.search);
+  return JSON.stringify([/(^|; )sb-[^=]+-auth-token/.test(document.cookie), q.get("error") ?? "", q.get("message") ?? ""]);
+};
 
-export function Site({ initial, signedIn, error, message }: Props) {
+export function Site({ initial }: { initial: SiteWindow }) {
+  const [signedIn, error, message] = JSON.parse(useSyncExternalStore(none, browserState, () => '[false,"",""]')) as [boolean, string, string];
   const { current, open, win, iconRef } = useWindows(initial, PATH, windowAt, TITLE);
 
   return (

@@ -14,9 +14,11 @@ const display = Bricolage_Grotesque({
   weight: ["600", "700", "800"],
 });
 
+// (only the admin's numbers and codes use it: not preloaded on every page, fetched where it shows)
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  preload: false,
 });
 
 export const metadata: Metadata = {

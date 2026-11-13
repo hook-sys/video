@@ -1,10 +1,7 @@
 import { Site } from "@/components/site/site";
-import { createClient } from "@/lib/supabase/server";
 
-export default async function Home() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return <Site initial="overview" signedIn={!!user} />;
+// The same page for everyone, made once at build time: whether you are signed
+// in, and a message after a try (?error=, ?message=), are read in the browser.
+export default function Page() {
+  return <Site initial="overview" />;
 }

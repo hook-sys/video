@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { logout } from "@/app/auth/actions";
 import { projectTitle, videoState } from "@/lib/project-status";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -129,7 +130,7 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
                     return (
                       <Link key={p.id} href={`/projects/${p.id}`} className="gs-card" onClick={remember}>
                         <div className="gs-thumb" style={{ background: p.brand_color ?? "#1d1d1f" }}>
-                          {src ? <video src={`${src}#t=1.5`} preload="metadata" muted playsInline /> : <Mark />}
+                          {src ? <Preview src={src} /> : <Mark />}
                           {p.duration_seconds ? (
                             <span className="len">
                               {Math.floor(p.duration_seconds / 60)}:{String(p.duration_seconds % 60).padStart(2, "0")}
@@ -202,4 +203,20 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
 
     </div>
   );
+}
+
+// A video's picture, fetched only when its card comes near the screen (a long
+// list no longer pulls every video's first seconds at once); the mark until then.
+function Preview({ src }: { src: string }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    // (the card's picture box: this span itself has no box of its own)
+    const el = box.current?.parentElement;
+    if (!el) return;
+    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && (setNear(true), io.disconnect()), { rootMargin: "300px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return near ? <video src={`${src}#t=1.5`} preload="metadata" muted playsInline /> : <span ref={box} className="contents"><Mark /></span>;
 }
