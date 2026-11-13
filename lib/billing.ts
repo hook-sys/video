@@ -20,7 +20,7 @@ export async function getBilling(): Promise<Billing> {
 type Change = { note?: string | null; project?: string | null; payment?: string | null; coupon?: string | null; actor?: string | null; allowNegative?: boolean };
 
 // The balance after; throws "insufficient_credits" when it would go below zero.
-export async function changeCredits(userId: string, delta: number, kind: "signup" | "purchase" | "bonus" | "coupon" | "video" | "refund" | "adjust" | "admin", c: Change = {}): Promise<number> {
+export async function changeCredits(userId: string, delta: number, kind: "signup" | "purchase" | "bonus" | "coupon" | "video" | "refund" | "adjust" | "admin" | "edit", c: Change = {}): Promise<number> {
   const { data, error } = await createAdminClient().rpc("credit_change", {
     p_user: userId,
     p_delta: Math.round(delta),

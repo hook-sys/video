@@ -192,7 +192,12 @@ screen and the one lit (never typed words), its things (up to 3, 1–3 words),
 its icon and its picture of the product. Timing, the voice and the brand never
 change. The browser previews an edit at once; the server applies the same
 edit to the plan as stored, checks it like a drawn plan and keeps it (the plan
-as made kept too, to go back to). No AI, no credits; the MP4 is made again.
+as made kept too, to go back to). No AI; the MP4 is made again. The first
+saved edit of a video is free, each one after costs credits (15 to start; both
+set on /admin/billing); going back to the video as made counts as an edit. The
+editor says what saving costs and asks first; the charge is taken before the
+save and given back if the save doesn't land (`projects.edit_count`, ledger
+kind `edit`). The team's own videos are never charged.
 
 The editor (app/projects/[id]/editor.tsx) opens over the page from "Edit
 video": the video in the middle, its scenes on a timeline below (as long as

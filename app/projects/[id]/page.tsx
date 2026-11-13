@@ -13,6 +13,7 @@ import { canUseDevTools } from "@/lib/dev-tools";
 import { SubmitButton } from "@/components/submit-button";
 import { AppShell } from "@/components/site/app-shell";
 import { userAccess } from "@/lib/admin";
+import { balanceOf, editCost, getBilling } from "@/lib/billing";
 import { buildRenderInput } from "@/lib/render-input";
 import { BackToDashboard } from "./back-to-dashboard";
 import { Studio } from "./studio";
@@ -34,6 +35,10 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
   } = await supabase.auth.getUser();
   const dev = !!user && (await canUseDevTools(supabase, user.id));
   const admin = user ? (await userAccess(supabase, user.id)).admin : false;
+  // what saving the next edit costs, and the one after it (the first is free; the team's never cost)
+  const billing = await getBilling();
+  const edits = Number((project as { edit_count?: number }).edit_count) || 0;
+  const editPrice = { cost: admin ? 0 : editCost(billing, edits), after: admin ? 0 : editCost(billing, edits + 1), balance: user && !admin ? await balanceOf(user.id) : null };
 
   const { data: voiceAudio } =
     project.voice_status === "completed" && ownedPath(project.voice_result?.storagePath, project.user_id, id)
@@ -118,7 +123,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
 
       {/* The video: watch it, download it. */}
       {ready && input?.plan && (
-        <Studio projectId={id} file={file} rendering={rendering} autoStart={rendering && project.render_status === "idle"} plan={input.plan} audioUrl={input.audioUrl} name={title} className={primaryBtn} editable={!!user && user.id === project.user_id && project.pipeline_status === "completed"} edited={!!(project.brief as { composer?: { original?: unknown } } | null)?.composer?.original} />
+        <Studio projectId={id} file={file} rendering={rendering} autoStart={rendering && project.render_status === "idle"} plan={input.plan} audioUrl={input.audioUrl} name={title} className={primaryBtn} editable={!!user && user.id === project.user_id && project.pipeline_status === "completed"} edited={!!(project.brief as { composer?: { original?: unknown } } | null)?.composer?.original} editPrice={editPrice} />
       )}
       {ready && !input?.plan && (
         <section className="flex flex-col items-start gap-3 rounded-2xl bg-white/70 p-6 text-sm text-foreground/65 ring-1 ring-black/[0.06]">

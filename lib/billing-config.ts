@@ -37,6 +37,9 @@ export type Billing = {
   bdtPerUsd: number;
   minLoad: number;
   wallets: Record<WalletId, Wallet>;
+  // a finished video's saved edits: this many free, then each costs editCredits
+  freeEdits: number;
+  editCredits: number;
 };
 
 export const DEFAULT_BILLING: Billing = {
@@ -63,6 +66,8 @@ export const DEFAULT_BILLING: Billing = {
   bdtPerUsd: 122,
   minLoad: 100,
   wallets: { bkash: { number: "", kind: "Personal" }, nagad: { number: "", kind: "Personal" }, rocket: { number: "", kind: "Personal" } },
+  freeEdits: 1,
+  editCredits: 15,
 };
 
 const num = (v: unknown, d: number, min = 0, max = 1e6) => {
@@ -100,6 +105,8 @@ export function normalizeBilling(raw: unknown): Billing {
     bdtPerUsd: num(r.bdtPerUsd, DEFAULT_BILLING.bdtPerUsd, 1, 10_000),
     minLoad: Math.round(num(r.minLoad, DEFAULT_BILLING.minLoad, 1, 1_000_000)),
     wallets,
+    freeEdits: Math.round(num(r.freeEdits, DEFAULT_BILLING.freeEdits, 0, 100)),
+    editCredits: Math.round(num(r.editCredits, DEFAULT_BILLING.editCredits, 0, 100_000)),
     tiers, packs: packs.length ? packs : DEFAULT_BILLING.packs, signupCredits: Math.round(num(r.signupCredits, DEFAULT_BILLING.signupCredits, 0, 100000)), minSeconds: Math.round(num(r.minSeconds, DEFAULT_BILLING.minSeconds, 0, 120)), trialScriptMax: Math.round(num(r.trialScriptMax, DEFAULT_BILLING.trialScriptMax, 50, 1000)) };
 }
 
@@ -113,7 +120,9 @@ export const creditsFor = (b: Billing, tier: TierId, seconds: number) => {
 export const priceOf = (b: Billing, credits: number) => ({ usd: Math.round(credits * b.creditUsd * 100) / 100, bdt: Math.ceil(credits * b.creditUsd * b.bdtPerUsd - 1e-9) });
 // The credits an amount of taka buys (rounded down)
 export const creditsForBdt = (b: Billing, bdt: number) => Math.floor(bdt / (b.creditUsd * b.bdtPerUsd) + 1e-9);
-export const walletsOffered = (b: Billing) => WALLETS.filter((id) => b.wallets[id].number.length >= 6);
+// What saving the next edit of a video costs (`used`: edits already saved)
+export const editCost = (b: Billing, used: number) => (used < b.freeEdits ? 0 : b.editCredits);
+export const walletsOffered =(b: Billing) => WALLETS.filter((id) => b.wallets[id].number.length >= 6);
 
 export const offered = (b: Billing) => TIER_IDS.filter((id) => b.tiers[id].status !== "off");
 // a level this customer may choose (`paid`: has bought credits, or the team gave them some)

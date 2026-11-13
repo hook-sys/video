@@ -105,6 +105,8 @@ export default async function BillingPage({ searchParams }: PageProps<"/admin/bi
             <label className={label}><span className={small}>Taka for 1 USD (prices shown in taka)</span><input name="bdt_per_usd" type="number" min={1} step="0.01" defaultValue={billing.bdtPerUsd} className={input} /></label>
             <label className={label}><span className={small}>Smallest load (credits) = {taka(priceOf(billing, billing.minLoad).bdt)}</span><input name="min_load" type="number" min={1} defaultValue={billing.minLoad} className={input} /></label>
             <label className={label}><span className={small}>Welcome credits (once, after email is confirmed)</span><input name="signup_credits" type="number" min={0} defaultValue={billing.signupCredits} className={input} /></label>
+            <label className={label}><span className={small}>Free edits per video (saved edits; going back to the original counts)</span><input name="free_edits" type="number" min={0} max={100} defaultValue={billing.freeEdits} className={input} /></label>
+            <label className={label}><span className={small}>Credits for each edit after the free ones</span><input name="edit_credits" type="number" min={0} defaultValue={billing.editCredits} className={input} /></label>
             <label className={label}><span className={small}>Script limit before the first load (characters)</span><input name="trial_script_max" type="number" min={50} max={1000} defaultValue={billing.trialScriptMax} className={input} /></label>
           </div>
           <p className={`${small} mt-2`}>1 credit = {usd(billing.creditUsd)} = ৳{(billing.creditUsd * billing.bdtPerUsd).toFixed(2)}</p>

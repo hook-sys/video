@@ -47,7 +47,12 @@ const option = (on: boolean, off = false) =>
 const pill = (on: boolean) => `rounded-md px-3 py-1.5 text-xs font-medium transition ${on ? "bg-[#3b8cff] text-white" : "bg-white/[0.06] text-white/75 hover:bg-white/[0.12]"}`;
 const field = "w-full rounded-md border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-sm text-white placeholder:text-white/30 focus:border-[#3b8cff] focus:outline-none";
 
-export function Editor({ projectId, plan, audioUrl, edited, onClose }: { projectId: string; plan: SimplePlan; audioUrl: string | null; edited: boolean; onClose: () => void }) {
+// what saving this edit costs (`after`: the one after it), and the customer's balance (null: the team)
+export type EditPrice = { cost: number; after: number; balance: number | null };
+const costLine = (p: EditPrice) =>
+  p.cost > 0 ? `Saving uses ${p.cost} credits${p.balance !== null ? ` · you have ${p.balance.toLocaleString("en-US")}` : ""}` : p.after > 0 ? `This edit is free · each one after uses ${p.after} credits` : "";
+
+export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { projectId: string; plan: SimplePlan; audioUrl: string | null; edited: boolean; price: EditPrice; onClose: () => void }) {
   const router = useRouter();
   // (drawn over the page, in the browser only)
   const mounted = useSyncExternalStore(noop, () => true, () => false);
@@ -210,6 +215,8 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
   const lit = (sec: string) => focus?.sec === sec;
 
   const save = async () => {
+    if (price.cost > 0 && !confirm(`Saving this edit uses ${price.cost} credits. Save it?`)) return;
+    if (price.cost === 0 && price.after > 0 && !confirm(`This is your free edit. After it, each saved edit uses ${price.after} credits. Save it?`)) return;
     setBusy(true);
     const r = await saveVideoEdit(projectId, edit);
     setBusy(false);
@@ -218,10 +225,11 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
     router.refresh();
   };
   const reset = async () => {
-    if (!confirm("Go back to the video as it was made? Your edits will be lost.")) return;
+    if (!confirm(`Go back to the video as it was made? Your edits will be lost.${price.cost > 0 ? ` This counts as an edit and uses ${price.cost} credits.` : ""}`)) return;
     setBusy(true);
-    await resetVideoEdit(projectId);
+    const r = await resetVideoEdit(projectId);
     setBusy(false);
+    if (!r.ok) return setNote({ ok: false, text: r.error });
     setNote({ ok: true, text: "Back to the video as it was made." });
     router.refresh();
   };
@@ -302,6 +310,7 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
         </button>
         <div className="ml-auto flex items-center gap-3">
           <span className="hidden text-xs text-white/45 sm:inline">{busy ? "Saving…" : dirty ? "● Unsaved changes" : edited ? "Edited · saved" : "As made"}</span>
+          {costLine(price) && <span className={`hidden text-xs md:inline ${price.cost > 0 && price.balance !== null && price.balance < price.cost ? "text-amber-300" : "text-white/45"}`}>{costLine(price)}</span>}
           {edited && !dirty && (
             <button type="button" disabled={busy} onClick={reset} className="text-xs text-white/55 hover:text-white">
               Restore original

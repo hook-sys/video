@@ -9,7 +9,7 @@ import { retimeScript } from "@/lib/voice-timing";
 import { ownedPath } from "@/lib/projects";
 import { v2DetailsOf } from "@/lib/v2/form";
 import { v2DirectorModel, v2Role, v2VoiceName } from "@/lib/v2/models";
-import { creditsFor, creditsForBdt, normalizeBilling, pickable, priceOf, walletsOffered, withCoupon } from "@/lib/billing-config";
+import { creditsFor, creditsForBdt, editCost, normalizeBilling, pickable, priceOf, walletsOffered, withCoupon } from "@/lib/billing-config";
 import { SETTINGS } from "@/lib/app-settings";
 import { iconFor } from "@/lib/simple/brain";
 import { resolveIcon } from "@/components/video/icons";
@@ -153,7 +153,7 @@ export async function runChecks(): Promise<Check[]> {
     const bill = normalizeBilling(null);
     const fair =
       creditsFor(bill, "standard", 20) === 30 && creditsFor(bill, "standard", 4) === 30 && creditsFor(bill, "standard", 20.2) === 31 && creditsFor(bill, "standard", 30) === 40 && creditsFor(bill, "pro", 30) === 70 &&
-      priceOf(bill, 100).usd === 1 && priceOf(bill, 100).bdt === 122 && creditsForBdt(bill, 500) === 409 && walletsOffered(bill).length === 0 && walletsOffered(normalizeBilling({ wallets: { bkash: { number: "01712-345678" } } })).join() === "bkash";
+      priceOf(bill, 100).usd === 1 && priceOf(bill, 100).bdt === 122 && creditsForBdt(bill, 500) === 409 && editCost(bill, 0) === 0 && editCost(bill, 1) === 15 && editCost(bill, 4) === 15 && editCost(normalizeBilling({ freeEdits: 0, editCredits: 20 }), 0) === 20 && walletsOffered(bill).length === 0 && walletsOffered(normalizeBilling({ wallets: { bkash: { number: "01712-345678" } } })).join() === "bkash";
     const pack = bill.packs[0];
     const deals = [withCoupon(pack, { kind: "discount", value: 10 }), withCoupon(pack, { kind: "bonus", value: 100 }), withCoupon(pack, { kind: "discount", value: 100 })];
     const mendedBill = normalizeBilling({ tiers: { standard: { status: "off", perSecond: -3 }, ultra: { status: "nope" } }, packs: [{ usd: 0, credits: 5 }], signupCredits: "x" });
