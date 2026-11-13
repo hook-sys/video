@@ -1,6 +1,6 @@
 import { settleWordIcons } from "./check";
 import { litInTime, printOf, shownWord, variantOk, wordsAlone } from "./select";
-import { ideaNeedsThings, GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, VARIANTS, WAYS } from "./types";
+import { ideaNeedsThings, GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, STYLES, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, VARIANTS, WAYS } from "./types";
 
 // The customer's edits of their video, guided: the look of the whole video
 // (its ground, type, pace and way between scenes) and, scene by scene, how it
@@ -51,7 +51,7 @@ export function editOf(plan: SimplePlan): PlanEdit {
 // The plan with an edit, or why it cannot be
 export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan; error?: undefined } | { plan?: undefined; error: string } {
   const t = edit?.theme;
-  if (!t || !GROUNDS.includes(t.ground) || !WAYS.includes(t.way) || !PACES.includes(t.pace) || !Number.isInteger(t.type) || t.type < 0 || t.type >= TYPE_PAIRS.length) return { error: "That look is not one there is." };
+  if (!t || !GROUNDS.includes(t.ground) || !WAYS.includes(t.way) || !PACES.includes(t.pace) || !Number.isInteger(t.type) || t.type < 0 || t.type >= TYPE_PAIRS.length || (t.style !== undefined && !STYLES.includes(t.style))) return { error: "That look is not one there is." };
   if (!Array.isArray(edit.scenes) || edit.scenes.length !== plan.scenes.length) return { error: "The scenes do not match the video." };
   const shots = plan.brand.screens?.length ?? 0;
   // (a scene's own ground: one there is, other than the video's — the same as the video's is none)
@@ -109,7 +109,7 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
     delete next.wordIcon;
     scenes.push(next);
   }
-  const theme: Theme = { ground: t.ground, type: t.type, way: t.way, pace: t.pace };
+  const theme: Theme = { ground: t.ground, type: t.type, way: t.way, pace: t.pace, ...(t.style ? { style: t.style } : {}) };
   return { plan: settleWordIcons({ ...plan, theme, scenes, print: printOf(theme, scenes) }) };
 }
 

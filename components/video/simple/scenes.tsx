@@ -4,7 +4,7 @@ import { hasDigit } from "./bangla";
 import { emWidth, familyOf } from "./faces";
 import { fitWords, measured } from "./fit";
 import { type Box, HERO_W, TYPE, WEIGHT, bandOf, sideOf, splitOf, stackOf, wordsFit } from "./geo";
-import { type C, Cursor, blend, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { type C, rad, Cursor, blend, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import { closeAt, phraseMode, phrasesOf } from "./rhythm";
 import { Living, livingOf } from "./living";
 import type { Scene } from "./types";
@@ -209,7 +209,7 @@ function Trouble({ c }: { c: C }) {
           return (
             <div key={i} style={abs({ left: 20, top: 40 + i * 190, width: 820, height: 180, opacity: clamp01(k * 1.6), transform: `translateY(${((1 - k) * -420).toFixed(1)}px) rotate(${(turn[i] * (0.4 + 0.6 * k)).toFixed(2)}deg)` })}>
               <div style={{ ...panel(c, 26), height: "100%", display: "flex", alignItems: "center", gap: 28, padding: "0 34px" }}>
-                <div style={{ width: 100, height: 100, borderRadius: 26, background: tint(c.look.bad, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: 100, height: 100, borderRadius: rad(c, 26), background: tint(c.look.bad, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <Icon name={it.icon ?? "triangle-alert"} size={54} color={c.look.bad} strokeWidth={2.2} />
                 </div>
                 <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
@@ -373,14 +373,14 @@ function Feature({ c }: { c: C }) {
     return (
       <Side c={c} dw={pw} dh={ph}>
         <div style={abs({ left: 0, top: 0, width: pw, height: ph, ...rise(k, 120) })}>
-          <div style={{ width: "100%", height: "100%", borderRadius: 64, background: c.look.dark ? "#0b0c10" : "#15171c", padding: 14, boxSizing: "border-box", boxShadow: `0 50px 120px ${c.look.shadow}` }}>
-            <div style={{ width: "100%", height: "100%", borderRadius: 52, background: c.look.dark ? "#16181f" : "#f2f3f6", position: "relative", overflow: "hidden", fontFamily: familyOf(c.look.text) }}>
+          <div style={{ width: "100%", height: "100%", borderRadius: rad(c, 64), background: c.look.dark ? "#0b0c10" : "#15171c", padding: 14, boxSizing: "border-box", boxShadow: `0 50px 120px ${c.look.shadow}` }}>
+            <div style={{ width: "100%", height: "100%", borderRadius: rad(c, 52), background: c.look.dark ? "#16181f" : "#f2f3f6", position: "relative", overflow: "hidden", fontFamily: familyOf(c.look.text) }}>
               <div style={abs({ left: pw / 2 - 70 - 14, top: 16, width: 140, height: 36, borderRadius: 99, background: "#000" })} />
               <div style={center({ left: 0, right: 0, top: 120, height: 90, fontSize: 76, fontWeight: 600, letterSpacing: "-0.03em", color: c.look.dark ? "#fff" : "#111" })}>9:41</div>
               {items.map((it, i) => {
                 const kr = springAt(c, itemAt(c, i, n));
                 return (
-                  <div key={i} style={abs({ left: 18, right: 18, top: 300 + i * 148, height: 132, borderRadius: 30, background: c.look.dark ? "rgba(255,255,255,0.1)" : "#ffffff", boxShadow: "0 10px 30px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 18, padding: "0 20px", color: c.look.dark ? "#fff" : "#111", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * -80).toFixed(1)}px) scale(${(0.92 + 0.08 * kr).toFixed(3)})` })}>
+                  <div key={i} style={abs({ left: 18, right: 18, top: 300 + i * 148, height: 132, borderRadius: rad(c, 30), background: c.look.dark ? "rgba(255,255,255,0.1)" : "#ffffff", boxShadow: "0 10px 30px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 18, padding: "0 20px", color: c.look.dark ? "#fff" : "#111", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * -80).toFixed(1)}px) scale(${(0.92 + 0.08 * kr).toFixed(3)})` })}>
                     <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={72} solid />
                     <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                       <One part="item" style={{ fontSize: 36, fontWeight: 700 }} fit={270} face={c.look.text}>{it.text}</One>
@@ -506,7 +506,7 @@ function Steps({ c }: { c: C }) {
         {items.slice(0, -1).map((_, i) => {
           const d = ease(clamp01((c.f - itemAt(c, i, n) - 8) / 14));
           const a = at(i), b = at(i + 1);
-          return <div key={`l${i}`} style={abs(row ? { left: a.x + 100, top: a.y - 3, width: (b.x - a.x - 200) * d, height: 6, borderRadius: 9, background: c.look.accent } : { left: a.x - 3, top: a.y + 100, width: 6, height: (b.y - a.y - 200) * d, borderRadius: 9, background: c.look.accent })} />;
+          return <div key={`l${i}`} style={abs(row ? { left: a.x + 100, top: a.y - 3, width: (b.x - a.x - 200) * d, height: 6, borderRadius: rad(c, 9), background: c.look.accent } : { left: a.x - 3, top: a.y + 100, width: 6, height: (b.y - a.y - 200) * d, borderRadius: rad(c, 9), background: c.look.accent })} />;
         })}
         {items.map((it, i) => {
           const k = springAt(c, itemAt(c, i, n));

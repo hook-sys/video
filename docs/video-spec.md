@@ -163,13 +163,29 @@ every hero is designed once and scaled into its place (`geo.ts`).
 
 ## Variation (what the viewer sees change)
 
-Per video the selector draws: the template and variant of every beat (never the
-same template twice in a row), the mirror, the ground (dark / light / brand / glass),
-the type pair, the transition family (slide / zoom / wipe / blur) and the pace (calm /
-lively); each intent has several templates it can be played with, drawn by
-weight. These make a fingerprint; a new video must differ from the
-customer's last five in at least 3 of: ground, type, transitions, pace,
-template order.
+Per video the selector draws: the look (soft / neon / editorial / bold / depth),
+then a ground it stands on (dark / light / brand / glass), the template and variant
+of every beat (never the same template twice in a row), the mirror, the type pair
+(editorial mostly the serif, bold mostly a heavy face), the transition family
+(slide / zoom / wipe / blur / leak / push / tilt) and the pace (calm / lively); each
+intent has several templates it can be played with, drawn by weight. These make a
+fingerprint; a new video must differ from the customer's last five in at least 3
+of: ground, type, transitions, pace, template order, look.
+
+**Looks** (`theme.ts` lookOf, `types.ts` STYLES): one family for every card, icon
+tile, keyword and the ground's pattern, laid over the ground's colours. Soft: the
+first look (frosted, rounded). Neon: a near-black ground of the brand's hue, cards
+edged and glowing in the accent, the keyword glowing, a floor grid running to a
+horizon. Editorial: warm paper, near-black ink, square corners, cards edged in a
+fine ink line with no shadow, a page's rules and margin. Bold: thick ink outlines,
+a hard shadow set off to the lower right, halftone dots fading to the middle.
+Depth: rounder corners, deep layered shadows, the camera turning slowly in 3D,
+big soft blobs of colour drifting. Corners follow the look (`rad`), a pill stays a
+pill. The customer can change the look in the editor.
+
+**Transitions**: leak — a dissolve under a sweep of warm light; push — the next
+comes up from below, both streaked by motion blur; tilt — the scene turns away in
+depth as the next turns in. None dips to the bare ground for long.
 
 ## Phase plan
 

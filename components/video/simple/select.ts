@@ -2,7 +2,7 @@ import { countOf, leadsBn, trailsBn } from "./bangla";
 import { rng } from "./faces";
 import { framesOf, pointsOf } from "./beats";
 import { wordIcon } from "./motion";
-import { ideaNeedsThings, type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
+import { ideaNeedsThings, type Beat, type Brand, FPS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, STYLE_GROUNDS, STYLES, type Style, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
 
 // The selector: each beat's template and variant, and the video's theme —
 // drawn from a seed, never the same template twice in a row, and unlike
@@ -65,8 +65,13 @@ export const wordsAlone = (t: TemplateId, v: number) => t === "kinetic" || (t ==
 
 function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, seed: number, duration: number): Omit<SimplePlan, "w" | "h"> {
   const R = rng(seed);
-  const grounds: Ground[] = grey(brand.color) ? GROUNDS.filter((g) => g !== "brand") : [...GROUNDS];
-  const theme: Theme = { ground: R.pick(grounds), type: R.int(0, TYPE_PAIRS.length - 1), way: R.pick(WAYS), pace: R.pick(PACES) };
+  // the look first (soft a little more often: the first look), then a ground it stands on
+  // (a grey brand colour never fills the ground)
+  const style = styleOf(R.next());
+  const grounds: Ground[] = STYLE_GROUNDS[style].filter((g) => !(grey(brand.color) && g === "brand"));
+  // (editorial: mostly the serif; bold: mostly a heavy display face)
+  const type = style === "editorial" && R.next() < 0.7 ? 4 : style === "bold" && R.next() < 0.7 ? R.pick([1, 3]) : R.int(0, TYPE_PAIRS.length - 1);
+  const theme: Theme = { ground: R.pick(grounds.length ? grounds : ["light"]), type, way: R.pick(WAYS), pace: R.pick(PACES), style };
   const frames = framesOf(words, beats, duration);
   // (words alone: at most one scene in four, never two in a row)
   const most = Math.max(1, Math.floor((readings.length - 1) / 4));
@@ -238,11 +243,14 @@ export function litInTime<W extends { at: number; key: boolean }>(words: W[], fr
   return words.map((w, j) => (j < k ? { ...w, at: Math.min(w.at, at) } : { ...w, at: Math.max(from, w.at - by) }));
 }
 
-// what makes a video look like itself: its ground, type, transitions, pace and template order
+// a look by weight: soft 0.28, the others 0.18 each
+export const styleOf = (x: number): Style => (x < 0.28 ? "soft" : STYLES[1 + Math.min(3, Math.floor((x - 0.28) / 0.18))]);
+
+// what makes a video look like itself: its ground, type, transitions, pace, template order and look
 // (and the scenes on a ground of their own, when there are any)
 export const printOf = (theme: Theme, scenes: Scene[]) => {
   const own = scenes.map((s) => (s.ground && s.ground !== theme.ground ? s.ground[0] : "-")).join("");
-  return [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${TEMPLATES.indexOf(s.template).toString(36)}${s.variant}`).join(""), ...(/[^-]/.test(own) ? [own] : [])].join("|");
+  return [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${TEMPLATES.indexOf(s.template).toString(36)}${s.variant}`).join(""), theme.style ?? "soft", ...(/[^-]/.test(own) ? [own] : [])].join("|");
 };
 
 // One scene, one idea: what is shown once is not shown twice

@@ -1,7 +1,7 @@
 import { Icon } from "../icons";
 import { familyOf } from "./faces";
 import { TYPE, WEIGHT } from "./geo";
-import { type C, One, clamp01, ease, panel, springAt, tint } from "./kit";
+import { type C, rad, One, clamp01, ease, panel, springAt, tint } from "./kit";
 import { WordsIn, abs } from "./scenes";
 import type { Scene } from "./types";
 
@@ -215,7 +215,7 @@ export function Panel({ c }: { c: C }) {
           const [a, b] = TINTS[k % TINTS.length];
           const lit = k === now ? clamp01((f - at + 3) / 8) : 0;
           return (
-            <div key={k} style={abs({ left: 20, right: 20, top: 20 + k * rh, height: rh - 12, borderRadius: 28, background: tint(b, 0.08 * lit), display: "flex", alignItems: "center", gap: 26, padding: "0 26px", boxSizing: "border-box", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * 30).toFixed(1)}px)`, filter: kr < 0.98 ? `blur(${((1 - kr) * 8).toFixed(1)}px)` : undefined })}>
+            <div key={k} style={abs({ left: 20, right: 20, top: 20 + k * rh, height: rh - 12, borderRadius: rad(c, 28), background: tint(b, 0.08 * lit), display: "flex", alignItems: "center", gap: 26, padding: "0 26px", boxSizing: "border-box", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * 30).toFixed(1)}px)`, filter: kr < 0.98 ? `blur(${((1 - kr) * 8).toFixed(1)}px)` : undefined })}>
               <div data-part="item-icon" style={{ width: tileS, height: tileS, borderRadius: tileS * 0.27, background: `linear-gradient(160deg, ${a}, ${b})`, boxShadow: `inset 0 ${(tileS * 0.05).toFixed(0)}px ${(tileS * 0.07).toFixed(0)}px rgba(255,255,255,0.5), 0 ${(tileS * 0.12).toFixed(0)}px ${(tileS * 0.28).toFixed(0)}px ${b}55`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Icon name={r.icon} size={tileS * 0.52} color="#ffffff" strokeWidth={2.2} />
               </div>

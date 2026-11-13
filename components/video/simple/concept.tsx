@@ -3,7 +3,7 @@ import { Icon } from "../icons";
 import { familyOf } from "./faces";
 import { fitWords, noteHero } from "./fit";
 import { TYPE, WEIGHT, fitIn } from "./geo";
-import { type C, Glyph, One, blend, clamp01, countUp, ease, panel, pop, rise, springAt, tint } from "./kit";
+import { type C, rad, Glyph, One, blend, clamp01, countUp, ease, panel, pop, rise, springAt, tint } from "./kit";
 import { Band, Side, abs } from "./scenes";
 import { toAscii } from "./bangla";
 import { numberOf } from "./points";
@@ -236,7 +236,7 @@ function Truth({ c }: { c: C }) {
       <>
         {word({ clipPath: "inset(0 0 50% 0)", opacity: 1 - g, transform: `translate(${(-g * W * 0.22).toFixed(1)}px, ${(-g * H * 0.3).toFixed(1)}px) rotate(${(-g * 7).toFixed(2)}deg)` })}
         {word({ clipPath: "inset(50% 0 0 0)", opacity: 1 - g, transform: `translate(${(g * W * 0.22).toFixed(1)}px, ${(g * H * 0.3).toFixed(1)}px) rotate(${(g * 7).toFixed(2)}deg)` })}
-        {cut > 0 && <div style={abs({ left: pad, top: H / 2 - 4, width: (W - 2 * pad) * clamp01((f - (T - 6)) / 5), height: 8, borderRadius: 4, background: look.accent, opacity: cut })} />}
+        {cut > 0 && <div style={abs({ left: pad, top: H / 2 - 4, width: (W - 2 * pad) * clamp01((f - (T - 6)) / 5), height: 8, borderRadius: rad(c, 4), background: look.accent, opacity: cut })} />}
       </>
     );
   } else if (v === 1) {
@@ -387,7 +387,7 @@ function Cost({ c }: { c: C }) {
       <div style={abs({ left: (dw - w) / 2, top, width: w, height: 110 + n * row + 120, ...panel(c, 36), ...rise(springAt(c, s.from + 2)) })}>
         <div style={abs({ left: 36, top: 30, display: "flex", alignItems: "center", gap: 20 })}>
           <Glyph c={c} name="receipt" size={76} card at={s.from + 4} />
-          <div style={{ width: 200, height: 18, borderRadius: 9, background: tint(look.panelAccent, 0.14) }} />
+          <div style={{ width: 200, height: 18, borderRadius: rad(c, 9), background: tint(look.panelAccent, 0.14) }} />
         </div>
         {Array.from({ length: n }, (_, i) => {
           const it = s.items[i];
@@ -396,15 +396,15 @@ function Cost({ c }: { c: C }) {
           const gone = i ? cut : 0;
           return (
             <div key={i} style={abs({ left: 36, right: 36, top: 110 + i * row, height: row - 18, display: "flex", alignItems: "center", gap: 18, opacity: clamp01(k * 2) * (1 - gone), transform: `translateX(${((1 - k) * 40 + gone * -30).toFixed(1)}px)`, borderBottom: `2px dashed ${tint(look.panelAccent, 0.18)}` })}>
-              {it ? <One part="item" face={look.text} fit={360} style={{ fontFamily: familyOf(look.text), fontSize: 44, fontWeight: WEIGHT.item, color: look.panelInk, flex: 1 }}>{it.text}</One> : <div style={{ flex: 1 }}><div style={{ width: `${40 + 30 * hash(i, 9)}%`, height: 16, borderRadius: 8, background: tint(look.panelAccent, 0.14) }} /></div>}
-              <div style={{ width: 100 + 60 * hash(i, 4), height: 26, borderRadius: 13, background: tint(look.bad, 0.22) }} />
+              {it ? <One part="item" face={look.text} fit={360} style={{ fontFamily: familyOf(look.text), fontSize: 44, fontWeight: WEIGHT.item, color: look.panelInk, flex: 1 }}>{it.text}</One> : <div style={{ flex: 1 }}><div style={{ width: `${40 + 30 * hash(i, 9)}%`, height: 16, borderRadius: rad(c, 8), background: tint(look.panelAccent, 0.14) }} /></div>}
+              <div style={{ width: 100 + 60 * hash(i, 4), height: 26, borderRadius: rad(c, 13), background: tint(look.bad, 0.22) }} />
             </div>
           );
         })}
         <div style={abs({ left: 36, right: 36, top: 110 + n * row + 20, height: 76, display: "flex", alignItems: "center", gap: 18, opacity: clamp01(kt * 2) })}>
-          <div style={{ flex: 1, height: 36, borderRadius: 18, background: tint(look.panelAccent, 0.1), overflow: "hidden", position: "relative" }}>
-            <div style={abs({ left: 0, top: 0, bottom: 0, width: `${(bar * 100).toFixed(1)}%`, borderRadius: 15, background: look.bad })} />
-            <div style={abs({ left: 0, top: 0, bottom: 0, width: `${(bar * 100).toFixed(1)}%`, borderRadius: 15, background: look.panelAccent, opacity: cut })} />
+          <div style={{ flex: 1, height: 36, borderRadius: rad(c, 18), background: tint(look.panelAccent, 0.1), overflow: "hidden", position: "relative" }}>
+            <div style={abs({ left: 0, top: 0, bottom: 0, width: `${(bar * 100).toFixed(1)}%`, borderRadius: rad(c, 15), background: look.bad })} />
+            <div style={abs({ left: 0, top: 0, bottom: 0, width: `${(bar * 100).toFixed(1)}%`, borderRadius: rad(c, 15), background: look.panelAccent, opacity: cut })} />
           </div>
           {s.number && <div style={{ fontFamily: familyOf(look.display), fontWeight: 800, fontSize: 64, color: look.panelInk, letterSpacing: "-0.02em" }}>{countUp(s.number, ease(grow))}</div>}
           <div style={{ position: "relative", width: 64, height: 64 }}>
@@ -447,7 +447,7 @@ function Hours({ c }: { c: C }) {
   return (
     <Place c={c} dw={dw} dh={dh}>
       <div style={abs({ left: (dw - w) / 2, top: 20, width: w, height: dh - 40, ...panel(c, 34), overflow: "hidden", ...rise(springAt(c, s.from + 2)) })}>
-        <div style={abs({ left: 30, top: 26, display: "flex", gap: 12 })}>{[0, 1, 2].map((i) => <div key={i} style={{ width: 16, height: 16, borderRadius: 8, background: tint(look.panelAccent, 0.25) }} />)}</div>
+        <div style={abs({ left: 30, top: 26, display: "flex", gap: 12 })}>{[0, 1, 2].map((i) => <div key={i} style={{ width: 16, height: 16, borderRadius: rad(c, 8), background: tint(look.panelAccent, 0.25) }} />)}</div>
         <svg width={120} height={120} viewBox="0 0 120 120" style={abs({ left: (w - 120) / 2, top: 50 })}>
           <circle cx={60} cy={60} r={52} fill="none" stroke={look.panelInk} strokeWidth={7} />
           <line x1={60} y1={60} x2={60} y2={30} stroke={look.panelInk} strokeWidth={7} strokeLinecap="round" transform={`rotate(${(sec / 12).toFixed(1)} 60 60)`} />
@@ -459,15 +459,15 @@ function Hours({ c }: { c: C }) {
             <div style={abs({ left: 30, top: top + t * (lane + 22) + 10, width: 90, height: lane - 20, display: "flex", alignItems: "center", gap: 8 })}>
               <Icon name={glyphs[t]} size={34} color={look.panelSub} strokeWidth={2} />
             </div>
-            <div style={abs({ left, top: top + t * (lane + 22), width: right - left, height: lane, borderRadius: 14, background: tint(look.panelAccent, 0.06) })} />
+            <div style={abs({ left, top: top + t * (lane + 22), width: right - left, height: lane, borderRadius: rad(c, 14), background: tint(look.panelAccent, 0.06) })} />
             {clips[t].map((cl, k) => {
               const kk = springAt(c, cl.at);
               // (gone where the sweep has passed)
               const past = clamp01((sx - cl.x) / 40);
-              return <div key={k} style={abs({ left: cl.x, top: top + t * (lane + 22) + 8, width: cl.w, height: lane - 16, borderRadius: 10, background: tint(look.panelAccent, 0.22 + 0.2 * hash(t * 13 + k, 5)), opacity: clamp01(kk * 2) * (1 - past), transform: `scaleY(${(0.5 + 0.5 * clamp01(kk)).toFixed(3)})` })} />;
+              return <div key={k} style={abs({ left: cl.x, top: top + t * (lane + 22) + 8, width: cl.w, height: lane - 16, borderRadius: rad(c, 10), background: tint(look.panelAccent, 0.22 + 0.2 * hash(t * 13 + k, 5)), opacity: clamp01(kk * 2) * (1 - past), transform: `scaleY(${(0.5 + 0.5 * clamp01(kk)).toFixed(3)})` })} />;
             })}
             {/* (the clean clip, drawn as the sweep passes) */}
-            {sweep > 0 && <div style={abs({ left, top: top + t * (lane + 22) + 8, width: Math.max(0, sx - left), height: lane - 16, borderRadius: 10, background: t ? tint(look.panelAccent, 0.35) : look.accentFill })} />}
+            {sweep > 0 && <div style={abs({ left, top: top + t * (lane + 22) + 8, width: Math.max(0, sx - left), height: lane - 16, borderRadius: rad(c, 10), background: t ? tint(look.panelAccent, 0.35) : look.accentFill })} />}
           </div>
         ))}
         {/* cut marks, until the sweep takes them */}
@@ -507,7 +507,7 @@ function Barriers({ c }: { c: C }) {
           <div key={i} style={abs({ left: 40, top: top + i * (card + gap), width: dw - 80, height: card, ...panel(c, 32), display: "flex", alignItems: "center", gap: 30, padding: "0 40px", boxSizing: "border-box", opacity: clamp01(k * 2) * (1 - 0.85 * gone), filter: gone > 0.01 ? `blur(${(gone * 4).toFixed(2)}px)` : undefined, transform: `translateY(${((1 - k) * 40 + gone * 30).toFixed(1)}px) scale(${(1 - 0.08 * gone).toFixed(3)})` })}>
             <Glyph c={c} part="item-icon" name={it.icon ?? s.icon} size={86} card at={s.from + 4 + i * 6} />
             <One part="item" face={look.text} fit={dw - 80 - 80 - 86 - 30 - 120} style={{ fontFamily: familyOf(look.text), fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: look.panelInk }}>{it.text}</One>
-            <div style={abs({ right: 34, top: (card - 84) / 2, width: 84, height: 84, borderRadius: 42, background: look.bad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 10px 26px ${tint(look.bad, 0.35)}`, ...pop(x), ...(f < barrierAt(s, i) - 2 ? { opacity: 0 } : {}) })}>
+            <div style={abs({ right: 34, top: (card - 84) / 2, width: 84, height: 84, borderRadius: rad(c, 42), background: look.bad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 10px 26px ${tint(look.bad, 0.35)}`, ...pop(x), ...(f < barrierAt(s, i) - 2 ? { opacity: 0 } : {}) })}>
               <Icon name="x" size={52} color="#ffffff" strokeWidth={3.2} />
             </div>
           </div>
@@ -553,7 +553,7 @@ function Progress({ c }: { c: C }) {
         const x = x0 + bw * u;
         return (
           <div key={i}>
-            <div style={abs({ left: x - 20, top: by + bh / 2 - 20, width: 40, height: 40, borderRadius: 20, border: `7px solid ${look.bg}`, boxSizing: "border-box", background: `linear-gradient(${tint(look.ink, 0.25 * (1 - lit))}, ${tint(look.ink, 0.25 * (1 - lit))}), ${look.accent}`, transform: `scale(${(1 + 0.3 * Math.sin(Math.PI * lit)).toFixed(3)})` })} />
+            <div style={abs({ left: x - 20, top: by + bh / 2 - 20, width: 40, height: 40, borderRadius: rad(c, 20), border: `7px solid ${look.bg}`, boxSizing: "border-box", background: `linear-gradient(${tint(look.ink, 0.25 * (1 - lit))}, ${tint(look.ink, 0.25 * (1 - lit))}), ${look.accent}`, transform: `scale(${(1 + 0.3 * Math.sin(Math.PI * lit)).toFixed(3)})` })} />
             {items[i] && (
               <div style={abs({ left: x - 160, width: 320, top: by + bh + 26, display: "flex", justifyContent: "center", opacity: 0.35 + 0.65 * lit })}>
                 <One part="item" face={look.text} fit={300} style={{ fontFamily: familyOf(look.text), fontSize: 40, fontWeight: WEIGHT.item, color: look.ink }}>{items[i].text}</One>
@@ -589,7 +589,7 @@ function Agenda({ c }: { c: C }) {
         const k = springAt(c, agendaAt(s, i));
         return (
           <div key={i} style={abs({ left: 30, top: top + i * (row + gap), width: dw - 60, height: row, ...panel(c, 30), display: "flex", alignItems: "center", gap: 28, padding: "0 34px", boxSizing: "border-box", opacity: clamp01(k * 2), filter: k < 0.99 ? `blur(${((1 - k) * 8).toFixed(1)}px)` : undefined, transform: `translateX(${((1 - k) * 60).toFixed(1)}px)` })}>
-            <div style={{ flexShrink: 0, width: 76, height: 76, borderRadius: 38, background: look.accentFill, color: look.onAccent, fontFamily: familyOf(look.display), fontWeight: 800, fontSize: 40, display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 6, boxSizing: "border-box", boxShadow: `0 8px 22px ${tint(look.accent, 0.3)}` }}>{numberOf(i + 1)}</div>
+            <div style={{ flexShrink: 0, width: 76, height: 76, borderRadius: rad(c, 38), background: look.accentFill, color: look.onAccent, fontFamily: familyOf(look.display), fontWeight: 800, fontSize: 40, display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 6, boxSizing: "border-box", boxShadow: `0 8px 22px ${tint(look.accent, 0.3)}` }}>{numberOf(i + 1)}</div>
             <One part="item" face={look.text} fit={dw - 60 - 68 - 76 - 28} style={{ fontFamily: familyOf(look.text), fontSize: TYPE.ITEM * 1.15, fontWeight: WEIGHT.item, color: look.panelInk }}>{t}</One>
           </div>
         );
@@ -628,8 +628,8 @@ function Versus({ c }: { c: C }) {
         const col = good ? look.accentFill : look.bad;
         return (
           <div key={i} style={abs({ left: xs[i], top, width: bw, height: dh - top, ...rise(k) })}>
-            <div style={abs({ left: 0, top: 0, width: bw, height: bh, borderRadius: 40, background: tint(good ? look.accent : look.bad, 0.12), overflow: "hidden", boxShadow: `inset 0 0 0 2px ${tint(good ? look.accent : look.bad, 0.25)}` })}>
-              <div style={abs({ left: 0, right: 0, bottom: 0, height: bh * lv[i], borderRadius: 40, background: col, boxShadow: `0 -8px 30px ${tint(good ? look.accent : look.bad, 0.3)}` })} />
+            <div style={abs({ left: 0, top: 0, width: bw, height: bh, borderRadius: rad(c, 40), background: tint(good ? look.accent : look.bad, 0.12), overflow: "hidden", boxShadow: `inset 0 0 0 2px ${tint(good ? look.accent : look.bad, 0.25)}` })}>
+              <div style={abs({ left: 0, right: 0, bottom: 0, height: bh * lv[i], borderRadius: rad(c, 40), background: col, boxShadow: `0 -8px 30px ${tint(good ? look.accent : look.bad, 0.3)}` })} />
               <div style={abs({ left: 0, right: 0, top: 26, display: "flex", justifyContent: "center" })}>
                 <Glyph c={c} name={good ? "trending-up" : "trending-down"} size={92} card at={i ? T : s.from + 12} />
               </div>
@@ -669,7 +669,7 @@ function Funnel({ c }: { c: C }) {
         // (each stage dims as the next one comes; the last stays lit)
         const next = i < n - 1 ? clamp01((f - funnelAt(s, i + 1)) / 10) : 0;
         return (
-          <div key={i} style={abs({ left: (dw - w) / 2, top: top + i * (row + gap), width: w, height: row, borderRadius: 28, background: last ? look.accentFill : tint(look.accent, 0.16 + 0.1 * i), boxShadow: last ? `0 14px 36px ${tint(look.accent, 0.35)}` : undefined, display: "flex", alignItems: "center", justifyContent: "center", gap: 18, padding: "0 28px", boxSizing: "border-box", opacity: clamp01(k * 2) * (1 - 0.35 * next), transform: `translateY(${((1 - k) * -40).toFixed(1)}px) scale(${(0.9 + 0.1 * k).toFixed(3)})` })}>
+          <div key={i} style={abs({ left: (dw - w) / 2, top: top + i * (row + gap), width: w, height: row, borderRadius: rad(c, 28), background: last ? look.accentFill : tint(look.accent, 0.16 + 0.1 * i), boxShadow: last ? `0 14px 36px ${tint(look.accent, 0.35)}` : undefined, display: "flex", alignItems: "center", justifyContent: "center", gap: 18, padding: "0 28px", boxSizing: "border-box", opacity: clamp01(k * 2) * (1 - 0.35 * next), transform: `translateY(${((1 - k) * -40).toFixed(1)}px) scale(${(0.9 + 0.1 * k).toFixed(3)})` })}>
             {it.icon && <Glyph c={c} name={it.icon} size={60} at={at} />}
             <One part="item" face={look.text} fit={w - 56 - (it.icon ? 78 : 0)} style={{ fontFamily: familyOf(look.text), fontSize: TYPE.ITEM * 1.15, fontWeight: WEIGHT.item, color: last ? look.onAccent : look.ink }}>{it.text}</One>
           </div>
@@ -709,7 +709,7 @@ function Split({ c }: { c: C }) {
           <div key={i} style={abs({ left: 30, top: top + i * (card + gap), width: dw - 60, height: card, ...panel(c, 32), display: "flex", alignItems: "center", gap: 28, padding: "0 36px", boxSizing: "border-box", opacity: clamp01(k * 2), transform: `translate(${(shake + (1 - k) * (good ? -60 : 60)).toFixed(1)}px, 0)`, boxShadow: `0 0 0 ${(3 * on).toFixed(1)}px ${tint(col, 0.6 * on)}, ${panel(c).boxShadow}` })}>
             <Glyph c={c} part="item-icon" name={it.icon ?? (good ? "circle-check" : "circle-x")} size={90} card at={at} />
             <One part="item" face={look.text} fit={dw - 60 - 72 - 90 - 28 - 130} style={{ fontFamily: familyOf(look.text), fontSize: TYPE.ITEM * 1.2, fontWeight: WEIGHT.item, color: look.panelInk }}>{it.text}</One>
-            <div style={abs({ right: 30, top: (card - 92) / 2, width: 92, height: 92, borderRadius: 46, background: good ? look.accentFill : look.bad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 10px 26px ${tint(col, 0.35)}`, ...pop(x), ...(f < at - 2 ? { opacity: 0 } : {}) })}>
+            <div style={abs({ right: 30, top: (card - 92) / 2, width: 92, height: 92, borderRadius: rad(c, 46), background: good ? look.accentFill : look.bad, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 10px 26px ${tint(col, 0.35)}`, ...pop(x), ...(f < at - 2 ? { opacity: 0 } : {}) })}>
               <Icon name={good ? "check" : "x"} size={56} color="#ffffff" strokeWidth={3.4} />
             </div>
           </div>
@@ -777,12 +777,12 @@ function Exit({ c }: { c: C }) {
     <Place c={c} dw={dw} dh={dh}>
       <div style={abs({ left: px, top: py, width: pw, height: ph, ...panel(c, 30), overflow: "hidden", ...rise(k) })}>
         <div style={abs({ left: 0, right: 0, top: 0, height: 54, background: tint(look.ink, 0.05), display: "flex", alignItems: "center", gap: 10, padding: "0 22px" })}>
-          {[0, 1, 2].map((d) => <div key={d} style={{ width: 14, height: 14, borderRadius: 7, background: tint(look.ink, 0.18) }} />)}
-          <div style={{ marginLeft: 16, height: 20, flex: 1, borderRadius: 10, background: tint(look.ink, 0.08) }} />
+          {[0, 1, 2].map((d) => <div key={d} style={{ width: 14, height: 14, borderRadius: rad(c, 7), background: tint(look.ink, 0.18) }} />)}
+          <div style={{ marginLeft: 16, height: 20, flex: 1, borderRadius: rad(c, 10), background: tint(look.ink, 0.08) }} />
         </div>
-        <div style={abs({ left: 34, top: 84, width: pw - 68, height: 150, borderRadius: 20, background: tint(look.accent, 0.12) })} />
-        {[0, 1, 2].map((r) => <div key={r} style={abs({ left: 34, top: 262 + r * 44, width: (pw - 68) * [0.9, 0.7, 0.8][r], height: 22, borderRadius: 11, background: tint(look.ink, 0.08) })} />)}
-        <div style={abs({ right: 34, bottom: 30, width: 180, height: 56, borderRadius: 28, background: blend(tint(look.ink, 0.1), look.bad, spot), boxShadow: spot > 0 ? `0 0 0 ${(6 * spot).toFixed(1)}px ${tint(look.bad, 0.25)}` : undefined })} />
+        <div style={abs({ left: 34, top: 84, width: pw - 68, height: 150, borderRadius: rad(c, 20), background: tint(look.accent, 0.12) })} />
+        {[0, 1, 2].map((r) => <div key={r} style={abs({ left: 34, top: 262 + r * 44, width: (pw - 68) * [0.9, 0.7, 0.8][r], height: 22, borderRadius: rad(c, 11), background: tint(look.ink, 0.08) })} />)}
+        <div style={abs({ right: 34, bottom: 30, width: 180, height: 56, borderRadius: rad(c, 28), background: blend(tint(look.ink, 0.1), look.bad, spot), boxShadow: spot > 0 ? `0 0 0 ${(6 * spot).toFixed(1)}px ${tint(look.bad, 0.25)}` : undefined })} />
       </div>
       {Array.from({ length: 9 }, (_, i) => {
         // each comes in from the left, into the page, and (all but two) out its right side
@@ -793,7 +793,7 @@ function Exit({ c }: { c: C }) {
         const x = stays ? -40 + ease(clamp01(u * 1.6)) * (px + pw * 0.45) : -40 + ease(u) * (dw + 40);
         const leaving = !stays && x > px + pw - 20;
         return (
-          <div key={i} style={abs({ left: x, top: y, width: 30, height: 30, borderRadius: 15, background: leaving ? look.bad : look.accent, opacity: f < t0 ? 0 : u >= 1 && !stays ? 0 : 0.9, boxShadow: `0 6px 16px ${tint(leaving ? look.bad : look.accent, 0.35)}` })} />
+          <div key={i} style={abs({ left: x, top: y, width: 30, height: 30, borderRadius: rad(c, 15), background: leaving ? look.bad : look.accent, opacity: f < t0 ? 0 : u >= 1 && !stays ? 0 : 0.9, boxShadow: `0 6px 16px ${tint(leaving ? look.bad : look.accent, 0.35)}` })} />
         );
       })}
       <div style={abs({ left: px + pw + 40, top: dh / 2 - 60, opacity: clamp01((f - s.from - 30) / 10) })}>
@@ -831,8 +831,8 @@ function Retention({ c }: { c: C }) {
       {/* the video playing along the bottom: its bar filling as the curve is drawn */}
       <div style={abs({ left: x0, top: y0 + ch + 40, width: cw, height: 54, display: "flex", alignItems: "center", gap: 20, opacity: clamp01(k * 2) })}>
         <Glyph c={c} name="play" size={54} at={s.from + 8} />
-        <div style={{ flex: 1, height: 14, borderRadius: 7, background: tint(look.ink, 0.1), position: "relative" }}>
-          <div style={abs({ left: 0, top: 0, bottom: 0, width: `${(drawn * 100).toFixed(1)}%`, borderRadius: 7, background: look.accentFill })} />
+        <div style={{ flex: 1, height: 14, borderRadius: rad(c, 7), background: tint(look.ink, 0.1), position: "relative" }}>
+          <div style={abs({ left: 0, top: 0, bottom: 0, width: `${(drawn * 100).toFixed(1)}%`, borderRadius: rad(c, 7), background: look.accentFill })} />
         </div>
       </div>
     </Place>
@@ -888,7 +888,7 @@ function Cycle({ c }: { c: C }) {
             <div data-part="item-icon" style={{ width: node, height: node, borderRadius: node * 0.28, background: `linear-gradient(160deg, ${a}, ${b})`, boxShadow: `inset 0 7px 10px rgba(255,255,255,0.5), 0 16px 34px ${b}55`, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Icon name={it.icon ?? "sparkles"} size={node * 0.5} color="#ffffff" strokeWidth={2.2} />
             </div>
-            <div style={{ padding: "6px 18px", borderRadius: 20, background: look.panelFill, boxShadow: `0 8px 20px ${look.shadow}` }}>
+            <div style={{ padding: "6px 18px", borderRadius: rad(c, 20), background: look.panelFill, boxShadow: `0 8px 20px ${look.shadow}` }}>
               <One part="item" face={look.text} fit={260} style={{ fontFamily: familyOf(look.text), fontSize: 50, fontWeight: WEIGHT.item, color: look.panelInk }}>{it.text}</One>
             </div>
           </div>
@@ -917,7 +917,7 @@ function Report({ c }: { c: C }) {
         <div style={abs({ left: 0, right: 0, top: 0, height: head, display: "flex", alignItems: "center", gap: 22, padding: "0 34px", borderBottom: `1px solid ${look.line}` })}>
           <Glyph c={c} name="chart-column" size={72} solid at={s.from + 6} />
           {title && <One face={look.display} fit={dw - 300} style={{ fontFamily: familyOf(look.display), fontSize: 50, fontWeight: 800, color: look.panelInk }}>{title}</One>}
-          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>{[0, 1, 2].map((d) => <div key={d} style={{ width: 12, height: 12, borderRadius: 6, background: tint(look.ink, 0.15) }} />)}</div>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>{[0, 1, 2].map((d) => <div key={d} style={{ width: 12, height: 12, borderRadius: rad(c, 6), background: tint(look.ink, 0.15) }} />)}</div>
         </div>
         {items.map((it, i) => {
           const at = splitAt({ ...s, items }, i);
@@ -926,14 +926,14 @@ function Report({ c }: { c: C }) {
           const [a, b] = TINTS[i % TINTS.length];
           return (
             <div key={i} style={abs({ left: 34, right: 34, top: head + 20 + i * rh, height: rh - 14, display: "flex", alignItems: "center", gap: 22, opacity: clamp01(kr * 1.6), transform: `translateX(${((1 - kr) * 40).toFixed(1)}px)` })}>
-              <div data-part="item-icon" style={{ width: 64, height: 64, borderRadius: 18, background: `linear-gradient(160deg, ${a}, ${b})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <div data-part="item-icon" style={{ width: 64, height: 64, borderRadius: rad(c, 18), background: `linear-gradient(160deg, ${a}, ${b})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Icon name={it.icon ?? "circle"} size={34} color="#ffffff" strokeWidth={2.3} />
               </div>
               <div style={{ width: 230, flexShrink: 0 }}>
                 <One part="item" face={look.text} fit={230} style={{ fontFamily: familyOf(look.text), fontSize: 42, fontWeight: WEIGHT.item, color: look.panelInk }}>{it.text}</One>
               </div>
-              <div style={{ flex: 1, height: 22, borderRadius: 11, background: tint(b, 0.15), position: "relative" }}>
-                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(fill * lens[i % 4] * 100).toFixed(1)}%`, borderRadius: 11, background: `linear-gradient(90deg, ${a}, ${b})` }} />
+              <div style={{ flex: 1, height: 22, borderRadius: rad(c, 11), background: tint(b, 0.15), position: "relative" }}>
+                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(fill * lens[i % 4] * 100).toFixed(1)}%`, borderRadius: rad(c, 11), background: `linear-gradient(90deg, ${a}, ${b})` }} />
               </div>
             </div>
           );

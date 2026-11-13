@@ -64,7 +64,9 @@ export const keyStyle = (look: Look, size: number): CSSProperties =>
   // (on glass: the keyword's gradient, its letters only)
   look.keyFill ? { backgroundImage: look.keyFill, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }
   // (the plate a little deeper than the line, so letters that hang below it stay on it)
-  : look.plate ? { color: look.bg, background: look.plateFill, borderRadius: Math.round(size * 0.16), padding: `${Math.round(size * 0.02)}px ${Math.round(size * 0.14)}px ${Math.round(size * 0.1)}px`, margin: `0 ${-Math.round(size * 0.06)}px` } : { color: look.accent };
+  : look.plate ? { color: look.bg, background: look.plateFill, borderRadius: Math.round(size * 0.16 * look.r), padding: `${Math.round(size * 0.02)}px ${Math.round(size * 0.14)}px ${Math.round(size * 0.1)}px`, margin: `0 ${-Math.round(size * 0.06)}px` }
+  // (neon: the keyword glows)
+  : { color: look.accent, ...(look.keyGlow ? { textShadow: look.keyGlow } : {}) };
 
 // The voice's words in their place: each as it is said, the key one in the
 // accent colour (on the brand's own colour: on a plate, keyStyle) — or with an effect: struck
@@ -140,7 +142,7 @@ export function Glyph({ c, name, size, solid = false, card = false, style, part,
   const accent = card ? look.panelAccent : look.accent;
   const on = card ? look.onPanelAccent : look.onAccent;
   return (
-    <div data-part={part} style={{ width: size, height: size, borderRadius: size * 0.28, background: solid ? look.accentFill : tint(accent, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: solid ? `${look.glass ? `inset 0 ${(size * 0.05).toFixed(0)}px ${(size * 0.07).toFixed(0)}px rgba(255,255,255,0.5), ` : ""}0 ${(size * 0.12).toFixed(0)}px ${(size * 0.3).toFixed(0)}px ${tint(accent, 0.28)}` : undefined, ...style }}>
+    <div data-part={part} style={{ width: size, height: size, borderRadius: size * 0.28 * look.r, ...(look.style === "bold" ? { border: `${Math.max(2, size * 0.03).toFixed(1)}px solid ${look.line}` } : look.style === "neon" ? { border: `1px solid ${tint(accent, 0.5)}` } : {}), background: solid ? look.accentFill : tint(accent, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: solid ? `${look.glass ? `inset 0 ${(size * 0.05).toFixed(0)}px ${(size * 0.07).toFixed(0)}px rgba(255,255,255,0.5), ` : ""}0 ${(size * 0.12).toFixed(0)}px ${(size * 0.3).toFixed(0)}px ${tint(accent, 0.28)}` : undefined, ...style }}>
       <div style={{ display: "flex", ...motionStyle(motionOf(name), c.f - (at ?? c.s.from + 12) - MOTION_DELAY) }}>
         <Icon name={name} size={size * 0.5} color={solid ? on : accent} strokeWidth={2} />
       </div>
@@ -151,7 +153,17 @@ export function Glyph({ c, name, size, solid = false, card = false, style, part,
 // a card's surface
 // (a thin border and a layered, soft shadow; on a dark ground: glass; on the glass
 // ground: frosted white, a hairline of the brand colour round it)
-export const panel = (c: C, radius = 30): CSSProperties => ({ background: c.look.panelFill, border: `1px solid ${c.look.line}`, borderRadius: radius, boxShadow: `${c.look.ring ? `0 0 0 1px ${c.look.ring}, ` : ""}0 1px 2px ${c.look.shadow}, 0 18px 50px ${c.look.shadow}`, color: c.look.panelInk, fontFamily: familyOf(c.look.text) });
+// (the look's own edge and shadow when it has them: neon's glowing edge, editorial's ink line, bold's hard offset shadow)
+export const panel = (c: C, radius = 30): CSSProperties => ({
+  background: c.look.panelFill,
+  border: c.look.cardBorder ?? `1px solid ${c.look.line}`,
+  borderRadius: rad(c, radius),
+  boxShadow: c.look.cardShadow ?? `${c.look.ring ? `0 0 0 1px ${c.look.ring}, ` : ""}0 1px 2px ${c.look.shadow}, 0 18px 50px ${c.look.shadow}`,
+  color: c.look.panelInk,
+  fontFamily: familyOf(c.look.text),
+});
+// a corner's radius in the video's look (squarer in editorial and bold, rounder in depth; a pill stays a pill)
+export const rad = (c: { look: { r: number } }, n: number) => (n >= 99 ? n : Math.round(n * c.look.r));
 
 // The brand's mark: its logo, else its initial on the accent
 export function Mark({ c, size }: { c: C; size: number }) {

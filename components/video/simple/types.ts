@@ -61,8 +61,10 @@ export const VARIANTS = 3;
 // (glass: an airy light ground of soft colour fields, frosted cards, glossy icons, the keyword in a gradient)
 export const GROUNDS = ["dark", "light", "brand", "glass"] as const;
 export type Ground = (typeof GROUNDS)[number];
-// (blur: the scene going out blurs and fades as the next comes in from a blur)
-export const WAYS = ["slide", "zoom", "wipe", "blur"] as const;
+// (blur: the scene going out blurs and fades as the next comes in from a blur · leak: a warm light
+// sweeps across the cut · push: the next comes up from below, both streaked by motion · tilt: the
+// scene turns away in depth as the next turns in)
+export const WAYS = ["slide", "zoom", "wipe", "blur", "leak", "push", "tilt"] as const;
 export type Way = (typeof WAYS)[number];
 export const PACES = ["calm", "lively"] as const;
 export type Pace = (typeof PACES)[number];
@@ -77,7 +79,23 @@ export const TYPE_PAIRS: [string, string][] = [
   ["noto-serif-bengali", "noto-sans-bengali"],
 ];
 
-export type Theme = { ground: Ground; type: number; way: Way; pace: Pace };
+// The video's look: one family for every card, icon tile, keyword and the ground's pattern —
+// soft (frosted, rounded; the first look), neon (a deep dark ground, glowing edges, a grid),
+// editorial (paper, hairline rules, square corners, a serif), bold (thick ink outlines, hard
+// offset shadows, halftone dots), depth (deep soft shadows, a slow turn in 3D, colour blobs)
+export const STYLES = ["soft", "neon", "editorial", "bold", "depth"] as const;
+export type Style = (typeof STYLES)[number];
+// the grounds each look stands on
+export const STYLE_GROUNDS: Record<Style, readonly Ground[]> = {
+  soft: ["dark", "light", "brand", "glass"],
+  neon: ["dark"],
+  editorial: ["light"],
+  bold: ["light", "brand"],
+  depth: ["glass", "light", "dark"],
+};
+
+// (style: none on a plan made before the looks — soft)
+export type Theme = { ground: Ground; type: number; way: Way; pace: Pace; style?: Style };
 
 // A scene as the film plays it (frames).
 export type Scene = {

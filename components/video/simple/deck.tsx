@@ -1,7 +1,7 @@
 import { Icon } from "../icons";
 import { familyOf } from "./faces";
 import { TYPE, WEIGHT } from "./geo";
-import { type C, One, clamp01, ease, springAt } from "./kit";
+import { type C, rad, One, clamp01, ease, springAt } from "./kit";
 import { TINTS } from "./panel";
 import { Band, abs } from "./scenes";
 import type { Scene } from "./types";
@@ -49,7 +49,7 @@ export function Deck({ c }: { c: C }) {
           return (
             <div key={k} style={abs({ left: cx, top: cy + float, width: cw, height: ch, opacity: clamp01((f - at + 2) / 6), transform: `rotateY(${turn.toFixed(1)}deg) rotateZ(${((1 - settle) * (k % 2 ? 5 : -5)).toFixed(2)}deg) scale(${(0.8 + 0.2 * settle).toFixed(4)})`, transformStyle: "preserve-3d" })}>
               {front ? (
-                <div style={{ position: "absolute", inset: 0, borderRadius: 36, background: look.panelFill, border: `1px solid ${look.line}`, boxShadow: `0 0 0 1px ${look.ring ?? "transparent"}, 0 24px 60px ${look.shadow}`, overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{ position: "absolute", inset: 0, borderRadius: rad(c, 36), background: look.panelFill, border: look.cardBorder ?? `1px solid ${look.line}`, boxShadow: look.cardShadow ?? `0 0 0 1px ${look.ring ?? "transparent"}, 0 24px 60px ${look.shadow}`, overflow: "hidden", display: "flex", flexDirection: "column", alignItems: "center" }}>
                   <div style={{ position: "absolute", left: 0, right: 0, top: 0, height: ch * 0.5, background: `linear-gradient(160deg, ${a}33, ${b}14)` }} />
                   <div data-part="item-icon" style={{ marginTop: ch * 0.13, width: cw * 0.42, height: cw * 0.42, borderRadius: cw * 0.11, background: `linear-gradient(160deg, ${a}, ${b})`, boxShadow: `inset 0 6px 9px rgba(255,255,255,0.5), 0 16px 34px ${b}55`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
                     <Icon name={t.icon} size={cw * 0.22} color="#ffffff" strokeWidth={2.2} />
@@ -61,8 +61,8 @@ export function Deck({ c }: { c: C }) {
                   {sweep > 0 && sweep < 1 && <div style={{ position: "absolute", inset: 0, background: "linear-gradient(105deg, rgba(255,255,255,0) 40%, rgba(255,255,255,0.75) 50%, rgba(255,255,255,0) 60%)", backgroundSize: "300% 100%", backgroundPosition: `${(130 - 160 * sweep).toFixed(1)}% 0` }} />}
                 </div>
               ) : (
-                <div style={{ position: "absolute", inset: 0, borderRadius: 36, background: `linear-gradient(160deg, ${a}, ${b})`, boxShadow: `0 24px 60px ${b}44`, transform: "rotateY(180deg)" }}>
-                  <div style={{ position: "absolute", inset: 18, borderRadius: 24, border: "3px solid rgba(255,255,255,0.35)" }} />
+                <div style={{ position: "absolute", inset: 0, borderRadius: rad(c, 36), background: `linear-gradient(160deg, ${a}, ${b})`, boxShadow: `0 24px 60px ${b}44`, transform: "rotateY(180deg)" }}>
+                  <div style={{ position: "absolute", inset: 18, borderRadius: rad(c, 24), border: "3px solid rgba(255,255,255,0.35)" }} />
                 </div>
               )}
             </div>

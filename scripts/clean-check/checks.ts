@@ -25,12 +25,12 @@ import { applyEdit, editOf } from "@/components/video/simple/edit";
 import { guessReadings } from "@/components/video/simple/guess";
 import { differs, planOf, repeats, wordsAlone } from "@/components/video/simple/select";
 import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
-import { bestPlan, checkPlan, heroShares, repairPlan, scoreOf } from "@/components/video/simple/check";
+import { bestPlan, checkPlan, colourProblemsOf, heroShares, repairPlan, scoreOf } from "@/components/video/simple/check";
 import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
 import { geoFor, geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/simple/faces";
-import { CONCEPTS, GROUNDS, type Scene, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
+import { CONCEPTS, GROUNDS, type Scene, STYLES, STYLE_GROUNDS, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
 import { conceptSounds, turnOf } from "@/components/video/simple/concept";
 import { PUNCH } from "@/components/video/simple/scenes";
 import { alignScript, pausesOf } from "@/lib/voice-align";
@@ -224,6 +224,12 @@ export async function runChecks(): Promise<Check[]> {
     const wide = Math.max(...fitted.lines.map((l) => l.reduce((a, i, k) => a + emWidth("Your invoices finally pay themselves automatically".split(" ")[i], face, 700) * fitted.size + (k ? emWidth(" ", face, 700) * 1.15 * fitted.size : 0), 0)));
     add("words fitted to their place: within its lines and its width, the lines even", fitted.lines.length <= 3 && wide <= 680 && fitted.size >= 60, `${fitted.size}px · ${fitted.lines.map((l) => l.length).join("/")} words a line`);
     // the check before playing (check.ts): every template, variant, frame and ground clean as designed
+    // the looks: every look on every ground it stands on reads for very different brand colours, and its scenes lay out
+    const lookLeft = ["#7C3AED", "#F59E0B", "#10B981", "#111827", "#EF4444", "#0EA5E9", "#FACC15", "#FFFFFF"].flatMap((color) =>
+      STYLES.flatMap((style) => STYLE_GROUNDS[style].flatMap((ground) => colourProblemsOf({ ...galleryPlan({ ground, type: 0, way: "slide", pace: "calm", style }), brand: { name: "Brand", color, cta: "" } }).map((x) => `${color} ${style}/${ground}: ${x.detail}`))),
+    );
+    const lookScenes = STYLES.flatMap((style) => checkPlan(galleryPlan({ ground: STYLE_GROUNDS[style][0], type: 1, way: "tilt", pace: "calm", style })).map((x) => `${style} ${x.kind}`));
+    add("looks: soft, neon, editorial, bold and depth read on their grounds for any brand colour; their scenes lay out", !lookLeft.length && !lookScenes.length, lookLeft[0] ?? lookScenes[0] ?? `${STYLES.length} looks`);
     const galleryLeft = ([[1920, 1080], [1080, 1920], [1080, 1080]] as [number, number][]).flatMap((size) => GROUNDS.flatMap((ground) => checkPlan(galleryPlan({ ground, type: 1, way: "slide", pace: "calm" }, undefined, size)).map((x) => `${size.join("x")} ${ground} ${x.kind}`)));
     add("check before playing: all 36 template variants clean on every frame and ground", galleryLeft.length === 0, galleryLeft.slice(0, 3).join(" · ") || "36 × 3 frames × 3 grounds");
     // …and what goes wrong is found and mended

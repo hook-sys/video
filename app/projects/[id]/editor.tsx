@@ -10,7 +10,7 @@ import { colourProblemsOf, problemsOf, settledAt } from "@/components/video/simp
 import { OWN_GROUNDS, type PlanEdit, SHOWS_THINGS, type SceneEdit, TEMPLATE_NAME, TYPE_NAME, applyEdit, editOf, mostWords, sameEdit } from "@/components/video/simple/edit";
 import { SimpleFilm } from "@/components/video/simple/film";
 import { variantOk } from "@/components/video/simple/select";
-import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, TYPE_PAIRS, VARIANTS, WAYS } from "@/components/video/simple/types";
+import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePlan, STYLES, STYLE_GROUNDS, TEMPLATES, type TemplateId, TYPE_PAIRS, VARIANTS, WAYS } from "@/components/video/simple/types";
 
 // The customer's editor of a finished video (components/video/simple/edit.ts),
 // opened over the page: the video in the middle, its scenes on a timeline
@@ -22,7 +22,8 @@ import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePla
 // credits. Saved, the download and the server's MP4 are the edited video.
 
 const GROUND_NAME = { dark: "Dark", light: "Light", brand: "Brand colour", glass: "Glass" } as const;
-const WAY_NAME = { slide: "Slide", zoom: "Zoom", wipe: "Wipe", blur: "Blur" } as const;
+const WAY_NAME = { slide: "Slide", zoom: "Zoom", wipe: "Wipe", blur: "Blur", leak: "Light", push: "Push", tilt: "Turn" } as const;
+const STYLE_NAME = { soft: "Soft", neon: "Neon", editorial: "Editorial", bold: "Bold", depth: "Depth" } as const;
 const PACE_NAME = { calm: "Calm", lively: "Lively" } as const;
 const noop = () => () => {};
 // a run of words cut to fit a layout: the lit word kept, never starting or ending on a little word, as long as it can be
@@ -151,6 +152,15 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
         return { g, plan: p, ok: !!p && !colourProblemsOf(p).length };
       }),
       types: TYPE_PAIRS.map((_, i) => ({ i, plan: applyEdit(plan, { ...edit, theme: { ...edit.theme, type: i } }).plan })),
+      // (a look on a background it stands on: the one chosen if it does, else its first that reads)
+      styles: STYLES.map((st) => {
+        const grounds = STYLE_GROUNDS[st].includes(edit.theme.ground) ? [edit.theme.ground] : STYLE_GROUNDS[st];
+        for (const g of grounds) {
+          const p = applyEdit(plan, { ...edit, theme: { ...edit.theme, style: st, ground: g } }).plan;
+          if (p && !colourProblemsOf(p).length) return { st, g, plan: p };
+        }
+        return { st, g: edit.theme.ground, plan: null };
+      }),
     }),
     [plan, edit],
   );
@@ -438,6 +448,16 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
               </>
             ) : (
               <>
+                <Section title="Look" hint="Cards, icons and the background's pattern">
+                  <div className="grid grid-cols-3 gap-2">
+                    {looks.styles.map(({ st, g, plan: p }) => (
+                      <button key={st} type="button" disabled={!p} onClick={() => (edit.theme.style ?? "soft") !== st && changeLook({ style: st, ground: g })} className={`${option((edit.theme.style ?? "soft") === st, !p)} overflow-hidden`}>
+                        {p && <Still plan={p} frame={frameOf(p.scenes[at])} />}
+                        <span className="block truncate px-2 py-1.5 text-[11px] text-white/70">{STYLE_NAME[st]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Section>
                 <Section title="Background" hint={(() => {
                   const mine = shown.scenes.map((x, i) => (x.ground && x.ground !== shown.theme.ground ? i + 1 : 0)).filter(Boolean);
                   return mine.length ? `Scene ${mine.join(" and ")} ${mine.length > 1 ? "have" : "has"} its own` : "For the whole video";

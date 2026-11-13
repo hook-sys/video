@@ -49,6 +49,49 @@ function useFaces(faces: Face[]) {
 // drift slowly the whole time — so scenes pass over one space (docs/reference:
 // the glow is never flat, never busy, and never jumps at a cut).
 function Ground({ look, f }: { look: Look; f: number }) {
+  return (
+    <>
+      <Light look={look} f={f} />
+      {look.decor !== "none" && <Decor look={look} f={f} />}
+    </>
+  );
+}
+
+// The look's pattern over the ground, faint and slowly moving (never busy, never a jump at a cut):
+// neon a floor grid running to a horizon, editorial a page's rules and margin, bold halftone dots
+// fading to the middle, depth big soft blobs of colour drifting
+function Decor({ look, f }: { look: Look; f: number }) {
+  const ink = look.dark ? "#ffffff" : "#000000";
+  if (look.decor === "grid")
+    return (
+      <AbsoluteFill style={{ overflow: "hidden", pointerEvents: "none" }}>
+        <div style={{ position: "absolute", left: "-50%", right: "-50%", top: "52%", height: "120%", transform: "perspective(700px) rotateX(64deg)", transformOrigin: "50% 0%", backgroundImage: `linear-gradient(${tint(look.accent, 0.35)} 1.5px, transparent 1.5px), linear-gradient(90deg, ${tint(look.accent, 0.35)} 1.5px, transparent 1.5px)`, backgroundSize: "90px 90px", backgroundPosition: `0 ${((f * 1.2) % 90).toFixed(1)}px`, WebkitMaskImage: "linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent)", opacity: 0.55 }} />
+        <div style={{ position: "absolute", left: 0, right: 0, top: "44%", height: "16%", background: `radial-gradient(60% 50% at 50% 60%, ${tint(look.accent, 0.28)}, transparent 75%)` }} />
+      </AbsoluteFill>
+    );
+  if (look.decor === "rules")
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", backgroundImage: `linear-gradient(${tint(ink, 0.045)} 1px, transparent 1px)`, backgroundSize: "100% 72px", backgroundPosition: `0 ${(-f * 0.15).toFixed(1)}px` }}>
+        <div style={{ position: "absolute", top: 0, bottom: 0, left: "7%", width: 1.5, background: tint(look.accent, 0.35) }} />
+        <div style={{ position: "absolute", top: 0, bottom: 0, right: "7%", width: 1, background: tint(ink, 0.08) }} />
+      </AbsoluteFill>
+    );
+  if (look.decor === "dots")
+    return (
+      <AbsoluteFill style={{ pointerEvents: "none", backgroundImage: `radial-gradient(${tint(look.ground === "brand" ? "#ffffff" : look.accent, look.ground === "brand" ? 0.16 : 0.2)} 2.6px, transparent 3px)`, backgroundSize: "26px 26px", backgroundPosition: `${(f * 0.2).toFixed(1)}px ${(f * 0.12).toFixed(1)}px`, WebkitMaskImage: "radial-gradient(75% 75% at 50% 50%, transparent 35%, #000 100%)" }} />
+    );
+  // blobs
+  const blob = (cx: number, cy: number, r: number, col: string) => <div style={{ position: "absolute", left: `${cx - r}%`, top: `${cy - r * 1.7}%`, width: `${r * 2}%`, height: `${r * 3.4}%`, borderRadius: "50%", background: `radial-gradient(closest-side, ${col}, transparent)` }} />;
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", overflow: "hidden" }}>
+      {blob(22 + Math.sin(f / 90) * 8, 28 + Math.cos(f / 110) * 8, 26, tint(look.accent, look.dark ? 0.32 : 0.22))}
+      {blob(78 + Math.cos(f / 100) * 8, 70 + Math.sin(f / 130) * 7, 30, tint(look.accent, look.dark ? 0.22 : 0.16))}
+      {blob(60 + Math.sin(f / 150) * 10, 18 + Math.cos(f / 95) * 6, 16, tint(look.ink, look.dark ? 0.06 : 0.05))}
+    </AbsoluteFill>
+  );
+}
+
+function Light({ look, f }: { look: Look; f: number }) {
   const x = 32 + Math.sin(f / 170) * 14, y = 30 + Math.cos(f / 210) * 10;
   // (glass: two large soft fields — the brand colour top left, its warm neighbour bottom right — and a haze along the bottom, drifting)
   if (look.fields) {
@@ -97,7 +140,9 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
         while (goesOn(c0)) c0--;
         while (goesOn(c1 + 1)) c1++;
         const p = (f - scenes[c0].from) / Math.max(1, scenes[c1].to - scenes[c0].from);
-        const cam = `scale(${(1 + (lively ? 0.07 : 0.045) * p).toFixed(4)}) translateX(${((0.5 - p) * 28).toFixed(1)}px)`;
+        // (depth: the camera also turns a little in 3D, slowly, as if round the cards)
+        const turn = look.style === "depth" ? ` perspective(2600px) rotateY(${(Math.sin(f / 140) * 2.6).toFixed(3)}deg) rotateX(${(Math.cos(f / 170) * 1.6).toFixed(3)}deg)` : "";
+        const cam = `scale(${(1 + (lively ? 0.07 : 0.045) * p).toFixed(4)}) translateX(${((0.5 - p) * 28).toFixed(1)}px)${turn}`;
         let way = "";
         let opacity = 1;
         let clip: string | undefined;
@@ -114,6 +159,20 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
           opacity = pin < 1 ? clamp01(pin * 1.7) : clamp01((1 - pout) * 1.7);
           if (t > 0.002) blur = `blur(${(t * 16).toFixed(2)}px)`;
           way = `scale(${(pin < 1 ? 1.03 - 0.03 * pin : 1 - 0.03 * pout).toFixed(4)})`;
+        } else if (theme.way === "leak") {
+          // (a dissolve under a sweep of warm light: never the bare ground — the scene going out stays until what comes in is there)
+          opacity = pin < 1 ? clamp01(pin * 1.8) : clamp01((1 - pout) * 1.8);
+          way = `scale(${(pin < 1 ? 1.02 - 0.02 * pin : 1 + 0.02 * pout).toFixed(4)})`;
+        } else if (theme.way === "push") {
+          // (the next comes up from below, the one going out goes up and away; both streaked while they move)
+          const t = pin < 1 ? 1 - pin : pout;
+          way = pin < 1 ? `translateY(${((1 - pin) * g.H * 0.55).toFixed(1)}px)` : `translateY(${(-pout * g.H * 0.3).toFixed(1)}px) scale(${(1 - 0.05 * pout).toFixed(4)})`;
+          opacity = pin < 1 ? clamp01(pin * 2) : clamp01((1 - pout) * 2.2);
+          if (t > 0.002) blur = `blur(${(Math.sin(Math.PI * t) * 9).toFixed(2)}px)`;
+        } else if (theme.way === "tilt") {
+          // (the scene turns away in depth as the next turns in from the other side)
+          way = pin < 1 ? `perspective(1800px) translateX(${((1 - pin) * W * 0.3).toFixed(1)}px) rotateY(${(-(1 - pin) * 32).toFixed(2)}deg)` : `perspective(1800px) translateX(${(-pout * W * 0.3).toFixed(1)}px) rotateY(${(pout * 32).toFixed(2)}deg)`;
+          opacity = pin < 1 ? clamp01(pin * 2) : clamp01((1 - pout) * 2);
         } else if (pin < 1) clip = `inset(0 ${((1 - pin) * 100).toFixed(2)}% 0 0)`;
         // (on one ground, the scene going out is wiped away where the next comes in)
         else if (pout > 0) clip = `inset(0 0 0 ${(pout * 100).toFixed(2)}%)`;
@@ -135,12 +194,25 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
               )}
             </AbsoluteFill>
             {pin < 1 && theme.way === "wipe" && <div style={{ position: "absolute", top: 0, bottom: 0, left: pin * W - 6, width: 12, background: (mine ?? look).accent }} />}
+            {pin < 1 && theme.way === "leak" && <Leak look={mine ?? look} t={pin} />}
           </AbsoluteFill>
         );
       })}
       {BAR && <PointBar plan={plan} f={f} look={look} />}
       {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
       {plan.sfx !== false && <Sounds plan={plan} webAudio={webAudio} />}
+    </AbsoluteFill>
+  );
+}
+
+// A warm light leak sweeping across a cut: brightest halfway, a band of light and the brand colour
+function Leak({ look, t }: { look: Look; t: number }) {
+  const a = Math.sin(Math.PI * t);
+  const x = -40 + t * 140;
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", mixBlendMode: look.dark ? "screen" : "soft-light", opacity: a }}>
+      <AbsoluteFill style={{ background: `linear-gradient(105deg, transparent ${x - 30}%, rgba(255,214,170,0.75) ${x - 8}%, rgba(255,250,240,0.95) ${x}%, ${tint(look.accent, 0.6)} ${x + 12}%, transparent ${x + 34}%)` }} />
+      <AbsoluteFill style={{ background: `radial-gradient(50% 70% at ${x}% 40%, rgba(255,236,210,0.5), transparent 70%)` }} />
     </AbsoluteFill>
   );
 }
