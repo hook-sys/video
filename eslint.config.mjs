@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // the film bundled for the frame check (scripts/frame-check/bundle.mjs)
     ".remotion-bundle/**",
+    // Claude Code skills (.claude/skills: Remotion's own, with example code)
+    ".claude/**",
   ]),
 ]);
 
