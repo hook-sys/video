@@ -339,3 +339,49 @@
   .gs-word { font-size: 16px; }
   .md-credits { display: none; }
 }
+
+/* ══ MotionDots, stage 3: the signed-in pages — no window chrome, the numbers in the brand's
+   gradient, cards that lift and glow, progress that shimmers ══ */
+.gs-titlebar { display: none; }
+.gs-win.gs-glass { border-radius: 30px; }
+.gs-body.gs-app { padding: clamp(22px, 4vw, 44px); }
+.gs-app .gs-head h2, .gs-app > div > .gs-head h2 { font-size: clamp(34px, 4.6vw, 54px); line-height: 1; letter-spacing: -0.04em; font-weight: 800; }
+.gs .gs-kicker { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: #6f6b85; }
+.gs .gs-kicker::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--md-grad); animation: ld-ping-gs 2s infinite; }
+@keyframes ld-ping-gs { 0% { box-shadow: 0 0 0 0 rgba(164, 69, 242, 0.5); } 80%, 100% { box-shadow: 0 0 0 9px rgba(164, 69, 242, 0); } }
+
+/* the numbers */
+.gs-facts.four { gap: 12px; background: none; border-radius: 0; overflow: visible; }
+.gs-facts.four > div { border-radius: 20px; background: #fff; box-shadow: 0 1px 2px rgba(20, 18, 31, 0.05), 0 14px 30px -22px rgba(70, 30, 150, 0.45); transition: transform 0.25s cubic-bezier(.3,.7,.4,1.4), box-shadow 0.25s; }
+.gs-facts.four > div:hover { transform: translateY(-3px); box-shadow: 0 1px 2px rgba(20, 18, 31, 0.05), 0 20px 40px -22px rgba(70, 30, 150, 0.55); }
+.gs-facts strong { font-family: var(--font-display), system-ui; font-size: clamp(30px, 3vw, 40px); font-weight: 800; background: var(--md-grad); -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content; }
+
+/* making now: a card with a live dot, its bar of the gradient with a light running along it */
+.gs-section h3 { font-family: var(--font-display), system-ui; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.gs-run { background: #fff; box-shadow: 0 1px 2px rgba(20, 18, 31, 0.05), 0 14px 30px -24px rgba(70, 30, 150, 0.5); transition: transform 0.25s cubic-bezier(.3,.7,.4,1.4); }
+.gs-run:hover { transform: translateY(-2px); }
+.gs-run b::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 9px; vertical-align: 2px; background: #22c55e; animation: ld-ping-gs 1.6s infinite; }
+.gs-bar-track { height: 8px; }
+.gs-bar-track i { display: block; height: 100%; border-radius: 99px; background: var(--md-grad); background-size: 200% 100%; position: relative; overflow: hidden; transition: width 0.8s cubic-bezier(.2,.8,.2,1); }
+.gs-bar-track i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent); transform: translateX(-100%); animation: gs-shimmer 1.6s infinite; }
+@keyframes gs-shimmer { to { transform: translateX(100%); } }
+
+/* the videos: lift, the picture grows a little, a play button comes up */
+.gs-card { border-radius: 22px; transition: transform 0.3s cubic-bezier(.3,.7,.4,1.3), box-shadow 0.3s; }
+.gs-card:hover { transform: translateY(-5px); box-shadow: 0 0 0 2px rgba(164, 69, 242, 0.35), 0 26px 50px -26px rgba(70, 30, 150, 0.6); }
+.gs-thumb { overflow: hidden; }
+.gs-thumb > video, .gs-thumb > .gs-mark { transition: transform 0.5s cubic-bezier(.2,.8,.2,1); }
+.gs-card:hover .gs-thumb > video, .gs-card:hover .gs-thumb > .gs-mark { transform: scale(1.06); }
+.gs-thumb::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgba(255, 255, 255, 0.18) 1.5px, transparent 2px); background-size: 16px 16px; pointer-events: none; }
+.gs-thumb::after { content: ""; position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(255, 255, 255, 0.92) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M9 6.5v11l9-5.5z' fill='%236d4cf5'/></svg>") center / 26px no-repeat; box-shadow: 0 10px 24px -8px rgba(20, 10, 60, 0.6); opacity: 0; transform: scale(0.6); transition: opacity 0.25s, transform 0.35s cubic-bezier(.3,.7,.4,1.6); }
+.gs-card:hover .gs-thumb::after { opacity: 1; transform: scale(1); }
+.gs-card-body b { font-family: var(--font-display), system-ui; font-size: 16px; letter-spacing: -0.01em; }
+
+/* nothing yet: the mark, big, bouncing gently */
+.gs-empty { border: 0; background: #fff; box-shadow: 0 1px 2px rgba(20, 18, 31, 0.05), 0 18px 40px -28px rgba(70, 30, 150, 0.5); border-radius: 26px; }
+.gs-empty::before { content: ""; display: block; width: 72px; height: 72px; margin: 0 auto 18px; border-radius: 22px; background: url("/brand/motiondots-mark.svg") center / contain no-repeat; animation: ld-float-gs 3s ease-in-out infinite; filter: drop-shadow(0 12px 18px rgba(164, 69, 242, 0.45)); }
+@keyframes ld-float-gs { 50% { transform: translateY(-8px) rotate(-4deg); } }
+.gs-empty b { font-family: var(--font-display), system-ui; font-size: 22px; }
+@media (prefers-reduced-motion: reduce) {
+  .gs *, .gs *::before, .gs *::after { animation: none !important; }
+}
