@@ -39,7 +39,7 @@ export default async function BrandPage({ searchParams }: { searchParams: Promis
             {kits.map((k) => (
               <div key={k.id} className="flex flex-col gap-3 rounded-2xl border border-foreground/10 bg-white/80 p-4">
                 <div className="flex items-center gap-3">
-                  <span className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-black/5">
+                  <span className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#fff] ring-1 ring-black/5">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     {k.logoUrl ? <img src={k.logoUrl} alt="" className="max-h-11 max-w-11 object-contain" /> : <span className="text-xs text-foreground/40">No icon</span>}
                   </span>

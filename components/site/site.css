@@ -422,3 +422,68 @@
 /* (the dark tone's page over the light one set above) */
 .gs.gs-dark { --gs-page: #0c0b14; background: #0c0b14; }
 .gs-dark .gs-win.gs-glass { background: rgba(22, 20, 34, 0.62); }
+
+/* ══ MotionDots, stage 5: the user's side in the admin's dark — the same menu bar with the
+   places as tabs under the name (user-tabs.tsx), the same glass, the same gradient ══ */
+.gs-user-stage { margin-top: 22px; }
+.gs-stage.gs-user-stage.wide { width: min(1280px, calc(100% - 32px)); }
+.gs-user .gs-footer.wide { width: min(1280px, calc(100% - 32px)); }
+.gs-dark .gs-kicker { color: #a8a4bd; }
+.gs-dark .md-credits { color: #d9d6ea; background: rgba(255, 255, 255, 0.06); }
+.gs-dark .md-credits:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.gs-dark .md-avatar span { background: #15131f; color: #fff; }
+.gs-dark .md-avatar.on span { background: transparent; }
+.gs-dark .gs-plain { color: #d9d6ea; }
+
+/* the cards on the dark: a lit edge, a violet glow under */
+.gs-dark { --md-card: rgba(255, 255, 255, 0.045); --md-card-hi: rgba(255, 255, 255, 0.075); --md-edge: rgba(255, 255, 255, 0.08); }
+.gs-dark .gs-facts.four > div,
+.gs-dark .gs-run,
+.gs-dark .gs-card,
+.gs-dark .gs-empty { background: var(--md-card); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px var(--md-edge), 0 20px 40px -28px rgba(0, 0, 0, 0.9); }
+.gs-dark .gs-facts.four > div:hover,
+.gs-dark .gs-run:hover { background: var(--md-card-hi); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(164, 69, 242, 0.35), 0 22px 44px -24px rgba(164, 69, 242, 0.55); }
+.gs-dark .gs-card:hover { box-shadow: 0 0 0 1.5px rgba(164, 69, 242, 0.55), 0 26px 50px -24px rgba(164, 69, 242, 0.6); }
+.gs-dark .gs-facts small { color: #8f8aa8; }
+.gs-dark .gs-bar-track, .gs-dark .gs-wait-meter { background: rgba(255, 255, 255, 0.08); }
+.gs-dark .gs-account { background: var(--md-edge); }
+.gs-dark .gs-account div { background: #16141f; }
+.gs-dark .gs-note.info { background: rgba(109, 76, 245, 0.14); color: #cfc6ff; }
+.gs-dark .gs-note.error { background: rgba(244, 63, 94, 0.14); color: #fda4af; }
+.gs-dark .gs-pill { background: rgba(255, 255, 255, 0.08); color: #c9c5da; }
+.gs-dark .gs-pill.ok { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+.gs-dark .gs-pill.busy { background: rgba(109, 76, 245, 0.2); color: #c4b5fd; }
+.gs-dark .gs-pill.bad { background: rgba(244, 63, 94, 0.16); color: #fda4af; }
+.gs-dark .gs-pill.wait { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
+.gs-dark .gs-app h1, .gs-dark .gs-app h2 { color: #fff; }
+
+/* the pages written for the light (billing, brand kits, the new-video form, a video):
+   their white panels turn to the dark glass, their blue to the brand's violet */
+.gs-user .bg-white\/50, .gs-user .bg-white\/60 { background: rgba(255, 255, 255, 0.03); }
+.gs-user .bg-white\/70, .gs-user .open\:bg-white\/70[open] { background: var(--md-card); }
+.gs-user .bg-white, .gs-user .bg-white\/80, .gs-user .hover\:bg-white:hover { background: rgba(255, 255, 255, 0.06); }
+.gs-user .ring-black\/\[0\.06\], .gs-user .ring-black\/\[0\.05\], .gs-user .ring-black\/5, .gs-user .ring-black\/10 { --tw-ring-color: rgba(255, 255, 255, 0.08); }
+.gs-user .bg-\[\#1d1d1f\] { background: var(--md-grad); }
+.gs-user .text-\[\#0a66d6\], .gs-user .text-\[\#0a5cc2\] { color: #b8a6ff; }
+.gs-user .border-\[\#0a66d6\], .gs-user .focus\:border-\[\#0a66d6\]:focus, .gs-user .hover\:border-\[\#0a66d6\]\/60:hover { border-color: #9b6cff; }
+.gs-user .bg-\[\#0a66d6\]\/10, .gs-user .bg-\[\#0a66d6\]\/\[0\.06\], .gs-user .bg-\[\#e5effc\] { background: rgba(124, 92, 255, 0.16); }
+.gs-user .ring-\[\#0a66d6\]\/15, .gs-user .focus\:ring-\[\#0a66d6\]\/15:focus { --tw-ring-color: rgba(164, 69, 242, 0.25); }
+.gs-user .bg-\[\#0a66d6\], .gs-user .bg-\[\#0859bd\] { background: var(--md-grad); }
+.gs-user .hover\:bg-\[\#0859bd\]:hover, .gs-user .hover\:bg-\[\#0857b8\]:hover { background: var(--md-grad); filter: brightness(1.12); }
+.gs-user .accent-\[\#0a66d6\] { accent-color: #9b6cff; }
+.gs-user .bg-\[\#fdecea\], .gs-user .bg-red-100 { background: rgba(244, 63, 94, 0.14); }
+.gs-user .text-\[\#a1281b\], .gs-user .text-red-900, .gs-user .text-red-700 { color: #fda4af; }
+.gs-user .bg-\[\#e3f4e8\], .gs-user .bg-emerald-50, .gs-user .bg-emerald-100 { background: rgba(34, 197, 94, 0.13); }
+.gs-user .text-\[\#1e7a3c\], .gs-user .text-emerald-900, .gs-user .text-emerald-600 { color: #86efac; }
+.gs-user .bg-\[\#fff3df\], .gs-user .bg-amber-50, .gs-user .bg-amber-50\/70, .gs-user .bg-amber-100 { background: rgba(245, 158, 11, 0.13); }
+.gs-user .text-\[\#8a5300\], .gs-user .text-amber-900, .gs-user .text-amber-700, .gs-user .text-amber-600 { color: #fcd34d; }
+.gs-user input, .gs-user textarea, .gs-user select { color-scheme: dark; }
+.gs-user select option { background: #16141f; color: #f4f2ff; }
+.gs-dark .gs-wait-steps li { background: var(--md-card); box-shadow: 0 0 0 1px var(--md-edge); color: #6f6b85; }
+.gs-dark .gs-wait-steps .dot { background: rgba(255, 255, 255, 0.07); color: #a8a4bd; }
+.gs-dark .gs-wait-steps li.done { color: #a8a4bd; }
+.gs-dark .gs-wait-steps li.done .dot { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+.gs-dark .gs-wait-steps li.now { color: #fff; background: var(--md-card-hi); box-shadow: 0 0 0 1.5px #9b6cff, 0 18px 40px -22px rgba(164, 69, 242, 0.7); }
+.gs-dark .gs-wait-steps li.now .dot { background: var(--md-grad); color: #fff; }
+.gs-dark .gs-wait-steps li.now em { color: #c4b5fd; }
+.gs-dark .gs-wait-meter i { background: var(--md-grad); }

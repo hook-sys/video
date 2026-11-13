@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useRef } from "react";
 import { Desk, remember, useArrival } from "./windows";
 import { Avatar, TopNav } from "./top-nav";
+import { UserTabs, userTabs } from "./user-tabs";
 import { LegalFooterLinks } from "./legal-links";
 import "./site.css";
 
-// The signed-in pages in the site's glass: the bar, one window, and the dock
-// (Videos, Account, Credits, Admin, New video). The window opens out of what was
-// clicked to come here (windows.tsx remember/useArrival).
+// The signed-in pages, in the admin's dark: the menu bar with the user's places
+// as tabs under the name (user-tabs.tsx), and one window. The window opens out
+// of what was clicked to come here (windows.tsx remember/useArrival).
 
 export type ShellPlace = "videos" | "account" | "brand" | "credits" | "admin" | "new" | null;
 
@@ -17,18 +18,13 @@ export function AppShell({ title, admin, active, initial, wide, action, children
   const win = useRef<HTMLElement>(null);
   useArrival(win);
   return (
-    <div className="gs">
+    <div className="gs gs-dark gs-user">
       <Desk />
       <TopNav
-        wide={wide}
+        wide
         home="/dashboard"
         onHome={remember}
-        items={[
-          { href: "/dashboard", label: "Videos", active: active === "videos", onClick: remember },
-          { href: "/brand", label: "Brand kits", active: active === "brand", onClick: remember },
-          { href: "/billing", label: "Credits", active: active === "credits", onClick: remember },
-          ...(admin ? [{ href: "/admin", label: "Admin", active: active === "admin", onClick: remember }] : []),
-        ]}
+        below={<UserTabs items={userTabs(active, admin, () => remember)} />}
         right={
           <>
             {action ?? (
@@ -40,7 +36,7 @@ export function AppShell({ title, admin, active, initial, wide, action, children
           </>
         }
       />
-      <main className={`gs-stage${wide ? " wide" : ""}`}>
+      <main className={`gs-stage gs-user-stage${wide ? " wide" : ""}`}>
         <section ref={win} className="gs-win gs-glass">
           <div className="gs-titlebar">
             <div className="gs-dots" aria-hidden="true">

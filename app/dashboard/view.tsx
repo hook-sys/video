@@ -6,13 +6,14 @@ import { projectTitle, videoState } from "@/lib/project-status";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Desk, Mark, remember, useWindows } from "@/components/site/windows";
 import { Avatar, TopNav } from "@/components/site/top-nav";
+import { UserTabs, userTabs } from "@/components/site/user-tabs";
 import { STATE_UI, ago, monthStart, pipelineProgress } from "./helpers";
 import type { DashboardRow } from "./page";
 import { LegalFooterLinks } from "@/components/site/legal-links";
 import "@/components/site/site.css";
 
-// The customer dashboard, in the site's glass: the videos and the account,
-// one window at a time, and a dock (data comes from page.tsx).
+// The customer dashboard, in the admin's dark: the videos and the account, one
+// window at a time, the places as tabs under the menu bar (data comes from page.tsx).
 
 type DashWindow = "videos" | "account";
 const PATH: Record<DashWindow, string> = { videos: "/dashboard", account: "/dashboard#account" };
@@ -31,19 +32,21 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
   const initial = (name || email || "?")[0];
 
   return (
-    <div className="gs">
+    <div className="gs gs-dark gs-user">
       <AutoRefresh active={active.length > 0} intervalMs={8000} />
       <Desk />
 
       <TopNav
+        wide
         home="/dashboard"
         onHome={open("videos")}
-        items={[
-          { href: PATH.videos, label: "Videos", active: current === "videos", onClick: open("videos"), anchor: iconRef("videos") },
-          { href: "/brand", label: "Brand kits", onClick: remember },
-          { href: "/billing", label: "Credits", onClick: remember },
-          ...(admin ? [{ href: "/admin", label: "Admin", onClick: remember }] : []),
-        ]}
+        below={
+          <UserTabs
+            items={userTabs(current, admin, (place) => (place === "videos" || place === "account" ? open(place) : remember)).map((t) =>
+              t.icon === "videos" ? { ...t, anchor: iconRef("videos") } : t.icon === "account" ? { ...t, anchor: iconRef("account") } : t,
+            )}
+          />
+        }
         right={
           <>
             <Link href="/billing" className="md-credits" onClick={remember}>
@@ -57,7 +60,7 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
         }
       />
 
-      <main className="gs-stage">
+      <main className="gs-stage gs-user-stage wide">
         {win(
           "videos",
           <>
@@ -193,7 +196,7 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
         )}
       </main>
 
-      <footer className="gs-footer">
+      <footer className="gs-footer wide">
         <LegalFooterLinks />
       </footer>
 

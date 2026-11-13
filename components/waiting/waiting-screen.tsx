@@ -25,7 +25,7 @@ export function WaitingScreen({ step, inline }: { step?: string | null; inline?:
   const share = Math.round(((now + 0.5) / steps.length) * 100);
 
   const screen = (
-    <div className="gs gs-wait" role="status" aria-live="polite">
+    <div className="gs gs-dark gs-user gs-wait" role="status" aria-live="polite">
       <Desk />
       <TopNav
         home={sending ? null : "/dashboard"}
