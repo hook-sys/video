@@ -235,6 +235,11 @@ editor says what saving costs and asks first; the charge is taken before the
 save and given back if the save doesn't land (`projects.edit_count`, ledger
 kind `edit`). The team's own videos are never charged.
 
+The layout is chosen in two steps, so the list stays short and only what is
+open is drawn: each kind of scene once (its design now, else its first that
+fits), then the designs of the kind picked, each by its name (Pills, Grid,
+Timeline… `edit.ts` designName).
+
 The editor (app/projects/[id]/editor.tsx) opens over the page from "Edit
 video": the video in the middle, its scenes on a timeline below (as long as
 they are, a playhead), and beside it the scene picked (its layout, text,

@@ -16,6 +16,15 @@ export type PlanEdit = { theme: Theme; scenes: SceneEdit[] };
 // names a customer reads
 export const TEMPLATE_NAME: Record<TemplateId, string> = { statement: "Big words", kinetic: "Moving words", trouble: "The problems", compare: "Before and after", reveal: "Brand reveal", feature: "Product card", screen: "Your product", messages: "Messages", bento: "Tiles", stat: "Big number", chart: "Chart", steps: "Steps", cta: "Ending", concept: "The idea", point: "Point", panel: "Panel", deck: "Cards" };
 export const TYPE_NAME = ["Clean", "Modern", "Characterful", "Soft", "Classic"];
+// a design's name in the editor (a template without names of its own: "Design 1, 2, 3")
+const DESIGN_NAMES: Partial<Record<TemplateId, string[]>> = {
+  panel: ["List", "Pills", "Grid", "Timeline", "Focus", "Checklist", "Bars", "Hub"],
+  deck: ["Dealt", "Fan", "Pile", "Flip", "Badges"],
+  kinetic: ["One by one", "Typed", "Grow", "Rise", "Marker", "Underline", "Focus", "Meet", "Box", "Drop"],
+  statement: ["Centred", "With picture", "Sides", "Quote", "Marker", "Quote card", "Behind", "Frame", "Meet", "Glow", "Box"],
+  point: ["Number", "Tile", "Outline", "Ring", "Behind", "Dots", "Rules", "Diamond", "Count", "Bar"],
+};
+export const designName = (t: TemplateId, v: number) => DESIGN_NAMES[t]?.[v] ?? `Design ${v + 1}`;
 // (the templates that show the things a scene names)
 export const SHOWS_THINGS: TemplateId[] = ["trouble", "compare", "reveal", "feature", "messages", "bento", "chart", "steps"];
 

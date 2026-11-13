@@ -7,7 +7,7 @@ import { Player, type PlayerRef, Thumbnail } from "@remotion/player";
 import { resetVideoEdit, saveVideoEdit } from "@/app/projects/actions";
 import { ICON_NAMES, Icon, resolveIcon } from "@/components/video/icons";
 import { colourProblemsOf, problemsOf, settledAt } from "@/components/video/simple/check";
-import { OWN_GROUNDS, type PlanEdit, SHOWS_THINGS, type SceneEdit, TEMPLATE_NAME, TYPE_NAME, applyEdit, editOf, mostWords, sameEdit } from "@/components/video/simple/edit";
+import { OWN_GROUNDS, type PlanEdit, SHOWS_THINGS, type SceneEdit, TEMPLATE_NAME, TYPE_NAME, applyEdit, designName, editOf, mostWords, sameEdit } from "@/components/video/simple/edit";
 import { SimpleFilm } from "@/components/video/simple/film";
 import { variantOk } from "@/components/video/simple/select";
 import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePlan, STYLES, STYLE_GROUNDS, TEMPLATES, type TemplateId, TYPE_PAIRS, variantsOf, WAYS } from "@/components/video/simple/types";
@@ -120,30 +120,58 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
     setNote(undefined);
   };
 
-  // the layouts this scene can take (each laid out and checked), as they look —
-  // the one it has first; one that holds fewer words keeps the run around the lit word
-  const ways = useMemo(() => {
-    const last = at === plan.scenes.length - 1;
-    const out: { t: TemplateId; v: number; show: [number, number] | null; key: number | null; plan: SimplePlan }[] = [];
-    const now = applyEdit(plan, edit).plan;
-    if (now) out.push({ t: scene.template, v: scene.variant, show: scene.show, key: scene.key, plan: now });
-    for (const t of TEMPLATES) {
-      if (last !== (t === "cta") || (t === "screen" && !(plan.brand.screens?.length ?? 0))) continue;
-      for (let v = 0; v < variantsOf(t); v++) {
-        if ((t === scene.template && v === scene.variant) || !variantOk(t, v, scene.items.length)) continue;
+  // the layouts this scene can take (each laid out and checked), as they look — the one it has first;
+  // one that holds fewer words keeps the run around the lit word. Two steps, so the list stays short and
+  // only what is open is drawn: each template once (the design it has, else its first that fits), then
+  // the designs of the template open.
+  type Way = { t: TemplateId; v: number; show: [number, number] | null; key: number | null; plan: SimplePlan };
+  const wayOf = useMemo(() => {
+    const cache = new Map<string, Way | null>();
+    return (t: TemplateId, v: number): Way | null => {
+      const id = `${t}:${v}`;
+      if (cache.has(id)) return cache.get(id)!;
+      let out: Way | null = null;
+      if (t === scene.template && v === scene.variant) {
+        const now = applyEdit(plan, edit).plan;
+        out = now ? { t, v, show: scene.show, key: scene.key, plan: now } : null;
+      } else if (variantOk(t, v, scene.items.length)) {
         let show = scene.show, key = scene.key;
+        let fits = true;
         if (show && show[1] - show[0] + 1 > mostWords(t, v)) {
           show = shorter(s.said!.map((w) => w.t), show, key, mostWords(t, v));
           if (key != null && (key < show[0] || key > show[1])) key = null;
-        } else if (!show && s.words.length > mostWords(t, v)) continue;
-        const trial = applyEdit(plan, { ...edit, scenes: edit.scenes.map((x, i) => (i === at ? { ...x, template: t, variant: v, show, key, screen: t === "screen" ? (x.screen ?? 0) : null } : x)) });
-        if (!trial.plan) continue;
-        if (problemsOf(trial.plan, at).some((x) => !before.has(`${at}:${x.detail}`))) continue;
-        out.push({ t, v, show, key, plan: trial.plan });
+        } else if (!show && s.words.length > mostWords(t, v)) fits = false;
+        if (fits) {
+          const trial = applyEdit(plan, { ...edit, scenes: edit.scenes.map((x, i) => (i === at ? { ...x, template: t, variant: v, show, key, screen: t === "screen" ? (x.screen ?? 0) : null } : x)) });
+          if (trial.plan && !problemsOf(trial.plan, at).some((x) => !before.has(`${at}:${x.detail}`))) out = { t, v, show, key, plan: trial.plan };
+        }
+      }
+      cache.set(id, out);
+      return out;
+    };
+  }, [plan, edit, at, scene, s, before]);
+  const kinds = useMemo(() => {
+    const last = at === plan.scenes.length - 1;
+    const out: Way[] = [];
+    for (const t of TEMPLATES) {
+      if (last !== (t === "cta") || (t === "screen" && !(plan.brand.screens?.length ?? 0))) continue;
+      const order = t === scene.template ? [scene.variant, ...Array.from({ length: variantsOf(t) }, (_, v) => v).filter((v) => v !== scene.variant)] : Array.from({ length: variantsOf(t) }, (_, v) => v);
+      for (const v of order) {
+        const w = wayOf(t, v);
+        if (w) {
+          out.push(w);
+          break;
+        }
       }
     }
-    return out;
-  }, [plan, edit, at, scene, s, before]);
+    // (the template it has first)
+    return out.sort((a, b) => Number(b.t === scene.template) - Number(a.t === scene.template));
+  }, [wayOf, at, plan, scene.template, scene.variant]);
+  // the template whose designs are open (the scene's own, until another is picked)
+  // (kept for the scene it was opened on: another scene opens on its own)
+  const [opened, setOpened] = useState<{ at: number; t: TemplateId } | null>(null);
+  const openT = opened?.at === at ? opened.t : scene.template;
+  const designs = useMemo(() => Array.from({ length: variantsOf(openT) }, (_, v) => wayOf(openT, v)).filter((w): w is Way => !!w), [wayOf, openT]);
   // the backgrounds and lettering, as they look on this scene (a background the brand colour does not read on: not offered)
   const looks = useMemo(
     () => ({
@@ -368,23 +396,46 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
           <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
             {tab === "scene" ? (
               <>
-                <Section id="layout" lit={lit("layout")} title="Layout" hint={at === last ? "The last scene is always your brand and the ask" : `${ways.length} that fit this scene`}>
-                  <div className="grid grid-cols-2 gap-2">
-                    {ways.map((w) => {
-                      const on = scene.template === w.t && scene.variant === w.v;
-                      const n = ways.filter((x) => x.t === w.t).length;
+                <Section id="layout" lit={lit("layout")} title="Layout" hint={at === last ? "The last scene is always your brand and the ask" : `${kinds.length} kinds that fit this scene`}>
+                  <div className="grid grid-cols-3 gap-2">
+                    {kinds.map((w) => {
+                      const on = scene.template === w.t;
+                      const many = variantsOf(w.t) > 1;
                       return (
-                        <button key={`${w.t}${w.v}`} type="button" onClick={() => !on && changeScene({ template: w.t, variant: w.v, show: w.show, key: w.key, screen: w.t === "screen" ? (scene.screen ?? 0) : null })} className={`${option(on)} overflow-hidden`}>
+                        <button
+                          key={w.t}
+                          type="button"
+                          onClick={() => {
+                            setOpened({ at, t: w.t });
+                            if (!on) changeScene({ template: w.t, variant: w.v, show: w.show, key: w.key, screen: w.t === "screen" ? (scene.screen ?? 0) : null });
+                          }}
+                          className={`${option(on || openT === w.t)} overflow-hidden`}
+                        >
                           <Still plan={w.plan} frame={frameOf(w.plan.scenes[at])} />
                           <span className="block truncate px-2 py-1.5 text-[11px] text-white/70">
                             {TEMPLATE_NAME[w.t]}
-                            {n > 1 ? ` ${ways.filter((x) => x.t === w.t).findIndex((x) => x.v === w.v) + 1}` : ""}
+                            {many ? <span className="text-white/35"> · {variantsOf(w.t)}</span> : null}
                           </span>
                         </button>
                       );
                     })}
                   </div>
                 </Section>
+                {designs.length > 1 && (
+                  <Section title={`Designs · ${TEMPLATE_NAME[openT]}`} hint={`${designs.length} that fit this scene`}>
+                    <div className="grid grid-cols-2 gap-2">
+                      {designs.map((w) => {
+                        const on = scene.template === w.t && scene.variant === w.v;
+                        return (
+                          <button key={`${w.t}${w.v}`} type="button" onClick={() => !on && changeScene({ template: w.t, variant: w.v, show: w.show, key: w.key, screen: w.t === "screen" ? (scene.screen ?? 0) : null })} className={`${option(on)} overflow-hidden`}>
+                            <Still plan={w.plan} frame={frameOf(w.plan.scenes[at])} />
+                            <span className="block truncate px-2 py-1.5 text-[11px] text-white/70">{designName(w.t, w.v)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Section>
+                )}
 
                 {s.said?.length && scene.show ? (
                   <Section id="text" lit={lit("text")} title="Text" hint={`${scene.show[1] - scene.show[0] + 1} of up to ${mostWords(scene.template, scene.variant)} words`}>
