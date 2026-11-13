@@ -385,3 +385,40 @@
 @media (prefers-reduced-motion: reduce) {
   .gs *, .gs *::before, .gs *::after { animation: none !important; }
 }
+
+/* ══ MotionDots, stage 4: the admin — the menu bar on top (its places as tabs below the name),
+   the brand's gradient in the dark ══ */
+.gs-dark .gs-desk .d1 { background: #2a1856; }
+.gs-dark .gs-desk .d2 { background: #45163a; }
+.gs-dark .gs-desk .d3 { background: #182346; }
+.gs-dark .md-nav-in { background: rgba(24, 22, 36, 0.66); border-color: rgba(255, 255, 255, 0.08); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 14px 40px -20px rgba(0, 0, 0, 0.8); }
+.gs-dark .gs-word { color: #f4f2ff; }
+.gs-dark .md-link { color: #a8a4bd; }
+.gs-dark .md-link:hover, .gs-dark .md-link.on { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.md-below { flex-basis: 100%; min-width: 0; }
+.md-nav-in:has(.md-below) { flex-wrap: wrap; }
+.md-tabs { display: flex; align-items: center; gap: 2px; overflow-x: auto; scrollbar-width: none; padding: 6px 2px 2px; border-top: 1px solid rgba(255, 255, 255, 0.06); margin-top: 4px; }
+.md-tabs::-webkit-scrollbar { display: none; }
+.md-tab-group { display: flex; align-items: center; gap: 2px; flex: none; }
+.md-tab-sep { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.1); margin: 0 8px; }
+.md-tab { position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 8px 12px; border-radius: 12px; font-size: 13px; font-weight: 500; color: #a8a4bd; text-decoration: none; white-space: nowrap; transition: color 0.15s, background 0.15s, transform 0.2s cubic-bezier(.3,.7,.4,1.4); }
+.md-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.md-tab:active { transform: scale(0.96); }
+.md-tab.on { color: #fff; background: var(--md-grad); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 8px 20px -10px rgba(164, 69, 242, 0.9); }
+.md-tab em { font-style: normal; font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 99px; background: rgba(244, 63, 94, 0.25); color: #fda4af; }
+.md-tab.on em { background: rgba(255, 255, 255, 0.25); color: #fff; }
+.gs-admin-stage { margin: 22px auto 40px; width: min(1280px, calc(100% - 32px)); }
+@media (min-width: 1024px) { .gs-admin-stage { margin-left: auto; } }
+.gs-dark .gs-win.gs-glass { border-radius: 26px; }
+.md-admin-h1 { font-family: var(--font-display), system-ui; font-size: clamp(28px, 3vw, 38px); font-weight: 800; letter-spacing: -0.035em; color: #fff; margin: 0; }
+.md-grad-num { font-family: var(--font-display), system-ui; font-weight: 800 !important; background: var(--md-grad); -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content; }
+.md-stat, .md-card { transition: transform 0.25s cubic-bezier(.3,.7,.4,1.4), border-color 0.25s, box-shadow 0.25s; }
+.md-stat:hover { transform: translateY(-3px); border-color: rgba(164, 69, 242, 0.35); box-shadow: 0 18px 40px -24px rgba(164, 69, 242, 0.6); }
+.md-card:hover { border-color: rgba(164, 69, 242, 0.22); }
+.md-btn { background: var(--md-grad); background-size: 140% 100%; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 8px 20px -10px rgba(164, 69, 242, 0.8); }
+.md-btn:hover { background-position: 100% 0; transform: translateY(-1px); }
+.md-btn:active { transform: scale(0.96); }
+.gs-dark .gs-mark { filter: drop-shadow(0 4px 14px rgba(164, 69, 242, 0.55)); }
+/* (the dark tone's page over the light one set above) */
+.gs.gs-dark { --gs-page: #0c0b14; background: #0c0b14; }
+.gs-dark .gs-win.gs-glass { background: rgba(22, 20, 34, 0.62); }

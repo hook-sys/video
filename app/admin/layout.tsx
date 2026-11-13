@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Desk, Mark } from "@/components/site/windows";
+import { Desk } from "@/components/site/windows";
+import { TopNav } from "@/components/site/top-nav";
 import "@/components/site/site.css";
 import { logout } from "@/app/auth/actions";
 import { type Section, requireAdmin } from "@/lib/admin";
@@ -40,33 +41,25 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   return (
     <div className="gs gs-dark">
       <Desk />
-      <header className="gs-bar gs-glass admin">
-        <Link href="/admin" className="gs-brand">
-          <Mark />
-          MotionDots
-        </Link>
-        <Badge tone="violet">{ROLE_LABEL[s.role]}</Badge>
-        <div className="ml-auto hidden items-center gap-3 text-sm sm:flex">
-          <span className="text-zinc-500">{s.email}</span>
-          <Link href="/dashboard" className="gs-plain">
-            Open app
-          </Link>
-          <form action={logout}>
-            <button className="gs-btn ghost">Log out</button>
-          </form>
-        </div>
-      </header>
-      <AdminNav badges={{ "/admin/queue": failed ?? 0 }} allowed={Object.entries(PAGE_SECTION).filter(([, sec]) => s.can(sec)).map(([href]) => href)} />
+      <TopNav
+        wide
+        home="/admin"
+        right={
+          <>
+            <Badge tone="violet">{ROLE_LABEL[s.role]}</Badge>
+            <span className="hidden text-sm text-zinc-500 xl:inline">{s.email}</span>
+            <Link href="/dashboard" className="gs-plain">
+              Open app
+            </Link>
+            <form action={logout}>
+              <button className="gs-btn ghost">Log out</button>
+            </form>
+          </>
+        }
+        below={<AdminNav badges={{ "/admin/queue": failed ?? 0 }} allowed={Object.entries(PAGE_SECTION).filter(([, sec]) => s.can(sec)).map(([href]) => href)} />}
+      />
       <main className="gs-admin-stage">
         <section className="gs-win gs-glass">
-          <div className="gs-titlebar">
-            <div className="gs-dots" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </div>
-            <span>Admin</span>
-          </div>
           <div className="flex flex-col gap-6 p-5 sm:p-8">{children}</div>
         </section>
       </main>

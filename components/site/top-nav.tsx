@@ -12,7 +12,8 @@ import { Mark, Wordmark } from "./windows";
 export type NavItem = { href: string; label: string; active?: boolean; onClick?: (e: MouseEvent<HTMLAnchorElement>) => void; anchor?: Ref<HTMLAnchorElement> };
 
 // (`home` null: the name is not a link — while a video is being sent, leaving would lose it)
-export function TopNav({ items = [], right, home = "/", onHome, wide }: { items?: NavItem[]; right?: ReactNode; home?: string | null; onHome?: (e: MouseEvent<HTMLAnchorElement>) => void; wide?: boolean }) {
+// (`below`: a row under it all, the full width — the admin's tabs)
+export function TopNav({ items = [], right, home = "/", onHome, wide, below }: { items?: NavItem[]; right?: ReactNode; home?: string | null; onHome?: (e: MouseEvent<HTMLAnchorElement>) => void; wide?: boolean; below?: ReactNode }) {
   return (
     <header className="md-nav">
       <div className={`md-nav-in${wide ? " wide" : ""}`}>
@@ -37,6 +38,7 @@ export function TopNav({ items = [], right, home = "/", onHome, wide }: { items?
           </nav>
         )}
         <div className="md-right">{right}</div>
+        {below && <div className="md-below">{below}</div>}
       </div>
     </header>
   );
