@@ -7,6 +7,7 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { Desk, Mark, remember, useWindows } from "@/components/site/windows";
 import { STATE_UI, ago, monthStart, pipelineProgress } from "./helpers";
 import type { DashboardRow } from "./page";
+import { LegalFooterLinks } from "@/components/site/legal-links";
 import "@/components/site/site.css";
 
 // The customer dashboard, in the site's glass: the videos and the account,
@@ -179,7 +180,9 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
         )}
       </main>
 
-      <footer className="gs-footer">© MotionBrief</footer>
+      <footer className="gs-footer">
+        <LegalFooterLinks />
+      </footer>
 
       <nav className="gs-dock gs-glass" aria-label="Main">
         <Link href="/" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionBrief home">

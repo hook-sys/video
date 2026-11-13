@@ -57,7 +57,12 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         <div className="flex flex-col gap-3">
           <h2 className="text-lg font-semibold">Load credits</h2>
           {wallets.length ? (
-            <LoadForm wallets={wallets} perCredit={perCredit} minLoad={billing.minLoad} />
+            <>
+              <LoadForm wallets={wallets} perCredit={perCredit} minLoad={billing.minLoad} />
+              <p className="text-xs text-foreground/50">
+                Credits don&apos;t expire. See our <a href="/refund" className="underline">Refund Policy</a>.
+              </p>
+            </>
           ) : (
             <p className="rounded-xl border border-foreground/10 bg-white/70 px-4 py-3 text-sm text-foreground/70">Payments are being set up. Please check back soon.</p>
           )}

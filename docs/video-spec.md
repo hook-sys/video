@@ -31,6 +31,13 @@ submit the amount, their number and the transaction ID; the team checks it and
 approves (the credits added once) or rejects it. All of it is set on
 /admin/billing.
 
+**Terms, Privacy, Refunds and keep-alive**: `/terms`, `/privacy` and `/refund`
+are open to everyone, linked from every footer and the sign-up form. The support
+email and phone they show are set on /admin/settings. Vercel's daily cron
+(`vercel.json`) calls `/api/keep-alive`, a small database read, so the free
+Supabase project is never paused for inactivity. It runs on production only;
+with `CRON_SECRET` set, only Vercel may call it.
+
 **AI providers** (`lib/ai/keys.ts`, `/admin/models`): Google (Gemini), OpenAI,
 Anthropic (Claude) and fal. Each key comes from the environment or is saved by
 a super admin (encrypted, only its last four shown). Each role (Director,

@@ -22,6 +22,8 @@ export const SETTINGS: SettingDef[] = [
   { key: "maintenance_message", label: "Maintenance message", help: "Shown to customers who try to create a video during maintenance.", type: "text", fallback: "MotionBrief is getting an upgrade. Back soon." },
   { key: "feature_sfx", label: "Sound effects", help: "Soft sound effects in every video — a whoosh between scenes, a pop as a thing comes in, a click on the button. No music.", type: "bool", fallback: true },
   { key: "feature_server_render", label: "Server render", help: "Each finished video is rendered on the server (a Vercel Sandbox, real Chrome) as a high-quality 1080p MP4 the customer downloads at once. When off (or if it fails), the video is rendered in the customer's browser when they download it.", type: "bool", fallback: true },
+  { key: "support_email", label: "Support email", help: "Shown to customers on the Terms, Privacy and Refund pages for questions, refunds and deleting an account.", type: "text", fallback: "" },
+  { key: "support_phone", label: "Support phone / WhatsApp", help: "Shown beside the support email on the Terms, Privacy and Refund pages. Leave empty to hide.", type: "text", fallback: "" },
   { key: "max_videos_per_day", label: "Videos per customer per day", help: "New videos a customer can start in 24 hours. 0 = no limit. Admins are exempt.", type: "number", fallback: 20 },
 ];
 

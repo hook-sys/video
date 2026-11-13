@@ -4,6 +4,7 @@ import Link from "next/link";
 import { login, signup } from "@/app/auth/actions";
 import { DEMOS } from "@/components/landing/demos";
 import { Desk, Mark, remember, useWindows } from "./windows";
+import { LegalFooterLinks } from "./legal-links";
 import "./site.css";
 
 // The site before login: one glass window at a time over a still desk, and a
@@ -199,6 +200,9 @@ export function Site({ initial, signedIn, error, message }: Props) {
             <label htmlFor="gs-signup-password">Password</label>
             <input id="gs-signup-password" name="password" type="password" required minLength={6} autoComplete="new-password" />
             <button className="gs-btn">Create account</button>
+            <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>
+              By creating an account you agree to our <Link href="/terms">Terms</Link>, <Link href="/privacy">Privacy Policy</Link> and <Link href="/refund">Refund Policy</Link>.
+            </p>
             <div className="gs-switch">
               Have an account?{" "}
               <button type="button" onClick={open("login")}>
@@ -209,7 +213,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
         )}
       </main>
 
-      <footer className="gs-footer">© MotionBrief</footer>
+      <footer className="gs-footer"><LegalFooterLinks /></footer>
 
       <nav className="gs-dock gs-glass" aria-label="Main">
         {(

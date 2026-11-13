@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRef } from "react";
 import { Desk, Mark, remember, useArrival } from "./windows";
+import { LegalFooterLinks } from "./legal-links";
 import "./site.css";
 
 // The signed-in pages in the site's glass: the bar, one window, and the dock
@@ -41,7 +42,7 @@ export function AppShell({ title, admin, active, initial, wide, action, children
           <div className="gs-body gs-app">{children}</div>
         </section>
       </main>
-      <footer className={`gs-footer${wide ? " wide" : ""}`}>© MotionBrief</footer>
+      <footer className={`gs-footer${wide ? " wide" : ""}`}><LegalFooterLinks /></footer>
       <nav className="gs-dock gs-glass" aria-label="Main">
         <Link href="/dashboard" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionBrief">
           <Mark />
