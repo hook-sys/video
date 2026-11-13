@@ -20,7 +20,7 @@ export default async function TermsPage() {
       </p>
 
       <h2>1. What MotionDots does</h2>
-      <p>MotionDots turns a script (or your own voice recording), your brand and your website into a short motion video. The voice, the scenes and the timing are made by software, including AI models run by other companies (see our <Link href="/privacy" className="text-[#0a66d6] hover:underline">Privacy Policy</Link>).</p>
+      <p>MotionDots turns a script (or your own voice recording), your brand and your website into a short motion video. The voice, the scenes and the timing are made by software, including AI models run by other companies (see our <Link href="/privacy" className="text-[#c4b5fd] hover:underline">Privacy Policy</Link>).</p>
 
       <h2>2. Your account</h2>
       <ul>
@@ -42,7 +42,7 @@ export default async function TermsPage() {
         <li>Prices and the price of a credit may change. A change never affects credits you already have or a video already started.</li>
         <li>Welcome credits and credits from promotional codes have no cash value.</li>
         <li>
-          Refunds follow our <Link href="/refund" className="text-[#0a66d6] hover:underline">Refund Policy</Link>.
+          Refunds follow our <Link href="/refund" className="text-[#c4b5fd] hover:underline">Refund Policy</Link>.
         </li>
       </ul>
 

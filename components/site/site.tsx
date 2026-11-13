@@ -23,7 +23,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
   const { current, open, win, iconRef } = useWindows(initial, PATH, windowAt, TITLE);
 
   return (
-    <div className="gs">
+    <div className="gs gs-dark gs-site">
       <Desk />
 
       <TopNav

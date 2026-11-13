@@ -141,3 +141,17 @@
   .ld-reveal { opacity: 1; transform: none; filter: none; }
   .ld-row { opacity: 1; transform: none; filter: none; }
 }
+
+/* ══ the whole site in the dark (13 Nov 2026): the same page, its glass dark, its light lit edges ══ */
+.gs-dark .ld { --ink: #f4f2ff; --ink2: #a8a4bd; }
+.gs-dark .ld-small { color: #77738c; }
+.gs-dark .ld-pill { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 6px 20px -12px rgba(164, 69, 242, 0.7); }
+.gs-dark .ld-video { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.1); box-shadow: 0 40px 90px -40px rgba(164, 69, 242, 0.6), 0 10px 30px -18px rgba(0, 0, 0, 0.8); }
+.gs-dark .ld-screen { background: radial-gradient(70% 60% at 20% 15%, rgba(124, 92, 255, 0.35), transparent 70%), radial-gradient(60% 55% at 90% 90%, rgba(255, 92, 157, 0.28), transparent 70%), #110e1f; }
+.gs-dark .ld-panel { background: rgba(255, 255, 255, 0.07); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 18px 40px -16px rgba(0, 0, 0, 0.7); }
+.gs-dark .ld-track { background: rgba(255, 255, 255, 0.1); }
+.gs-dark .ld-stat, .gs-dark .ld-step, .gs-dark .ld-price { background: rgba(255, 255, 255, 0.045); border-color: rgba(255, 255, 255, 0.08); }
+.gs-dark .ld-step:hover, .gs-dark .ld-stat:hover { border-color: rgba(164, 69, 242, 0.4); }
+.gs-dark .ld-word, .gs-dark .ld-example, .gs-dark .ld-price-list li { background: rgba(255, 255, 255, 0.055); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 18px 36px -24px rgba(0, 0, 0, 0.9); }
+.gs-dark .ld-word:hover { box-shadow: 0 0 0 1.5px rgba(164, 69, 242, 0.5), 0 22px 44px -22px rgba(164, 69, 242, 0.6); }
+.gs-dark .ld-step-n { -webkit-text-stroke-color: rgba(164, 69, 242, 0.32); }

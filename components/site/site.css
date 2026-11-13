@@ -487,3 +487,11 @@
 .gs-dark .gs-wait-steps li.now .dot { background: var(--md-grad); color: #fff; }
 .gs-dark .gs-wait-steps li.now em { color: #c4b5fd; }
 .gs-dark .gs-wait-meter i { background: var(--md-grad); }
+
+/* ══ stage 6: the site before login in the dark too — log in, start free ══ */
+.gs-dark .gs-word { color: #f4f2ff; }
+.gs-dark .gs-auth input { background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.12); color: #f4f2ff; }
+.gs-dark .gs-auth input:focus { border-color: #9b6cff; box-shadow: 0 0 0 4px rgba(164, 69, 242, 0.22); }
+.gs-dark .gs-auth a { color: #c4b5fd; }
+.gs-dark .gs-switch button { color: #c4b5fd; font-weight: 600; }
+.gs-dark .gs-auth h2 { color: #fff; }

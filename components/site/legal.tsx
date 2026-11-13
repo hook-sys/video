@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Mark, Wordmark } from "./windows";
+import "./site.css";
 import { getSettings } from "@/lib/app-settings";
 import { LEGAL_LINKS } from "./legal-links";
 
@@ -17,7 +19,7 @@ export function Contact({ email, phone }: { email: string; phone: string }) {
   return (
     <>
       {email && (
-        <a href={`mailto:${email}`} className="font-medium text-[#0a66d6] hover:underline">
+        <a href={`mailto:${email}`} className="font-medium text-[#c4b5fd] hover:underline">
           {email}
         </a>
       )}
@@ -29,23 +31,24 @@ export function Contact({ email, phone }: { email: string; phone: string }) {
 
 export function LegalPage({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-[#f5f5f7] text-[#1d1d1f]">
-      <header className="mx-auto flex max-w-3xl items-center justify-between px-4 py-5">
-        <Link href="/" className="text-base font-semibold tracking-tight">
-          MotionDots
+    <div className="gs gs-dark min-h-dvh text-[#e4e2f0]">
+      <header className="relative z-[1] mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-5">
+        <Link href="/" className="gs-brand flex items-center gap-2" aria-label="MotionDots home">
+          <Mark />
+          <Wordmark />
         </Link>
-        <nav className="flex gap-4 text-sm text-[#1d1d1f]/60">
+        <nav className="flex gap-4 text-sm text-white/55">
           {LEGAL_LINKS.map((l) => (
-            <Link key={l.href} href={l.href} className="hover:text-[#1d1d1f]">
+            <Link key={l.href} href={l.href} className="hover:text-white">
               {l.label}
             </Link>
           ))}
         </nav>
       </header>
-      <main className="mx-auto max-w-3xl px-4 pb-20">
-        <article className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-black/[0.05] sm:p-10 [&_h2]:mt-8 [&_h2]:text-lg [&_h2]:font-semibold [&_li]:mt-1.5 [&_p]:mt-3 [&_p]:leading-relaxed [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:leading-relaxed">
-          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-          <p className="text-sm text-[#1d1d1f]/50">Last updated {LEGAL_UPDATED}</p>
+      <main className="relative z-[1] mx-auto max-w-3xl px-4 pb-20">
+        <article className="rounded-3xl bg-white/[0.045] p-6 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.9)] ring-1 ring-white/[0.08] sm:p-10 [&_h2]:mt-8 [&_h2]:text-lg [&_h2]:font-semibold [&_li]:mt-1.5 [&_p]:mt-3 [&_p]:leading-relaxed [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:leading-relaxed">
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">{title}</h1>
+          <p className="text-sm text-white/45">Last updated {LEGAL_UPDATED}</p>
           {children}
         </article>
       </main>
