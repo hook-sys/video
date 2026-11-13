@@ -3,7 +3,7 @@ import { Icon } from "../icons";
 import { Concept } from "./concept";
 import { familyOf } from "./faces";
 import { fitWords } from "./fit";
-import { type C, rad, Glyph, blend, One, Words, clamp01, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { type C, type Effect, rad, Glyph, blend, One, Words, clamp01, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import { TYPE, WEIGHT } from "./geo";
 import { Band, Phrases, Side, TEMPLATES_1, WordsIn, abs, center, display, itemAt, thingAt } from "./scenes";
 import { phraseMode } from "./rhythm";
@@ -165,6 +165,8 @@ function Chart({ c }: { c: C }) {
 }
 
 // ── kinetic: the words are the show ───────────────────────────────────────
+// the kinetic variants after the first three: one way of coming in each
+export const KINETIC_MOVES: Partial<Record<number, Effect>> = { 3: "mask", 4: "sweep", 5: "underline", 6: "focus", 7: "split", 8: "box", 9: "drop" };
 function Kinetic({ c }: { c: C }) {
   const { W, H, pad, u } = c.g;
   const box = { left: pad, top: 0, width: W - 2 * pad, height: H };
@@ -201,9 +203,11 @@ function Kinetic({ c }: { c: C }) {
       </div>
     );
   }
-  // big words, the key one growing in as it is said (the whole line phrase by phrase, when it says more)
-  if (phraseMode(c.s)) return <Phrases c={c} effect="pop" />;
-  return <WordsIn c={c} box={box} place="center" effect="pop" />;
+  // big words, the key one growing in as it is said — or (3…9) coming in another way (kit.tsx Moving)
+  // (the whole line phrase by phrase, when it says more)
+  const effect: Effect = KINETIC_MOVES[c.s.variant] ?? "pop";
+  if (phraseMode(c.s)) return <Phrases c={c} effect={effect} />;
+  return <WordsIn c={c} box={box} place="center" effect={effect} />;
 }
 
 // ── messages: the product talking ─────────────────────────────────────────

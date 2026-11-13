@@ -71,7 +71,12 @@ export const keyStyle = (look: Look, size: number): CSSProperties =>
 // The voice's words in their place: each as it is said, the key one in the
 // accent colour (on the brand's own colour: on a plate, keyStyle) — or with an effect: struck
 // through (what goes away), typed letter by letter, or the key word growing in.
-export type Effect = "strike" | "type" | "pop";
+// (more ways in, rows.tsx/kinetic and statement variants: "mask" — each word rising from behind its line;
+// "sweep" — a marker swept behind the lit word; "underline" — a line drawn under it; "focus" — each word in
+// from a large blur; "split" — the first half from the left, the rest from the right; "box" — a box drawn
+// round the lit word; "drop" — each word dropping in from above)
+export type Effect = "strike" | "type" | "pop" | "mask" | "sweep" | "underline" | "focus" | "split" | "box" | "drop";
+const MOVES = new Set<Effect | undefined>(["mask", "sweep", "underline", "focus", "split", "box", "drop"]);
 // The words alone on screen, their lit word one an icon plainly stands for
 // ("invoices", "fast"): that icon comes in just before it, beside it, and does
 // what it means (keyIconOf, motion.ts).
@@ -87,7 +92,7 @@ export function keyIconOf(s: Scene): { at: number; index: number; name: string }
 export function Words({ c, width, lines, max, min, align = "center", color, effect, style }: { c: C; width: number; lines: number; max: number; min?: number; align?: "left" | "center" | "right"; color?: string; effect?: Effect; style?: CSSProperties }) {
   const { look } = c;
   const words = c.s.words;
-  const icon = !effect || effect === "pop" ? keyIconOf(c.s) : null;
+  const icon = !effect || effect === "pop" || MOVES.has(effect) ? keyIconOf(c.s) : null;
   // (the icon laid out as a word of its own, before the lit one)
   const texts = words.map((w) => w.t);
   if (icon) texts.splice(icon.index, 0, ICON_SLOT);
@@ -116,6 +121,7 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
                 </span>
               );
             }
+            if (MOVES.has(effect)) return <Moving key={i} c={c} w={w} i={i} n={words.length} size={fit.size} effect={effect!} lit={lit} />;
             const grow = effect === "pop" && w.key ? springAt(c, w.at + 2, 0.8) : 1;
             // (on glass each word comes in from a blur — sharp as it is said — and the lit one is crossed once by a light)
             const soft: CSSProperties = look.glass ? { ...rise(k, fit.size * 0.12), filter: k < 0.995 ? `blur(${(Math.max(0, 1 - k) * 14).toFixed(2)}px)` : undefined } : rise(k, fit.size * 0.45);
@@ -131,6 +137,30 @@ export function Words({ c, width, lines, max, min, align = "center", color, effe
       ))}
     </div>
   );
+}
+
+// A word coming in one of the other ways (Effect), as it is said; the lit one marked as the way has it
+function Moving({ c, w, i, n, size, effect, lit }: { c: C; w: { t: string; at: number; key: boolean }; i: number; n: number; size: number; effect: Effect; lit: boolean }) {
+  const { look } = c;
+  const k = springAt(c, w.at - 2);
+  const mark = ease(clamp01((c.f - w.at - 4) / 14));
+  const key = lit ? keyStyle(look, size) : {};
+  let move: CSSProperties = {};
+  if (effect === "mask") move = { transform: `translateY(${((1 - k) * size * 1.1).toFixed(1)}px)`, opacity: clamp01(k * 3) };
+  else if (effect === "focus") move = { transform: `scale(${(1.6 - 0.6 * k).toFixed(4)})`, opacity: clamp01(k * 1.6), filter: k < 0.995 ? `blur(${((1 - k) * 22).toFixed(2)}px)` : undefined };
+  else if (effect === "split") move = { transform: `translateX(${((1 - k) * (i < n / 2 ? -1 : 1) * size * 4).toFixed(1)}px)`, opacity: clamp01(k * 1.8) };
+  else if (effect === "drop") move = { transform: `translateY(${((1 - k) * -size * 1.4).toFixed(1)}px) rotate(${((1 - k) * (i % 2 ? 8 : -8)).toFixed(2)}deg)`, opacity: clamp01(k * 2) };
+  else move = rise(k, size * 0.3);
+  const inner = (
+    <span style={{ display: "inline-block", position: "relative", ...move, ...key }}>
+      {lit && effect === "sweep" && <span style={{ position: "absolute", zIndex: -1, left: -size * 0.08, right: -size * 0.08, top: "18%", bottom: "4%", borderRadius: Math.round(size * 0.1 * look.r), background: tint(look.accent, look.dark ? 0.35 : 0.22), transformOrigin: "left center", transform: `scaleX(${mark.toFixed(4)})` }} />}
+      {w.t}
+      {lit && effect === "underline" && <span style={{ position: "absolute", left: 0, bottom: -size * 0.06, height: Math.max(6, size * 0.08), width: `${(mark * 100).toFixed(1)}%`, borderRadius: 99, background: look.accentFill }} />}
+      {lit && effect === "box" && <span style={{ position: "absolute", left: -size * 0.14, right: -size * 0.14, top: size * 0.02, bottom: -size * 0.06, border: `${Math.max(3, size * 0.04).toFixed(1)}px solid ${look.accent}`, borderRadius: Math.round(size * 0.14 * look.r), clipPath: `inset(0 ${((1 - mark) * 100).toFixed(2)}% 0 0)` }} />}
+    </span>
+  );
+  // (the mask: the line clips the word rising into it)
+  return effect === "mask" ? <span style={{ display: "inline-block", overflow: "hidden", paddingBottom: size * 0.12, marginBottom: -size * 0.12 }}>{inner}</span> : inner;
 }
 
 // An icon on a tile, one way everywhere: the accent's icon on a soft tile of

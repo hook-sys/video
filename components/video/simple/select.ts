@@ -135,7 +135,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // (two ideas in a row are two pictures: an idea may follow another idea)
     let template = pickOf(list, prev === "concept" && prevIdea !== read.concept ? null : prev, R);
     // (a variant that needs things only when there are some)
-    let variant = R.int(0, variantsOf(template) - 1);
+    let variant = variantOf(template, R);
     if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
     // (the opening idea with its words on screen: the hook is read as well as seen)
     if (template === "concept" && variant === 2 && i === 0 && read.concept !== "truth") variant = R.int(0, 1);
@@ -145,7 +145,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       const shown = list.filter(([t]) => t !== "statement" && t !== "kinetic");
       if (shown.length) {
         template = pickOf(shown, prev, R);
-        variant = R.int(0, variantsOf(template) - 1);
+        variant = variantOf(template, R);
         if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
       } else [template, variant] = ["statement", 1];
     }
@@ -155,13 +155,13 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       const other = list.filter(([t]) => t !== "statement" && t !== "kinetic" && t !== "concept");
       if (other.length) {
         template = pickOf(other, prev, R);
-        variant = R.int(0, variantsOf(template) - 1);
+        variant = variantOf(template, R);
         if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
       } else {
         // (another picture the beat's own words stand for — "ডেটা", "অর্ডার" — else moving words when they may come)
         const altWord = words.slice(beats[i].first, beats[i].last + 1).find((w) => { const x = wordIcon(w.text); return x && !recent.slice(-4).includes(x); });
         if (altWord) [r.icon, iconAt] = [wordIcon(altWord.text), Math.round(altWord.start * FPS)];
-        else if (!wasAlone && alone < most && !r.hero) [template, variant] = ["kinetic", R.chance(0.5) ? 0 : 2];
+        else if (!wasAlone && alone < most && !r.hero) [template, variant] = ["kinetic", R.pick(KINETIC_PLAIN)];
       }
     }
     // (the words beside their pictures: when the things the beat names are its own words — so they would only
@@ -199,12 +199,12 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       if (named && prev !== "reveal") [template, variant] = ["reveal", R.int(0, variantsOf("reveal") - 1)];
       else if (other.length) {
         template = pickOf(other, prev, R);
-        variant = R.int(0, variantsOf(template) - 1);
+        variant = variantOf(template, R);
         if (!variantOk(template, variant, r.items.length)) variant = 0;
-      } else [template, variant] = ["kinetic", R.chance(0.5) ? 0 : 2];
+      } else [template, variant] = ["kinetic", R.pick(KINETIC_PLAIN)];
     }
     // (words typed as a prompt only when they ask something)
-    if (template === "kinetic" && variant === 1 && !/\?["'”’)]*$/.test(words[r.show[1]]?.text ?? "")) variant = R.chance(0.5) ? 0 : 2;
+    if (template === "kinetic" && variant === 1 && !/\?["'”’)]*$/.test(words[r.show[1]]?.text ?? "")) variant = R.pick(KINETIC_PLAIN);
     wasAlone = wordsAlone(template, variant);
     if (wasAlone) alone++;
     const screen = template === "screen" ? pictured++ : undefined;
@@ -274,6 +274,15 @@ function spokenIcon(words: Word[], beat: Beat, [a, b]: [number, number], key: nu
 }
 // the templates (and variants) whose hero is the scene's own icon
 export const showsIcon = (t: TemplateId, v: number, concept?: string) => (t === "statement" && v === 1) || t === "feature" || t === "stat" || t === "chart" || t === "messages" || t === "screen" || (t === "concept" && concept === "trapped");
+
+// A template's design: any of them — but the statement's words beside a picture (1) as often as before
+// there were more ways of words alone (a third), so the words alone do not crowd the video
+export const KINETIC_PLAIN = [0, 2, 3, 4, 5, 6, 7, 8, 9];
+export function variantOf(t: TemplateId, R: ReturnType<typeof rng>): number {
+  const n = variantsOf(t);
+  if (t === "statement" && n > 3) return R.chance(1 / 3) ? 1 : R.pick([0, ...Array.from({ length: n - 2 }, (_, k) => k + 2)]);
+  return R.int(0, n - 1);
+}
 
 // a look by weight: soft 0.28, the others 0.18 each
 export const styleOf = (x: number): Style => (x < 0.28 ? "soft" : STYLES[1 + Math.min(3, Math.floor((x - 0.28) / 0.18))]);

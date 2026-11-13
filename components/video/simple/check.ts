@@ -171,7 +171,9 @@ function fewerWords(s: Scene, most: number): Scene {
   const k = Math.max(0, s.words.findIndex((w) => w.key));
   const from = Math.max(0, Math.min(k - Math.floor((most - 1) / 2), s.words.length - most));
   const words = s.words.slice(from, from + most);
-  return { ...s, words: words.map((w, j) => ({ ...w, t: j === 0 ? w.t.charAt(0).toUpperCase() + w.t.slice(1) : w.t })) };
+  // (the first of them never later than 4 frames into the scene — as the selector brings them in)
+  const late = Math.max(0, (words[0]?.at ?? s.from) - (s.from + (s.from ? 4 : 0)));
+  return { ...s, words: words.map((w, j) => ({ ...w, at: w.at - late, t: j === 0 ? w.t.charAt(0).toUpperCase() + w.t.slice(1) : w.t })) };
 }
 // icons the library has (an unknown one is none: never a stand-in for what is said)
 const knownIcons = (s: Scene): Scene => ({ ...s, icon: resolveIcon(s.icon) ? s.icon : "", items: s.items.map((it) => (it.icon && !resolveIcon(it.icon) ? { ...it, icon: null } : it)) });
@@ -188,7 +190,8 @@ function candidates(plan: SimplePlan, i: number, kinds: Set<Problem["kind"]>, re
   const base = [kinds.has("icon") ? knownIcons : null, kinds.has("twice") ? unique : null].reduce((x, f) => (f ? f(x) : x), s);
   const mended: Scene[] = [base];
   if (kinds.has("cut")) mended.push(shortItems(base, 2), shortItems(base, 2, 2));
-  if (kinds.has("words")) mended.push(fewerWords(base, 4), fewerWords(base, 3));
+  // (too many words, or the last one said too near the cut to be read: fewer of them, around the lit one)
+  if (kinds.has("words") || kinds.has("rushed")) mended.push(fewerWords(base, 4), fewerWords(base, 3));
   const variants = (x: Scene, t: TemplateId) => Array.from({ length: variantsOf(t) }, (_, v) => v).filter((v) => variantOk(t, v, x.items.length)).map((v) => ({ ...x, template: t, variant: v }));
   const out = mended.flatMap((x) => [x, ...variants(x, s.template).filter((y) => y.variant !== x.variant)]);
   if (!last && reading) {

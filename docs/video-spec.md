@@ -169,8 +169,19 @@ sliding in from alternate sides, a grid of cards, a timeline drawing down, the
 one just said big with those before in a strip, a checklist ticking, bars
 growing, a hub of nodes round the brand's mark — and the deck 5 — dealt from a
 stack, fanned like a hand, slid onto a pile, flipping forward, round badges. A
-panel going on keeps its design (one panel to the eye). 109 designs in all
-(55 template variants, 18 ideas × 3).
+panel going on keeps its design (one panel to the eye). The kinetic 10 and the
+statement 11: the words alone coming in other ways (`kit.tsx` Moving — rising
+from behind their line, a marker swept behind the lit word, a line drawn under
+it, in from a large blur, the halves meeting, a box drawn round it, dropping in)
+and the statement's own layouts (a quote set left beside a bar, a quote card, the
+lit word huge and faint behind, a frame of corners). The statement's words beside
+a picture (1) still come a third of the time, so the words alone do not crowd the
+video. The point 10: its number in a ring drawn round it, huge and faint, with a
+dot for each point, between two rules, in a turned square, counting up, on a bar
+of the accent. 131 designs in all (77 template variants, 18 ideas × 3).
+
+A scene whose last word is said too near the cut to be read is mended by showing
+fewer of its words, around the lit one, brought in from the scene's start.
 
 Per video the selector draws: the look (soft / neon / editorial / bold / depth),
 then a ground it stands on (dark / light / brand / glass), the template and variant

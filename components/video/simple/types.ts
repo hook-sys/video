@@ -55,9 +55,10 @@ export const ideaNeedsThings = (c: Concept | undefined, things: number) => (c ==
 // (a new template goes last: a video's print keeps each template's place)
 export const TEMPLATES = ["statement", "kinetic", "trouble", "compare", "reveal", "feature", "messages", "bento", "stat", "chart", "steps", "cta", "screen", "concept", "point", "panel", "deck"] as const;
 export type TemplateId = (typeof TEMPLATES)[number];
-// every template has three designed variants — some more (rows.tsx: the panel 8, the deck 5)
+// every template has three designed variants — some more (rows.tsx: the panel 8, the deck 5; the kinetic
+// 10, the statement 11, kit.tsx Moving; the point 10, points.tsx)
 export const VARIANTS = 3;
-export const VARIANT_COUNT: Partial<Record<TemplateId, number>> = { panel: 8, deck: 5 };
+export const VARIANT_COUNT: Partial<Record<TemplateId, number>> = { panel: 8, deck: 5, kinetic: 10, statement: 11, point: 10 };
 export const variantsOf = (t: TemplateId) => VARIANT_COUNT[t] ?? VARIANTS;
 
 // (glass: an airy light ground of soft colour fields, frosted cards, glossy icons, the keyword in a gradient)

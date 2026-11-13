@@ -119,6 +119,7 @@ function Statement({ c }: { c: C }) {
       </Side>
     );
   }
+  if (c.s.variant >= 3) return <StatementMore c={c} />;
   // the lines come in from alternate sides, the key word in the accent
   const fit = fitWords(c.s.words.map((w) => w.t), c.look.display, { width: W - 2 * pad, lines: c.g.shape === "wide" ? 3 : 4, max: Math.round(TYPE.HERO * c.g.u), min: 70 });
   return (
@@ -134,6 +135,80 @@ function Statement({ c }: { c: C }) {
       })}
     </div>
   );
+}
+
+// The words alone, other ways (3…10): each a layout and a way of coming in (kit.tsx Moving)
+function StatementMore({ c }: { c: C }) {
+  const { W, H, pad, u, shape } = c.g;
+  const { look, s, f } = c;
+  const v = s.variant;
+  const full = { left: pad, top: 0, width: W - 2 * pad, height: H };
+  const key = s.words.find((w) => w.key) ?? s.words[0];
+  const k0 = springAt(c, s.from + 2);
+  // 3 · a quote set left, a bar of the accent beside it, rising from behind each line
+  if (v === 3) {
+    const bw = W - 2 * pad - 60;
+    return (
+      <div style={abs({ left: pad, top: 0, width: W - 2 * pad, height: H, display: "flex", alignItems: "center" })}>
+        <div style={{ width: Math.max(8, 12 * u), alignSelf: "center", height: `${(clamp01(k0 * 1.4) * 52).toFixed(1)}%`, borderRadius: 99, background: look.accentFill, marginRight: 48, flexShrink: 0 }} />
+        <Words c={c} width={bw} lines={shape === "wide" ? 3 : 5} max={Math.round(TYPE.HERO * u)} min={64} align="left" effect="mask" />
+      </div>
+    );
+  }
+  // 5 · on a card, as a quote
+  if (v === 5) {
+    const cw = W - 2 * pad, inner = cw - 140 * u;
+    const onCard = { ...c, look: { ...look, ink: look.panelInk, accent: look.panelAccent, plate: false, keyFill: undefined, keyGlow: undefined } };
+    return (
+      <div style={center({ ...full })}>
+        <div style={{ ...panel(c, 48), padding: `${Math.round(80 * u)}px ${Math.round(70 * u)}px`, position: "relative", ...rise(k0, 60) }}>
+          <div style={{ position: "absolute", left: 36 * u, top: -10 * u, fontFamily: familyOf(look.display), fontSize: 220 * u, lineHeight: 1, color: tint(look.panelAccent, 0.25) }}>“</div>
+          <Words c={onCard} width={inner} lines={shape === "wide" ? 3 : 4} max={Math.round(TYPE.HERO * u * 0.85)} min={56} effect="mask" />
+        </div>
+      </div>
+    );
+  }
+  // 6 · the lit word huge and faint behind, an outline; the words drop in over it
+  if (v === 6) {
+    const big = fitWords([key.t], look.display, { width: W * 1.1, lines: 1, max: Math.round(H * 0.45), min: 120 }).size;
+    const kb = springAt(c, key.at - 6, 1.6);
+    return (
+      <>
+        <div style={center({ inset: 0, opacity: 0.16 * clamp01(kb * 1.5), transform: `scale(${(1.15 - 0.15 * kb).toFixed(4)})` })}>
+          <div style={{ fontFamily: familyOf(look.display), fontWeight: 800, fontSize: big, color: "transparent", WebkitTextStroke: `${Math.max(2, big * 0.012).toFixed(1)}px ${look.accent}`, whiteSpace: "nowrap" }}>{key.t}</div>
+        </div>
+        <WordsIn c={c} box={full} place="center" effect="drop" />
+      </>
+    );
+  }
+  // 7 · inside a frame of corners drawn in, the lit word underlined
+  if (v === 7) {
+    const fw = W - 2 * pad * 0.6, fh = H * (shape === "wide" ? 0.62 : 0.42), arm = 70 * u, t = ease(clamp01((f - s.from - 2) / 16));
+    const corner = (st: CSSProperties) => <div style={abs({ width: arm * t, height: arm * t, borderColor: look.accent, borderStyle: "solid", borderWidth: 0, ...st })} />;
+    return (
+      <>
+        <div style={abs({ left: (W - fw) / 2, top: (H - fh) / 2, width: fw, height: fh })}>
+          {corner({ left: 0, top: 0, borderTopWidth: 5, borderLeftWidth: 5 })}
+          {corner({ right: 0, top: 0, borderTopWidth: 5, borderRightWidth: 5 })}
+          {corner({ left: 0, bottom: 0, borderBottomWidth: 5, borderLeftWidth: 5 })}
+          {corner({ right: 0, bottom: 0, borderBottomWidth: 5, borderRightWidth: 5 })}
+        </div>
+        <WordsIn c={c} box={{ left: (W - fw) / 2 + 40, top: (H - fh) / 2, width: fw - 80, height: fh }} place="center" effect="underline" />
+      </>
+    );
+  }
+  // 9 · in from a large blur, a soft light of the accent behind
+  if (v === 9) {
+    return (
+      <>
+        <div style={abs({ inset: 0, background: `radial-gradient(40% 32% at 50% 50%, ${tint(look.accent, look.dark ? 0.3 : 0.18)}, transparent 70%)`, opacity: clamp01(k0 * 1.4) })} />
+        <WordsIn c={c} box={full} place="center" effect="focus" />
+      </>
+    );
+  }
+  // 4 · a marker swept behind the lit word · 8 · the halves meeting · 10 · a box drawn round the lit word
+  const effect: Effect = v === 4 ? "sweep" : v === 8 ? "split" : "box";
+  return <WordsIn c={c} box={full} place="center" effect={effect} />;
 }
 
 // ── the words beside their pictures: a card for each thing they name ──────
