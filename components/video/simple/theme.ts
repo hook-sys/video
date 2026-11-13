@@ -223,7 +223,7 @@ function groundColours(theme: Theme, color: string): Ground$ {
   const accent = readable(brand, bg, 3.5, "#ffffff");
   return {
     dark: true, bg, glow: alpha(brand, 0.22), ink: "#ffffff", sub: "rgba(255,255,255,0.66)", accent, plate: false, plateFill: accent, onAccent: inkOn(accent),
-    panel: "rgba(255,255,255,0.06)", panelFill: "linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04))", panelAccent: accent, onPanelAccent: inkOn(accent),
+    panel: mix(bg, "#ffffff", 0.06), panelFill: `linear-gradient(180deg, ${mix(bg, "#ffffff", 0.09)}, ${mix(bg, "#ffffff", 0.04)})`, panelAccent: accent, onPanelAccent: inkOn(accent),
     panelInk: "#ffffff", panelSub: "rgba(255,255,255,0.6)", line: "rgba(255,255,255,0.09)", shadow: "rgba(0,0,0,0.5)",
     fill: brand, onFill: inkOn(brand), bad: "#ff6369", accentFill: accent, ...faces,
   };
