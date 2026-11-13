@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { login, signup } from "@/app/auth/actions";
-import { DEMOS } from "@/components/landing/demos";
 import { Desk, remember, useWindows } from "./windows";
 import { TopNav } from "./top-nav";
+import { Landing } from "./landing";
 import { LegalFooterLinks } from "./legal-links";
 import "./site.css";
 
@@ -21,11 +21,6 @@ type Props = { initial: SiteWindow; signedIn: boolean; error?: string; message?:
 
 export function Site({ initial, signedIn, error, message }: Props) {
   const { current, open, win, iconRef } = useWindows(initial, PATH, windowAt, TITLE);
-  const play = (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <path d="M5 3v12l10-6z" fill="#1d1d1f" />
-    </svg>
-  );
 
   return (
     <div className="gs">
@@ -56,118 +51,10 @@ export function Site({ initial, signedIn, error, message }: Props) {
         }
       />
 
+      {/* the landing page: one long page (Overview, How it works and Examples are places on it) */}
+      {current === "overview" || current === "how" || current === "examples" ? <Landing signedIn={signedIn} start={open("signup")} examples="#examples" focus={current} /> : null}
+
       <main className="gs-stage">
-        {win(
-          "overview",
-          <>
-            <div className="gs-ov">
-              <div>
-                <h1>
-                  Your product,
-                  <br />
-                  explained in one video.
-                </h1>
-                <p className="gs-lead">Send us your website or your own script. You get a narrated motion video, every scene drawn for the words spoken in it.</p>
-                <div className="gs-row">
-                  {signedIn ? (
-                    <Link href="/projects/new" onClick={remember} className="gs-btn big">
-                      Create video
-                    </Link>
-                  ) : (
-                    <Link href="/signup" className="gs-btn big" onClick={open("signup")}>
-                      Start free
-                    </Link>
-                  )}
-                  <Link href="/#examples" className="gs-btn ghost big" onClick={open("examples")}>
-                    See examples
-                  </Link>
-                </div>
-              </div>
-              <div className="gs-screen">
-                <div className="gs-frame">
-                  <div className="card">
-                    <b>Today&apos;s bookings</b>
-                    <i className="on" />
-                    <i />
-                    <i />
-                  </div>
-                  <button type="button" className="gs-play" aria-label="See examples" onClick={open("examples")}>
-                    {play}
-                  </button>
-                  <div className="num">
-                    40%<small>fewer no-shows</small>
-                  </div>
-                </div>
-                <div className="gs-meta">
-                  <span>A clinic booking app · 32 s</span>
-                  <span className="gs-formats">
-                    <span>16:9</span>
-                    <span>9:16</span>
-                    <span>1:1</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="gs-facts">
-              <div>
-                <b>Your words, read aloud</b>
-                <span>A natural voice, timed word by word.</span>
-              </div>
-              <div>
-                <b>Made for your brand</b>
-                <span>Your icon, name and colour in every scene.</span>
-              </div>
-              <div>
-                <b>Download as MP4</b>
-                <span>Wide, tall or square, ready to post.</span>
-              </div>
-            </div>
-          </>,
-        )}
-
-        {win(
-          "how",
-          <>
-            <h2>Three steps. No editing.</h2>
-            <p className="gs-lead">You bring what the product does. MotionDots does the rest.</p>
-            <div className="gs-steps">
-              {[
-                ["Tell us about the product", "Write the script word for word, add your icon, and answer six short questions.", "6 questions"],
-                ["Hear the voice", "The script is read by a natural voice. Every word gets its own moment.", "automatic"],
-                ["Watch and download", "Each scene follows the words. Download it ready to post.", "MP4"],
-              ].map(([title, text, tag], i) => (
-                <div key={title} className="gs-step">
-                  <span className="n">{i + 1}</span>
-                  <div>
-                    <b>{title}</b>
-                    <span>{text}</span>
-                  </div>
-                  <em>{tag}</em>
-                </div>
-              ))}
-            </div>
-          </>,
-        )}
-
-        {win(
-          "examples",
-          <>
-            <h2>Made with MotionDots.</h2>
-            <p className="gs-lead">Promo videos made from a short brief.</p>
-            <div className="gs-grid">
-              {DEMOS.map((d, i) => (
-                <figure key={i} className="gs-ex">
-                  {d.src ? <video src={d.src} poster={d.poster ?? undefined} controls playsInline preload="metadata" /> : <div className="soon">Coming soon</div>}
-                  <figcaption>
-                    <b>{d.title}</b>
-                    <span>{d.industry}</span>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          </>,
-        )}
-
         {win(
           "login",
           <form action={login} className="gs-auth">
