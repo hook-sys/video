@@ -76,6 +76,8 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
   const [note, setNote] = useState<{ ok: boolean; text: string }>();
   // the choices a click in the video brought up (lit for a moment)
   const [focus, setFocus] = useState<{ sec: string; item?: number; n: number } | null>(null);
+  const [moreScene, setMoreScene] = useState(false);
+  const [moreStyle, setMoreStyle] = useState(false);
   const [frame, setFrame] = useState(0);
   const player = useRef<PlayerRef>(null);
   const opening = useRef(frameOf(plan.scenes[0]));
@@ -243,6 +245,8 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
     setTab("scene");
     setNote(undefined);
     const n = (focus?.n ?? 0) + 1;
+    // (a part folded away in the scene's "More" — its things, icon, picture, background — opens it)
+    if (["items", "icon", "picture", "ground"].includes(sec)) setMoreScene(true);
     setFocus({ sec, item: item >= 0 ? item : undefined, n });
     setTimeout(() => {
       document.querySelector(`[data-sec="${sec}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -448,6 +452,7 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
                   </Section>
                 )}
 
+                <More title="More for this scene" hint="Items, icon, picture, background" open={moreScene} onToggle={setMoreScene}>
                 {SHOWS_THINGS.includes(scene.template) && (
                   <Section id="items" lit={lit("items")} title="Items" hint="Up to 3 · each 1–3 words">
                     <div className="flex flex-col gap-2">
@@ -496,6 +501,7 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
                     ))}
                   </div>
                 </Section>
+                </More>
               </>
             ) : (
               <>
@@ -509,6 +515,16 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
                     ))}
                   </div>
                 </Section>
+                <Section title="Transition" hint="Between scenes">
+                  <div className="flex flex-wrap gap-1.5">
+                    {WAYS.map((w) => (
+                      <button key={w} type="button" onClick={() => changeLook({ way: w })} className={pill(edit.theme.way === w)}>
+                        {WAY_NAME[w]}
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+                <More title="More style" hint="Background, lettering, movement" open={moreStyle} onToggle={setMoreStyle}>
                 <Section title="Background" hint={(() => {
                   const mine = shown.scenes.map((x, i) => (x.ground && x.ground !== shown.theme.ground ? i + 1 : 0)).filter(Boolean);
                   return mine.length ? `Scene ${mine.join(" and ")} ${mine.length > 1 ? "have" : "has"} its own` : "For the whole video";
@@ -532,15 +548,6 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
                     ))}
                   </div>
                 </Section>
-                <Section title="Transition" hint="Between scenes">
-                  <div className="flex flex-wrap gap-1.5">
-                    {WAYS.map((w) => (
-                      <button key={w} type="button" onClick={() => changeLook({ way: w })} className={pill(edit.theme.way === w)}>
-                        {WAY_NAME[w]}
-                      </button>
-                    ))}
-                  </div>
-                </Section>
                 <Section title="Movement">
                   <div className="flex flex-wrap gap-1.5">
                     {PACES.map((p) => (
@@ -550,6 +557,7 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
                     ))}
                   </div>
                 </Section>
+                </More>
               </>
             )}
           </div>
@@ -565,6 +573,21 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
 }
 
 // a section of the panel
+// What most edits never need, folded away under one line (opened when something in it is clicked in the video)
+function More({ title, hint, open, onToggle, children }: { title: string; hint: string; open: boolean; onToggle: (open: boolean) => void; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <button type="button" onClick={() => onToggle(!open)} className="flex items-center justify-between rounded-lg bg-white/[0.04] px-3 py-2.5 text-left text-xs text-white/70 hover:bg-white/[0.08]">
+        <span>
+          <span className="font-medium text-white/85">{title}</span> <span className="text-white/40">· {hint}</span>
+        </span>
+        <span className={`text-white/40 transition ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
 function Section({ id, lit = false, title, hint, children }: { id?: string; lit?: boolean; title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section data-sec={id} className={`-m-2 flex flex-col gap-2.5 rounded-lg p-2 transition-colors duration-500 ${lit ? "bg-[#3b8cff]/[0.12] ring-1 ring-[#3b8cff]/60" : "ring-1 ring-transparent"}`}>
