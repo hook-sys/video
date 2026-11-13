@@ -2,7 +2,7 @@ import { countOf, leadsBn, trailsBn } from "./bangla";
 import { rng } from "./faces";
 import { framesOf, pointsOf } from "./beats";
 import { wordIcon } from "./motion";
-import { ideaNeedsThings, type Beat, type Brand, FPS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, STYLE_GROUNDS, STYLES, type Style, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
+import { ideaNeedsThings, type Beat, type Brand, FPS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, STYLE_GROUNDS, STYLES, type Style, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, variantsOf, WAYS, type Word } from "./types";
 
 // The selector: each beat's template and variant, and the video's theme —
 // drawn from a seed, never the same template twice in a row, and unlike
@@ -104,7 +104,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       return {
         ...frames[i],
         template: "point" as const,
-        variant: R.int(0, VARIANTS - 1),
+        variant: R.int(0, variantsOf("point") - 1),
         left: true,
         words: litInTime(shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS)), key: k === shown.length - 1 })), frames[i].from, frames[i].to),
         icon: read0.icon ?? "sparkles",
@@ -135,7 +135,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // (two ideas in a row are two pictures: an idea may follow another idea)
     let template = pickOf(list, prev === "concept" && prevIdea !== read.concept ? null : prev, R);
     // (a variant that needs things only when there are some)
-    let variant = R.int(0, VARIANTS - 1);
+    let variant = R.int(0, variantsOf(template) - 1);
     if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
     // (the opening idea with its words on screen: the hook is read as well as seen)
     if (template === "concept" && variant === 2 && i === 0 && read.concept !== "truth") variant = R.int(0, 1);
@@ -145,7 +145,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       const shown = list.filter(([t]) => t !== "statement" && t !== "kinetic");
       if (shown.length) {
         template = pickOf(shown, prev, R);
-        variant = R.int(0, VARIANTS - 1);
+        variant = R.int(0, variantsOf(template) - 1);
         if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
       } else [template, variant] = ["statement", 1];
     }
@@ -155,7 +155,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       const other = list.filter(([t]) => t !== "statement" && t !== "kinetic" && t !== "concept");
       if (other.length) {
         template = pickOf(other, prev, R);
-        variant = R.int(0, VARIANTS - 1);
+        variant = R.int(0, variantsOf(template) - 1);
         if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
       } else {
         // (another picture the beat's own words stand for — "ডেটা", "অর্ডার" — else moving words when they may come)
@@ -182,8 +182,9 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // any screenshot or phone in a Bangla video: the owner's choice, cards that move)
     const shotLike = template === "screen" || template === "messages" || (template === "feature" && variant === 1);
     const dealt = bn && !goesOn && i < readings.length - 1 && tiles.length >= 2 && (panelled ? lastCards === "panel" : shotLike);
-    if (dealt) [template, variant] = ["deck", 0];
-    else if (panelled) [template, variant] = ["panel", 0];
+    // (a design of its own each time — a panel going on keeps the one it has: one panel to the eye)
+    if (dealt) [template, variant] = ["deck", R.int(0, variantsOf("deck") - 1)];
+    else if (panelled) [template, variant] = ["panel", goesOn ? before!.variant : R.int(0, variantsOf("panel") - 1)];
     else if (bn && shotLike) [template, variant] = r.items.length && !(template === "feature" && variant === 1) ? ["feature", 0] : ["statement", 1];
     if (dealt || panelled) lastCards = dealt ? "deck" : "panel";
     const rows = goesOn ? [...before!.tiles!, ...tiles.filter((t) => !before!.tiles!.some((x) => x.text === t.text))] : tiles;
@@ -195,10 +196,10 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       const other = list.filter(([t]) => t !== "statement" && t !== "kinetic" && !showsIcon(t, 0, read.concept) && !(t === "concept" && !idea));
       // (a beat that names the brand: its picture is the brand's own mark)
       const named = bareOf(brand.name).length >= 3 && beatWords.some((w) => bareOf(w.text).includes(bareOf(brand.name).slice(0, Math.max(3, bareOf(brand.name).length - 2))));
-      if (named && prev !== "reveal") [template, variant] = ["reveal", R.int(0, VARIANTS - 1)];
+      if (named && prev !== "reveal") [template, variant] = ["reveal", R.int(0, variantsOf("reveal") - 1)];
       else if (other.length) {
         template = pickOf(other, prev, R);
-        variant = R.int(0, VARIANTS - 1);
+        variant = R.int(0, variantsOf(template) - 1);
         if (!variantOk(template, variant, r.items.length)) variant = 0;
       } else [template, variant] = ["kinetic", R.chance(0.5) ? 0 : 2];
     }

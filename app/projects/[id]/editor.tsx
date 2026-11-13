@@ -10,7 +10,7 @@ import { colourProblemsOf, problemsOf, settledAt } from "@/components/video/simp
 import { OWN_GROUNDS, type PlanEdit, SHOWS_THINGS, type SceneEdit, TEMPLATE_NAME, TYPE_NAME, applyEdit, editOf, mostWords, sameEdit } from "@/components/video/simple/edit";
 import { SimpleFilm } from "@/components/video/simple/film";
 import { variantOk } from "@/components/video/simple/select";
-import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePlan, STYLES, STYLE_GROUNDS, TEMPLATES, type TemplateId, TYPE_PAIRS, VARIANTS, WAYS } from "@/components/video/simple/types";
+import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePlan, STYLES, STYLE_GROUNDS, TEMPLATES, type TemplateId, TYPE_PAIRS, variantsOf, WAYS } from "@/components/video/simple/types";
 
 // The customer's editor of a finished video (components/video/simple/edit.ts),
 // opened over the page: the video in the middle, its scenes on a timeline
@@ -129,7 +129,7 @@ export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { 
     if (now) out.push({ t: scene.template, v: scene.variant, show: scene.show, key: scene.key, plan: now });
     for (const t of TEMPLATES) {
       if (last !== (t === "cta") || (t === "screen" && !(plan.brand.screens?.length ?? 0))) continue;
-      for (let v = 0; v < VARIANTS; v++) {
+      for (let v = 0; v < variantsOf(t); v++) {
         if ((t === scene.template && v === scene.variant) || !variantOk(t, v, scene.items.length)) continue;
         let show = scene.show, key = scene.key;
         if (show && show[1] - show[0] + 1 > mostWords(t, v)) {

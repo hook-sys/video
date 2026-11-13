@@ -5,6 +5,7 @@ import { type C, rad, One, clamp01, ease, springAt } from "./kit";
 import { TINTS } from "./panel";
 import { Band, abs } from "./scenes";
 import type { Scene } from "./types";
+import { DECK_VARIANTS } from "./rows";
 
 // The deck (docs/video-spec.md, Cards): the things a beat names as cards dealt from a
 // stack — each flies to its place turning over (its back the colour of its tile), lands
@@ -15,6 +16,9 @@ import type { Scene } from "./types";
 export const dealAt = (s: Scene, k: number) => Math.max(s.from + 6 + k * 7, (s.tiles?.[k]?.at ?? s.from) - 6);
 
 export function Deck({ c }: { c: C }) {
+  // (its other designs: rows.tsx)
+  const Alt = DECK_VARIANTS[c.s.variant];
+  if (Alt) return <Alt c={c} />;
   const { s, f, look, g } = c;
   const cards = (s.tiles ?? []).slice(0, 4);
   const n = cards.length;

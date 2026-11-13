@@ -30,7 +30,7 @@ import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
 import { geoFor, geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/simple/faces";
-import { CONCEPTS, GROUNDS, type Scene, type SimplePlan, STYLES, STYLE_GROUNDS, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
+import { CONCEPTS, GROUNDS, type Scene, type SimplePlan, STYLES, STYLE_GROUNDS, TEMPLATES, VARIANTS, variantsOf } from "@/components/video/simple/types";
 import { conceptSounds, turnOf } from "@/components/video/simple/concept";
 import { PUNCH } from "@/components/video/simple/scenes";
 import { alignScript, pausesOf } from "@/lib/voice-align";
@@ -207,7 +207,7 @@ export async function runChecks(): Promise<Check[]> {
     add("a template per beat, never the same twice in a row, the brand and the ask last", plans.every((p) => p.scenes.length === beats.length && p.scenes.at(-1)!.template === "cta" && p.scenes.every((x, i) => !i || x.template !== p.scenes[i - 1].template || x.template === "statement" || (x.template === "concept" && x.concept !== p.scenes[i - 1].concept))), plans.map((p) => p.scenes.map((x) => `${x.template}${x.variant}`).join(",")).join(" · "));
     add("the same script four times: four videos unlike each other in at least 3 of ground, type, transitions, pace and template order", plans.every((p, i) => plans.slice(0, i).every((q) => differs(p.print, q.print) >= 3)), prints.join(" · "));
     const g = galleryPlan({ ground: "dark", type: 0, way: "slide", pace: "calm" });
-    add("every template has its variants in the gallery", TEMPLATES.every((x) => g.scenes.filter((s) => s.template === x).length === VARIANTS), `${g.scenes.length} scenes`);
+    add("every template has its variants in the gallery", TEMPLATES.every((x) => g.scenes.filter((s) => s.template === x).length === variantsOf(x)), `${g.scenes.length} scenes`);
     // every frame: the places inside it, the words' place and the hero's apart
     const inside = (b: { left: number; top: number; width: number; height: number }, W: number, H: number) => b.left >= 0 && b.top >= 0 && b.left + b.width <= W && b.top + b.height <= H;
     const apart = (a: { left: number; top: number; width: number; height: number }, b: typeof a) => a.left + a.width <= b.left || b.left + b.width <= a.left || a.top + a.height <= b.top || b.top + b.height <= a.top;
@@ -248,7 +248,7 @@ export async function runChecks(): Promise<Check[]> {
     const lookScenes = STYLES.flatMap((style) => checkPlan(galleryPlan({ ground: STYLE_GROUNDS[style][0], type: 1, way: "tilt", pace: "calm", style })).map((x) => `${style} ${x.kind}`));
     add("looks: soft, neon, editorial, bold and depth read on their grounds for any brand colour; their scenes lay out", !lookLeft.length && !lookScenes.length, lookLeft[0] ?? lookScenes[0] ?? `${STYLES.length} looks`);
     const galleryLeft = ([[1920, 1080], [1080, 1920], [1080, 1080]] as [number, number][]).flatMap((size) => GROUNDS.flatMap((ground) => checkPlan(galleryPlan({ ground, type: 1, way: "slide", pace: "calm" }, undefined, size)).map((x) => `${size.join("x")} ${ground} ${x.kind}`)));
-    add("check before playing: all 36 template variants clean on every frame and ground", galleryLeft.length === 0, galleryLeft.slice(0, 3).join(" · ") || "36 × 3 frames × 3 grounds");
+    add("check before playing: every template variant clean on every frame and ground", galleryLeft.length === 0, galleryLeft.slice(0, 3).join(" · ") || `${galleryPlan({ ground: "dark", type: 1, way: "slide", pace: "calm" }).scenes.length} variants × 3 frames × ${GROUNDS.length} grounds`);
     // …and what goes wrong is found and mended
     const bad = sampleScene("feature", 0, 0, 120);
     bad.items = [{ text: "Extraordinarily complicated reconciliation", icon: "layers" }, { text: "Stock", icon: "no-such-icon" }, { text: "Stock", icon: "boxes" }];

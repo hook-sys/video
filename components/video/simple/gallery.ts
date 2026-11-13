@@ -1,4 +1,4 @@
-import { type Brand, type Item, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, VARIANTS } from "./types";
+import { type Brand, type Item, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, variantsOf } from "./types";
 
 // Every template in every variant, on sample words, on any frame — the template gallery
 // (/admin/templates) and the engine's checks. Each sample is 3 s.
@@ -40,7 +40,7 @@ export function sampleScene(template: TemplateId, variant: number, from: number,
 }
 
 export function galleryPlan(theme: Theme, only?: TemplateId, size: [number, number] = [1920, 1080]): SimplePlan {
-  const list = (only ? [only] : TEMPLATES).flatMap((t) => Array.from({ length: VARIANTS }, (_, v) => [t, v] as const));
+  const list = (only ? [only] : TEMPLATES).flatMap((t) => Array.from({ length: variantsOf(t) }, (_, v) => [t, v] as const));
   const scenes = list.map(([t, v], i) => sampleScene(t, v, i * 90, 90, i % 4 < 2));
   return { engine: "simple", v: 1, duration: scenes.length * 90, w: size[0], h: size[1], seed: 1, brand: GALLERY_BRAND, theme, scenes, print: "gallery", sfx: false };
 }

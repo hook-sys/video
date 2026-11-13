@@ -163,6 +163,15 @@ every hero is designed once and scaled into its place (`geo.ts`).
 
 ## Variation (what the viewer sees change)
 
+**Designs.** Every template has three designed variants, some more
+(`types.ts` VARIANT_COUNT, `rows.tsx`): the panel 8 — the frosted list, pills
+sliding in from alternate sides, a grid of cards, a timeline drawing down, the
+one just said big with those before in a strip, a checklist ticking, bars
+growing, a hub of nodes round the brand's mark — and the deck 5 — dealt from a
+stack, fanned like a hand, slid onto a pile, flipping forward, round badges. A
+panel going on keeps its design (one panel to the eye). 109 designs in all
+(55 template variants, 18 ideas × 3).
+
 Per video the selector draws: the look (soft / neon / editorial / bold / depth),
 then a ground it stands on (dark / light / brand / glass), the template and variant
 of every beat (never the same template twice in a row), the mirror, the type pair

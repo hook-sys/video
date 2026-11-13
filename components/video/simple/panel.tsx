@@ -4,6 +4,7 @@ import { TYPE, WEIGHT } from "./geo";
 import { type C, rad, One, clamp01, ease, panel, springAt, tint } from "./kit";
 import { WordsIn, abs } from "./scenes";
 import type { Scene } from "./types";
+import { PANEL_VARIANTS } from "./rows";
 
 // The panel (docs/video-spec.md, The panel): the hand-made reel's look — one frosted panel
 // of rows, each a glossy tile in its own colour, the thing as said, and a small picture of
@@ -25,7 +26,7 @@ const MOST = 5;
 export const rowAt = (s: Scene, k: number) => (k < (s.carry ?? 0) ? s.from - 30 : Math.max(s.from + 6 + (k - (s.carry ?? 0)) * 6, (s.tiles?.[k]?.at ?? s.from) - 3));
 
 // what a row's picture is, by its icon
-type Kind = "bars" | "table" | "map" | "clock" | "rise" | "fall" | "reach" | "page" | "play" | "check" | "fill";
+export type Kind = "bars" | "table" | "map" | "clock" | "rise" | "fall" | "reach" | "page" | "play" | "check" | "fill";
 const KIND: Record<string, Kind> = {
   cake: "bars", "chart-column": "bars", database: "table", calendar: "bars", "layout-dashboard": "bars", percent: "bars",
   "map-pin": "map", store: "map", house: "map",
@@ -39,7 +40,7 @@ const KIND: Record<string, Kind> = {
 export const kindOf = (icon: string): Kind => KIND[icon] ?? "fill";
 
 // ── the small pictures: w × h, from frame `at`, in the row's colour ──
-function Mini({ kind, w, h, f, at, col, soft, line }: { kind: Kind; w: number; h: number; f: number; at: number; col: string; soft: string; line: string }) {
+export function Mini({ kind, w, h, f, at, col, soft, line }: { kind: Kind; w: number; h: number; f: number; at: number; col: string; soft: string; line: string }) {
   const t = (d = 0, len = 18) => ease(clamp01((f - at - d) / len));
   const box = { position: "absolute" as const, left: 0, top: 0, width: w, height: h };
   if (kind === "bars") {
@@ -185,6 +186,9 @@ function Mini({ kind, w, h, f, at, col, soft, line }: { kind: Kind; w: number; h
 
 // ── the panel ──
 export function Panel({ c }: { c: C }) {
+  // (its other designs: rows.tsx)
+  const Alt = PANEL_VARIANTS[c.s.variant];
+  if (Alt) return <Alt c={c} />;
   const { W, H, pad, shape } = c.g;
   const { s, f, look } = c;
   const rows = (s.tiles ?? []).slice(0, MOST);

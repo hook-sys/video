@@ -10,7 +10,7 @@ import { rowAt } from "./panel";
 import { dealAt } from "./deck";
 import { choices, grey, planOf, printOf, showsIcon, variantOk, wordsAlone } from "./select";
 import { contrast, lookOf, themeOf } from "./theme";
-import { ideaNeedsThings, GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, VARIANTS } from "./types";
+import { ideaNeedsThings, GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, variantsOf } from "./types";
 
 // The plan checked before it is played, by code (no AI, no browser): every
 // scene laid out once at its last frame, and what would go wrong found —
@@ -189,7 +189,7 @@ function candidates(plan: SimplePlan, i: number, kinds: Set<Problem["kind"]>, re
   const mended: Scene[] = [base];
   if (kinds.has("cut")) mended.push(shortItems(base, 2), shortItems(base, 2, 2));
   if (kinds.has("words")) mended.push(fewerWords(base, 4), fewerWords(base, 3));
-  const variants = (x: Scene, t: TemplateId) => Array.from({ length: VARIANTS }, (_, v) => v).filter((v) => variantOk(t, v, x.items.length)).map((v) => ({ ...x, template: t, variant: v }));
+  const variants = (x: Scene, t: TemplateId) => Array.from({ length: variantsOf(t) }, (_, v) => v).filter((v) => variantOk(t, v, x.items.length)).map((v) => ({ ...x, template: t, variant: v }));
   const out = mended.flatMap((x) => [x, ...variants(x, s.template).filter((y) => y.variant !== x.variant)]);
   if (!last && reading) {
     // (never the template of the scene before or after it)

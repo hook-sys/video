@@ -125,7 +125,8 @@ export function lookOf(theme: Theme, color: string): Look {
     const accent = readable(mix(brand, "#ffffff", 0.12), bg, 5, "#ffffff");
     return {
       ...base, bg, glow: alpha(accent, 0.2), accent, onAccent: inkOn(accent), panelAccent: accent, onPanelAccent: inkOn(accent), accentFill: accent, fill: accent, onFill: inkOn(accent),
-      panel: "rgba(255,255,255,0.035)", panelFill: `linear-gradient(180deg, ${alpha(accent, 0.07)}, rgba(255,255,255,0.02))`,
+      // (opaque: a see-through card blinks in renders — the dark look's lesson)
+      panel: mix(bg, "#ffffff", 0.035), panelFill: `linear-gradient(180deg, ${mix(bg, accent, 0.07)}, ${mix(bg, "#ffffff", 0.02)})`,
       line: alpha(accent, 0.4), shadow: "rgba(0,0,0,0.6)",
       style, r: 0.7, cardBorder: `1px solid ${alpha(accent, 0.5)}`, cardShadow: `0 0 0 1px ${alpha(accent, 0.12)}, 0 0 34px ${alpha(accent, 0.22)}, 0 24px 60px rgba(0,0,0,0.55)`,
       keyGlow: `0 0 30px ${alpha(accent, 0.6)}, 0 0 8px ${alpha(accent, 0.5)}`, decor: "grid",

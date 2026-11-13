@@ -1,6 +1,6 @@
 import { settleWordIcons } from "./check";
 import { litInTime, printOf, shownWord, variantOk, wordsAlone } from "./select";
-import { ideaNeedsThings, GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, STYLES, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, VARIANTS, WAYS } from "./types";
+import { ideaNeedsThings, GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, STYLES, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, variantsOf, WAYS } from "./types";
 
 // The customer's edits of their video, guided: the look of the whole video
 // (its ground, type, pace and way between scenes) and, scene by scene, how it
@@ -82,7 +82,7 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
       things.push({ text, icon });
     }
     if (e.template === "concept" && ideaNeedsThings(s.concept, things.length)) return { error: `${n}: this needs at least two things.` };
-    if (!Number.isInteger(e.variant) || e.variant < 0 || e.variant >= VARIANTS || !variantOk(e.template, e.variant, things.length)) return { error: `${n}: that way of showing it needs more things.` };
+    if (!Number.isInteger(e.variant) || e.variant < 0 || e.variant >= variantsOf(e.template) || !variantOk(e.template, e.variant, things.length)) return { error: `${n}: that way of showing it needs more things.` };
     const icon = String(e.icon ?? "").slice(0, 40) || s.icon;
     // the words on screen: a run of its beat's own words (never typed), the lit one among them
     let words = s.words;
