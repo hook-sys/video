@@ -32,7 +32,7 @@ export function LegalPage({ title, children }: { title: string; children: React.
     <div className="min-h-dvh bg-[#f5f5f7] text-[#1d1d1f]">
       <header className="mx-auto flex max-w-3xl items-center justify-between px-4 py-5">
         <Link href="/" className="text-base font-semibold tracking-tight">
-          MotionBrief
+          MotionDots
         </Link>
         <nav className="flex gap-4 text-sm text-[#1d1d1f]/60">
           {LEGAL_LINKS.map((l) => (

@@ -21,7 +21,7 @@ export function AppShell({ title, admin, active, initial, wide, action, children
       <header className={`gs-bar gs-glass${wide ? " wide" : ""}`}>
         <Link href="/dashboard" className="gs-brand" onClick={remember}>
           <Mark />
-          MotionBrief
+          MotionDots
         </Link>
         {action ?? (
           <Link href="/projects/new" className="gs-btn" onClick={remember}>
@@ -44,7 +44,7 @@ export function AppShell({ title, admin, active, initial, wide, action, children
       </main>
       <footer className={`gs-footer${wide ? " wide" : ""}`}><LegalFooterLinks /></footer>
       <nav className="gs-dock gs-glass" aria-label="Main">
-        <Link href="/dashboard" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionBrief">
+        <Link href="/dashboard" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionDots">
           <Mark />
         </Link>
         <Link href="/dashboard" onClick={remember} aria-current={active === "videos" ? "page" : undefined}>

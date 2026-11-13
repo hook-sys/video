@@ -7,7 +7,7 @@ import { ROLE_TONE } from "../_components/format";
 
 export const metadata = { title: "Team" };
 
-// The admin team (super admin only): who helps run MotionBrief, with which
+// The admin team (super admin only): who helps run MotionDots, with which
 // role, and whether their admin access is on.
 export default async function TeamPage({ searchParams }: PageProps<"/admin/team">) {
   const { error, saved } = await searchParams;
@@ -17,7 +17,7 @@ export default async function TeamPage({ searchParams }: PageProps<"/admin/team"
 
   return (
     <>
-      <PageHeader title="Team" sub="The people who run MotionBrief with you. Add someone by the email they signed up with, choose their role, turn them on or off." />
+      <PageHeader title="Team" sub="The people who run MotionDots with you. Add someone by the email they signed up with, choose their role, turn them on or off." />
       {typeof error === "string" && <Notice tone="warn">{error}</Notice>}
       {saved && !error && <Notice tone="good">Saved.</Notice>}
       <Card title="Add a team member">

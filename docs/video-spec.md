@@ -1,6 +1,6 @@
-# MotionBrief video spec (the simple engine)
+# MotionDots video spec (the simple engine)
 
-One page: what a good MotionBrief video is, and how the simple engine
+One page: what a good MotionDots video is, and how the simple engine
 (`components/video/simple`) makes one. Every owner request changes this page
 and a template, never adds a rule layer. Taste lives in the templates you can
 see on /admin/templates, not in prompt text.

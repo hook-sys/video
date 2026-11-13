@@ -201,7 +201,7 @@ export function Desk() {
   );
 }
 
-// The MotionBrief mark: a play (blue → violet) with the three lines of a
+// The MotionDots mark: a play (blue → violet) with the three lines of a
 // brief in it — short, long, short (public/brand/motionbrief-mark.svg).
 export function Mark() {
   // (its own gradient: a mark hidden elsewhere on the page must not take it along)

@@ -25,7 +25,7 @@ const PAGE_SECTION: Record<string, Section> = {
   "/admin/audit": "audit",
 };
 
-export const metadata: Metadata = { title: { default: "Admin", template: "%s · Admin · MotionBrief" }, robots: { index: false } };
+export const metadata: Metadata = { title: { default: "Admin", template: "%s · Admin · MotionDots" }, robots: { index: false } };
 
 export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   const s = await requireAdmin();
@@ -43,7 +43,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
       <header className="gs-bar gs-glass admin">
         <Link href="/admin" className="gs-brand">
           <Mark />
-          MotionBrief
+          MotionDots
         </Link>
         <Badge tone="violet">{ROLE_LABEL[s.role]}</Badge>
         <div className="ml-auto hidden items-center gap-3 text-sm sm:flex">

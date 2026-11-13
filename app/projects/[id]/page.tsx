@@ -127,7 +127,7 @@ export default async function ProjectPage({ params }: PageProps<"/projects/[id]"
       )}
       {ready && !input?.plan && (
         <section className="flex flex-col items-start gap-3 rounded-2xl bg-white/70 p-6 text-sm text-foreground/65 ring-1 ring-black/[0.06]">
-          <p>{input?.problems.includes("This video was made with an earlier version.") ? "This video was made with an earlier version of MotionBrief and can no longer be played here." : "This video can't be shown: its voice is missing."} {file ? "Its MP4 is still here to download." : "Make it again from a new video."}</p>
+          <p>{input?.problems.includes("This video was made with an earlier version.") ? "This video was made with an earlier version of MotionDots and can no longer be played here." : "This video can't be shown: its voice is missing."} {file ? "Its MP4 is still here to download." : "Make it again from a new video."}</p>
           {file ? <a href={file} className={`${primaryBtn} w-auto px-6`}>Download video</a> : <Link href={`/projects/new?from=${id}`} className={`${primaryBtn} w-auto px-6`}>Make it again</Link>}
         </section>
       )}

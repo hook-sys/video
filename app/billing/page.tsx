@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Credits" };
 
 const input =
   "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
-const KIND: Record<string, string> = { signup: "Welcome credits", purchase: "Credits loaded", bonus: "Bonus", coupon: "Code", video: "Video", refund: "Refund", adjust: "Length adjustment", edit: "Video edit", admin: "From MotionBrief" };
+const KIND: Record<string, string> = { signup: "Welcome credits", purchase: "Credits loaded", bonus: "Bonus", coupon: "Code", video: "Video", refund: "Refund", adjust: "Length adjustment", edit: "Video edit", admin: "From MotionDots" };
 const STATUS: Record<string, { text: string; tone: string }> = {
   pending: { text: "Checking", tone: "bg-amber-100 text-amber-900" },
   paid: { text: "Added", tone: "bg-emerald-100 text-emerald-900" },

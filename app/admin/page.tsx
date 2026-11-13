@@ -32,7 +32,7 @@ export default async function AdminOverview() {
 
   return (
     <>
-      <PageHeader title="Overview" sub="Everything happening on MotionBrief, at a glance." />
+      <PageHeader title="Overview" sub="Everything happening on MotionDots, at a glance." />
       {waiting > 0 && (
         <Notice tone="warn">
           {waiting} new {waiting === 1 ? "account is" : "accounts are"} waiting for approval. <Link href="/admin/users?status=pending" className="underline">Review them</Link>

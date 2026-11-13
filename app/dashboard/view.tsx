@@ -37,7 +37,7 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
       <header className="gs-bar gs-glass">
         <Link href="/dashboard" className="gs-brand" onClick={open("videos")}>
           <Mark />
-          MotionBrief
+          MotionDots
         </Link>
         <Link href="/projects/new" onClick={remember} className="gs-btn">
           New video
@@ -185,7 +185,7 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
       </footer>
 
       <nav className="gs-dock gs-glass" aria-label="Main">
-        <Link href="/" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionBrief home">
+        <Link href="/" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionDots home">
           <Mark />
         </Link>
         <Link href={PATH.videos} onClick={open("videos")} aria-current={current === "videos" ? "page" : undefined}>

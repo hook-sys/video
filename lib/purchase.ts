@@ -80,7 +80,7 @@ export async function startPurchase(userId: string, email: string | null, packIn
           price_data: {
             currency: "usd",
             unit_amount: Math.round(deal.usd * 100),
-            product_data: { name: `${(deal.credits + deal.bonus).toLocaleString("en-US")} MotionBrief credits`, description: coupon ? `Code ${coupon.code}` : undefined },
+            product_data: { name: `${(deal.credits + deal.bonus).toLocaleString("en-US")} MotionDots credits`, description: coupon ? `Code ${coupon.code}` : undefined },
           },
         },
       ],

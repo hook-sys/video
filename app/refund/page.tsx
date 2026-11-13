@@ -10,7 +10,7 @@ export default async function RefundPage() {
   const contact = await supportContact();
   return (
     <LegalPage title="Refund Policy">
-      <p>MotionBrief is pay per use: you load credits and each video uses some. This page explains when credits come back to your balance and when we return money.</p>
+      <p>MotionDots is pay per use: you load credits and each video uses some. This page explains when credits come back to your balance and when we return money.</p>
 
       <h2>1. Credits come back automatically when</h2>
       <ul>
@@ -35,7 +35,7 @@ export default async function RefundPage() {
       <p>We answer refund requests within 3 working days. An approved money refund is sent within 7 working days.</p>
 
       <h2>5. Credits don&apos;t expire</h2>
-      <p>Credits you load stay in your balance while your account is open. If we close MotionBrief, we will tell you in advance and return the money for unused loaded credits.</p>
+      <p>Credits you load stay in your balance while your account is open. If we close MotionDots, we will tell you in advance and return the money for unused loaded credits.</p>
 
       <h2>6. Ask for a refund</h2>
       <p>

@@ -29,7 +29,7 @@ export function WaitingScreen({ step, inline }: { step?: string | null; inline?:
       <header className="gs-bar gs-glass">
         <span className="gs-brand">
           <Mark />
-          MotionBrief
+          MotionDots
         </span>
         {!sending && (
           <Link href="/dashboard" className="gs-plain">
@@ -38,7 +38,7 @@ export function WaitingScreen({ step, inline }: { step?: string | null; inline?:
         )}
       </header>
       <nav className="gs-dock gs-glass gs-only-wide" aria-label="Main">
-        <span className="gs-dock-brand" aria-label="MotionBrief">
+        <span className="gs-dock-brand" aria-label="MotionDots">
           <Mark />
         </span>
         {!sending && (

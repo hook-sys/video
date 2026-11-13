@@ -126,7 +126,7 @@ export async function testAiModel(_prev: TestResult | null, formData: FormData):
       return { ok: true, ms: Date.now() - started, audioUrl: `data:${r.type};base64,${Buffer.from(r.bytes).toString("base64")}`, output: "Word timing: from the voice's pauses (no AI) — the video stays in sync.", cost: Number.isFinite(priced) ? `${usd(priced)} for ${r.units} ${text(formData, "provider") === "google" ? "audio tokens" : "characters"} (from your prices)` : `${r.units} ${text(formData, "provider") === "google" ? "audio tokens" : "characters"} — add a price per unit below` };
     }
     if (kind === "voice") {
-      const sample = "This is a MotionBrief voice test. Your product, explained in thirty seconds.";
+      const sample = "This is a MotionDots voice test. Your product, explained in thirty seconds.";
       const r = await generateVoice({ script: sample, language: "English", style: "Friendly", gender: text(formData, "gender") || "female" }, { on: true, model, template: text(formData, "template", 2000), female: text(formData, "female", 80), male: text(formData, "male", 80) });
       const priced = unitCost(config, r.model, sample.length, () => NaN);
       // Without the model's own word times, a video hears them with Whisper: try it here too.

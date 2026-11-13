@@ -10,7 +10,7 @@ export const LEGAL_LINKS = [
 export function LegalFooterLinks() {
   return (
     <>
-      © MotionBrief
+      © MotionDots
       {LEGAL_LINKS.map((l) => (
         <span key={l.href}>
           {" · "}

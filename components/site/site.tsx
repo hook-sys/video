@@ -33,7 +33,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
       <header className="gs-bar gs-glass">
         <Link href="/" className="gs-brand" onClick={open("overview")}>
           <Mark />
-          MotionBrief
+          MotionDots
         </Link>
         {signedIn ? (
           <Link href="/dashboard" className="gs-btn" onClick={remember}>
@@ -129,7 +129,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
           "how",
           <>
             <h2>Three steps. No editing.</h2>
-            <p className="gs-lead">You bring what the product does. MotionBrief does the rest.</p>
+            <p className="gs-lead">You bring what the product does. MotionDots does the rest.</p>
             <div className="gs-steps">
               {[
                 ["Tell us about the product", "Write the script word for word, add your icon, and answer six short questions.", "6 questions"],
@@ -152,7 +152,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
         {win(
           "examples",
           <>
-            <h2>Made with MotionBrief.</h2>
+            <h2>Made with MotionDots.</h2>
             <p className="gs-lead">Promo videos made from a short brief.</p>
             <div className="gs-grid">
               {DEMOS.map((d, i) => (
@@ -218,7 +218,7 @@ export function Site({ initial, signedIn, error, message }: Props) {
       <nav className="gs-dock gs-glass" aria-label="Main">
         {(
           [
-            // (the black one carries the MotionBrief mark: the brand is not repeated above it)
+            // (the black one carries the MotionDots mark: the brand is not repeated above it)
             ["overview", "t1", null],
             ["how", "t2", <path key="p" d="M6 7h12M6 12h8M6 17h10" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />],
             [

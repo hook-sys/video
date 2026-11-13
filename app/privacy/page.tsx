@@ -5,12 +5,12 @@ export const metadata: Metadata = { title: "Privacy Policy" };
 // (the support contact and prices from the admin, re-read every 5 minutes)
 export const revalidate = 300;
 
-// What MotionBrief keeps about a customer, why, who else processes it, and how to have it deleted.
+// What MotionDots keeps about a customer, why, who else processes it, and how to have it deleted.
 export default async function PrivacyPage() {
   const contact = await supportContact();
   return (
     <LegalPage title="Privacy Policy">
-      <p>This policy explains what information MotionBrief collects, why, who processes it for us, and the choices you have. We don&apos;t sell your information and we don&apos;t show ads.</p>
+      <p>This policy explains what information MotionDots collects, why, who processes it for us, and the choices you have. We don&apos;t sell your information and we don&apos;t show ads.</p>
 
       <h2>1. What we collect</h2>
       <ul>
@@ -31,7 +31,7 @@ export default async function PrivacyPage() {
       </ul>
 
       <h2>3. Who processes it for us</h2>
-      <p>We use trusted companies to run MotionBrief. They process your information only to provide their service to us:</p>
+      <p>We use trusted companies to run MotionDots. They process your information only to provide their service to us:</p>
       <ul>
         <li><b>Supabase</b> — our database, file storage and login.</li>
         <li><b>Vercel</b> — hosting the website and making the video files.</li>
@@ -55,7 +55,7 @@ export default async function PrivacyPage() {
       <p>Your files are stored privately and shown only to you through short-lived links. Our API keys are kept encrypted. No system is perfectly secure; if we learn of a problem that affects you, we will tell you.</p>
 
       <h2>8. Children</h2>
-      <p>MotionBrief is not meant for children under 13, and we don&apos;t knowingly collect their information.</p>
+      <p>MotionDots is not meant for children under 13, and we don&apos;t knowingly collect their information.</p>
 
       <h2>9. Changes and contact</h2>
       <p>

@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "MotionBrief", template: "%s · MotionBrief" },
-  description: "MotionBrief turns your script and brief into a motion-graphics promo video for your SaaS or digital product.",
-  applicationName: "MotionBrief",
+  title: { default: "MotionDots", template: "%s · MotionDots" },
+  description: "MotionDots turns your script and brief into a motion-graphics promo video for your SaaS or digital product.",
+  applicationName: "MotionDots",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
