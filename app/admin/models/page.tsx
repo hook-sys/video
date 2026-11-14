@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin";
 import { REASONINGS, SETTING_KEY, TEXT_TASKS, V2_ROLES, normalizeConfig, voiceChoicesText } from "@/lib/ai/models";
+import { VoicePresets } from "./voice-presets";
 import { PROVIDERS, PROVIDER_ENV, PROVIDER_NAME, keyStatus, loadAiKeys } from "@/lib/ai/keys";
 import { Badge, Card, Notice, PageHeader, btnPrimary, input } from "../_components/ui";
 import { daysAgo, usd } from "../_components/format";
@@ -13,7 +14,7 @@ export const maxDuration = 300;
 
 // Suggestions only: any model name fal (or OpenAI) accepts can be typed.
 const TEXT_MODELS = ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gpt-5-nano", "gpt-5-mini", "claude-haiku-5-5", "claude-sonnet-5-5", "google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "google/gemini-2.5-pro", "openai/gpt-5-mini", "openai/gpt-5-nano", "openai/gpt-5", "anthropic/claude-haiku-4.5", "anthropic/claude-sonnet-4.5", "deepseek/deepseek-chat-v3.1", "qwen/qwen3-235b-a22b", "meta-llama/llama-4-maverick", "gpt-5-mini", "gpt-5-nano"];
-const VOICE_MODELS = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts", "gpt-4o-mini-tts", "fal-ai/elevenlabs/tts/turbo-v2.5", "fal-ai/elevenlabs/tts/multilingual-v2", "fal-ai/minimax/speech-02-turbo", "fal-ai/minimax/speech-02-hd", "fal-ai/kokoro/american-english", "fal-ai/chatterbox/text-to-speech", "fal-ai/dia-tts"];
+const VOICE_MODELS = ["fal-ai/gemini-tts", "fal-ai/gemini-3.1-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts", "gpt-4o-mini-tts", "fal-ai/elevenlabs/tts/turbo-v2.5", "fal-ai/elevenlabs/tts/multilingual-v2", "fal-ai/minimax/speech-02-turbo", "fal-ai/minimax/speech-02-hd", "fal-ai/kokoro/american-english", "fal-ai/chatterbox/text-to-speech", "fal-ai/dia-tts"];
 
 
 export default async function ModelsPage({ searchParams }: PageProps<"/admin/models">) {
@@ -65,6 +66,8 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
               <input type="hidden" name="provider" value={p} />
               <span className="text-zinc-300">
                 {PROVIDER_NAME[p]}
+                {p === "google" && <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer" className="block text-[11px] text-violet-300 hover:underline">Get a Gemini key ↗</a>}
+                {p === "fal" && <a href="https://fal.ai/dashboard/keys" target="_blank" rel="noreferrer" className="block text-[11px] text-violet-300 hover:underline">Get a fal key ↗</a>}
                 <span className="block text-xs text-zinc-500">{keys[p].source === "saved" ? `saved ••••${keys[p].last4}` : keys[p].source === "environment" ? `${PROVIDER_ENV[p]} ••••${keys[p].last4}` : "no key"}</span>
               </span>
               <input name="key" type="password" autoComplete="off" disabled={!editable} placeholder={`Paste a new ${PROVIDER_NAME[p]} key`} className={input} />
@@ -105,6 +108,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
 
           <Card title="Voice" action={c.voice.on ? <input type="hidden" name="voice_on" value="on" /> : null}>
             <div className="flex flex-col gap-3 text-sm">
+              <VoicePresets />
               <label className="flex flex-col gap-1">
                 <span className="text-zinc-400">Provider</span>
                 <select name="voice_provider" defaultValue={c.voice.provider} className={input}>
