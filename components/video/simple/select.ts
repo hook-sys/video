@@ -212,7 +212,19 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     recent.push(template === "statement" && variant === 1 && !tiled ? (r.icon ?? "sparkles") : "");
     prevIdea = template === "concept" ? read.concept : undefined;
     // (beside a hero — or under the brand's mark — the words are its caption: at most four of them, around the key one)
-    const [start, end] = wasAlone || template === "cta" ? r.show : keyRun(words, r.show, r.key, 4);
+    let [start, end] = wasAlone || template === "cta" ? r.show : keyRun(words, r.show, r.key, 4);
+    // (the picture never runs ahead of the voice — owner, 14 Nov 2026: a run said later in the beat is
+    // not pulled to the scene's start; the beat's opening words are shown instead, as they are said)
+    let keyAt = r.key;
+    let opened = false;
+    if (start > beats[i].first && Math.round(words[start].start * FPS) - (frames[i].from + (frames[i].from ? 4 : 0)) > LEAD_MAX) {
+      [start, end] = openingRun(words, beats[i], end - start + 1);
+      if (keyAt === null || keyAt < start || keyAt > end) keyAt = keyOf(words, start, end);
+      opened = true;
+    }
+    // (one scene, one idea: no thing that only repeats the opening words now shown instead)
+    const shownSaid = words.slice(start, end + 1).map((w) => w.text).join(" ");
+    const things = (template === "concept" ? read : r).items.filter((it) => !opened || template === "concept" || !repeats(it.text, shownSaid));
     const shown = words.slice(start, end + 1);
     // (the words come in as they are said — the first never later than 4 frames into the scene, the
     // video's very first at once: no empty start)
@@ -222,11 +234,11 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       template,
       variant,
       left: R.chance(0.5),
-      words: litInTime(shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS) - late), key: start + k === r.key })), frames[i].from, frames[i].to),
+      words: litInTime(shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS) - late), key: start + k === keyAt })), frames[i].from, frames[i].to),
       icon: r.icon ?? "",
       ...(r.icon && iconAt !== undefined ? { iconAt } : {}),
       // (an idea's things as read: the truth's two words are among the words said)
-      items: (template === "concept" ? read : r).items.slice(0, template === "concept" && read.concept === "funnel" ? 5 : 3),
+      items: things.slice(0, template === "concept" && read.concept === "funnel" ? 5 : 3),
       number: r.number,
       ...(tiled ? { tiles } : {}),
       ...(dealt ? { tiles } : panelled ? { tiles: rows, ...(goesOn ? { carry: before!.tiles!.length, cont: true } : {}) } : {}),
@@ -257,7 +269,8 @@ export const variantOk = (template: TemplateId, variant: number, items: number) 
 export const LIT_HOLD = 30;
 export function litInTime<W extends { at: number; key: boolean }>(words: W[], from: number, to: number): W[] {
   const k = words.findIndex((w) => w.key);
-  const by = k >= 0 ? words[k].at - Math.max(from, to - LIT_HOLD) : 0;
+  // (but never more than 0.2 s ahead of the voice: the picture never runs ahead of it — owner, 14 Nov 2026)
+  const by = k >= 0 ? Math.min(LEAD_MAX, words[k].at - Math.max(from, to - LIT_HOLD)) : 0;
   if (by <= 0) return words;
   const at = words[k].at - by;
   return words.map((w, j) => (j < k ? { ...w, at: Math.min(w.at, at) } : { ...w, at: Math.max(from, w.at - by) }));
@@ -302,6 +315,25 @@ export function repeats(thing: string, said: string): boolean {
   const a = tokens(thing), b = new Set(tokens(said));
   return !!a.length && a.filter((x) => b.has(x)).length / a.length >= 0.66;
 }
+// The most a word may come on screen before the voice says it (0.2 s)
+export const LEAD_MAX = 6;
+const littleWord = (t: string) => LITTLE.has(t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""));
+// The beat's opening words, as many as were to be shown (2–6): from its first word (past at most two
+// little ones — "and", এবং — it may not start on), never ending on one that leads the next
+export function openingRun(words: Word[], beat: Beat, n: number): [number, number] {
+  let a = beat.first;
+  while (a < Math.min(beat.last - 1, beat.first + 2) && (littleWord(words[a].text) || trailsBn(words[a].text))) a++;
+  let b = Math.min(beat.last, a + Math.max(2, Math.min(6, n)) - 1);
+  while (b > a + 1 && (littleWord(words[b].text) || leadsBn(words[b].text))) b--;
+  return [a, b];
+}
+// the run's word to light when the one chosen is not in it: its longest that is not a little word
+export function keyOf(words: Word[], a: number, b: number): number {
+  let best = a;
+  for (let k = a; k <= b; k++) if (!littleWord(words[k].text) && !leadsBn(words[k].text) && words[k].text.length > words[best].text.length) best = k;
+  return best;
+}
+
 // the run of at most `most` words around the key one, never starting or ending on a little word (when it can be helped)
 export function keyRun(words: Word[], [a, b]: [number, number], key: number | null, most: number): [number, number] {
   if (b - a + 1 <= most) return [a, b];

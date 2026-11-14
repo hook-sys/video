@@ -320,7 +320,15 @@ at most 2 after (the Director's rule, lib/simple/brain.ts) — and the 4-frame
 pull above only ever moves those opening words; it never pulls a phrase said
 later in the beat to the scene's start (that put words 1.3–4 s ahead of the
 voice in 7 of 12 scenes of video b7f1933c). No empty start comes from showing
-the opening words, never from showing later ones early; the zoom between scenes goes through, the scene going out staying until
+the opening words, never from showing later ones early. The engine holds to it
+whatever the Director picks: a run said later than the beat's opening (more than
+0.2 s past the scene's start) is replaced by the beat's opening words, as many
+(`openingRun`, `LEAD_MAX` in select.ts — its things that would only repeat them
+dropped); the lit word is never pulled more than 0.2 s ahead to be read; a scene
+shortened to fewer words keeps its opening ones when the others would come early
+(check.ts `fewerWords`); and `aheadOfVoice` (check.ts) finds any word on screen
+more than 0.2 s before it is said — none in the checks, even when every beat's last
+words are picked; the zoom between scenes goes through, the scene going out staying until
 what comes in is there. Measured on the same script rendered: frames with only
 the ground 1.5–1.7 s → 0–0.3 s of 25 s.
 

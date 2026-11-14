@@ -8,7 +8,7 @@ import { TEMPLATE, clickOf } from "./more";
 import { norm, thingAt, tileAt } from "./scenes";
 import { rowAt } from "./panel";
 import { dealAt } from "./deck";
-import { choices, grey, planOf, printOf, showsIcon, variantOk, wordsAlone } from "./select";
+import { LEAD_MAX, choices, grey, planOf, printOf, showsIcon, variantOk, wordsAlone } from "./select";
 import { contrast, lookOf, themeOf } from "./theme";
 import { ideaNeedsThings, GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, variantsOf } from "./types";
 
@@ -154,6 +154,22 @@ export function heroShares(plan: SimplePlan): (number | null)[] {
   });
 }
 
+// Words on screen before the voice says them (more than 0.2 s ahead): each shown word against when
+// its beat says it — none in a good video (owner, 14 Nov 2026: the picture never runs ahead of the voice)
+export function aheadOfVoice(plan: SimplePlan): { scene: number; word: string; by: number }[] {
+  const plain = (t: string) => t.normalize("NFC").toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, "");
+  return plan.scenes.flatMap((s, i) => {
+    let from = 0;
+    return s.words.flatMap((w) => {
+      const j = (s.said ?? []).findIndex((x, k) => k >= from && plain(x.t) === plain(w.t));
+      if (j < 0) return [];
+      from = j + 1;
+      const by = s.said![j].at - w.at;
+      return by > LEAD_MAX ? [{ scene: i, word: w.t, by }] : [];
+    });
+  });
+}
+
 // one scene's problems (the editor asks this for every way a scene can be shown)
 export const problemsOf = (plan: SimplePlan, i: number): Problem[] => sceneProblems(plan, i, lookIn(plan, i));
 // the look's colours alone (the video's ground and any scene's own)
@@ -170,10 +186,17 @@ const shortItems = (s: Scene, words: number, most = 3): Scene => ({ ...s, items:
 function fewerWords(s: Scene, most: number): Scene {
   if (s.words.length <= most) return s;
   const k = Math.max(0, s.words.findIndex((w) => w.key));
-  const from = Math.max(0, Math.min(k - Math.floor((most - 1) / 2), s.words.length - most));
-  const words = s.words.slice(from, from + most);
-  // (the first of them never later than 4 frames into the scene — as the selector brings them in)
-  const late = Math.max(0, (words[0]?.at ?? s.from) - (s.from + (s.from ? 4 : 0)));
+  let from = Math.max(0, Math.min(k - Math.floor((most - 1) / 2), s.words.length - most));
+  // (the first of them never later than 4 frames into the scene — as the selector brings them in —
+  // but never pulled more than 0.2 s ahead of the voice: else the opening words, the longest lit)
+  const pull = (x: number) => Math.max(0, (s.words[x]?.at ?? s.from) - (s.from + (s.from ? 4 : 0)));
+  if (pull(from) > LEAD_MAX) from = 0;
+  let words = s.words.slice(from, from + most);
+  if (!words.some((w) => w.key)) {
+    const best = words.reduce((a, w, j) => (w.t.length > words[a].t.length ? j : a), 0);
+    words = words.map((w, j) => ({ ...w, key: j === best }));
+  }
+  const late = pull(from);
   return { ...s, words: words.map((w, j) => ({ ...w, at: w.at - late, t: j === 0 ? w.t.charAt(0).toUpperCase() + w.t.slice(1) : w.t })) };
 }
 // icons the library has (an unknown one is none: never a stand-in for what is said)
