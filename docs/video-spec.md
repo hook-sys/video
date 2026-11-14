@@ -313,7 +313,14 @@ still frames 40–50 % → 32–37 %.
 Nothing on screen is a dead moment. The first words of a scene come in by
 4 frames into it (the video's first at once), a little before they are said
 — titles lead the voice; a phrase's first word comes in as the one before
-goes; the zoom between scenes goes through, the scene going out staying until
+goes. **The picture never runs ahead of the voice (owner, 14 Nov 2026):** a
+word, icon or card comes in at most 0.2 s (6 frames) before it is said. So the
+words a scene shows are taken from the scene's own opening — its first word or
+at most 2 after (the Director's rule, lib/simple/brain.ts) — and the 4-frame
+pull above only ever moves those opening words; it never pulls a phrase said
+later in the beat to the scene's start (that put words 1.3–4 s ahead of the
+voice in 7 of 12 scenes of video b7f1933c). No empty start comes from showing
+the opening words, never from showing later ones early; the zoom between scenes goes through, the scene going out staying until
 what comes in is there. Measured on the same script rendered: frames with only
 the ground 1.5–1.7 s → 0–0.3 s of 25 s.
 
