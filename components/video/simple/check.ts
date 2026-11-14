@@ -79,7 +79,8 @@ function walk(node: ReactNode, icons: string[]): void {
   if (!isValidElement(node)) return;
   const props = node.props as { children?: ReactNode; name?: string; path?: unknown };
   if (node.type === Icon && !props.path && !resolveIcon(props.name ?? "")) icons.push(props.name ?? "");
-  if (typeof node.type === "function") return walk((node.type as (p: unknown) => ReactNode)(props), icons);
+  // (a part marked not laid out — a living icon's Lottie, which uses React hooks — is not stepped into)
+  if (typeof node.type === "function") return (node.type as { notLaidOut?: boolean }).notLaidOut ? undefined : walk((node.type as (p: unknown) => ReactNode)(props), icons);
   walk(props.children, icons);
 }
 
