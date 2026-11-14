@@ -199,6 +199,7 @@ export function SimpleFilm({ plan, audioUrl, webAudio }: FilmProps) {
         );
       })}
       {BAR && <PointBar plan={plan} f={f} look={look} />}
+      {plan.watermark && <Watermark W={g.W} H={g.H} />}
       {audioUrl && (webAudio ? <MediaAudio src={audioUrl} /> : <Html5Audio src={audioUrl} />)}
       {plan.sfx !== false && <Sounds plan={plan} webAudio={webAudio} />}
     </AbsoluteFill>
@@ -229,3 +230,30 @@ function Sounds({ plan, webAudio }: { plan: SimplePlan; webAudio?: boolean }) {
   );
 }
 
+
+// A free trial video's mark: "Made with MotionDots" in the lower right, all the
+// way through — the dots logo and the name on a dark glass pill, clear on any look.
+function Watermark({ W, H }: { W: number; H: number }) {
+  const u = Math.min(W, H) / 1080;
+  const size = 34 * u;
+  return (
+    <div style={{ position: "absolute", right: 28 * u, bottom: 28 * u, display: "flex", alignItems: "center", gap: 12 * u, padding: `${10 * u}px ${20 * u}px ${10 * u}px ${10 * u}px`, borderRadius: 999, background: "rgba(12,11,20,0.62)", boxShadow: `0 ${6 * u}px ${24 * u}px rgba(0,0,0,0.35), inset 0 0 0 ${1.5 * u}px rgba(255,255,255,0.14)`, color: "#fff", fontFamily: "Inter, 'Segoe UI', system-ui, sans-serif", fontSize: 22 * u, fontWeight: 600, letterSpacing: "-0.01em", opacity: 0.92, zIndex: 50, pointerEvents: "none" }}>
+      <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden>
+        <defs>
+          <linearGradient id="md-wm" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#5B5BF6" />
+            <stop offset="0.55" stopColor="#A445F2" />
+            <stop offset="1" stopColor="#FF5C9D" />
+          </linearGradient>
+        </defs>
+        <rect width="64" height="64" rx="18" fill="url(#md-wm)" />
+        <circle cx="17" cy="44" r="4.5" fill="#fff" fillOpacity="0.55" />
+        <circle cx="30" cy="34.5" r="6.2" fill="#fff" fillOpacity="0.8" />
+        <circle cx="45.5" cy="22.5" r="8.8" fill="#fff" />
+      </svg>
+      <span>
+        Made with <b style={{ fontWeight: 800 }}>MotionDots</b>
+      </span>
+    </div>
+  );
+}

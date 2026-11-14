@@ -108,6 +108,8 @@ export default async function BillingPage({ searchParams }: PageProps<"/admin/bi
             <label className={label}><span className={small}>Free edits per video (saved edits; going back to the original counts)</span><input name="free_edits" type="number" min={0} max={100} defaultValue={billing.freeEdits} className={input} /></label>
             <label className={label}><span className={small}>Credits for each edit after the free ones</span><input name="edit_credits" type="number" min={0} defaultValue={billing.editCredits} className={input} /></label>
             <label className={label}><span className={small}>Script limit before the first load (characters)</span><input name="trial_script_max" type="number" min={50} max={1000} defaultValue={billing.trialScriptMax} className={input} /></label>
+            <label className={label}><span className={small}>Free trial videos (before the first load; watermarked, no edits)</span><input name="trial_videos" type="number" min={0} max={100} defaultValue={billing.trialVideos} className={input} /></label>
+            <label className={label}><span className={small}>Longest free trial video (seconds)</span><input name="trial_seconds" type="number" min={5} max={90} defaultValue={billing.trialSeconds} className={input} /></label>
           </div>
           <p className={`${small} mt-2`}>1 credit = {usd(billing.creditUsd)} = ৳{(billing.creditUsd * billing.bdtPerUsd).toFixed(2)}</p>
         </Card>

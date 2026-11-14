@@ -6,6 +6,7 @@ import { VIDEOS_BUCKET } from "@/lib/projects";
 import { RENDER_PROJECT_COLUMNS, type RenderProject, buildRenderInput } from "@/lib/render-input";
 import { filmSnapshot } from "@/lib/film-snapshot";
 import { FILM_ID } from "@/components/video/simple/types";
+import { localProgress, renderLocally } from "@/lib/render-local";
 
 // The video's MP4, made on the server: the film opened in a real Chrome in a
 // Vercel Sandbox (started from the film's snapshot, lib/film-snapshot.ts) and encoded for quality — every frame as PNG (no banding in
@@ -19,6 +20,11 @@ import { FILM_ID } from "@/components/video/simple/types";
 // pipeline while it has time — reads its progress and, once it is done,
 // stores the file. Neither throws: a render that cannot be made is marked
 // failed and the browser render remains.
+//
+// On our own server (RENDER_MODE=local, the VPS) there is no sandbox: the
+// render runs on this machine (lib/render-local.ts) and stores its own file
+// when it is done; collectServerRender only reads where it is.
+const LOCAL = process.env.RENDER_MODE === "local";
 
 // (the most this account's sandboxes get)
 const VCPUS = 4;
@@ -81,6 +87,16 @@ export async function startServerRender(projectId: string): Promise<{ started: t
     const index = 0;
     if (!plan || !audioUrl) return await fail(projectId, problems.join(" ") || "nothing to render");
 
+    if (LOCAL) {
+      const job: Job = { sandboxId: "local", cmdId: "", at: new Date().toISOString(), plan: index, seed: plan.seed, frames: plan.duration };
+      await setComposer(projectId, { renderJob: job });
+      const userId = String((project as RenderProject).user_id);
+      void renderLocally(projectId, plan, audioUrl)
+        .then((file) => store(projectId, userId, file, job))
+        .catch((e) => fail(projectId, `render: ${e instanceof Error ? e.message : String(e)}`.slice(0, 500)));
+      console.info("server render: started here", { projectId, frames: plan.duration });
+      return { started: true };
+    }
     const signal = AbortSignal.timeout(240_000);
     const snapshotId = await filmSnapshot(signal);
     const sandbox = await Sandbox.create({ source: { type: "snapshot", snapshotId }, resources: { vcpus: VCPUS }, timeout: SANDBOX_MS, signal });
@@ -143,6 +159,19 @@ export async function startServerRender(projectId: string): Promise<{ started: t
   }
 }
 
+// The finished MP4 stored with the project, and the project told.
+async function store(projectId: string, userId: string, file: Buffer | null | undefined, job: Job): Promise<{ status: "completed" | "failed" }> {
+  if (!file?.length) return (await fail(projectId, "the render wrote no file"), { status: "failed" });
+  const path = `${userId}/${projectId}/video.mp4`;
+  const { error } = await createAdminClient().storage.from(VIDEOS_BUCKET).upload(path, file, { contentType: "video/mp4", upsert: true });
+  if (error) return (await fail(projectId, `upload: ${error.message}`), { status: "failed" });
+  const done: ServerRender = { at: new Date().toISOString(), ms: Date.now() - Date.parse(job.at), bytes: file.length, plan: job.plan, seed: job.seed, frames: job.frames };
+  // (which version the file is, kept with the video: the studio offers it for that one)
+  await setComposer(projectId, { renderJob: null, render: done }, { render_status: "completed", render_error: null, video_path: path });
+  console.info("server render: done", { projectId, s: Math.round(done.ms / 1000), mb: +(done.bytes / 1e6).toFixed(1), frames: done.frames });
+  return { status: "completed" };
+}
+
 // Where the render is (0–1), and once it is done the file stored.
 export async function collectServerRender(projectId: string): Promise<{ status: "processing"; progress: number } | { status: "completed" | "failed" | "idle" }> {
   const admin = createAdminClient();
@@ -154,6 +183,13 @@ export async function collectServerRender(projectId: string): Promise<{ status: 
   const job = (data.brief as Brief | null)?.composer?.renderJob;
   // (starting: the job is written in a moment)
   if (!job) return { status: "processing", progress: 0 };
+  // made on this machine: it stores itself; only where it is is read here (none here,
+  // long after it began: the server restarted and the render was lost)
+  if (job.sandboxId === "local") {
+    const p = localProgress(projectId);
+    if (p === undefined && Date.now() - Date.parse(job.at) > STALE_MS) return (await fail(projectId, "the render stopped (the server restarted)"), { status: "failed" });
+    return { status: "processing", progress: p ?? 0.99 };
+  }
   try {
     const p = await getRenderProgress({ sandboxId: job.sandboxId, cmdId: job.cmdId });
     if (p.stage === "expired") return (await fail(projectId, "the render's sandbox stopped before it finished"), { status: "failed" });
@@ -166,15 +202,7 @@ export async function collectServerRender(projectId: string): Promise<{ status: 
     const sandbox = await Sandbox.get({ sandboxId: job.sandboxId });
     const file = await sandbox.readFileToBuffer({ path: OUT });
     await sandbox.stop().catch(() => {});
-    if (!file?.length) return (await fail(projectId, "the render wrote no file"), { status: "failed" });
-    const path = `${data.user_id}/${projectId}/video.mp4`;
-    const { error } = await admin.storage.from(VIDEOS_BUCKET).upload(path, file, { contentType: "video/mp4", upsert: true });
-    if (error) return (await fail(projectId, `upload: ${error.message}`), { status: "failed" });
-    const done: ServerRender = { at: new Date().toISOString(), ms: Date.now() - Date.parse(job.at), bytes: file.length, plan: job.plan, seed: job.seed, frames: job.frames };
-    // (which version the file is, kept with the video: the studio offers it for that one)
-    await setComposer(projectId, { renderJob: null, render: done }, { render_status: "completed", render_error: null, video_path: path });
-    console.info("server render: done", { projectId, s: Math.round(done.ms / 1000), mb: +(done.bytes / 1e6).toFixed(1), frames: done.frames });
-    return { status: "completed" };
+    return await store(projectId, String(data.user_id), file, job);
   } catch (e) {
     // (a passing hiccup: asked again in a moment)
     console.warn("server render: progress", projectId, sandboxError(e));

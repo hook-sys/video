@@ -40,6 +40,10 @@ export type Billing = {
   // a finished video's saved edits: this many free, then each costs editCredits
   freeEdits: number;
   editCredits: number;
+  // the free trial, for a customer who hasn't bought credits: this many videos,
+  // each up to trialSeconds long — no credits taken, no edits, a watermark
+  trialVideos: number;
+  trialSeconds: number;
 };
 
 export const DEFAULT_BILLING: Billing = {
@@ -54,8 +58,8 @@ export const DEFAULT_BILLING: Billing = {
     { usd: 50, credits: 5500 },
     { usd: 100, credits: 11500 },
   ],
-  // about one 15-second Standard video
-  signupCredits: 50,
+  // none: a new customer has the free trial instead (trialVideos)
+  signupCredits: 0,
   // a video is charged at least this many seconds
   minSeconds: 15,
   // ~33 words ≈ a 16 s video ≈ 48 Standard credits
@@ -68,6 +72,8 @@ export const DEFAULT_BILLING: Billing = {
   wallets: { bkash: { number: "", kind: "Personal" }, nagad: { number: "", kind: "Personal" }, rocket: { number: "", kind: "Personal" } },
   freeEdits: 1,
   editCredits: 15,
+  trialVideos: 3,
+  trialSeconds: 20,
 };
 
 const num = (v: unknown, d: number, min = 0, max = 1e6) => {
@@ -107,6 +113,8 @@ export function normalizeBilling(raw: unknown): Billing {
     wallets,
     freeEdits: Math.round(num(r.freeEdits, DEFAULT_BILLING.freeEdits, 0, 100)),
     editCredits: Math.round(num(r.editCredits, DEFAULT_BILLING.editCredits, 0, 100_000)),
+    trialVideos: Math.round(num(r.trialVideos, DEFAULT_BILLING.trialVideos, 0, 100)),
+    trialSeconds: Math.round(num(r.trialSeconds, DEFAULT_BILLING.trialSeconds, 5, 90)),
     tiers, packs: packs.length ? packs : DEFAULT_BILLING.packs, signupCredits: Math.round(num(r.signupCredits, DEFAULT_BILLING.signupCredits, 0, 100000)), minSeconds: Math.round(num(r.minSeconds, DEFAULT_BILLING.minSeconds, 0, 120)), trialScriptMax: Math.round(num(r.trialScriptMax, DEFAULT_BILLING.trialScriptMax, 50, 1000)) };
 }
 

@@ -52,11 +52,11 @@ export async function retryPipeline(projectId: string) {
   if (!user) redirect("/login");
 
   // RLS: only returns the project if this user owns it.
-  const { data: project } = await supabase.from("projects").select("pipeline_status, credits_charged, quality, duration_seconds").eq("id", projectId).maybeSingle();
+  const { data: project } = await supabase.from("projects").select("*").eq("id", projectId).maybeSingle();
   if (!project || !["failed", "idle"].includes(project.pipeline_status)) return;
-  // its credits were given back when it failed: taken again for the new try
+  // its credits were given back when it failed: taken again for the new try (a free trial video: none)
   const { admin: team } = await userAccess(supabase, user.id);
-  if (!team && !project.credits_charged) {
+  if (!team && !project.trial && !project.credits_charged) {
     try {
       await chargeVideo(projectId, user.id, (TIER_IDS as readonly string[]).includes(project.quality) ? (project.quality as TierId) : "standard", Number(project.duration_seconds) || 0);
     } catch {
@@ -73,8 +73,10 @@ export async function retryPipeline(projectId: string) {
 // got in first (the count read is the count written over, or nothing is).
 async function keepEdit(projectId: string, userId: string, brief: object): Promise<{ ok: true } | { ok: false; error: string }> {
   const db = createAdminClient();
-  const { data: row, error: readError } = await db.from("projects").select("edit_count").eq("id", projectId).eq("user_id", userId).maybeSingle();
+  const { data: row, error: readError } = await db.from("projects").select("*").eq("id", projectId).eq("user_id", userId).maybeSingle();
   if (readError || !row) return { ok: false, error: "The change could not be saved. Please try again." };
+  // (a free trial video is shown as it was made)
+  if (row.trial) return { ok: false, error: "Free trial videos can't be edited. Load credits on the Credits page to make videos you can edit." };
   const used = Number(row.edit_count) || 0;
   const supabase = await createClient();
   const team = (await userAccess(supabase, userId)).admin;

@@ -228,6 +228,8 @@ export async function saveBilling(formData: FormData) {
     minLoad: f("min_load"),
     freeEdits: f("free_edits"),
     editCredits: f("edit_credits"),
+    trialVideos: f("trial_videos"),
+    trialSeconds: f("trial_seconds"),
     wallets: Object.fromEntries(WALLETS.map((id) => [id, { number: f(`${id}_number`), kind: f(`${id}_kind`) }])),
   });
   const { error } = await s.db.from("app_settings").upsert({ key: BILLING_KEY, value: next, updated_at: new Date().toISOString(), updated_by: s.userId });

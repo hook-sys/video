@@ -100,13 +100,26 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
   // one level: every new-version video is priced as Standard (/admin/billing)
   const quality = "standard" as const;
   if (!paid && mode === "script" && script.length > billing.trialScriptMax)
-    return { error: `With welcome credits the script can be up to ${billing.trialScriptMax} characters. Shorten it, or buy credits for a longer video.` };
+    return { error: `Before your first credit load the script can be up to ${billing.trialScriptMax} characters. Shorten it, or buy credits for a longer video.` };
   if (!paid && mode === "upload" && heardSeconds > trialSecondsOf(billing.trialScriptMax))
-    return { error: `With welcome credits the recording can be up to ${trialSecondsOf(billing.trialScriptMax)} seconds. Shorten it, or buy credits for a longer video.` };
+    return { error: `Before your first credit load the recording can be up to ${trialSecondsOf(billing.trialScriptMax)} seconds. Shorten it, or buy credits for a longer video.` };
   const cost = creditsFor(billing, quality, duration);
-  if (!access.admin) {
+  // the free trial (/admin/billing): a customer who hasn't bought credits makes
+  // a few short videos for nothing — watermarked, not editable — then loads
+  // credits. (A trial video that failed is not counted. Before the database
+  // knows trial videos — migration 20261114000039 — there is no trial.)
+  const trialUsed = async () => {
+    const { count, error } = await createAdminClient().from("projects").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("trial", true).neq("pipeline_status", "failed");
+    return error ? null : (count ?? 0);
+  };
+  const used = paid ? null : await trialUsed();
+  const trial = used !== null && used < billing.trialVideos;
+  if (trial && duration > billing.trialSeconds)
+    return { error: `Free trial videos can be up to ${billing.trialSeconds} seconds — this script makes about ${duration} s. Shorten it (about ${Math.floor((billing.trialSeconds - LOCKUP_SECONDS) * 2.5)} words), or load credits for a longer video.` };
+  if (!access.admin && !trial) {
     const have = await balanceOf(user.id);
-    if (have < cost) return { error: `This video needs about ${cost.toLocaleString("en-US")} credits and you have ${have.toLocaleString("en-US")}. Add credits on the Credits page.` };
+    if (have < cost)
+      return { error: used !== null && billing.trialVideos > 0 ? `Your ${billing.trialVideos} free videos are made. Load credits on the Credits page to make more — without the watermark, and with edits.` : `This video needs about ${cost.toLocaleString("en-US")} credits and you have ${have.toLocaleString("en-US")}. Add credits on the Credits page.` };
   }
 
   // the voice artist (a name from /admin/models), only when our voice speaks
@@ -138,11 +151,17 @@ export async function createProjectV2(_prev: CreateProjectV2State, formData: For
       target_audience: "",
       details,
       quality,
+      ...(trial ? { trial: true } : {}),
     })
     .select("id")
     .single();
   if (error || !data) return { error: error?.message ?? "The video could not be created." };
-  if (!access.admin) {
+  if (trial && ((await trialUsed()) ?? 0) > billing.trialVideos) {
+    // (two started at the same moment: the one over the limit is not made)
+    await admin.from("projects").delete().eq("id", data.id).eq("user_id", user.id);
+    return { error: `Your ${billing.trialVideos} free videos are made. Load credits on the Credits page to make more.` };
+  }
+  if (!access.admin && !trial) {
     try {
       await chargeVideo(data.id, user.id, quality, duration);
     } catch {

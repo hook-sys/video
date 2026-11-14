@@ -47,8 +47,9 @@ async function renderToFile({ props, file, signal, onProgress }: { props: Props;
 
 // file: the MP4 made on the server (lib/render-server.ts); rendering: it is
 // being made (autoStart: ask for it now)
-// editable: the owner may edit it (editor.tsx); edited: it was, and can go back
-export function Studio({ projectId, file, rendering = false, autoStart = false, plan, audioUrl, name, className, editable = false, edited = false, editPrice }: { projectId?: string; file?: string | null; rendering?: boolean; autoStart?: boolean; plan: SimplePlan; audioUrl: string | null; name: string; className: string; editable?: boolean; edited?: boolean; editPrice?: EditPrice }) {
+// editable: the owner may edit it (editor.tsx); edited: it was, and can go back;
+// trial: made on the free trial (watermarked, not editable)
+export function Studio({ projectId, file, rendering = false, autoStart = false, plan, audioUrl, name, className, editable = false, edited = false, editPrice, trial = false }: { trial?: boolean; projectId?: string; file?: string | null; rendering?: boolean; autoStart?: boolean; plan: SimplePlan; audioUrl: string | null; name: string; className: string; editable?: boolean; edited?: boolean; editPrice?: EditPrice }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const asked = useRef(false);
@@ -116,6 +117,13 @@ export function Studio({ projectId, file, rendering = false, autoStart = false, 
         {editable && projectId && editing && <Editor projectId={projectId} plan={plan} audioUrl={audioUrl} edited={edited} price={editPrice ?? { cost: 0, after: 0, balance: null }} onClose={() => setEditing(false)} />}
       </section>
       <aside className="flex flex-col gap-4">
+        {trial && (
+          <div className="flex flex-col gap-2 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
+            <h2 className="text-sm font-semibold">Free trial video</h2>
+            <p className="text-xs text-foreground/60">This video carries the MotionDots watermark and can&apos;t be edited. Load credits to make videos without the watermark — and edit them as much as you like.</p>
+            <a href="/billing" className="text-xs font-semibold text-[#0a66d6] hover:underline">Load credits →</a>
+          </div>
+        )}
         {editable && projectId && (
           <div className="flex flex-col gap-3 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
             <div className="flex items-center justify-between">

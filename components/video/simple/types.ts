@@ -155,6 +155,8 @@ export type SimplePlan = {
   // what makes it look like itself (kept to keep the next videos unlike it)
   print: string;
   sfx?: boolean;
+  // a free trial video: "Made with MotionDots" in a corner, all the way through
+  watermark?: boolean;
   // what the check before playing mended, and what it could not (check.ts)
   check?: { fixed: string[]; left: string[] };
 };

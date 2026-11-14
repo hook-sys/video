@@ -38,6 +38,12 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
   const paid = admin || (user ? await hasPaid(user.id) : false);
   if (user) await grantSignupCredits(user.id, !!user.email_confirmed_at).catch(() => {});
   const credits = user && !admin ? await balanceOf(user.id) : null;
+  // the free trial: how many of its videos are left (none counted before the database knows them)
+  let trial: { left: number; of: number; seconds: number } | null = null;
+  if (user && !paid && billing.trialVideos > 0) {
+    const { count, error } = await createAdminClient().from("projects").select("id", { count: "exact", head: true }).eq("user_id", user.id).eq("trial", true).neq("pipeline_status", "failed");
+    if (!error) trial = { left: Math.max(0, billing.trialVideos - (count ?? 0)), of: billing.trialVideos, seconds: billing.trialSeconds };
+  }
   const kits = user ? (await listBrandKits(createAdminClient(), user.id).catch(() => [])).map(({ id, name, color, logoUrl, websiteUrl, isDefault }) => ({ id, name, color, logoUrl, websiteUrl, isDefault })) : [];
   return (
     <AppShell title="New video" admin={admin} active="new" initial={(user?.email ?? "?")[0]} wide action={<span />}>
@@ -49,7 +55,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: P
         <p className="mb-6 rounded-2xl border border-amber-500/25 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">Your account is waiting for approval. You can look around and fill in your video now — your welcome credits arrive as soon as it&apos;s approved.</p>
       )}
       {/* (only welcome credits so far: a script short enough for them) */}
-      <CreateProjectFormV2 prefill={prefill} voices={voices} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} kits={kits} />
+      <CreateProjectFormV2 prefill={prefill} voices={voices} credits={credits} scriptMax={paid ? VOICE_SCRIPT_MAX : billing.trialScriptMax} kits={kits} trial={trial} />
     </AppShell>
   );
 }

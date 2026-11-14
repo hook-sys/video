@@ -1,0 +1,21 @@
+# Caddy: HTTPS (a free certificate, renewed by itself) in front of MotionDots.
+# Replace motiondots.com with your domain (both lines). Its DNS A record must
+# point at this server's IP before Caddy starts.
+
+motiondots.com, www.motiondots.com {
+	encode zstd gzip
+
+	# uploads: a recording, an icon and up to 5 pictures
+	request_body {
+		max_size 30MB
+	}
+
+	# the files that never change: a year in the browser
+	@static path /_next/static/* /brand/* /fonts/* /icons/*
+	header @static Cache-Control "public, max-age=31536000, immutable"
+
+	reverse_proxy 127.0.0.1:3000 {
+		# the visitor's real address (one account per network reads it)
+		header_up X-Real-IP {remote_host}
+	}
+}

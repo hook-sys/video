@@ -166,7 +166,7 @@ export async function runChecks(): Promise<Check[]> {
     const u = "11111111-1111-1111-1111-111111111111", p = "22222222-2222-2222-2222-222222222222";
     const owned = [ownedPath(`${u}/${p}/voice/narration.mp3`, u, p), ownedPath(`99999999-9999-9999-9999-999999999999/${p}/x.png`, u, p), ownedPath(`${u}/33333333-3333-3333-3333-333333333333/x.png`, u, p), ownedPath(`${u}/${p}/../other/x.png`, u, p), ownedPath(null, u, p), ownedPath(`${u}/${p}/x.png`, undefined, p)];
     add("only this project's own files are signed", owned.join(",") === "true,false,false,false,false,false", owned.join(","));
-    // credits: a set price for the first 20 s (30), then each level's rate a second; taka; coupons on a pack; pricing mended
+    // credits: a set price for the first 20 s (30), then each level's rate a second; taka; coupons on a pack; pricing mended; no welcome credits by default — the free trial instead (3 videos up to 20 s)
     const bill = normalizeBilling(null);
     const fair =
       creditsFor(bill, "standard", 20) === 30 && creditsFor(bill, "standard", 4) === 30 && creditsFor(bill, "standard", 20.2) === 31 && creditsFor(bill, "standard", 30) === 40 && creditsFor(bill, "pro", 30) === 70 &&
@@ -174,7 +174,7 @@ export async function runChecks(): Promise<Check[]> {
     const pack = bill.packs[0];
     const deals = [withCoupon(pack, { kind: "discount", value: 10 }), withCoupon(pack, { kind: "bonus", value: 100 }), withCoupon(pack, { kind: "discount", value: 100 })];
     const mendedBill = normalizeBilling({ tiers: { standard: { status: "off", perSecond: -3 }, ultra: { status: "nope" } }, packs: [{ usd: 0, credits: 5 }], signupCredits: "x" });
-    add("credits: per second by level, Pro for paying customers only, coupons (% off, % more, free), pricing mended", fair && deals[0].usd === 9 && deals[1].bonus === pack.credits && deals[2].usd === 0 && mendedBill.tiers.standard.status === "on" && mendedBill.tiers.standard.perSecond === 0 && mendedBill.tiers.ultra.status === "soon" && mendedBill.packs.length === 4 && mendedBill.signupCredits === 50 && pickable(bill, "ultra") === null && pickable(bill, "pro") === "pro" && pickable(bill, "pro", false) === null && pickable(bill, "standard", false) === "standard", `30 s: ${creditsFor(bill, "standard", 30)} / ${creditsFor(bill, "pro", 30)} · $${deals[0].usd} · +${deals[1].bonus}`);
+    add("credits: per second by level, Pro for paying customers only, coupons (% off, % more, free), pricing mended", fair && deals[0].usd === 9 && deals[1].bonus === pack.credits && deals[2].usd === 0 && mendedBill.tiers.standard.status === "on" && mendedBill.tiers.standard.perSecond === 0 && mendedBill.tiers.ultra.status === "soon" && mendedBill.packs.length === 4 && mendedBill.signupCredits === 0 && mendedBill.trialVideos === 3 && mendedBill.trialSeconds === 20 && pickable(bill, "ultra") === null && pickable(bill, "pro") === "pro" && pickable(bill, "pro", false) === null && pickable(bill, "standard", false) === "standard", `30 s: ${creditsFor(bill, "standard", 30)} / ${creditsFor(bill, "pro", 30)} · $${deals[0].usd} · +${deals[1].bonus}`);
     // an icon name the library lacks becomes the nearest real one
     const icons = [iconFor("notebook-pen-paper-xyz", "Paper diary"), iconFor(null, "Ringing phone"), iconFor("calendar", "x")];
     add("icons: a name the library lacks becomes a real icon", icons.every((x) => !!x && !!resolveIcon(x)) && icons[2] === "calendar", icons.join(" · "));

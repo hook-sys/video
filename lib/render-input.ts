@@ -12,9 +12,12 @@ export type RenderProject = {
   brief: unknown;
   voice_status: string;
   voice_result: { storagePath?: string; timing?: { words?: WordTiming[] } | null } | null;
+  // a free trial video: the watermark on it
+  trial?: boolean | null;
 };
 
-export const RENDER_PROJECT_COLUMNS = "id, user_id, brief, voice_status, voice_result";
+// ("*": the trial column is read where the database has it — migration 20261114000039)
+export const RENDER_PROJECT_COLUMNS = "*";
 
 // The project's video as it plays: its stored plan with the customer's logo,
 // the product's pictures and the voice signed now. A video made with an earlier engine has no plan
@@ -46,6 +49,7 @@ export async function buildRenderInput(supabase: SupabaseClient, project: Render
   const names = (stored.brand.screens ?? []).filter((n) => /^[\w.-]+$/.test(n));
   const screens = project.id && project.user_id && names.length ? await Promise.all(names.map(async (n) => (await supabase.storage.from(SCREENSHOTS_BUCKET).createSignedUrl(`${project.user_id}/${project.id}/${n}`, expiresIn)).data?.signedUrl ?? "")) : [];
   // sound effects, unless the team turned them off (admin → Settings)
-  const plan: SimplePlan = { ...stored, brand: { ...stored.brand, icon: logoUrl, screens }, sfx: (await getSettings()).feature_sfx !== false };
+  // (a free trial video: the watermark, wherever it plays or is made)
+  const plan: SimplePlan = { ...stored, brand: { ...stored.brand, icon: logoUrl, screens }, sfx: (await getSettings()).feature_sfx !== false, watermark: !!project.trial };
   return { problems, plan, audioUrl };
 }

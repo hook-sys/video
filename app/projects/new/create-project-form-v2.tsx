@@ -34,7 +34,8 @@ function secondsOf(file: File): Promise<number> {
 // name, the website (pictures of the product are taken from it) or pictures
 // of it uploaded, the voice and the format. No call to action (the button
 // says the ask the voice ends on), no questions, one quality level.
-export function CreateProjectFormV2({ prefill, voices = [], credits = null, scriptMax = VOICE_SCRIPT_MAX, kits = [] }: { prefill?: Prefill; voices?: VoiceOption[]; credits?: number | null; scriptMax?: number; kits?: KitOption[] }) {
+// trial: the free trial's videos left and how long each may be (a customer who hasn't loaded credits)
+export function CreateProjectFormV2({ prefill, voices = [], credits = null, scriptMax = VOICE_SCRIPT_MAX, kits = [], trial = null }: { prefill?: Prefill; voices?: VoiceOption[]; credits?: number | null; scriptMax?: number; kits?: KitOption[]; trial?: { left: number; of: number; seconds: number } | null }) {
   // a saved brand kit (/brand): its name, colour, website and icon, so nothing is uploaded again
   const first = prefill ? undefined : (kits.find((k) => k.isDefault) ?? kits[0]);
   const [kitId, setKitId] = useState(first?.id ?? "");
@@ -85,10 +86,20 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
                   {script.length}/{scriptMax}
                 </span>
               </div>
-              {scriptMax < VOICE_SCRIPT_MAX && (
+              {trial && trial.left > 0 ? (
                 <p className={hint}>
-                  Welcome credits: a script up to {scriptMax} characters. <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">Buy credits</Link> for longer scripts.
+                  Free trial: {trial.left} of {trial.of} videos left · up to {trial.seconds} s each · with the MotionDots watermark. <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">Load credits</Link> for longer videos without it.
                 </p>
+              ) : trial ? (
+                <p className={hint}>
+                  Your free trial videos are made. <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">Load credits</Link> to make more — without the watermark, and with edits.
+                </p>
+              ) : (
+                scriptMax < VOICE_SCRIPT_MAX && (
+                  <p className={hint}>
+                    Before your first credit load: a script up to {scriptMax} characters. <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">Load credits</Link> for longer scripts.
+                  </p>
+                )
               )}
             </>
           ) : (
