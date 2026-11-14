@@ -25,7 +25,7 @@ import { applyEdit, editOf } from "@/components/video/simple/edit";
 import { guessReadings } from "@/components/video/simple/guess";
 import { differs, planOf, repeats, showsIcon, wordsAlone } from "@/components/video/simple/select";
 import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
-import { bestPlan, checkPlan, colourProblemsOf, heroShares, repairPlan, scoreOf } from "@/components/video/simple/check";
+import { aheadOfVoice, bestPlan, checkPlan, colourProblemsOf, heroShares, repairPlan, scoreOf } from "@/components/video/simple/check";
 import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
 import { geoFor, geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
@@ -206,6 +206,12 @@ export async function runChecks(): Promise<Check[]> {
     });
     add("a template per beat, never the same twice in a row, the brand and the ask last", plans.every((p) => p.scenes.length === beats.length && p.scenes.at(-1)!.template === "cta" && p.scenes.every((x, i) => !i || x.template !== p.scenes[i - 1].template || x.template === "statement" || (x.template === "concept" && x.concept !== p.scenes[i - 1].concept))), plans.map((p) => p.scenes.map((x) => `${x.template}${x.variant}`).join(",")).join(" · "));
     add("the same script four times: four videos unlike each other in at least 3 of ground, type, transitions, pace and template order", plans.every((p, i) => plans.slice(0, i).every((q) => differs(p.print, q.print) >= 3)), prints.join(" · "));
+    // the picture never runs ahead of the voice (owner, 14 Nov 2026): even when the Director shows each
+    // beat's LAST words (as it did in video b7f1933c), no word is on screen more than 0.2 s before it is said
+    const lateReadings = readings.map((r, i) => ({ ...r, show: [Math.max(beats[i].first, beats[i].last - 2), beats[i].last] as [number, number], key: beats[i].last }));
+    const latePlans = [11, 12, 13, 14, 15].map((sd) => repairPlan(planOf({ words: sw, beats, readings: lateReadings, brand, seed: sd, duration: durationOf(sw) }), lateReadings).plan);
+    const ahead = [...plans, ...latePlans].flatMap((p) => aheadOfVoice(p));
+    add("the picture never runs ahead of the voice: no word on screen more than 0.2 s before it is said, even when the Director picks a beat's last words", ahead.length === 0, ahead.length ? ahead.slice(0, 4).map((x) => `scene ${x.scene + 1} "${x.word}" ${(x.by / 30).toFixed(1)} s early`).join(" · ") : `${plans.length + latePlans.length} plans, every word on time`);
     const g = galleryPlan({ ground: "dark", type: 0, way: "slide", pace: "calm" });
     add("every template has its variants in the gallery", TEMPLATES.every((x) => g.scenes.filter((s) => s.template === x).length === variantsOf(x)), `${g.scenes.length} scenes`);
     // every frame: the places inside it, the words' place and the hero's apart
