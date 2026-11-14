@@ -15,10 +15,11 @@ const PRESETS = {
     voice_model: "fal-ai/gemini-tts",
     voice_template: JSON.stringify({ prompt: "{{text}}", voice: "{{voice}}", model: "gemini-2.5-flash-tts", style_instructions: STYLE, output_format: "mp3" }),
   },
+  // (no instruction before the script: Gemini TTS can read an instruction aloud as part of the voice)
   google: {
     voice_provider: "google",
     voice_model: "gemini-3.8-flash-tts",
-    voice_template: `${STYLE}: {{text}}`,
+    voice_template: "",
   },
 } as const;
 

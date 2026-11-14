@@ -117,7 +117,7 @@ export default async function ModelsPage({ searchParams }: PageProps<"/admin/mod
                   <option value="fal">fal — any voice model on fal</option>
                 </select>
               </label>
-              <p className="text-zinc-500">Template — fal: the model&apos;s JSON input. Google: how to say it, with the script as {"{{text}}"} (e.g. <i>Say this energetically, like an ad: {"{{text}}"}</i>). OpenAI: how to say it (its instructions). Empty fal fields use the environment (model <code>{env.voice}</code>).</p>
+              <p className="text-zinc-500">Template — fal: the model&apos;s JSON input. Google: best left empty — Gemini then speaks the script exactly; an instruction before {"{{text}}"} can be read aloud as part of the voice (test it first if you add one). OpenAI: how to say it (its instructions). Empty fal fields use the environment (model <code>{env.voice}</code>).</p>
               <input name="voice_model" list="voice-models" defaultValue={c.voice.model} placeholder="Model, e.g. fal-ai/elevenlabs/tts/turbo-v2.5" className={input} />
               <textarea name="voice_template" rows={2} defaultValue={c.voice.template} placeholder='Input template (JSON). Placeholders: {{text}} {{voice}} {{language}} {{style}} {{gender}}. e.g. {"text":"{{text}}","voice":"{{voice}}"}' className={`${input} font-mono text-xs`} />
               <div className="grid gap-2 md:grid-cols-2">
