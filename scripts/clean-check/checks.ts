@@ -9,7 +9,7 @@ import { retimeScript } from "@/lib/voice-timing";
 import { ownedPath } from "@/lib/projects";
 import { v2DetailsOf } from "@/lib/v2/form";
 import { v2DirectorModel, v2Role, v2VoiceName } from "@/lib/v2/models";
-import { creditsFor, normalizeBilling, pickable, withCoupon } from "@/lib/billing-config";
+import { creditsFor, creditsForBdt, editCost, normalizeBilling, pickable, priceOf, walletsOffered, withCoupon } from "@/lib/billing-config";
 import { SETTINGS } from "@/lib/app-settings";
 import { iconFor } from "@/lib/simple/brain";
 import { resolveIcon } from "@/components/video/icons";
@@ -23,18 +23,35 @@ import { askOf, beatsOf, durationOf } from "@/components/video/simple/beats";
 import { isPublicHost, websiteUrlOf } from "@/lib/website-url";
 import { applyEdit, editOf } from "@/components/video/simple/edit";
 import { guessReadings } from "@/components/video/simple/guess";
-import { differs, planOf, repeats, wordsAlone } from "@/components/video/simple/select";
+import { differs, planOf, repeats, showsIcon, wordsAlone } from "@/components/video/simple/select";
 import { galleryPlan, sampleScene } from "@/components/video/simple/gallery";
-import { bestPlan, checkPlan, heroShares, repairPlan, scoreOf } from "@/components/video/simple/check";
+import { bestPlan, checkPlan, colourProblemsOf, heroShares, repairPlan, scoreOf } from "@/components/video/simple/check";
 import { DIRECTOR_CASES, scoreCase } from "@/lib/simple/director-test";
 import { fitWords } from "@/components/video/simple/fit";
 import { geoFor, geoOf, sideOf, splitOf, stackOf } from "@/components/video/simple/geo";
 import { emWidth, faceOf } from "@/components/video/simple/faces";
-import { CONCEPTS, GROUNDS, type Scene, TEMPLATES, VARIANTS } from "@/components/video/simple/types";
+import { CONCEPTS, GROUNDS, type Scene, type SimplePlan, STYLES, STYLE_GROUNDS, TEMPLATES, VARIANTS, variantsOf } from "@/components/video/simple/types";
 import { conceptSounds, turnOf } from "@/components/video/simple/concept";
 import { PUNCH } from "@/components/video/simple/scenes";
 import { alignScript, pausesOf } from "@/lib/voice-align";
 import { numberInWords, leadsBn, trailsBn } from "@/components/video/simple/bangla";
+
+// Every icon on screen — a scene's, a card's or a row's — is the icon of a word said in its beat, and a
+// scene's comes in with that word; a scene whose hero is its icon always has one (the owner's rule)
+function iconsOff(pl: SimplePlan): string[] {
+  return pl.scenes.flatMap((x, k) => {
+    if (x.template === "cta" || x.template === "point") return [];
+    const heard = new Set((x.said ?? []).map((w) => wordIcon(w.t)).filter(Boolean));
+    const hero = showsIcon(x.template, x.variant, x.concept) && !(x.tiles?.length ?? 0);
+    const bad: string[] = [];
+    if (hero && !x.icon) bad.push(`scene ${k + 1} ${x.template}: no picture`);
+    if (hero && x.icon && !heard.has(x.icon)) bad.push(`scene ${k + 1} ${x.template}: ${x.icon} not said`);
+    if (x.icon && x.iconAt !== undefined && !(x.said ?? []).some((w) => wordIcon(w.t) === x.icon && Math.abs(w.at - x.iconAt!) <= 1)) bad.push(`scene ${k + 1}: ${x.icon} not timed to its word`);
+    // (a panel going on keeps the rows said in the beat before: those are checked there)
+    for (const t of (x.tiles ?? []).slice(x.carry ?? 0)) if (!heard.has(t.icon)) bad.push(`scene ${k + 1} card ${t.text}: ${t.icon} not said`);
+    return bad;
+  });
+}
 import { TYPE_PAIRS } from "@/components/video/simple/types";
 
 type Check = { section: string; name: string; ok: boolean; detail: string };
@@ -149,13 +166,15 @@ export async function runChecks(): Promise<Check[]> {
     const u = "11111111-1111-1111-1111-111111111111", p = "22222222-2222-2222-2222-222222222222";
     const owned = [ownedPath(`${u}/${p}/voice/narration.mp3`, u, p), ownedPath(`99999999-9999-9999-9999-999999999999/${p}/x.png`, u, p), ownedPath(`${u}/33333333-3333-3333-3333-333333333333/x.png`, u, p), ownedPath(`${u}/${p}/../other/x.png`, u, p), ownedPath(null, u, p), ownedPath(`${u}/${p}/x.png`, undefined, p)];
     add("only this project's own files are signed", owned.join(",") === "true,false,false,false,false,false", owned.join(","));
-    // credits: per second at each level's rate, a shortest charge; coupons on a pack; pricing mended
+    // credits: a set price for the first 20 s (30), then each level's rate a second; taka; coupons on a pack; pricing mended; no welcome credits by default — the free trial instead (3 videos up to 20 s)
     const bill = normalizeBilling(null);
-    const fair = creditsFor(bill, "standard", 30) === 90 && creditsFor(bill, "pro", 30) === 120 && creditsFor(bill, "standard", 4) === 45 && creditsFor(bill, "standard", 30.2) === 93;
+    const fair =
+      creditsFor(bill, "standard", 20) === 30 && creditsFor(bill, "standard", 4) === 30 && creditsFor(bill, "standard", 20.2) === 31 && creditsFor(bill, "standard", 30) === 40 && creditsFor(bill, "pro", 30) === 70 &&
+      priceOf(bill, 100).usd === 1 && priceOf(bill, 100).bdt === 122 && creditsForBdt(bill, 500) === 409 && editCost(bill, 0) === 0 && editCost(bill, 1) === 15 && editCost(bill, 4) === 15 && editCost(normalizeBilling({ freeEdits: 0, editCredits: 20 }), 0) === 20 && walletsOffered(bill).length === 0 && walletsOffered(normalizeBilling({ wallets: { bkash: { number: "01712-345678" } } })).join() === "bkash";
     const pack = bill.packs[0];
     const deals = [withCoupon(pack, { kind: "discount", value: 10 }), withCoupon(pack, { kind: "bonus", value: 100 }), withCoupon(pack, { kind: "discount", value: 100 })];
     const mendedBill = normalizeBilling({ tiers: { standard: { status: "off", perSecond: -3 }, ultra: { status: "nope" } }, packs: [{ usd: 0, credits: 5 }], signupCredits: "x" });
-    add("credits: per second by level, Pro for paying customers only, coupons (% off, % more, free), pricing mended", fair && deals[0].usd === 9 && deals[1].bonus === pack.credits && deals[2].usd === 0 && mendedBill.tiers.standard.status === "on" && mendedBill.tiers.standard.perSecond === 0 && mendedBill.tiers.ultra.status === "soon" && mendedBill.packs.length === 4 && mendedBill.signupCredits === 50 && pickable(bill, "ultra") === null && pickable(bill, "pro") === "pro" && pickable(bill, "pro", false) === null && pickable(bill, "standard", false) === "standard", `30 s: ${creditsFor(bill, "standard", 30)} / ${creditsFor(bill, "pro", 30)} · $${deals[0].usd} · +${deals[1].bonus}`);
+    add("credits: per second by level, Pro for paying customers only, coupons (% off, % more, free), pricing mended", fair && deals[0].usd === 9 && deals[1].bonus === pack.credits && deals[2].usd === 0 && mendedBill.tiers.standard.status === "on" && mendedBill.tiers.standard.perSecond === 0 && mendedBill.tiers.ultra.status === "soon" && mendedBill.packs.length === 4 && mendedBill.signupCredits === 0 && mendedBill.trialVideos === 3 && mendedBill.trialSeconds === 20 && pickable(bill, "ultra") === null && pickable(bill, "pro") === "pro" && pickable(bill, "pro", false) === null && pickable(bill, "standard", false) === "standard", `30 s: ${creditsFor(bill, "standard", 30)} / ${creditsFor(bill, "pro", 30)} · $${deals[0].usd} · +${deals[1].bonus}`);
     // an icon name the library lacks becomes the nearest real one
     const icons = [iconFor("notebook-pen-paper-xyz", "Paper diary"), iconFor(null, "Ringing phone"), iconFor("calendar", "x")];
     add("icons: a name the library lacks becomes a real icon", icons.every((x) => !!x && !!resolveIcon(x)) && icons[2] === "calendar", icons.join(" · "));
@@ -188,7 +207,7 @@ export async function runChecks(): Promise<Check[]> {
     add("a template per beat, never the same twice in a row, the brand and the ask last", plans.every((p) => p.scenes.length === beats.length && p.scenes.at(-1)!.template === "cta" && p.scenes.every((x, i) => !i || x.template !== p.scenes[i - 1].template || x.template === "statement" || (x.template === "concept" && x.concept !== p.scenes[i - 1].concept))), plans.map((p) => p.scenes.map((x) => `${x.template}${x.variant}`).join(",")).join(" · "));
     add("the same script four times: four videos unlike each other in at least 3 of ground, type, transitions, pace and template order", plans.every((p, i) => plans.slice(0, i).every((q) => differs(p.print, q.print) >= 3)), prints.join(" · "));
     const g = galleryPlan({ ground: "dark", type: 0, way: "slide", pace: "calm" });
-    add("every template has its variants in the gallery", TEMPLATES.every((x) => g.scenes.filter((s) => s.template === x).length === VARIANTS), `${g.scenes.length} scenes`);
+    add("every template has its variants in the gallery", TEMPLATES.every((x) => g.scenes.filter((s) => s.template === x).length === variantsOf(x)), `${g.scenes.length} scenes`);
     // every frame: the places inside it, the words' place and the hero's apart
     const inside = (b: { left: number; top: number; width: number; height: number }, W: number, H: number) => b.left >= 0 && b.top >= 0 && b.left + b.width <= W && b.top + b.height <= H;
     const apart = (a: { left: number; top: number; width: number; height: number }, b: typeof a) => a.left + a.width <= b.left || b.left + b.width <= a.left || a.top + a.height <= b.top || b.top + b.height <= a.top;
@@ -222,8 +241,14 @@ export async function runChecks(): Promise<Check[]> {
     const wide = Math.max(...fitted.lines.map((l) => l.reduce((a, i, k) => a + emWidth("Your invoices finally pay themselves automatically".split(" ")[i], face, 700) * fitted.size + (k ? emWidth(" ", face, 700) * 1.15 * fitted.size : 0), 0)));
     add("words fitted to their place: within its lines and its width, the lines even", fitted.lines.length <= 3 && wide <= 680 && fitted.size >= 60, `${fitted.size}px · ${fitted.lines.map((l) => l.length).join("/")} words a line`);
     // the check before playing (check.ts): every template, variant, frame and ground clean as designed
+    // the looks: every look on every ground it stands on reads for very different brand colours, and its scenes lay out
+    const lookLeft = ["#7C3AED", "#F59E0B", "#10B981", "#111827", "#EF4444", "#0EA5E9", "#FACC15", "#FFFFFF"].flatMap((color) =>
+      STYLES.flatMap((style) => STYLE_GROUNDS[style].flatMap((ground) => colourProblemsOf({ ...galleryPlan({ ground, type: 0, way: "slide", pace: "calm", style }), brand: { name: "Brand", color, cta: "" } }).map((x) => `${color} ${style}/${ground}: ${x.detail}`))),
+    );
+    const lookScenes = STYLES.flatMap((style) => checkPlan(galleryPlan({ ground: STYLE_GROUNDS[style][0], type: 1, way: "tilt", pace: "calm", style })).map((x) => `${style} ${x.kind}`));
+    add("looks: soft, neon, editorial, bold and depth read on their grounds for any brand colour; their scenes lay out", !lookLeft.length && !lookScenes.length, lookLeft[0] ?? lookScenes[0] ?? `${STYLES.length} looks`);
     const galleryLeft = ([[1920, 1080], [1080, 1920], [1080, 1080]] as [number, number][]).flatMap((size) => GROUNDS.flatMap((ground) => checkPlan(galleryPlan({ ground, type: 1, way: "slide", pace: "calm" }, undefined, size)).map((x) => `${size.join("x")} ${ground} ${x.kind}`)));
-    add("check before playing: all 36 template variants clean on every frame and ground", galleryLeft.length === 0, galleryLeft.slice(0, 3).join(" · ") || "36 × 3 frames × 3 grounds");
+    add("check before playing: every template variant clean on every frame and ground", galleryLeft.length === 0, galleryLeft.slice(0, 3).join(" · ") || `${galleryPlan({ ground: "dark", type: 1, way: "slide", pace: "calm" }).scenes.length} variants × 3 frames × ${GROUNDS.length} grounds`);
     // …and what goes wrong is found and mended
     const bad = sampleScene("feature", 0, 0, 120);
     bad.items = [{ text: "Extraordinarily complicated reconciliation", icon: "layers" }, { text: "Stock", icon: "no-such-icon" }, { text: "Stock", icon: "boxes" }];
@@ -260,6 +285,8 @@ export async function runChecks(): Promise<Check[]> {
       return [11, 222, 3333, 44444].map((seed) => repairPlan(planOf({ words: c.words, beats, readings, brand: { name: c.brand, color: "#6a5bff", cta: "Get started" }, seed, duration: durationOf(c.words) }), readings).plan);
     });
     const body = drawn.flatMap((p) => p.scenes.slice(0, -1).map((sc, i) => ({ sc, alone: wordsAlone(sc.template, sc.variant), before: i ? wordsAlone(p.scenes[i - 1].template, p.scenes[i - 1].variant) : false })));
+    const iconLeft = drawn.flatMap(iconsOff);
+    add("the picture is the word said: every icon on screen is a word said in its beat, and comes in with it; none said, none shown", !iconLeft.length, iconLeft.slice(0, 3).join(" · ") || `${drawn.reduce((n, p) => n + p.scenes.length, 0)} scenes`);
     const aloneShare = body.filter((x) => x.alone).length / body.length;
     const heroes = drawn.flatMap((p) => heroShares(p)).filter((x): x is number => x != null);
     const heroMean = heroes.reduce((a, x) => a + x, 0) / heroes.length;
@@ -356,8 +383,8 @@ export async function runChecks(): Promise<Check[]> {
     const together = Math.max(...heard.map((list) => Math.max(0, ...list.map((e) => list.filter((x) => x.at <= e.at && x.at + SOUND_FRAMES[x.name] > e.at).length))));
     const keyed = body.filter((x) => x.alone && keyIconOf(x.sc)).length;
     const moving = heard.flat().filter((e) => ["tick", "ding", "rise", "shimmer", "lock", "digital_processing", "typing"].includes(e.name)).length;
-    const plain = wordIcon("Invoices,") === "receipt" && wordIcon("fast") === "zap" && wordIcon("the") === null && wordIcon("team") === null && motionOf("circle-check") === "draw" && motionOf("bell") === "ring" && motionOf("house") === null;
-    add("icons that move, with their own sound: a word gets an icon only when it plainly stands for one (none for the rest, never a person); every icon and sound is there; never more than 3 sounds in a second, nor more than 3 sounding at once", !badIcons.length && !sounds.length && !unknown && crowd <= 3 && together <= MOST_AT_ONCE && plain, `${badIcons.length ? `no icon ${badIcons.join(", ")} · ` : ""}${sounds.length ? `no sound ${sounds.join(", ")} · ` : ""}${keyed}/${body.filter((x) => x.alone).length} words-alone scenes with an icon · ${moving} icon/typing sounds in ${drawn.length} videos · at most ${crowd} sounds a second, ${together} at once`);
+    const plain = wordIcon("Invoices,") === "receipt" && wordIcon("fast") === "zap" && wordIcon("the") === null && wordIcon("team") === "users" && wordIcon("বয়সের") === "user-round" && wordIcon("দিনের") === "sun" && wordIcon("দিন") === null && wordIcon("মানে") === null && motionOf("circle-check") === "draw" && motionOf("bell") === "ring" && motionOf("house") === null;
+    add("icons that move, with their own sound: a word gets an icon only when it plainly stands for one (none for the rest; people only as an outline, never a face or an animal); every icon and sound is there; never more than 3 sounds in a second, nor more than 3 sounding at once", !badIcons.length && !sounds.length && !unknown && crowd <= 3 && together <= MOST_AT_ONCE && plain, `${badIcons.length ? `no icon ${badIcons.join(", ")} · ` : ""}${sounds.length ? `no sound ${sounds.join(", ")} · ` : ""}${keyed}/${body.filter((x) => x.alone).length} words-alone scenes with an icon · ${moving} icon/typing sounds in ${drawn.length} videos · at most ${crowd} sounds a second, ${together} at once`);
   }
 
   {
@@ -472,7 +499,18 @@ export async function runChecks(): Promise<Check[]> {
     const panels = tall.scenes.filter((x) => x.template === "panel");
     const inOrder = panels.every((x) => x.tiles!.every((t, k, a) => (k < (x.carry ?? 0) || (t.at >= x.from - 6 && t.at < x.to)) && (!k || t.at >= a[k - 1].at)) && x.tiles!.length <= 5);
     const chains = tall.scenes.every((x, k) => !x.cont || (k > 0 && tall.scenes[k - 1].template === "panel" && (tall.scenes[k - 1].point?.n ?? 0) === (x.point?.n ?? 0) && (x.carry ?? 0) === tall.scenes[k - 1].tiles!.length));
+    // the picture is the word said (the owner's rule), in Bangla too
+    const iconLeftBn = iconsOff(tall);
+    add("the picture is the word said (Bangla): every icon on screen is a word said in its beat, and comes in with it; none said, none shown", !iconLeftBn.length, iconLeftBn.slice(0, 3).join(" · ") || `${tall.scenes.length} scenes`);
     add("Bangla: a beat's things as a panel's rows, each in as it is said; going on in the same panel without a cut inside a point", panels.length >= 1 && inOrder && chains, panels.map((x) => `${x.cont ? "+" : ""}${x.tiles!.map((t) => t.text).join("|")}`).join(" · ") || "none");
+    // 9. cards, not screenshots (the owner's choice): a Bangla video has no product screen, phone or message
+    //    screen; cards are dealt as their words are said; panel and cards never the same look twice running
+    const shots = tall.scenes.filter((x) => x.template === "screen" || x.template === "messages" || (x.template === "feature" && x.variant === 1));
+    const decks = tall.scenes.filter((x) => x.template === "deck");
+    const dealtInOrder = decks.every((x) => x.tiles!.every((t, k, a) => t.at >= x.from - 6 && t.at < x.to && (!k || t.at >= a[k - 1].at)));
+    const looks = tall.scenes.filter((x) => (x.template === "panel" && !x.cont) || x.template === "deck").map((x) => x.template);
+    const twice = looks.some((t, k) => k > 0 && t === "deck" && looks[k - 1] === "deck");
+    add("Bangla: cards, not screenshots — no product screen or phone; cards dealt as said; never two decks running", !shots.length && dealtInOrder && !twice, `${shots.length} screens · ${decks.length} decks · ${looks.join(",") || "none"}`);
     const found = xr.map((r) => r.concept ? `${r.concept}[${r.items.map((x) => x.text).join("|")}]` : "").filter(Boolean).join(" ");
     const want = ["versus[কম বিজ্ঞাপন খরচ|বেশি সেলস]", "funnel[প্রোডাক্ট|কার্ট|চেকআউট]", "progress[২৫%|৫০%|৭৫%]", "truth[অনুমান|ডেটা]", "few[৫,০০০ ভিজিটর|৫ জন]", "exit[", "split[সফল|ক্যানসেল]", "retention["];
     add("Bangla recipes found by their words: less for more (versus), stages narrowing (funnel), shares as a bar's stops, \"X নয়, Y\" (truth), many against few, leaving a page, good against bad, a video watched less", want.every((w) => found.includes(w)), found);

@@ -1,9 +1,10 @@
 import { Icon } from "../icons";
 import { familyOf } from "./faces";
 import { TYPE, WEIGHT } from "./geo";
-import { type C, One, clamp01, ease, panel, springAt, tint } from "./kit";
+import { type C, rad, One, clamp01, ease, panel, springAt, tint } from "./kit";
 import { WordsIn, abs } from "./scenes";
 import type { Scene } from "./types";
+import { PANEL_VARIANTS } from "./rows";
 
 // The panel (docs/video-spec.md, The panel): the hand-made reel's look — one frosted panel
 // of rows, each a glossy tile in its own colour, the thing as said, and a small picture of
@@ -25,21 +26,21 @@ const MOST = 5;
 export const rowAt = (s: Scene, k: number) => (k < (s.carry ?? 0) ? s.from - 30 : Math.max(s.from + 6 + (k - (s.carry ?? 0)) * 6, (s.tiles?.[k]?.at ?? s.from) - 3));
 
 // what a row's picture is, by its icon
-type Kind = "bars" | "map" | "clock" | "rise" | "fall" | "signal" | "page" | "play" | "check" | "fill";
+export type Kind = "bars" | "table" | "map" | "clock" | "rise" | "fall" | "reach" | "page" | "play" | "check" | "fill";
 const KIND: Record<string, Kind> = {
-  cake: "bars", "chart-column": "bars", database: "bars", calendar: "bars", "layout-dashboard": "bars", percent: "bars",
+  cake: "bars", "chart-column": "bars", database: "table", calendar: "bars", "layout-dashboard": "bars", percent: "bars",
   "map-pin": "map", store: "map", house: "map",
   clock: "clock", sun: "clock", moon: "clock", "alarm-clock": "clock", timer: "clock",
   "shopping-cart": "rise", package: "rise", heart: "rise", "trending-up": "rise", activity: "rise", star: "rise", "shopping-bag": "rise", banknote: "rise",
   "trending-down": "fall", "undo-2": "fall", "circle-x": "fall", "triangle-alert": "fall",
-  megaphone: "signal", radar: "signal", target: "signal", bell: "signal",
+  megaphone: "reach", radar: "reach", target: "reach", bell: "reach",
   globe: "page", file: "page", "file-text": "page", "mouse-pointer-click": "page", image: "page", smartphone: "page", "id-card": "page",
   play: "play", "circle-check": "check", "badge-check": "check", "list-checks": "check",
 };
 export const kindOf = (icon: string): Kind => KIND[icon] ?? "fill";
 
 // ── the small pictures: w × h, from frame `at`, in the row's colour ──
-function Mini({ kind, w, h, f, at, col, soft, line }: { kind: Kind; w: number; h: number; f: number; at: number; col: string; soft: string; line: string }) {
+export function Mini({ kind, w, h, f, at, col, soft, line }: { kind: Kind; w: number; h: number; f: number; at: number; col: string; soft: string; line: string }) {
   const t = (d = 0, len = 18) => ease(clamp01((f - at - d) / len));
   const box = { position: "absolute" as const, left: 0, top: 0, width: w, height: h };
   if (kind === "bars") {
@@ -95,12 +96,35 @@ function Mini({ kind, w, h, f, at, col, soft, line }: { kind: Kind; w: number; h
       </svg>
     );
   }
-  if (kind === "signal") {
+  if (kind === "reach") {
+    // a campaign going out: rings spreading from its source, the people it reaches lighting up
+    const cx = h * 0.5, cy = h / 2;
+    const dots = [[0.5, 0.3], [0.62, 0.72], [0.74, 0.42], [0.86, 0.2], [0.9, 0.74]];
     return (
-      <div style={{ ...box, display: "flex", alignItems: "center", gap: w * 0.035 }}>
-        {Array.from({ length: 9 }, (_, i) => {
-          const wave = 0.3 + 0.7 * Math.abs(Math.sin((f - at) / 7 + i * 0.8));
-          return <div key={i} style={{ flex: 1, height: `${(wave * t(i * 2, 10) * 90).toFixed(1)}%`, borderRadius: 99, background: i % 3 === 1 ? col : soft }} />;
+      <svg width={w} height={h} style={{ ...box, overflow: "hidden" }}>
+        {[0, 1, 2].map((k) => {
+          const u = (((f - at) / 40 + k / 3) % 1 + 1) % 1;
+          return <circle key={k} cx={cx} cy={cy} r={8 + u * h * 0.46} fill="none" stroke={col} strokeOpacity={0.45 * (1 - u) * t(0, 8)} strokeWidth={4} />;
+        })}
+        <circle cx={cx} cy={cy} r={12} fill={col} />
+        <line x1={cx + h * 0.5} y1={cy} x2={w * 0.42} y2={cy} stroke={soft} strokeWidth={4} strokeDasharray="6 8" />
+        {dots.map(([x, y], i) => {
+          const on = t(8 + i * 6, 8);
+          return <circle key={i} cx={w * x} cy={h * y} r={7 + 3 * on} fill={on > 0.5 ? col : soft} />;
+        })}
+      </svg>
+    );
+  }
+  if (kind === "table") {
+    // data gathering: a small table, its cells filling one by one
+    const cols = 4, rowsN = 3, gap = 6;
+    const cw = (w - gap * (cols - 1)) / cols, chh = (h - gap * (rowsN - 1)) / rowsN;
+    return (
+      <div style={box}>
+        {Array.from({ length: cols * rowsN }, (_, i) => {
+          const r = Math.floor(i / cols), q = i % cols;
+          const on = t(4 + i * 2, 8);
+          return <div key={i} style={{ position: "absolute", left: q * (cw + gap), top: r * (chh + gap), width: cw, height: chh, borderRadius: 6, background: r === 0 ? (on > 0.5 ? col : soft) : soft, opacity: 0.35 + 0.65 * on }}>{r > 0 && <div style={{ position: "absolute", left: 8, top: chh / 2 - 3, width: `${(on * (40 + ((i * 23) % 45))).toFixed(0)}%`, height: 6, borderRadius: 3, background: col, opacity: 0.6 }} />}</div>;
         })}
       </div>
     );
@@ -162,6 +186,9 @@ function Mini({ kind, w, h, f, at, col, soft, line }: { kind: Kind; w: number; h
 
 // ── the panel ──
 export function Panel({ c }: { c: C }) {
+  // (its other designs: rows.tsx)
+  const Alt = PANEL_VARIANTS[c.s.variant];
+  if (Alt) return <Alt c={c} />;
   const { W, H, pad, shape } = c.g;
   const { s, f, look } = c;
   const rows = (s.tiles ?? []).slice(0, MOST);
@@ -192,14 +219,14 @@ export function Panel({ c }: { c: C }) {
           const [a, b] = TINTS[k % TINTS.length];
           const lit = k === now ? clamp01((f - at + 3) / 8) : 0;
           return (
-            <div key={k} style={abs({ left: 20, right: 20, top: 20 + k * rh, height: rh - 12, borderRadius: 28, background: tint(b, 0.08 * lit), display: "flex", alignItems: "center", gap: 26, padding: "0 26px", boxSizing: "border-box", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * 30).toFixed(1)}px)`, filter: kr < 0.98 ? `blur(${((1 - kr) * 8).toFixed(1)}px)` : undefined })}>
+            <div key={k} style={abs({ left: 20, right: 20, top: 20 + k * rh, height: rh - 12, borderRadius: rad(c, 28), background: tint(b, 0.08 * lit), display: "flex", alignItems: "center", gap: 26, padding: "0 26px", boxSizing: "border-box", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * 30).toFixed(1)}px)`, filter: kr < 0.98 ? `blur(${((1 - kr) * 8).toFixed(1)}px)` : undefined })}>
               <div data-part="item-icon" style={{ width: tileS, height: tileS, borderRadius: tileS * 0.27, background: `linear-gradient(160deg, ${a}, ${b})`, boxShadow: `inset 0 ${(tileS * 0.05).toFixed(0)}px ${(tileS * 0.07).toFixed(0)}px rgba(255,255,255,0.5), 0 ${(tileS * 0.12).toFixed(0)}px ${(tileS * 0.28).toFixed(0)}px ${b}55`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <Icon name={r.icon} size={tileS * 0.52} color="#ffffff" strokeWidth={2.2} />
               </div>
               <div style={{ width: labelW, flexShrink: 0 }}>
                 <One part="item" face={look.display} fit={labelW} style={{ fontFamily: familyOf(look.display), fontSize: Math.round(Math.min(TYPE.ITEM * 1.1, rh * 0.3)), fontWeight: WEIGHT.item, color: look.panelInk }}>{r.text}</One>
               </div>
-              <div style={{ position: "relative", width: miniW, height: rh * 0.62, flexShrink: 0 }}>
+              <div style={{ position: "relative", width: miniW, height: rh * 0.62, flexShrink: 0, overflow: "hidden" }}>
                 <Mini kind={kindOf(r.icon)} w={miniW} h={rh * 0.62} f={f} at={at} col={b} soft={tint(b, 0.2)} line={tint(look.panelInk, 0.12)} />
               </div>
             </div>

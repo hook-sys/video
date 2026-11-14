@@ -6,7 +6,7 @@ export function PageHeader({ title, sub, children }: { title: string; sub?: stri
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">{title}</h1>
+        <h1 className="md-admin-h1">{title}</h1>
         {sub && <p className="mt-1 text-sm text-zinc-400">{sub}</p>}
       </div>
       {children}
@@ -16,7 +16,7 @@ export function PageHeader({ title, sub, children }: { title: string; sub?: stri
 
 export function Card({ title, action, children, className = "" }: { title?: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`min-w-0 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5 ${className}`}>
+    <section className={`md-card min-w-0 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5 ${className}`}>
       {(title || action) && (
         <div className="mb-4 flex items-center justify-between gap-3">
           {title && <h2 className="text-sm font-semibold text-zinc-200">{title}</h2>}
@@ -31,9 +31,9 @@ export function Card({ title, action, children, className = "" }: { title?: stri
 export function Stat({ label, value, hint, tone = "default" }: { label: string; value: React.ReactNode; hint?: string; tone?: "default" | "good" | "bad" | "warn" }) {
   const color = { default: "text-white", good: "text-emerald-400", bad: "text-rose-400", warn: "text-amber-300" }[tone];
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+    <div className="md-stat rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
       <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">{label}</p>
-      <p className={`mt-2 text-3xl font-semibold tabular-nums ${color}`}>{value}</p>
+      <p className={`mt-2 text-3xl font-semibold tabular-nums ${tone === "default" ? "md-grad-num" : color}`}>{value}</p>
       {hint && <p className="mt-1 text-xs text-zinc-500">{hint}</p>}
     </div>
   );
@@ -44,7 +44,7 @@ const BADGE = {
   green: "bg-emerald-500/15 text-emerald-300",
   red: "bg-rose-500/15 text-rose-300",
   amber: "bg-amber-500/15 text-amber-300",
-  violet: "bg-[#0a66d6]/25 text-[#9cc2ff]",
+  violet: "bg-[#a445f2]/20 text-[#d8b4fe]",
   blue: "bg-sky-500/15 text-sky-300",
 };
 export type BadgeTone = keyof typeof BADGE;
@@ -128,6 +128,6 @@ export function Filters({ items, current, base, param = "status" }: { items: { v
 }
 
 export const btn = "inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:bg-white/10 disabled:opacity-50";
-export const btnPrimary = "inline-flex items-center justify-center gap-1.5 rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:opacity-50";
+export const btnPrimary = "md-btn inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold text-white transition disabled:opacity-50";
 export const btnDanger = "inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-50";
-export const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-[#4f8ff0]/70";
+export const input = "w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-[#a445f2]/70";

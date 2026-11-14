@@ -2,33 +2,41 @@
 
 import Link from "next/link";
 import { useRef } from "react";
-import { Desk, Mark, remember, useArrival } from "./windows";
+import { Desk, remember, useArrival } from "./windows";
+import { Avatar, TopNav } from "./top-nav";
+import { UserTabs, userTabs } from "./user-tabs";
+import { LegalFooterLinks } from "./legal-links";
 import "./site.css";
 
-// The signed-in pages in the site's glass: the bar, one window, and the dock
-// (Videos, Account, Credits, Admin, New video). The window opens out of what was
-// clicked to come here (windows.tsx remember/useArrival).
+// The signed-in pages, in the admin's dark: the menu bar with the user's places
+// as tabs under the name (user-tabs.tsx), and one window. The window opens out
+// of what was clicked to come here (windows.tsx remember/useArrival).
 
-export type ShellPlace = "videos" | "account" | "credits" | "admin" | "new" | null;
+export type ShellPlace = "videos" | "account" | "brand" | "credits" | "admin" | "new" | null;
 
 export function AppShell({ title, admin, active, initial, wide, action, children }: { title: string; admin: boolean; active: ShellPlace; initial: string; wide?: boolean; action?: React.ReactNode; children: React.ReactNode }) {
   const win = useRef<HTMLElement>(null);
   useArrival(win);
   return (
-    <div className="gs">
+    <div className="gs gs-dark gs-user">
       <Desk />
-      <header className={`gs-bar gs-glass${wide ? " wide" : ""}`}>
-        <Link href="/dashboard" className="gs-brand" onClick={remember}>
-          <Mark />
-          MotionBrief
-        </Link>
-        {action ?? (
-          <Link href="/projects/new" className="gs-btn" onClick={remember}>
-            New video
-          </Link>
-        )}
-      </header>
-      <main className={`gs-stage${wide ? " wide" : ""}`}>
+      <TopNav
+        wide
+        home="/dashboard"
+        onHome={remember}
+        below={<UserTabs items={userTabs(active, admin, () => remember)} />}
+        right={
+          <>
+            {action ?? (
+              <Link href="/projects/new" className="gs-btn" onClick={remember}>
+                + New video
+              </Link>
+            )}
+            <Avatar href="/dashboard#account" initial={initial} onClick={remember} active={active === "account"} />
+          </>
+        }
+      />
+      <main className={`gs-stage gs-user-stage${wide ? " wide" : ""}`}>
         <section ref={win} className="gs-win gs-glass">
           <div className="gs-titlebar">
             <div className="gs-dots" aria-hidden="true">
@@ -41,55 +49,7 @@ export function AppShell({ title, admin, active, initial, wide, action, children
           <div className="gs-body gs-app">{children}</div>
         </section>
       </main>
-      <footer className={`gs-footer${wide ? " wide" : ""}`}>© MotionBrief</footer>
-      <nav className="gs-dock gs-glass" aria-label="Main">
-        <Link href="/dashboard" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionBrief">
-          <Mark />
-        </Link>
-        <Link href="/dashboard" onClick={remember} aria-current={active === "videos" ? "page" : undefined}>
-          <span className="gs-tile t1">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" aria-hidden="true">
-              <rect x="4" y="5" width="7" height="6" rx="1.5" />
-              <rect x="13" y="5" width="7" height="6" rx="1.5" />
-              <rect x="4" y="13" width="7" height="6" rx="1.5" />
-              <rect x="13" y="13" width="7" height="6" rx="1.5" />
-            </svg>
-          </span>
-          <small>Videos</small>
-        </Link>
-        <Link href="/dashboard#account" onClick={remember} aria-current={active === "account" ? "page" : undefined}>
-          <span className="gs-tile t5">
-            <span className="initial">{initial}</span>
-          </span>
-          <small>Account</small>
-        </Link>
-        <Link href="/billing" onClick={remember} aria-current={active === "credits" ? "page" : undefined}>
-          <span className="gs-tile t6">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="8" />
-              <path d="M14.5 9.5c-.5-.9-1.5-1.3-2.5-1.3-1.5 0-2.6.8-2.6 1.9 0 2.6 5.3 1.3 5.3 4 0 1.1-1.2 1.9-2.7 1.9-1.1 0-2.1-.4-2.6-1.3M12 6.8v1.4M12 15.8v1.4" />
-            </svg>
-          </span>
-          <small>Credits</small>
-        </Link>
-        {admin && (
-          <Link href="/admin" onClick={remember} aria-current={active === "admin" ? "page" : undefined}>
-            <span className="gs-tile t3">
-              <AdminGlyph />
-            </span>
-            <small>Admin</small>
-          </Link>
-        )}
-        <span className="gs-sep" aria-hidden="true" />
-        <Link href="/projects/new" onClick={remember} aria-current={active === "new" ? "page" : undefined}>
-          <span className="gs-tile t4">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#0a66d6" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-              <path d="M12 6v12M6 12h12" />
-            </svg>
-          </span>
-          <small>New video</small>
-        </Link>
-      </nav>
+      <footer className={`gs-footer${wide ? " wide" : ""}`}><LegalFooterLinks /></footer>
     </div>
   );
 }

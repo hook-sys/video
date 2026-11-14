@@ -4,8 +4,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* the whole site is dark (MotionDots, 13 Nov 2026) */
+  --background: #0c0b14;
+  --foreground: #ededed;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -13,13 +15,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

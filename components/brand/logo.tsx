@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 
-// The MotionBrief mark: lines of a brief turning into a play button.
+// The MotionDots mark: lines of a brief turning into a play button.
 // `animated` plays the intro (box pops in, the lines type out, the play button
 // arrives) once the page is ready, again on hover, and every `loopMs` if set.
 // See the .mb-* rules in globals.css; the video version is MotionBriefMark in

@@ -74,10 +74,13 @@ export async function storeVoiceAudio(
   if (type.startsWith("text/") || type.includes("json") || type.includes("html")) {
     throw new Error("Voice audio download was not audio.");
   }
-  const ext = EXTENSIONS[type] ?? "mp3";
-  const contentType = EXTENSIONS[type] ? type : "audio/mpeg";
+  return storeVoiceBytes(admin, await res.arrayBuffer(), EXTENSIONS[type] ? type : "audio/mpeg", userId, projectId);
+}
 
-  const body = await res.arrayBuffer();
+// The voice's bytes as a voice model gave them (Google's and OpenAI's speech answer with the audio itself)
+export async function storeVoiceBytes(admin: SupabaseClient, body: ArrayBuffer | Uint8Array, type: string, userId: string, projectId: string): Promise<{ path: string; bytes: number }> {
+  const contentType = EXTENSIONS[type] ? type : "audio/mpeg";
+  const ext = EXTENSIONS[contentType] ?? "mp3";
   if (body.byteLength === 0) throw new Error("Voice audio is empty.");
   if (body.byteLength > MAX_BYTES) throw new Error("Voice audio is too large.");
 

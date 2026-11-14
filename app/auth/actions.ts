@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userAccess } from "@/lib/admin";
 import { getSettings } from "@/lib/app-settings";
+import { clientIp, ipTaken, keepIp } from "@/lib/signup-ip";
 
 function credentials(formData: FormData) {
   return {
@@ -38,8 +39,13 @@ export async function signup(formData: FormData) {
     redirect(`/signup?error=${encodeURIComponent("Sign-ups are paused right now. Please try again later.")}`);
   const { email, password } = credentials(formData);
   // (admin settings: whether the email is confirmed first, whether the team approves the account)
-  const verify = settings.email_verification === true;
+  const verify = settings.email_verification !== false;
   const approve = settings.require_approval !== false;
+  // (one account from each network address, when the team wants it)
+  const oneIp = settings.one_account_per_ip !== false;
+  const ip = oneIp ? await clientIp() : null;
+  const sameIp = "An account has already been made from this internet connection. Log in to it instead, or contact support.";
+  if (oneIp && (await ipTaken(ip))) redirect(`/signup?error=${encodeURIComponent(sameIp)}`);
   const supabase = await createClient();
   const admin = createAdminClient();
   let id: string | null = null;
@@ -56,6 +62,11 @@ export async function signup(formData: FormData) {
     const { data, error } = await admin.auth.admin.createUser({ email: email.trim().toLowerCase(), password, email_confirm: true });
     if (error || !data.user) redirect(`/signup?error=${encodeURIComponent(/already/i.test(error?.message ?? "") ? "This email already has an account. Log in instead." : error?.message ?? "Couldn't create the account.")}`);
     id = data.user!.id;
+  }
+  // (the address kept with the new account; one made from it at the same moment loses)
+  if (id && oneIp && !(await keepIp(ip, id))) {
+    await admin.auth.admin.deleteUser(id).catch(() => {});
+    redirect(`/signup?error=${encodeURIComponent(sameIp)}`);
   }
   // (the profile row is made by the sign-up trigger)
   if (id && approve) await admin.from("profiles").update({ status: "pending" }).eq("id", id);

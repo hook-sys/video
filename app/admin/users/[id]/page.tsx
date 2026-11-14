@@ -7,7 +7,7 @@ import { Badge, Card, Notice, PageHeader, Stat, Table, btn, btnDanger, btnPrimar
 import { PROJECT_COLUMNS, ROLE_LABEL, ROLE_TONE, STATE_LABEL, STATUS_LABEL, STATUS_TONE, ago, projectTitle, usd, videoState, type ProjectRow } from "../../_components/format";
 
 // what each kind of credit change is called in the history
-const KIND: Record<string, string> = { signup: "Welcome", purchase: "Purchase", bonus: "Bonus", coupon: "Coupon", video: "Video", refund: "Refund", adjust: "Length adjust", admin: "Team" };
+const KIND: Record<string, string> = { signup: "Welcome", purchase: "Purchase", bonus: "Bonus", coupon: "Coupon", video: "Video", refund: "Refund", adjust: "Length adjust", admin: "Team", edit: "Video edit" };
 
 export default async function UserPage({ params, searchParams }: PageProps<"/admin/users/[id]">) {
   const { id } = await params;

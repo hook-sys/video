@@ -1,6 +1,6 @@
-# MotionBrief video spec (the simple engine)
+# MotionDots video spec (the simple engine)
 
-One page: what a good MotionBrief video is, and how the simple engine
+One page: what a good MotionDots video is, and how the simple engine
 (`components/video/simple`) makes one. Every owner request changes this page
 and a template, never adds a rule layer. Taste lives in the templates you can
 see on /admin/templates, not in prompt text.
@@ -14,6 +14,35 @@ Bank** (soft glass, phone UI).
 
 A script (or the customer's own recording) in, a video out. Nothing else is
 asked. The same script made twice gives two visibly different videos.
+
+**Brand kits** (`/brand`, `lib/brand-kits.ts`, table `brand_kits`): a customer
+keeps up to 10 brands (name, colour, icon, website, phone, tagline), one the
+default. The new-video form starts on the default kit; a kit's icon is copied
+into the video's folder, so it is never uploaded again. A brand typed on the
+form can be kept as a kit with one tick. Kits are read by their owner and
+written by the server only.
+
+**Credits and payments** (`lib/billing-config.ts`, `lib/manual-payment.ts`,
+`/billing`, `/admin/billing`): pay per use, no subscription. A video costs a set
+price for its first seconds (30 credits up to 20 s), then 1 credit a second; a
+credit is 1 cent, shown in taka at the rate the admin sets. Customers load
+credits by bKash, Nagad or Rocket: they send to the number on /billing and
+submit the amount, their number and the transaction ID; the team checks it and
+approves (the credits added once) or rejects it. All of it is set on
+/admin/billing.
+
+**Terms, Privacy, Refunds and keep-alive**: `/terms`, `/privacy` and `/refund`
+are open to everyone, linked from every footer and the sign-up form. The support
+email and phone they show are set on /admin/settings. Vercel's daily cron
+(`vercel.json`) calls `/api/keep-alive`, a small database read, so the free
+Supabase project is never paused for inactivity. It runs on production only;
+with `CRON_SECRET` set, only Vercel may call it.
+
+**AI providers** (`lib/ai/keys.ts`, `/admin/models`): Google (Gemini), OpenAI,
+Anthropic (Claude) and fal. Each key comes from the environment or is saved by
+a super admin (encrypted, only its last four shown). Each role (Director,
+voice…) picks its provider and model; the voice can be fal, Gemini TTS or
+OpenAI speech.
 
 ## What a good video is
 
@@ -134,13 +163,49 @@ every hero is designed once and scaled into its place (`geo.ts`).
 
 ## Variation (what the viewer sees change)
 
-Per video the selector draws: the template and variant of every beat (never the
-same template twice in a row), the mirror, the ground (dark / light / brand / glass),
-the type pair, the transition family (slide / zoom / wipe / blur) and the pace (calm /
-lively); each intent has several templates it can be played with, drawn by
-weight. These make a fingerprint; a new video must differ from the
-customer's last five in at least 3 of: ground, type, transitions, pace,
-template order.
+**Designs.** Every template has three designed variants, some more
+(`types.ts` VARIANT_COUNT, `rows.tsx`): the panel 8 — the frosted list, pills
+sliding in from alternate sides, a grid of cards, a timeline drawing down, the
+one just said big with those before in a strip, a checklist ticking, bars
+growing, a hub of nodes round the brand's mark — and the deck 5 — dealt from a
+stack, fanned like a hand, slid onto a pile, flipping forward, round badges. A
+panel going on keeps its design (one panel to the eye). The kinetic 10 and the
+statement 11: the words alone coming in other ways (`kit.tsx` Moving — rising
+from behind their line, a marker swept behind the lit word, a line drawn under
+it, in from a large blur, the halves meeting, a box drawn round it, dropping in)
+and the statement's own layouts (a quote set left beside a bar, a quote card, the
+lit word huge and faint behind, a frame of corners). The statement's words beside
+a picture (1) still come a third of the time, so the words alone do not crowd the
+video. The point 10: its number in a ring drawn round it, huge and faint, with a
+dot for each point, between two rules, in a turned square, counting up, on a bar
+of the accent. 131 designs in all (77 template variants, 18 ideas × 3).
+
+A scene whose last word is said too near the cut to be read is mended by showing
+fewer of its words, around the lit one, brought in from the scene's start.
+
+Per video the selector draws: the look (soft / neon / editorial / bold / depth),
+then a ground it stands on (dark / light / brand / glass), the template and variant
+of every beat (never the same template twice in a row), the mirror, the type pair
+(editorial mostly the serif, bold mostly a heavy face), the transition family
+(slide / zoom / wipe / blur / leak / push / tilt) and the pace (calm / lively); each
+intent has several templates it can be played with, drawn by weight. These make a
+fingerprint; a new video must differ from the customer's last five in at least 3
+of: ground, type, transitions, pace, template order, look.
+
+**Looks** (`theme.ts` lookOf, `types.ts` STYLES): one family for every card, icon
+tile, keyword and the ground's pattern, laid over the ground's colours. Soft: the
+first look (frosted, rounded). Neon: a near-black ground of the brand's hue, cards
+edged and glowing in the accent, the keyword glowing, a floor grid running to a
+horizon. Editorial: warm paper, near-black ink, square corners, cards edged in a
+fine ink line with no shadow, a page's rules and margin. Bold: thick ink outlines,
+a hard shadow set off to the lower right, halftone dots fading to the middle.
+Depth: rounder corners, deep layered shadows, the camera turning slowly in 3D,
+big soft blobs of colour drifting. Corners follow the look (`rad`), a pill stays a
+pill. The customer can change the look in the editor.
+
+**Transitions**: leak — a dissolve under a sweep of warm light; push — the next
+comes up from below, both streaked by motion blur; tilt — the scene turns away in
+depth as the next turns in. None dips to the bare ground for long.
 
 ## Phase plan
 
@@ -163,7 +228,17 @@ screen and the one lit (never typed words), its things (up to 3, 1–3 words),
 its icon and its picture of the product. Timing, the voice and the brand never
 change. The browser previews an edit at once; the server applies the same
 edit to the plan as stored, checks it like a drawn plan and keeps it (the plan
-as made kept too, to go back to). No AI, no credits; the MP4 is made again.
+as made kept too, to go back to). No AI; the MP4 is made again. The first
+saved edit of a video is free, each one after costs credits (15 to start; both
+set on /admin/billing); going back to the video as made counts as an edit. The
+editor says what saving costs and asks first; the charge is taken before the
+save and given back if the save doesn't land (`projects.edit_count`, ledger
+kind `edit`). The team's own videos are never charged.
+
+The layout is chosen in two steps, so the list stays short and only what is
+open is drawn: each kind of scene once (its design now, else its first that
+fits), then the designs of the kind picked, each by its name (Pills, Grid,
+Timeline… `edit.ts` designName).
 
 The editor (app/projects/[id]/editor.tsx) opens over the page from "Edit
 video": the video in the middle, its scenes on a timeline below (as long as
@@ -185,6 +260,19 @@ video's own ground stays under the rest.
 
 
 ## Icons that move, with their own sound (components/video/simple/motion.ts)
+
+**The picture is the word said (the owner's rule).** Every icon on screen — a
+scene's hero, a card's, a panel row's — is the icon of a word the voice says in
+that beat (`wordIcon`: English and Bangla word lists, Bangla by its stems), and
+a scene's comes in with that word (`Scene.iconAt`, the lit word's first, then
+the words on screen, then the rest of the beat). A beat with no such word has no
+picture of its own: it is never shown by a template whose hero is its icon
+(`showsIcon`) — another way with a hero of its own is chosen (the brand's mark
+when the beat names the brand), else the words move. Never a stand-in icon.
+Ambiguous words map only in their clear forms ("দিনের" is the sun; "দিন" alone
+is also "give"). A word about people is the plain outline of a person or people
+(user, users — the owner's exception of 13 Nov 2026); never a face, a body or an
+animal. Checked on every test script, English and Bangla.
 
 Every icon on a tile (kit.tsx Glyph) does what it means once it has come in:
 a check is drawn, a bell rings, a chart line rises, a bolt flashes, a letter
@@ -446,7 +534,7 @@ The owner's reference is the hand-made reel: a frosted panel of rows, each a
 glossy tile in its own colour (violet, blue, orange, green, pink in turn), the
 thing as said, and a small picture of what it means — bars for an age or data,
 a map and a dropping pin for a place, a clock sweeping for a time, a line
-rising for orders and interest (falling for returns), a signal for a campaign,
+rising for orders and interest (falling for returns), rings spreading from a campaign to the people it reaches (never a sound wave — it reads as a voice recording), a small table filling for data,
 a page and a cursor for a site, a play bar for a video, ticks for what is done,
 else a meter filling. Each row comes in as its word is said (a pop), the last
 said lit. The words said run under the panel, small, sharpening from a blur;
@@ -459,3 +547,23 @@ in between them — one scene to the eye — up to five rows and never across a
 point. The panel is laid out for the most rows it will have (Scene.rows), so
 it never moves as rows come.
 
+
+## Cards, moving (components/video/simple/deck.tsx)
+
+The owner's choice for Bangla videos: no product screenshots, phones or
+message screens — cards that move. A product screen, a phone of messages or
+a phone of notifications becomes cards (or one card clicked, or the words
+with their icon).
+
+- **The deck**: the things a beat names, dealt from a stack — each flies to its
+  place turning over (its back the colour of its tile), lands with a light
+  sweeping across it and floats; its glossy icon tile, its word under it. Two
+  side by side, three two-and-one, four two by two. A beat that would be a
+  panel is cards now and then (never the same look twice running; a panel
+  that goes on stays a panel).
+- **cycle** (concept.tsx): things that feed each other round ("ডেটা আপনাকে
+  শেখায়", "বারবার") — glossy tiles round a ring as each is said, the arrows
+  between them drawn, then a light going round.
+- **report**: a report said with its things ("রিপোর্ট", "হিসাব") — a report
+  card titled with the word as said, its rows the things, their bars filling
+  as each is said (no number that was not said).

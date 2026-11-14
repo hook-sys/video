@@ -1,5 +1,5 @@
 import { DISPLAY_FACES, TEXT_FACES, type Face, faceOf } from "./faces";
-import { type Ground, type Pace, type Theme, TYPE_PAIRS } from "./types";
+import { type Ground, type Pace, STYLE_GROUNDS, type Style, type Theme, TYPE_PAIRS } from "./types";
 
 // A video's colours and type. Every colour is the brand's own colour or a
 // neutral: the brand colour exactly where it reads (made only lighter or
@@ -45,6 +45,15 @@ export type Look = {
   ring?: string;
   display: Face;
   text: Face;
+  // the video's look (types.ts STYLES): how round corners are (× a template's own radius), a card's
+  // edge and shadow, a glow round the keyword, and the ground's pattern
+  style: Style;
+  ground: Ground;
+  r: number;
+  cardBorder?: string;
+  cardShadow?: string;
+  keyGlow?: string;
+  decor: "none" | "grid" | "rules" | "dots" | "blobs";
 };
 
 // ── colour arithmetic (sRGB) ──────────────────────────────────────────────
@@ -102,7 +111,68 @@ const turned = (hex: string, deg: number) => {
 // a scene's theme: the video's, on its own ground when it has one
 export const themeOf = (theme: Theme, s: { ground?: Ground }): Theme => (s.ground && s.ground !== theme.ground ? { ...theme, ground: s.ground } : theme);
 
+// The look of a video: its ground's colours, then its family's corners, edges, glow and pattern
 export function lookOf(theme: Theme, color: string): Look {
+  const style = theme.style ?? "soft";
+  // (a look on a ground it doesn't stand on — a scene's own ground — keeps the ground's colours, the look's shapes)
+  const base = groundLook(theme, color);
+  const brand = /^#?[0-9a-f]{6}$/i.test(color.trim()) ? `#${color.trim().replace("#", "").toLowerCase()}` : "#6a5bff";
+  const own = STYLE_GROUNDS[style].includes(theme.ground);
+  if (style === "neon") {
+    if (!own || !base.dark) return { ...base, style, r: 0.7, cardBorder: `1px solid ${alpha(base.accent, 0.45)}`, keyGlow: `0 0 28px ${alpha(base.accent, 0.55)}`, decor: "grid" };
+    // a near-black of the brand's hue; the accent bright; cards dark glass edged in the accent, glowing
+    const bg = mix(brand, "#03040a", 0.955);
+    const accent = readable(mix(brand, "#ffffff", 0.12), bg, 5, "#ffffff");
+    return {
+      ...base, bg, glow: alpha(accent, 0.2), accent, onAccent: inkOn(accent), panelAccent: accent, onPanelAccent: inkOn(accent), accentFill: accent, fill: accent, onFill: inkOn(accent),
+      // (opaque: a see-through card blinks in renders — the dark look's lesson)
+      panel: mix(bg, "#ffffff", 0.035), panelFill: `linear-gradient(180deg, ${mix(bg, accent, 0.07)}, ${mix(bg, "#ffffff", 0.02)})`,
+      line: alpha(accent, 0.4), shadow: "rgba(0,0,0,0.6)",
+      style, r: 0.7, cardBorder: `1px solid ${alpha(accent, 0.5)}`, cardShadow: `0 0 0 1px ${alpha(accent, 0.12)}, 0 0 34px ${alpha(accent, 0.22)}, 0 24px 60px rgba(0,0,0,0.55)`,
+      keyGlow: `0 0 30px ${alpha(accent, 0.6)}, 0 0 8px ${alpha(accent, 0.5)}`, decor: "grid",
+    };
+  }
+  if (style === "editorial") {
+    if (!own || base.dark) return { ...base, style, r: 0.18, cardBorder: `1.5px solid ${alpha(base.panelInk, 0.85)}`, cardShadow: "none", decor: "rules" };
+    // paper: a warm off-white, ink near black, cards a lighter paper edged in a fine ink line, no shadow
+    const bg = mix("#f4efe4", brand, 0.04);
+    const ink = "#16130f";
+    const accent = readable(brand, bg, 3.4, "#000000");
+    return {
+      ...base, bg, glow: alpha(brand, 0.06), ink, sub: "#5d564c", accent, onAccent: inkOn(accent), plateFill: accent,
+      panel: "#fffcf5", panelFill: "#fffcf5", panelAccent: readable(brand, "#fffcf5", 3.4, "#000000"), onPanelAccent: inkOn(readable(brand, "#fffcf5", 3.4, "#000000")),
+      panelInk: ink, panelSub: "#6a6257", line: alpha(ink, 0.85), shadow: "rgba(22,19,15,0.08)", accentFill: accent, fill: accent, onFill: inkOn(accent),
+      style, r: 0.18, cardBorder: `1.5px solid ${alpha(ink, 0.88)}`, cardShadow: "none", decor: "rules",
+    };
+  }
+  if (style === "bold") {
+    // thick ink outlines and a hard shadow set off to the lower right; halftone dots on the ground
+    const ink = "#0e1015";
+    return {
+      ...base, line: ink, style, r: 0.55, cardBorder: `3px solid ${ink}`, cardShadow: `9px 9px 0 ${ink}`, decor: "dots",
+      ...(own && !base.dark && theme.ground === "light"
+        ? (() => {
+            // (a warm paper ground: the keyword made dark enough to read on it again)
+            const bg = mix(brand, "#fffaf0", 0.9);
+            const accent = readable(brand, bg, 3.2, "#000000");
+            return { bg, panelFill: "#ffffff", panel: "#ffffff", accent, plateFill: accent, onAccent: inkOn(accent), accentFill: accent };
+          })()
+        : {}),
+    };
+  }
+  if (style === "depth") {
+    // deep, layered soft shadows, rounder corners, big drifting blobs of colour on the ground
+    const deep = alpha(mix(brand, "#000000", 0.55), base.dark ? 0.55 : 0.18);
+    return { ...base, style, r: 1.2, cardShadow: `0 2px 4px ${deep}, 0 24px 48px ${deep}, 0 60px 120px ${deep}`, decor: "blobs" };
+  }
+  return { ...base, style: "soft", r: 1, decor: "none" };
+}
+
+type Ground$ = Omit<Look, "style" | "ground" | "r" | "cardBorder" | "cardShadow" | "keyGlow" | "decor">;
+function groundLook(theme: Theme, color: string): Ground$ & { ground: Ground } {
+  return { ...groundColours(theme, color), ground: theme.ground };
+}
+function groundColours(theme: Theme, color: string): Ground$ {
   const brand = /^#?[0-9a-f]{6}$/i.test(color.trim()) ? `#${color.trim().replace("#", "").toLowerCase()}` : "#6a5bff";
   const [display, text] = TYPE_PAIRS[theme.type] ?? TYPE_PAIRS[0];
   const faces = { display: faceOf(display), text: faceOf(text, TEXT_FACES) ?? DISPLAY_FACES[0] };
@@ -154,7 +224,7 @@ export function lookOf(theme: Theme, color: string): Look {
   const accent = readable(brand, bg, 3.5, "#ffffff");
   return {
     dark: true, bg, glow: alpha(brand, 0.22), ink: "#ffffff", sub: "rgba(255,255,255,0.66)", accent, plate: false, plateFill: accent, onAccent: inkOn(accent),
-    panel: "rgba(255,255,255,0.06)", panelFill: "linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.04))", panelAccent: accent, onPanelAccent: inkOn(accent),
+    panel: mix(bg, "#ffffff", 0.06), panelFill: `linear-gradient(180deg, ${mix(bg, "#ffffff", 0.09)}, ${mix(bg, "#ffffff", 0.04)})`, panelAccent: accent, onPanelAccent: inkOn(accent),
     panelInk: "#ffffff", panelSub: "rgba(255,255,255,0.6)", line: "rgba(255,255,255,0.09)", shadow: "rgba(0,0,0,0.5)",
     fill: brand, onFill: inkOn(brand), bad: "#ff6369", accentFill: accent, ...faces,
   };

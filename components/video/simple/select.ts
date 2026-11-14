@@ -2,7 +2,7 @@ import { countOf, leadsBn, trailsBn } from "./bangla";
 import { rng } from "./faces";
 import { framesOf, pointsOf } from "./beats";
 import { wordIcon } from "./motion";
-import { ideaNeedsThings, type Beat, type Brand, FPS, GROUNDS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, VARIANTS, WAYS, type Word } from "./types";
+import { ideaNeedsThings, type Beat, type Brand, FPS, type Ground, PACES, type Reading, type Scene, type Show, type SimplePlan, STYLE_GROUNDS, STYLES, type Style, TYPE_PAIRS, TEMPLATES, type TemplateId, type Theme, variantsOf, WAYS, type Word } from "./types";
 
 // The selector: each beat's template and variant, and the video's theme —
 // drawn from a seed, never the same template twice in a row, and unlike
@@ -65,8 +65,13 @@ export const wordsAlone = (t: TemplateId, v: number) => t === "kinetic" || (t ==
 
 function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, seed: number, duration: number): Omit<SimplePlan, "w" | "h"> {
   const R = rng(seed);
-  const grounds: Ground[] = grey(brand.color) ? GROUNDS.filter((g) => g !== "brand") : [...GROUNDS];
-  const theme: Theme = { ground: R.pick(grounds), type: R.int(0, TYPE_PAIRS.length - 1), way: R.pick(WAYS), pace: R.pick(PACES) };
+  // the look first (soft a little more often: the first look), then a ground it stands on
+  // (a grey brand colour never fills the ground)
+  const style = styleOf(R.next());
+  const grounds: Ground[] = STYLE_GROUNDS[style].filter((g) => !(grey(brand.color) && g === "brand"));
+  // (editorial: mostly the serif; bold: mostly a heavy display face)
+  const type = style === "editorial" && R.next() < 0.7 ? 4 : style === "bold" && R.next() < 0.7 ? R.pick([1, 3]) : R.int(0, TYPE_PAIRS.length - 1);
+  const theme: Theme = { ground: R.pick(grounds.length ? grounds : ["light"]), type, way: R.pick(WAYS), pace: R.pick(PACES), style };
   const frames = framesOf(words, beats, duration);
   // (words alone: at most one scene in four, never two in a row)
   const most = Math.max(1, Math.floor((readings.length - 1) / 4));
@@ -84,6 +89,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
   const firstPoint = points.findIndex((p) => p);
   const agendaAt = titles.length ? beats.findIndex((b, i) => i < firstPoint && countOf(words.slice(b.first, b.last + 1).map((w) => w.text)) === titles.length) : -1;
   let last: Scene | null = null;
+  let lastCards: "panel" | "deck" | null = null;
   const scenes: Scene[] = readings.map((read0, i) => {
     const pt = points[i];
     if (pt?.open) {
@@ -98,7 +104,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       return {
         ...frames[i],
         template: "point" as const,
-        variant: R.int(0, VARIANTS - 1),
+        variant: R.int(0, variantsOf("point") - 1),
         left: true,
         words: litInTime(shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS)), key: k === shown.length - 1 })), frames[i].from, frames[i].to),
         icon: read0.icon ?? "sparkles",
@@ -113,7 +119,12 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // (a thing that only repeats the words shown beside it is not shown again)
     const [c0, c1] = keyRun(words, read.show, read.key, 4);
     const said = words.slice(c0, c1 + 1).map((w) => w.text).join(" ");
-    const r = { ...read, items: read.items.filter((it) => !repeats(it.text, said)) };
+    // the scene's picture: the icon of a word the voice says in this beat — the lit word's first, then
+    // the words on screen, then the rest of the beat — coming in as that word is said; no such word, no
+    // picture (never a stand-in: the owner's rule — the icon is what is being said)
+    const spoken = spokenIcon(words, beats[i], [c0, c1], read.key);
+    const r = { ...read, icon: spoken?.icon ?? read.icon, items: read.items.filter((it) => !repeats(it.text, said)) };
+    let iconAt = spoken ? spoken.at : undefined;
     // (the last beat is always the brand and the ask)
     const about = r.intent === "feature" || r.intent === "solution" || r.shows === "product";
     const base: [TemplateId, number][] = i === readings.length - 1 ? [["cta", 1]] : [...choices(r).filter(([t]) => t !== "cta"), ...(pictured < shots && about ? [["screen", r.intent === "solution" ? 0.35 : 0.6] as [TemplateId, number]] : [])];
@@ -124,7 +135,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     // (two ideas in a row are two pictures: an idea may follow another idea)
     let template = pickOf(list, prev === "concept" && prevIdea !== read.concept ? null : prev, R);
     // (a variant that needs things only when there are some)
-    let variant = R.int(0, VARIANTS - 1);
+    let variant = variantOf(template, R);
     if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
     // (the opening idea with its words on screen: the hook is read as well as seen)
     if (template === "concept" && variant === 2 && i === 0 && read.concept !== "truth") variant = R.int(0, 1);
@@ -134,7 +145,7 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       const shown = list.filter(([t]) => t !== "statement" && t !== "kinetic");
       if (shown.length) {
         template = pickOf(shown, prev, R);
-        variant = R.int(0, VARIANTS - 1);
+        variant = variantOf(template, R);
         if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
       } else [template, variant] = ["statement", 1];
     }
@@ -144,13 +155,13 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       const other = list.filter(([t]) => t !== "statement" && t !== "kinetic" && t !== "concept");
       if (other.length) {
         template = pickOf(other, prev, R);
-        variant = R.int(0, VARIANTS - 1);
+        variant = variantOf(template, R);
         if (!variantOk(template, variant, r.items.length)) variant = template === "chart" ? R.int(0, 1) : 0;
       } else {
         // (another picture the beat's own words stand for — "ডেটা", "অর্ডার" — else moving words when they may come)
-        const alt = words.slice(beats[i].first, beats[i].last + 1).map((w) => wordIcon(w.text)).find((x) => x && !recent.slice(-4).includes(x));
-        if (alt) r.icon = alt;
-        else if (!wasAlone && alone < most && !r.hero) [template, variant] = ["kinetic", R.chance(0.5) ? 0 : 2];
+        const altWord = words.slice(beats[i].first, beats[i].last + 1).find((w) => { const x = wordIcon(w.text); return x && !recent.slice(-4).includes(x); });
+        if (altWord) [r.icon, iconAt] = [wordIcon(altWord.text), Math.round(altWord.start * FPS)];
+        else if (!wasAlone && alone < most && !r.hero) [template, variant] = ["kinetic", R.pick(KINETIC_PLAIN)];
       }
     }
     // (the words beside their pictures: when the things the beat names are its own words — so they would only
@@ -167,12 +178,33 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
     const before = last?.template === "panel" && last.tiles && (last.point?.n ?? 0) === (pt?.point.n ?? 0) ? last : null;
     const goesOn = bn && !!before && tiles.length >= 1 && before.tiles!.length + tiles.length <= 5 && template !== "concept" && i < readings.length - 1;
     const panelled = bn && (goesOn || (tiles.length >= 2 && template !== "concept" && i < readings.length - 1));
-    if (panelled) [template, variant] = ["panel", 0];
+    // (cards dealt in place of a panel now and then — never the same look twice running — and in place of
+    // any screenshot or phone in a Bangla video: the owner's choice, cards that move)
+    const shotLike = template === "screen" || template === "messages" || (template === "feature" && variant === 1);
+    const dealt = bn && !goesOn && i < readings.length - 1 && tiles.length >= 2 && (panelled ? lastCards === "panel" : shotLike);
+    // (a design of its own each time — a panel going on keeps the one it has: one panel to the eye)
+    if (dealt) [template, variant] = ["deck", R.int(0, variantsOf("deck") - 1)];
+    else if (panelled) [template, variant] = ["panel", goesOn ? before!.variant : R.int(0, variantsOf("panel") - 1)];
+    else if (bn && shotLike) [template, variant] = r.items.length && !(template === "feature" && variant === 1) ? ["feature", 0] : ["statement", 1];
+    if (dealt || panelled) lastCards = dealt ? "deck" : "panel";
     const rows = goesOn ? [...before!.tiles!, ...tiles.filter((t) => !before!.tiles!.some((x) => x.text === t.text))] : tiles;
     const tiled = !panelled && i < readings.length - 1 && tiles.length >= 2 && (template === "statement" || template === "kinetic");
     if (tiled) [template, variant] = ["statement", 1];
+    // (no word said here has a picture: never a scene whose hero is one — another way its beat can be shown
+    // that has a hero of its own, else the words move)
+    if (!r.icon && !tiled && !panelled && !dealt && showsIcon(template, variant, read.concept)) {
+      const other = list.filter(([t]) => t !== "statement" && t !== "kinetic" && !showsIcon(t, 0, read.concept) && !(t === "concept" && !idea));
+      // (a beat that names the brand: its picture is the brand's own mark)
+      const named = bareOf(brand.name).length >= 3 && beatWords.some((w) => bareOf(w.text).includes(bareOf(brand.name).slice(0, Math.max(3, bareOf(brand.name).length - 2))));
+      if (named && prev !== "reveal") [template, variant] = ["reveal", R.int(0, variantsOf("reveal") - 1)];
+      else if (other.length) {
+        template = pickOf(other, prev, R);
+        variant = variantOf(template, R);
+        if (!variantOk(template, variant, r.items.length)) variant = 0;
+      } else [template, variant] = ["kinetic", R.pick(KINETIC_PLAIN)];
+    }
     // (words typed as a prompt only when they ask something)
-    if (template === "kinetic" && variant === 1 && !/\?["'”’)]*$/.test(words[r.show[1]]?.text ?? "")) variant = R.chance(0.5) ? 0 : 2;
+    if (template === "kinetic" && variant === 1 && !/\?["'”’)]*$/.test(words[r.show[1]]?.text ?? "")) variant = R.pick(KINETIC_PLAIN);
     wasAlone = wordsAlone(template, variant);
     if (wasAlone) alone++;
     const screen = template === "screen" ? pictured++ : undefined;
@@ -191,12 +223,13 @@ function draw(words: Word[], beats: Beat[], readings: Reading[], brand: Brand, s
       variant,
       left: R.chance(0.5),
       words: litInTime(shown.map((w, k) => ({ t: shownWord(w.text, k, shown.length), at: Math.max(frames[i].from, Math.round(w.start * FPS) - late), key: start + k === r.key })), frames[i].from, frames[i].to),
-      icon: r.icon ?? "sparkles",
+      icon: r.icon ?? "",
+      ...(r.icon && iconAt !== undefined ? { iconAt } : {}),
       // (an idea's things as read: the truth's two words are among the words said)
       items: (template === "concept" ? read : r).items.slice(0, template === "concept" && read.concept === "funnel" ? 5 : 3),
       number: r.number,
       ...(tiled ? { tiles } : {}),
-      ...(panelled ? { tiles: rows, ...(goesOn ? { carry: before!.tiles!.length, cont: true } : {}) } : {}),
+      ...(dealt ? { tiles } : panelled ? { tiles: rows, ...(goesOn ? { carry: before!.tiles!.length, cont: true } : {}) } : {}),
       ...(screen != null ? { screen } : {}),
       ...(read.concept ? { concept: read.concept, resolves: r.intent !== "hook" && r.intent !== "problem" } : {}),
       said: words.slice(beats[i].first, beats[i].last + 1).map((w) => ({ t: w.text, at: Math.round(w.start * FPS) })),
@@ -230,11 +263,35 @@ export function litInTime<W extends { at: number; key: boolean }>(words: W[], fr
   return words.map((w, j) => (j < k ? { ...w, at: Math.min(w.at, at) } : { ...w, at: Math.max(from, w.at - by) }));
 }
 
-// what makes a video look like itself: its ground, type, transitions, pace and template order
+// The icon of a word said in the beat, and when it is said: the lit word's, then the words shown, then the beat's others
+function spokenIcon(words: Word[], beat: Beat, [a, b]: [number, number], key: number | null): { icon: string; at: number } | null {
+  const order = [...(key !== null && key >= beat.first && key <= beat.last ? [key] : []), ...Array.from({ length: b - a + 1 }, (_, k) => a + k), ...Array.from({ length: beat.last - beat.first + 1 }, (_, k) => beat.first + k)];
+  for (const k of order) {
+    const icon = words[k] ? wordIcon(words[k].text) : null;
+    if (icon) return { icon, at: Math.round(words[k].start * FPS) };
+  }
+  return null;
+}
+// the templates (and variants) whose hero is the scene's own icon
+export const showsIcon = (t: TemplateId, v: number, concept?: string) => (t === "statement" && v === 1) || t === "feature" || t === "stat" || t === "chart" || t === "messages" || t === "screen" || (t === "concept" && concept === "trapped");
+
+// A template's design: any of them — but the statement's words beside a picture (1) as often as before
+// there were more ways of words alone (a third), so the words alone do not crowd the video
+export const KINETIC_PLAIN = [0, 2, 3, 4, 5, 6, 7, 8, 9];
+export function variantOf(t: TemplateId, R: ReturnType<typeof rng>): number {
+  const n = variantsOf(t);
+  if (t === "statement" && n > 3) return R.chance(1 / 3) ? 1 : R.pick([0, ...Array.from({ length: n - 2 }, (_, k) => k + 2)]);
+  return R.int(0, n - 1);
+}
+
+// a look by weight: soft 0.28, the others 0.18 each
+export const styleOf = (x: number): Style => (x < 0.28 ? "soft" : STYLES[1 + Math.min(3, Math.floor((x - 0.28) / 0.18))]);
+
+// what makes a video look like itself: its ground, type, transitions, pace, template order and look
 // (and the scenes on a ground of their own, when there are any)
 export const printOf = (theme: Theme, scenes: Scene[]) => {
   const own = scenes.map((s) => (s.ground && s.ground !== theme.ground ? s.ground[0] : "-")).join("");
-  return [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${TEMPLATES.indexOf(s.template).toString(36)}${s.variant}`).join(""), ...(/[^-]/.test(own) ? [own] : [])].join("|");
+  return [theme.ground, theme.type, theme.way, theme.pace, scenes.map((s) => `${TEMPLATES.indexOf(s.template).toString(36)}${s.variant}`).join(""), theme.style ?? "soft", ...(/[^-]/.test(own) ? [own] : [])].join("|");
 };
 
 // One scene, one idea: what is shown once is not shown twice

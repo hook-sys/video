@@ -1,6 +1,6 @@
 import { settleWordIcons } from "./check";
 import { litInTime, printOf, shownWord, variantOk, wordsAlone } from "./select";
-import { ideaNeedsThings, GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, VARIANTS, WAYS } from "./types";
+import { ideaNeedsThings, GROUNDS, type Ground, type Item, PACES, type Scene, type SimplePlan, STYLES, TEMPLATES, type TemplateId, type Theme, TYPE_PAIRS, variantsOf, WAYS } from "./types";
 
 // The customer's edits of their video, guided: the look of the whole video
 // (its ground, type, pace and way between scenes) and, scene by scene, how it
@@ -14,8 +14,17 @@ export type SceneEdit = { template: TemplateId; variant: number; show: [number, 
 export type PlanEdit = { theme: Theme; scenes: SceneEdit[] };
 
 // names a customer reads
-export const TEMPLATE_NAME: Record<TemplateId, string> = { statement: "Big words", kinetic: "Moving words", trouble: "The problems", compare: "Before and after", reveal: "Brand reveal", feature: "Product card", screen: "Your product", messages: "Messages", bento: "Tiles", stat: "Big number", chart: "Chart", steps: "Steps", cta: "Ending", concept: "The idea", point: "Point", panel: "Panel" };
+export const TEMPLATE_NAME: Record<TemplateId, string> = { statement: "Big words", kinetic: "Moving words", trouble: "The problems", compare: "Before and after", reveal: "Brand reveal", feature: "Product card", screen: "Your product", messages: "Messages", bento: "Tiles", stat: "Big number", chart: "Chart", steps: "Steps", cta: "Ending", concept: "The idea", point: "Point", panel: "Panel", deck: "Cards" };
 export const TYPE_NAME = ["Clean", "Modern", "Characterful", "Soft", "Classic"];
+// a design's name in the editor (a template without names of its own: "Design 1, 2, 3")
+const DESIGN_NAMES: Partial<Record<TemplateId, string[]>> = {
+  panel: ["List", "Pills", "Grid", "Timeline", "Focus", "Checklist", "Bars", "Hub"],
+  deck: ["Dealt", "Fan", "Pile", "Flip", "Badges"],
+  kinetic: ["One by one", "Typed", "Grow", "Rise", "Marker", "Underline", "Focus", "Meet", "Box", "Drop"],
+  statement: ["Centred", "With picture", "Sides", "Quote", "Marker", "Quote card", "Behind", "Frame", "Meet", "Glow", "Box"],
+  point: ["Number", "Tile", "Outline", "Ring", "Behind", "Dots", "Rules", "Diamond", "Count", "Bar"],
+};
+export const designName = (t: TemplateId, v: number) => DESIGN_NAMES[t]?.[v] ?? `Design ${v + 1}`;
 // (the templates that show the things a scene names)
 export const SHOWS_THINGS: TemplateId[] = ["trouble", "compare", "reveal", "feature", "messages", "bento", "chart", "steps"];
 
@@ -51,7 +60,7 @@ export function editOf(plan: SimplePlan): PlanEdit {
 // The plan with an edit, or why it cannot be
 export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan; error?: undefined } | { plan?: undefined; error: string } {
   const t = edit?.theme;
-  if (!t || !GROUNDS.includes(t.ground) || !WAYS.includes(t.way) || !PACES.includes(t.pace) || !Number.isInteger(t.type) || t.type < 0 || t.type >= TYPE_PAIRS.length) return { error: "That look is not one there is." };
+  if (!t || !GROUNDS.includes(t.ground) || !WAYS.includes(t.way) || !PACES.includes(t.pace) || !Number.isInteger(t.type) || t.type < 0 || t.type >= TYPE_PAIRS.length || (t.style !== undefined && !STYLES.includes(t.style))) return { error: "That look is not one there is." };
   if (!Array.isArray(edit.scenes) || edit.scenes.length !== plan.scenes.length) return { error: "The scenes do not match the video." };
   const shots = plan.brand.screens?.length ?? 0;
   // (a scene's own ground: one there is, other than the video's — the same as the video's is none)
@@ -69,7 +78,7 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
     // (an idea only where its words picture one, the truth with its two words)
     if (e.template === "concept" && !s.concept) return { error: `${n}: its words picture no idea to show.` };
     if ((e.template === "point") !== (s.template === "point")) return { error: `${n}: a point's opening stays one — and no other scene becomes one.` };
-    if (e.template === "panel" && (s.tiles?.length ?? 0) < 1) return { error: `${n}: a panel needs the things its words name.` };
+    if ((e.template === "panel" || e.template === "deck") && (s.tiles?.length ?? 0) < 1) return { error: `${n}: this needs the things its words name.` };
     if (e.template === "screen" && !(Number.isInteger(e.screen) && e.screen! >= 0 && e.screen! < shots)) return { error: `${n}: there is no such picture of the product.` };
     const items = Array.isArray(e.items) ? e.items : [];
     if (items.length > 3) return { error: `${n}: at most three things.` };
@@ -82,7 +91,7 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
       things.push({ text, icon });
     }
     if (e.template === "concept" && ideaNeedsThings(s.concept, things.length)) return { error: `${n}: this needs at least two things.` };
-    if (!Number.isInteger(e.variant) || e.variant < 0 || e.variant >= VARIANTS || !variantOk(e.template, e.variant, things.length)) return { error: `${n}: that way of showing it needs more things.` };
+    if (!Number.isInteger(e.variant) || e.variant < 0 || e.variant >= variantsOf(e.template) || !variantOk(e.template, e.variant, things.length)) return { error: `${n}: that way of showing it needs more things.` };
     const icon = String(e.icon ?? "").slice(0, 40) || s.icon;
     // the words on screen: a run of its beat's own words (never typed), the lit one among them
     let words = s.words;
@@ -109,7 +118,7 @@ export function applyEdit(plan: SimplePlan, edit: PlanEdit): { plan: SimplePlan;
     delete next.wordIcon;
     scenes.push(next);
   }
-  const theme: Theme = { ground: t.ground, type: t.type, way: t.way, pace: t.pace };
+  const theme: Theme = { ground: t.ground, type: t.type, way: t.way, pace: t.pace, ...(t.style ? { style: t.style } : {}) };
   return { plan: settleWordIcons({ ...plan, theme, scenes, print: printOf(theme, scenes) }) };
 }
 

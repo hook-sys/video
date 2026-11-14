@@ -12,6 +12,7 @@
     "check:clean": "node scripts/clean-check/run.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@fal-ai/client": "^1.10.1",
     "@remotion/bundler": "4.0.529",
     "@remotion/layout-utils": "4.0.529",

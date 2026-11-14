@@ -3,12 +3,13 @@ import { Icon } from "../icons";
 import { Concept } from "./concept";
 import { familyOf } from "./faces";
 import { fitWords } from "./fit";
-import { type C, Glyph, blend, One, Words, clamp01, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { type C, type Effect, rad, Glyph, blend, One, Words, clamp01, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import { TYPE, WEIGHT } from "./geo";
 import { Band, Phrases, Side, TEMPLATES_1, WordsIn, abs, center, display, itemAt, thingAt } from "./scenes";
 import { phraseMode } from "./rhythm";
 import { PointOpen } from "./points";
 import { Panel } from "./panel";
+import { Deck } from "./deck";
 import type { Item, Scene, TemplateId } from "./types";
 
 // The templates, part 2: compare (before → after), chart (it grows),
@@ -71,7 +72,7 @@ function Compare({ c }: { c: C }) {
         <div style={abs({ left: 0, top: 0, width: w, height: dh, ...rise(k, 60) })}>
           {card(false)}
           <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 ${((1 - slide) * 100).toFixed(2)}% 0 0)` }}>{card(true)}</div>
-          <div style={abs({ left: slide * w - 4, top: 70, width: 8, height: n * 120 + 100, borderRadius: 9, background: c.look.accent })} />
+          <div style={abs({ left: slide * w - 4, top: 70, width: 8, height: n * 120 + 100, borderRadius: rad(c, 9), background: c.look.accent })} />
           <div style={center({ left: slide * w - 40, top: 30, width: 80, height: 80, borderRadius: 99, background: c.look.accent })}>
             <Icon name="chevrons-left-right" size={44} color={c.look.onAccent} strokeWidth={2.6} />
           </div>
@@ -152,7 +153,7 @@ function Chart({ c }: { c: C }) {
         const last = i === n - 1;
         return (
           <div key={i} style={abs({ left: 0, top: i * (bh + gap), width: dw, height: bh })}>
-            <div style={abs({ left: 0, top: 0, width: dw * len, height: bh, borderRadius: 30, background: last ? c.look.accent : tint(c.look.accent, c.look.dark ? 0.24 : 0.2), display: "flex", alignItems: "center", gap: 20, padding: "0 30px", boxSizing: "border-box", overflow: "hidden" })}>
+            <div style={abs({ left: 0, top: 0, width: dw * len, height: bh, borderRadius: rad(c, 30), background: last ? c.look.accent : tint(c.look.accent, c.look.dark ? 0.24 : 0.2), display: "flex", alignItems: "center", gap: 20, padding: "0 30px", boxSizing: "border-box", overflow: "hidden" })}>
               <Icon name={it.icon ?? c.s.icon} size={56} color={last ? c.look.onAccent : c.look.ink} strokeWidth={2.2} />
               <One part="item" style={{ fontFamily: familyOf(c.look.text), fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, color: last ? c.look.onAccent : c.look.ink }} fit={dw * 0.45} face={c.look.text}>{it.text}</One>
             </div>
@@ -164,6 +165,8 @@ function Chart({ c }: { c: C }) {
 }
 
 // ── kinetic: the words are the show ───────────────────────────────────────
+// the kinetic variants after the first three: one way of coming in each
+export const KINETIC_MOVES: Partial<Record<number, Effect>> = { 3: "mask", 4: "sweep", 5: "underline", 6: "focus", 7: "split", 8: "box", 9: "drop" };
 function Kinetic({ c }: { c: C }) {
   const { W, H, pad, u } = c.g;
   const box = { left: pad, top: 0, width: W - 2 * pad, height: H };
@@ -200,9 +203,11 @@ function Kinetic({ c }: { c: C }) {
       </div>
     );
   }
-  // big words, the key one growing in as it is said (the whole line phrase by phrase, when it says more)
-  if (phraseMode(c.s)) return <Phrases c={c} effect="pop" />;
-  return <WordsIn c={c} box={box} place="center" effect="pop" />;
+  // big words, the key one growing in as it is said — or (3…9) coming in another way (kit.tsx Moving)
+  // (the whole line phrase by phrase, when it says more)
+  const effect: Effect = KINETIC_MOVES[c.s.variant] ?? "pop";
+  if (phraseMode(c.s)) return <Phrases c={c} effect={effect} />;
+  return <WordsIn c={c} box={box} place="center" effect={effect} />;
 }
 
 // ── messages: the product talking ─────────────────────────────────────────
@@ -227,9 +232,9 @@ function Messages({ c }: { c: C }) {
             const mine = i % 2 === 1;
             return (
               <div key={i} style={abs({ top: 170 + i * 170, [mine ? "right" : "left"]: 40, maxWidth: dw - 200 })}>
-                {typing && <div style={{ display: "flex", gap: 10, padding: "26px 30px", borderRadius: 40, background: c.look.line }}>{[0, 1, 2].map((d) => <div key={d} style={{ width: 16, height: 16, borderRadius: 99, background: c.look.panelSub, opacity: 0.4 + 0.6 * clamp01(Math.sin((c.f + d * 4) / 3)) }} />)}</div>}
+                {typing && <div style={{ display: "flex", gap: 10, padding: "26px 30px", borderRadius: rad(c, 40), background: c.look.line }}>{[0, 1, 2].map((d) => <div key={d} style={{ width: 16, height: 16, borderRadius: 99, background: c.look.panelSub, opacity: 0.4 + 0.6 * clamp01(Math.sin((c.f + d * 4) / 3)) }} />)}</div>}
                 {c.f >= at && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "24px 34px", borderRadius: 44, background: mine ? c.look.panelAccent : tint(c.look.panelAccent, 0.12), color: mine ? onPanel(c) : c.look.panelInk, ...pop(kb), transformOrigin: mine ? "right center" : "left center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "24px 34px", borderRadius: rad(c, 44), background: mine ? c.look.panelAccent : tint(c.look.panelAccent, 0.12), color: mine ? onPanel(c) : c.look.panelInk, ...pop(kb), transformOrigin: mine ? "right center" : "left center" }}>
                     <Icon name={it.icon ?? c.s.icon} size={48} color={mine ? onPanel(c) : c.look.panelAccent} strokeWidth={2.2} />
                     <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item }} fit={dw - 360} face={c.look.text}>{it.text}</One>
                   </div>
@@ -263,7 +268,7 @@ function Messages({ c }: { c: C }) {
                 <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={72} card />
                 <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
                   <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: read ? 550 : 750 }} fit={560} face={c.look.text}>{it.text}</One>
-                  <div style={{ height: 14, width: 260 + i * 40, borderRadius: 9, background: c.look.line, marginTop: 14 }} />
+                  <div style={{ height: 14, width: 260 + i * 40, borderRadius: rad(c, 9), background: c.look.line, marginTop: 14 }} />
                 </div>
               </div>
             );
@@ -281,7 +286,7 @@ function Messages({ c }: { c: C }) {
         <div style={{ height: 90, display: "flex", alignItems: "center", gap: 14, padding: "0 34px", borderBottom: `1.5px solid ${c.look.line}` }}>
           {[0, 1, 2].map((d) => <div key={d} style={{ width: 18, height: 18, borderRadius: 99, background: c.look.line }} />)}
         </div>
-        {[0, 1, 2, 3].map((r) => <div key={r} style={abs({ left: 50, top: 140 + r * 130, width: 360 - r * 40, height: 70, borderRadius: 18, background: c.look.line, opacity: 0.6 })} />)}
+        {[0, 1, 2, 3].map((r) => <div key={r} style={abs({ left: 50, top: 140 + r * 130, width: 360 - r * 40, height: 70, borderRadius: rad(c, 18), background: c.look.line, opacity: 0.6 })} />)}
         {items.map((it, i) => {
           const kt = springAt(c, itemAt(c, i, n));
           return (
@@ -308,7 +313,7 @@ function Bento({ c }: { c: C }) {
     return (
       <div style={{ width: w, height: h, ...panel(c, 34), padding: 40, boxSizing: "border-box", display: "flex", flexDirection: "column", justifyContent: "space-between", background: big ? c.look.fill : c.look.panel, color: big ? c.look.onFill : c.look.panelInk, ...rise(k, 50) }}>
         {big ? (
-          <div style={center({ position: "relative", width: 110, height: 110, borderRadius: 30, background: tint(c.look.onFill, 0.18) })}>
+          <div style={center({ position: "relative", width: 110, height: 110, borderRadius: rad(c, 30), background: tint(c.look.onFill, 0.18) })}>
             <Icon name={it.icon ?? c.s.icon} size={64} color={c.look.onFill} strokeWidth={2.2} />
           </div>
         ) : (
@@ -387,18 +392,18 @@ function Page({ c }: { c: C }) {
     <div style={{ position: "absolute", inset: 0, background: c.look.panel === "#ffffff" ? "#ffffff" : "#15171d", padding: 48, boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 26 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
         <Glyph c={c} part="icon" name={c.s.icon} size={44} solid card />
-        <div style={{ height: 14, width: 120, borderRadius: 9, background: tint(ink, 0.3) }} />
+        <div style={{ height: 14, width: 120, borderRadius: rad(c, 9), background: tint(ink, 0.3) }} />
         <div style={{ flex: 1 }} />
-        {[70, 70, 70].map((w, i) => <div key={i} style={{ height: 12, width: w, borderRadius: 9, background: tint(ink, 0.22) }} />)}
+        {[70, 70, 70].map((w, i) => <div key={i} style={{ height: 12, width: w, borderRadius: rad(c, 9), background: tint(ink, 0.22) }} />)}
         <div style={{ height: 40, width: 120, borderRadius: 99, background: c.look.panelAccent }} />
       </div>
       <div style={{ display: "flex", gap: 40, flex: 1 }}>
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 18, paddingTop: 40 }}>
-          {[0.9, 0.7].map((w, i) => <div key={i} style={{ height: 44, width: `${w * 100}%`, borderRadius: 12, background: tint(ink, 0.45) }} />)}
-          {[0.95, 0.8, 0.6].map((w, i) => <div key={i} style={{ height: 14, width: `${w * 100}%`, borderRadius: 9, background: tint(ink, 0.2) }} />)}
+          {[0.9, 0.7].map((w, i) => <div key={i} style={{ height: 44, width: `${w * 100}%`, borderRadius: rad(c, 12), background: tint(ink, 0.45) }} />)}
+          {[0.95, 0.8, 0.6].map((w, i) => <div key={i} style={{ height: 14, width: `${w * 100}%`, borderRadius: rad(c, 9), background: tint(ink, 0.2) }} />)}
           <div style={{ height: 52, width: 200, borderRadius: 99, background: c.look.panelAccent, marginTop: 14 }} />
         </div>
-        <div style={{ flex: 1, borderRadius: 24, background: tint(c.look.panelAccent, 0.16), display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ flex: 1, borderRadius: rad(c, 24), background: tint(c.look.panelAccent, 0.16), display: "flex", alignItems: "center", justifyContent: "center" }}>
           <Icon name={c.s.icon} size={120} color={c.look.panelAccent} strokeWidth={1.6} />
         </div>
       </div>
@@ -437,7 +442,7 @@ function Screen({ c }: { c: C }) {
   );
 }
 
-export const TEMPLATE: Record<TemplateId, (p: { c: C }) => ReactNode> = { ...TEMPLATES_1, kinetic: Kinetic, compare: Compare, chart: Chart, messages: Messages, bento: Bento, screen: Screen, concept: Concept, point: PointOpen, panel: Panel };
+export const TEMPLATE: Record<TemplateId, (p: { c: C }) => ReactNode> = { ...TEMPLATES_1, kinetic: Kinetic, compare: Compare, chart: Chart, messages: Messages, bento: Bento, screen: Screen, concept: Concept, point: PointOpen, panel: Panel, deck: Deck };
 
 // the scene's click (its cursor's or its button's — the last scene has a button only when the voice asks), for its sound
 export function clickOf(s: Scene, asks = true): number | null {

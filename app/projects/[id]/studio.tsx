@@ -6,7 +6,7 @@ import { renderProgress, startRender } from "@/app/projects/actions";
 import { Player } from "@remotion/player";
 import { SimpleFilm } from "@/components/video/simple/film";
 import { FILM_ID, type FilmProps, type SimplePlan } from "@/components/video/simple/types";
-import { Editor } from "./editor";
+import { Editor, type EditPrice } from "./editor";
 
 // The project's video: watch it, edit it (its owner) and download it — the
 // MP4 made on the server, or (until it is there, or if it can't be made)
@@ -47,8 +47,9 @@ async function renderToFile({ props, file, signal, onProgress }: { props: Props;
 
 // file: the MP4 made on the server (lib/render-server.ts); rendering: it is
 // being made (autoStart: ask for it now)
-// editable: the owner may edit it (editor.tsx); edited: it was, and can go back
-export function Studio({ projectId, file, rendering = false, autoStart = false, plan, audioUrl, name, className, editable = false, edited = false }: { projectId?: string; file?: string | null; rendering?: boolean; autoStart?: boolean; plan: SimplePlan; audioUrl: string | null; name: string; className: string; editable?: boolean; edited?: boolean }) {
+// editable: the owner may edit it (editor.tsx); edited: it was, and can go back;
+// trial: made on the free trial (watermarked, not editable)
+export function Studio({ projectId, file, rendering = false, autoStart = false, plan, audioUrl, name, className, editable = false, edited = false, editPrice, trial = false }: { trial?: boolean; projectId?: string; file?: string | null; rendering?: boolean; autoStart?: boolean; plan: SimplePlan; audioUrl: string | null; name: string; className: string; editable?: boolean; edited?: boolean; editPrice?: EditPrice }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const asked = useRef(false);
@@ -113,9 +114,16 @@ export function Studio({ projectId, file, rendering = false, autoStart = false, 
             style={{ width: "100%", maxHeight: "75vh", aspectRatio: `${sizeOf(plan)[0]} / ${sizeOf(plan)[1]}` }}
           />
         </div>
-        {editable && projectId && editing && <Editor projectId={projectId} plan={plan} audioUrl={audioUrl} edited={edited} onClose={() => setEditing(false)} />}
+        {editable && projectId && editing && <Editor projectId={projectId} plan={plan} audioUrl={audioUrl} edited={edited} price={editPrice ?? { cost: 0, after: 0, balance: null }} onClose={() => setEditing(false)} />}
       </section>
       <aside className="flex flex-col gap-4">
+        {trial && (
+          <div className="flex flex-col gap-2 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
+            <h2 className="text-sm font-semibold">Free trial video</h2>
+            <p className="text-xs text-foreground/60">This video carries the MotionDots watermark and can&apos;t be edited. Load credits to make videos without the watermark — and edit them as much as you like.</p>
+            <a href="/billing" className="text-xs font-semibold text-[#0a66d6] hover:underline">Load credits →</a>
+          </div>
+        )}
         {editable && projectId && (
           <div className="flex flex-col gap-3 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">
             <div className="flex items-center justify-between">
@@ -125,7 +133,10 @@ export function Studio({ projectId, file, rendering = false, autoStart = false, 
             <button type="button" onClick={() => setEditing(true)} className="inline-flex items-center justify-center gap-2 rounded-full border border-foreground/15 bg-white px-5 py-2.5 text-sm font-semibold hover:border-foreground/35">
               Edit video
             </button>
-            <p className="text-xs text-foreground/50">Change the style, each scene&apos;s layout, words and icons. Free.</p>
+            <p className="text-xs text-foreground/50">
+              Change the style, each scene&apos;s layout, words and icons.{" "}
+              {!editPrice || (editPrice.cost === 0 && editPrice.after === 0) ? "Free." : editPrice.cost === 0 ? `Your first saved edit is free, then ${editPrice.after} credits each.` : `Saving an edit uses ${editPrice.cost} credits.`}
+            </p>
           </div>
         )}
         <div className="flex flex-col gap-3 rounded-2xl bg-white/70 p-5 ring-1 ring-black/[0.06]">

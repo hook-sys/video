@@ -201,8 +201,9 @@ export function Desk() {
   );
 }
 
-// The MotionBrief mark: a play (blue → violet) with the three lines of a
-// brief in it — short, long, short (public/brand/motionbrief-mark.svg).
+// The MotionDots mark: a tile of the brand's gradient (indigo → violet → pink) and three
+// dots rising across it, small to large — a motion trail, the moment before the bounce
+// (public/brand/motiondots-mark.svg). Over a link it bounces (site.css .gs-mark).
 export function Mark() {
   // (its own gradient: a mark hidden elsewhere on the page must not take it along)
   const fill = `gs-mark-${useId().replace(/[^\w-]/g, "")}`;
@@ -210,16 +211,26 @@ export function Mark() {
     <span className="gs-mark">
       <svg viewBox="0 0 64 64" aria-hidden="true">
         <defs>
-          <linearGradient id={fill} x1="0.1" y1="0" x2="0.75" y2="1">
-            <stop offset="0" stopColor="#0a66d6" />
-            <stop offset="1" stopColor="#7c3aed" />
+          <linearGradient id={fill} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#5B5BF6" />
+            <stop offset="0.55" stopColor="#A445F2" />
+            <stop offset="1" stopColor="#FF5C9D" />
           </linearGradient>
         </defs>
-        <polygon points="16,10.5 16,53.5 53.5,32" fill={`url(#${fill})`} stroke={`url(#${fill})`} strokeWidth="10" strokeLinejoin="round" />
-        <rect x="20.5" y="22.5" width="10" height="5" rx="2.5" fill="#fff" />
-        <rect x="20.5" y="29.5" width="19" height="5" rx="2.5" fill="#fff" />
-        <rect x="20.5" y="36.5" width="10" height="5" rx="2.5" fill="#fff" />
+        <rect width="64" height="64" rx="18" fill={`url(#${fill})`} />
+        <circle className="d1" cx="17" cy="44" r="4.5" fill="#fff" fillOpacity="0.55" />
+        <circle className="d2" cx="30" cy="34.5" r="6.2" fill="#fff" fillOpacity="0.8" />
+        <circle className="d3" cx="45.5" cy="22.5" r="8.8" fill="#fff" />
       </svg>
+    </span>
+  );
+}
+
+// The name: "Motion" in ink, "Dots" in the brand's gradient
+export function Wordmark() {
+  return (
+    <span className="gs-word">
+      Motion<b>Dots</b>
     </span>
   );
 }

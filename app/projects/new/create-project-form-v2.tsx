@@ -8,6 +8,8 @@ import { BRAND_NAME_MAX, FORMATS, LOGO_MAX_BYTES, SCREENS_MAX, VERCEL_SCREENSHOT
 import { V2_VOICE_TYPES } from "@/lib/v2/form";
 import { Field, Step, Upload, VoicePicker, colourOf, smaller, type Prefill } from "./form-parts";
 
+export type KitOption = { id: string; name: string; color: string | null; logoUrl: string | null; websiteUrl: string | null; isDefault: boolean };
+
 const input =
   "w-full rounded-xl border border-foreground/12 bg-white/80 px-3.5 py-2.5 text-sm placeholder:text-foreground/35 focus:border-[#0a66d6] focus:outline-none focus:ring-4 focus:ring-[#0a66d6]/15";
 const area =
@@ -32,7 +34,19 @@ function secondsOf(file: File): Promise<number> {
 // name, the website (pictures of the product are taken from it) or pictures
 // of it uploaded, the voice and the format. No call to action (the button
 // says the ask the voice ends on), no questions, one quality level.
-export function CreateProjectFormV2({ prefill, voices = [], credits = null, scriptMax = VOICE_SCRIPT_MAX }: { prefill?: Prefill; voices?: VoiceOption[]; credits?: number | null; scriptMax?: number }) {
+// trial: the free trial's videos left and how long each may be (a customer who hasn't loaded credits)
+export function CreateProjectFormV2({ prefill, voices = [], credits = null, scriptMax = VOICE_SCRIPT_MAX, kits = [], trial = null }: { prefill?: Prefill; voices?: VoiceOption[]; credits?: number | null; scriptMax?: number; kits?: KitOption[]; trial?: { left: number; of: number; seconds: number } | null }) {
+  // a saved brand kit (/brand): its name, colour, website and icon, so nothing is uploaded again
+  const first = prefill ? undefined : (kits.find((k) => k.isDefault) ?? kits[0]);
+  const [kitId, setKitId] = useState(first?.id ?? "");
+  const kit = kits.find((k) => k.id === kitId);
+  const [brandName, setBrandName] = useState(first?.name ?? prefill?.brandName ?? "");
+  const [website, setWebsite] = useState(first?.websiteUrl ?? prefill?.websiteUrl ?? "");
+  const pick = (k?: KitOption) => {
+    setKitId(k?.id ?? "");
+    setBrandName(k?.name ?? "");
+    setWebsite(k?.websiteUrl ?? "");
+  };
   const [state, action, pending] = useActionState(createProjectV2, {});
   const [mode, setMode] = useState<"script" | "upload">("script");
   const [script, setScript] = useState(prefill?.script ?? "");
@@ -58,17 +72,11 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
         <input type="hidden" name="voice_mode" value={mode} />
         <input type="hidden" name="voice_seconds" value={voiceFile?.seconds ? voiceFile.seconds.toFixed(2) : ""} />
         <input type="hidden" name="format" value={format} />
-        <input type="hidden" name="brand_color" value={logo?.colour ?? ""} />
+        <input type="hidden" name="brand_color" value={logo ? (logo.colour ?? "") : (kit?.color ?? "")} />
+        <input type="hidden" name="brand_kit_id" value={kitId} />
         <input type="hidden" name="voice_style" value={VOICE_STYLES[0]} />
 
-        <Step n={1} title="Your voice-over" sub="Type the script for our voice to read, or upload your own recording.">
-          <div className="flex gap-2">
-            {(["script", "upload"] as const).map((m) => (
-              <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m} className={`rounded-full border px-3.5 py-1.5 text-sm ${mode === m ? "border-[#0a66d6] bg-[#0a66d6]/10 font-medium text-[#0a66d6]" : "border-foreground/12 bg-white/70 hover:border-foreground/30"}`}>
-                {m === "script" ? "Write a script" : "Upload my voice"}
-              </button>
-            ))}
-          </div>
+        <Step n={1} title={mode === "script" ? "Your script" : "Your recording"}>
           {mode === "script" ? (
             <>
               <textarea name="script" required rows={7} maxLength={scriptMax} value={script} onChange={(e) => setScript(e.target.value)} placeholder="Paste your script — exactly what the voice will say" className={area} />
@@ -78,10 +86,20 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
                   {script.length}/{scriptMax}
                 </span>
               </div>
-              {scriptMax < VOICE_SCRIPT_MAX && (
+              {trial && trial.left > 0 ? (
                 <p className={hint}>
-                  Welcome credits: a script up to {scriptMax} characters. <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">Buy credits</Link> for longer scripts.
+                  Free trial: {trial.left} of {trial.of} videos left · up to {trial.seconds} s each · with the MotionDots watermark. <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">Load credits</Link> for longer videos without it.
                 </p>
+              ) : trial ? (
+                <p className={hint}>
+                  Your free trial videos are made. <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">Load credits</Link> to make more — without the watermark, and with edits.
+                </p>
+              ) : (
+                scriptMax < VOICE_SCRIPT_MAX && (
+                  <p className={hint}>
+                    Before your first credit load: a script up to {scriptMax} characters. <Link href="/billing" className="font-medium text-[#0a66d6] hover:underline">Load credits</Link> for longer scripts.
+                  </p>
+                )
               )}
             </>
           ) : (
@@ -109,21 +127,45 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
             <textarea name="upload_script" required rows={6} maxLength={VOICE_SCRIPT_MAX} value={uploadScript} onChange={(e) => setUploadScript(e.target.value)} placeholder="Write the words of your recording — exactly as you say them, with । , ? where you pause" className={area} />
             </>
           )}
+          <button type="button" onClick={() => setMode(mode === "script" ? "upload" : "script")} className="self-start text-xs font-medium text-[#0a66d6] hover:underline">
+            {mode === "script" ? "Or upload your own voice" : "Or write a script for our voice"}
+          </button>
         </Step>
 
-        <Step n={2} title="Your brand" sub="Your icon and name reveal the product and close the video.">
+        <Step n={2} title="Your brand">
+          {kits.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {kits.map((k) => (
+                <button key={k.id} type="button" onClick={() => pick(k)} aria-pressed={kitId === k.id} className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${kitId === k.id ? "border-[#0a66d6] bg-[#0a66d6]/10 font-medium text-[#0a66d6]" : "border-foreground/12 bg-white/70 hover:border-foreground/30"}`}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {k.logoUrl ? <img src={k.logoUrl} alt="" className="size-5 object-contain" /> : <span className="size-3 rounded-full" style={{ background: k.color ?? "#0a66d6" }} />}
+                  {k.name}
+                </button>
+              ))}
+              <button type="button" onClick={() => pick()} aria-pressed={!kitId} className={`rounded-full border px-3 py-1.5 text-sm ${!kitId ? "border-[#0a66d6] bg-[#0a66d6]/10 font-medium text-[#0a66d6]" : "border-foreground/12 bg-white/70 hover:border-foreground/30"}`}>
+                + Another brand
+              </button>
+            </div>
+          )}
+          {/* (a saved brand chosen: its name and website go with it; nothing to fill in) */}
+          {kit?.logoUrl ? (
+            <>
+              <input type="hidden" name="brand_name" value={brandName} />
+              <input type="hidden" name="website_url" value={website} />
+            </>
+          ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <Upload
               title="Icon"
-              text={logo ? logo.name : "Upload your icon"}
+              text={logo ? logo.name : kit?.logoUrl ? "Your saved icon · tap to change" : "Upload your icon"}
               sub={`PNG, JPG or WebP · up to ${LOGO_MAX_BYTES / 1024 / 1024} MB`}
               // eslint-disable-next-line @next/next/no-img-element
-              preview={logo ? <img src={logo.url} alt="" className="max-h-12 max-w-[70%] object-contain" /> : undefined}
+              preview={logo || kit?.logoUrl ? <img src={logo?.url ?? kit!.logoUrl!} alt="" className="max-h-12 max-w-[70%] object-contain" /> : undefined}
             >
               <input
                 name="logo"
                 type="file"
-                required
+                required={!kit?.logoUrl}
                 accept="image/png,image/jpeg,image/webp"
                 className="sr-only"
                 onChange={(e) => {
@@ -141,18 +183,47 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
                 }}
               />
             </Upload>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               <Field title="Company name">
-                <input name="brand_name" required defaultValue={prefill?.brandName} maxLength={BRAND_NAME_MAX} placeholder="Your company name" className={input} />
+                <input name="brand_name" required value={brandName} onChange={(e) => setBrandName(e.target.value)} maxLength={BRAND_NAME_MAX} placeholder="Your company name" className={input} />
               </Field>
-              <Field title="Website (optional)">
-                <input name="website_url" type="text" inputMode="url" defaultValue={prefill?.websiteUrl} maxLength={300} placeholder="yourcompany.com" className={input} />
-              </Field>
-              <span className={hint}>We take pictures of your product from it for the video.</span>
+              {!kit && <label className="flex items-center gap-2 text-xs text-foreground/65">
+                <input type="checkbox" name="save_kit" value="1" defaultChecked className="size-4 accent-[#0a66d6]" />
+                Save this brand for next time
+              </label>}
             </div>
           </div>
+          )}
+        </Step>
+
+        {/* the rest, folded away: most videos need none of it (the voice, the size, a website, pictures) */}
+        <details className="group rounded-2xl bg-white/50 ring-1 ring-black/[0.05] open:bg-white/70">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-medium text-foreground/70">
+            <span>More options <span className="font-normal text-foreground/45">· {format}{mode === "script" ? " · voice" : ""} · website · pictures</span></span>
+            <span className="text-foreground/40 transition group-open:rotate-180">▾</span>
+          </summary>
+          <div className="flex flex-col gap-5 px-5 pb-5">
+          <Field title="Size">
+            <div className="flex gap-2">
+              {FORMATS.map((f) => (
+                <button key={f} type="button" onClick={() => setFormat(f)} aria-pressed={format === f} className={`rounded-full border px-3.5 py-1.5 text-sm ${format === f ? "border-[#0a66d6] bg-[#0a66d6]/10 font-medium text-[#0a66d6]" : "border-foreground/12 bg-white/70 hover:border-foreground/30"}`}>
+                  {f} <span className="text-[11px] text-foreground/45">{f === "16:9" ? "YouTube" : f === "9:16" ? "Reels" : "Feed"}</span>
+                </button>
+              ))}
+            </div>
+          </Field>
+          {mode === "script" && (
+            <Field title="Voice">
+              <VoicePicker voices={voices} initial={prefill?.voice} />
+            </Field>
+          )}
+          {!kit?.logoUrl && (
+            <Field title="Website">
+              <input name="website_url" type="text" inputMode="url" value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={300} placeholder="yourcompany.com" className={input} />
+            </Field>
+          )}
           <Upload
-            title="Pictures of your product (optional)"
+            title="Pictures of your product"
             text={screens.length ? `${screens.length} picture${screens.length > 1 ? "s" : ""} added` : "Add up to 3 pictures"}
             sub="Website private, or behind a login? Add screenshots of it here instead."
           >
@@ -179,29 +250,19 @@ export function CreateProjectFormV2({ prefill, voices = [], credits = null, scri
             />
           </Upload>
           <input ref={screensInput} name="screens" type="file" multiple className="hidden" tabIndex={-1} aria-hidden />
-        </Step>
-
-        {mode === "script" ? (
-          <Step n={3} title="Voice" sub="Bangla voice-over. Press play to hear each voice.">
-            <VoicePicker voices={voices} initial={prefill?.voice} />
-          </Step>
-        ) : (
+          {kits.length > 0 && (
+            <Link href="/brand" className="self-start text-xs font-medium text-[#0a66d6] hover:underline">
+              Manage brand kits
+            </Link>
+          )}
+          </div>
+        </details>
+        {mode !== "script" && (
           <>
             <input type="hidden" name="voice_language" value={VOICE_LANGUAGES[0]} />
             <input type="hidden" name="voice_gender" value="female" />
           </>
         )}
-
-        <Step n={mode === "script" ? 4 : 3} title="Format">
-          <div className="grid grid-cols-3 gap-3">
-            {FORMATS.map((f) => (
-              <button key={f} type="button" onClick={() => setFormat(f)} aria-pressed={format === f} className={`flex flex-col items-center gap-1 rounded-2xl border bg-white/70 p-3 ${format === f ? "border-[#0a66d6] ring-4 ring-[#0a66d6]/15" : "border-foreground/12 hover:border-foreground/30"}`}>
-                <span className="text-sm font-medium">{f}</span>
-                <span className="text-[11px] text-foreground/50">{f === "16:9" ? "Web, YouTube" : f === "9:16" ? "Reels, TikTok" : "Feed"}</span>
-              </button>
-            ))}
-          </div>
-        </Step>
 
         {error && <p className="rounded-xl bg-[#fdecea] px-4 py-3 text-sm text-[#a1281b]">{error}</p>}
         <button disabled={blocked} className="w-full rounded-full bg-[#0a66d6] px-6 py-4 text-base font-semibold text-white hover:bg-[#0859bd] disabled:opacity-60">

@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { logout } from "@/app/auth/actions";
 import { projectTitle, videoState } from "@/lib/project-status";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { Desk, Mark, remember, useWindows } from "@/components/site/windows";
+import { Avatar, TopNav } from "@/components/site/top-nav";
+import { UserTabs, userTabs } from "@/components/site/user-tabs";
 import { STATE_UI, ago, monthStart, pipelineProgress } from "./helpers";
 import type { DashboardRow } from "./page";
+import { LegalFooterLinks } from "@/components/site/legal-links";
 import "@/components/site/site.css";
 
-// The customer dashboard, in the site's glass: the videos and the account,
-// one window at a time, and a dock (data comes from page.tsx).
+// The customer dashboard, in the admin's dark: the videos and the account, one
+// window at a time, the places as tabs under the menu bar (data comes from page.tsx).
 
 type DashWindow = "videos" | "account";
 const PATH: Record<DashWindow, string> = { videos: "/dashboard", account: "/dashboard#account" };
@@ -29,21 +33,35 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
   const initial = (name || email || "?")[0];
 
   return (
-    <div className="gs">
+    <div className="gs gs-dark gs-user">
       <AutoRefresh active={active.length > 0} intervalMs={8000} />
       <Desk />
 
-      <header className="gs-bar gs-glass">
-        <Link href="/dashboard" className="gs-brand" onClick={open("videos")}>
-          <Mark />
-          MotionBrief
-        </Link>
-        <Link href="/projects/new" onClick={remember} className="gs-btn">
-          New video
-        </Link>
-      </header>
+      <TopNav
+        wide
+        home="/dashboard"
+        onHome={open("videos")}
+        below={
+          <UserTabs
+            items={userTabs(current, admin, (place) => (place === "videos" || place === "account" ? open(place) : remember)).map((t) =>
+              t.icon === "videos" ? { ...t, anchor: iconRef("videos") } : t.icon === "account" ? { ...t, anchor: iconRef("account") } : t,
+            )}
+          />
+        }
+        right={
+          <>
+            <Link href="/billing" className="md-credits" onClick={remember}>
+              {admin ? "∞" : credits.toLocaleString("en-US")} credits
+            </Link>
+            <Link href="/projects/new" onClick={remember} className="gs-btn">
+              + New video
+            </Link>
+            <Avatar href={PATH.account} initial={initial} onClick={open("account")} active={current === "account"} />
+          </>
+        }
+      />
 
-      <main className="gs-stage">
+      <main className="gs-stage gs-user-stage wide">
         {win(
           "videos",
           <>
@@ -112,7 +130,7 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
                     return (
                       <Link key={p.id} href={`/projects/${p.id}`} className="gs-card" onClick={remember}>
                         <div className="gs-thumb" style={{ background: p.brand_color ?? "#1d1d1f" }}>
-                          {src ? <video src={`${src}#t=1.5`} preload="metadata" muted playsInline /> : <Mark />}
+                          {src ? <Preview src={src} /> : <Mark />}
                           {p.duration_seconds ? (
                             <span className="len">
                               {Math.floor(p.duration_seconds / 60)}:{String(p.duration_seconds % 60).padStart(2, "0")}
@@ -163,6 +181,9 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
               <Link href="/billing" onClick={remember} className="gs-btn">
                 Buy credits
               </Link>
+              <Link href="/brand" onClick={remember} className="gs-btn ghost">
+                Brand kits
+              </Link>
               {admin && (
                 <Link href="/admin" onClick={remember} className="gs-btn ghost">
                   Admin panel
@@ -176,61 +197,26 @@ export function DashboardView({ email, name, admin, pending = false, credits, pr
         )}
       </main>
 
-      <footer className="gs-footer">© MotionBrief</footer>
+      <footer className="gs-footer wide">
+        <LegalFooterLinks />
+      </footer>
 
-      <nav className="gs-dock gs-glass" aria-label="Main">
-        <Link href="/" className="gs-dock-brand gs-only-wide" onClick={remember} aria-label="MotionBrief home">
-          <Mark />
-        </Link>
-        <Link href={PATH.videos} onClick={open("videos")} aria-current={current === "videos" ? "page" : undefined}>
-          <span ref={iconRef("videos")} className="gs-tile t1">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" aria-hidden="true">
-              <rect x="4" y="5" width="7" height="6" rx="1.5" />
-              <rect x="13" y="5" width="7" height="6" rx="1.5" />
-              <rect x="4" y="13" width="7" height="6" rx="1.5" />
-              <rect x="13" y="13" width="7" height="6" rx="1.5" />
-            </svg>
-          </span>
-          <small>Videos</small>
-        </Link>
-        <Link href={PATH.account} onClick={open("account")} aria-current={current === "account" ? "page" : undefined}>
-          <span ref={iconRef("account")} className="gs-tile t5">
-            <span className="initial">{initial}</span>
-          </span>
-          <small>Account</small>
-        </Link>
-        <Link href="/billing" onClick={remember}>
-          <span className="gs-tile t6">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="8" />
-              <path d="M14.5 9.5c-.5-.9-1.5-1.3-2.5-1.3-1.5 0-2.6.8-2.6 1.9 0 2.6 5.3 1.3 5.3 4 0 1.1-1.2 1.9-2.7 1.9-1.1 0-2.1-.4-2.6-1.3M12 6.8v1.4M12 15.8v1.4" />
-            </svg>
-          </span>
-          <small>Credits</small>
-        </Link>
-        {admin && (
-          <Link href="/admin" onClick={remember}>
-            <span className="gs-tile t3">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                <path d="M5 7h14M5 12h14M5 17h14" />
-                <circle cx="9" cy="7" r="1.6" fill="#fff" />
-                <circle cx="15" cy="12" r="1.6" fill="#fff" />
-                <circle cx="8" cy="17" r="1.6" fill="#fff" />
-              </svg>
-            </span>
-            <small>Admin</small>
-          </Link>
-        )}
-        <span className="gs-sep" aria-hidden="true" />
-        <Link href="/projects/new" onClick={remember}>
-          <span className="gs-tile t4">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#0a66d6" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
-              <path d="M12 6v12M6 12h12" />
-            </svg>
-          </span>
-          <small>New video</small>
-        </Link>
-      </nav>
     </div>
   );
+}
+
+// A video's picture, fetched only when its card comes near the screen (a long
+// list no longer pulls every video's first seconds at once); the mark until then.
+function Preview({ src }: { src: string }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    // (the card's picture box: this span itself has no box of its own)
+    const el = box.current?.parentElement;
+    if (!el) return;
+    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && (setNear(true), io.disconnect()), { rootMargin: "300px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return near ? <video src={`${src}#t=1.5`} preload="metadata" muted playsInline /> : <span ref={box} className="contents"><Mark /></span>;
 }

@@ -7,10 +7,10 @@ import { Player, type PlayerRef, Thumbnail } from "@remotion/player";
 import { resetVideoEdit, saveVideoEdit } from "@/app/projects/actions";
 import { ICON_NAMES, Icon, resolveIcon } from "@/components/video/icons";
 import { colourProblemsOf, problemsOf, settledAt } from "@/components/video/simple/check";
-import { OWN_GROUNDS, type PlanEdit, SHOWS_THINGS, type SceneEdit, TEMPLATE_NAME, TYPE_NAME, applyEdit, editOf, mostWords, sameEdit } from "@/components/video/simple/edit";
+import { OWN_GROUNDS, type PlanEdit, SHOWS_THINGS, type SceneEdit, TEMPLATE_NAME, TYPE_NAME, applyEdit, designName, editOf, mostWords, sameEdit } from "@/components/video/simple/edit";
 import { SimpleFilm } from "@/components/video/simple/film";
 import { variantOk } from "@/components/video/simple/select";
-import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePlan, TEMPLATES, type TemplateId, TYPE_PAIRS, VARIANTS, WAYS } from "@/components/video/simple/types";
+import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePlan, STYLES, STYLE_GROUNDS, TEMPLATES, type TemplateId, TYPE_PAIRS, variantsOf, WAYS } from "@/components/video/simple/types";
 
 // The customer's editor of a finished video (components/video/simple/edit.ts),
 // opened over the page: the video in the middle, its scenes on a timeline
@@ -22,7 +22,8 @@ import { type FilmProps, GROUNDS, type Ground, PACES, type Scene, type SimplePla
 // credits. Saved, the download and the server's MP4 are the edited video.
 
 const GROUND_NAME = { dark: "Dark", light: "Light", brand: "Brand colour", glass: "Glass" } as const;
-const WAY_NAME = { slide: "Slide", zoom: "Zoom", wipe: "Wipe", blur: "Blur" } as const;
+const WAY_NAME = { slide: "Slide", zoom: "Zoom", wipe: "Wipe", blur: "Blur", leak: "Light", push: "Push", tilt: "Turn" } as const;
+const STYLE_NAME = { soft: "Soft", neon: "Neon", editorial: "Editorial", bold: "Bold", depth: "Depth" } as const;
 const PACE_NAME = { calm: "Calm", lively: "Lively" } as const;
 const noop = () => () => {};
 // a run of words cut to fit a layout: the lit word kept, never starting or ending on a little word, as long as it can be
@@ -47,7 +48,12 @@ const option = (on: boolean, off = false) =>
 const pill = (on: boolean) => `rounded-md px-3 py-1.5 text-xs font-medium transition ${on ? "bg-[#3b8cff] text-white" : "bg-white/[0.06] text-white/75 hover:bg-white/[0.12]"}`;
 const field = "w-full rounded-md border border-white/10 bg-white/[0.05] px-2.5 py-1.5 text-sm text-white placeholder:text-white/30 focus:border-[#3b8cff] focus:outline-none";
 
-export function Editor({ projectId, plan, audioUrl, edited, onClose }: { projectId: string; plan: SimplePlan; audioUrl: string | null; edited: boolean; onClose: () => void }) {
+// what saving this edit costs (`after`: the one after it), and the customer's balance (null: the team)
+export type EditPrice = { cost: number; after: number; balance: number | null };
+const costLine = (p: EditPrice) =>
+  p.cost > 0 ? `Saving uses ${p.cost} credits${p.balance !== null ? ` · you have ${p.balance.toLocaleString("en-US")}` : ""}` : p.after > 0 ? `This edit is free · each one after uses ${p.after} credits` : "";
+
+export function Editor({ projectId, plan, audioUrl, edited, price, onClose }: { projectId: string; plan: SimplePlan; audioUrl: string | null; edited: boolean; price: EditPrice; onClose: () => void }) {
   const router = useRouter();
   // (drawn over the page, in the browser only)
   const mounted = useSyncExternalStore(noop, () => true, () => false);
@@ -70,6 +76,8 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
   const [note, setNote] = useState<{ ok: boolean; text: string }>();
   // the choices a click in the video brought up (lit for a moment)
   const [focus, setFocus] = useState<{ sec: string; item?: number; n: number } | null>(null);
+  const [moreScene, setMoreScene] = useState(false);
+  const [moreStyle, setMoreStyle] = useState(false);
   const [frame, setFrame] = useState(0);
   const player = useRef<PlayerRef>(null);
   const opening = useRef(frameOf(plan.scenes[0]));
@@ -114,30 +122,58 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
     setNote(undefined);
   };
 
-  // the layouts this scene can take (each laid out and checked), as they look —
-  // the one it has first; one that holds fewer words keeps the run around the lit word
-  const ways = useMemo(() => {
-    const last = at === plan.scenes.length - 1;
-    const out: { t: TemplateId; v: number; show: [number, number] | null; key: number | null; plan: SimplePlan }[] = [];
-    const now = applyEdit(plan, edit).plan;
-    if (now) out.push({ t: scene.template, v: scene.variant, show: scene.show, key: scene.key, plan: now });
-    for (const t of TEMPLATES) {
-      if (last !== (t === "cta") || (t === "screen" && !(plan.brand.screens?.length ?? 0))) continue;
-      for (let v = 0; v < VARIANTS; v++) {
-        if ((t === scene.template && v === scene.variant) || !variantOk(t, v, scene.items.length)) continue;
+  // the layouts this scene can take (each laid out and checked), as they look — the one it has first;
+  // one that holds fewer words keeps the run around the lit word. Two steps, so the list stays short and
+  // only what is open is drawn: each template once (the design it has, else its first that fits), then
+  // the designs of the template open.
+  type Way = { t: TemplateId; v: number; show: [number, number] | null; key: number | null; plan: SimplePlan };
+  const wayOf = useMemo(() => {
+    const cache = new Map<string, Way | null>();
+    return (t: TemplateId, v: number): Way | null => {
+      const id = `${t}:${v}`;
+      if (cache.has(id)) return cache.get(id)!;
+      let out: Way | null = null;
+      if (t === scene.template && v === scene.variant) {
+        const now = applyEdit(plan, edit).plan;
+        out = now ? { t, v, show: scene.show, key: scene.key, plan: now } : null;
+      } else if (variantOk(t, v, scene.items.length)) {
         let show = scene.show, key = scene.key;
+        let fits = true;
         if (show && show[1] - show[0] + 1 > mostWords(t, v)) {
           show = shorter(s.said!.map((w) => w.t), show, key, mostWords(t, v));
           if (key != null && (key < show[0] || key > show[1])) key = null;
-        } else if (!show && s.words.length > mostWords(t, v)) continue;
-        const trial = applyEdit(plan, { ...edit, scenes: edit.scenes.map((x, i) => (i === at ? { ...x, template: t, variant: v, show, key, screen: t === "screen" ? (x.screen ?? 0) : null } : x)) });
-        if (!trial.plan) continue;
-        if (problemsOf(trial.plan, at).some((x) => !before.has(`${at}:${x.detail}`))) continue;
-        out.push({ t, v, show, key, plan: trial.plan });
+        } else if (!show && s.words.length > mostWords(t, v)) fits = false;
+        if (fits) {
+          const trial = applyEdit(plan, { ...edit, scenes: edit.scenes.map((x, i) => (i === at ? { ...x, template: t, variant: v, show, key, screen: t === "screen" ? (x.screen ?? 0) : null } : x)) });
+          if (trial.plan && !problemsOf(trial.plan, at).some((x) => !before.has(`${at}:${x.detail}`))) out = { t, v, show, key, plan: trial.plan };
+        }
+      }
+      cache.set(id, out);
+      return out;
+    };
+  }, [plan, edit, at, scene, s, before]);
+  const kinds = useMemo(() => {
+    const last = at === plan.scenes.length - 1;
+    const out: Way[] = [];
+    for (const t of TEMPLATES) {
+      if (last !== (t === "cta") || (t === "screen" && !(plan.brand.screens?.length ?? 0))) continue;
+      const order = t === scene.template ? [scene.variant, ...Array.from({ length: variantsOf(t) }, (_, v) => v).filter((v) => v !== scene.variant)] : Array.from({ length: variantsOf(t) }, (_, v) => v);
+      for (const v of order) {
+        const w = wayOf(t, v);
+        if (w) {
+          out.push(w);
+          break;
+        }
       }
     }
-    return out;
-  }, [plan, edit, at, scene, s, before]);
+    // (the template it has first)
+    return out.sort((a, b) => Number(b.t === scene.template) - Number(a.t === scene.template));
+  }, [wayOf, at, plan, scene.template, scene.variant]);
+  // the template whose designs are open (the scene's own, until another is picked)
+  // (kept for the scene it was opened on: another scene opens on its own)
+  const [opened, setOpened] = useState<{ at: number; t: TemplateId } | null>(null);
+  const openT = opened?.at === at ? opened.t : scene.template;
+  const designs = useMemo(() => Array.from({ length: variantsOf(openT) }, (_, v) => wayOf(openT, v)).filter((w): w is Way => !!w), [wayOf, openT]);
   // the backgrounds and lettering, as they look on this scene (a background the brand colour does not read on: not offered)
   const looks = useMemo(
     () => ({
@@ -146,6 +182,15 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
         return { g, plan: p, ok: !!p && !colourProblemsOf(p).length };
       }),
       types: TYPE_PAIRS.map((_, i) => ({ i, plan: applyEdit(plan, { ...edit, theme: { ...edit.theme, type: i } }).plan })),
+      // (a look on a background it stands on: the one chosen if it does, else its first that reads)
+      styles: STYLES.map((st) => {
+        const grounds = STYLE_GROUNDS[st].includes(edit.theme.ground) ? [edit.theme.ground] : STYLE_GROUNDS[st];
+        for (const g of grounds) {
+          const p = applyEdit(plan, { ...edit, theme: { ...edit.theme, style: st, ground: g } }).plan;
+          if (p && !colourProblemsOf(p).length) return { st, g, plan: p };
+        }
+        return { st, g: edit.theme.ground, plan: null };
+      }),
     }),
     [plan, edit],
   );
@@ -200,6 +245,8 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
     setTab("scene");
     setNote(undefined);
     const n = (focus?.n ?? 0) + 1;
+    // (a part folded away in the scene's "More" — its things, icon, picture, background — opens it)
+    if (["items", "icon", "picture", "ground"].includes(sec)) setMoreScene(true);
     setFocus({ sec, item: item >= 0 ? item : undefined, n });
     setTimeout(() => {
       document.querySelector(`[data-sec="${sec}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -210,6 +257,8 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
   const lit = (sec: string) => focus?.sec === sec;
 
   const save = async () => {
+    if (price.cost > 0 && !confirm(`Saving this edit uses ${price.cost} credits. Save it?`)) return;
+    if (price.cost === 0 && price.after > 0 && !confirm(`This is your free edit. After it, each saved edit uses ${price.after} credits. Save it?`)) return;
     setBusy(true);
     const r = await saveVideoEdit(projectId, edit);
     setBusy(false);
@@ -218,10 +267,11 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
     router.refresh();
   };
   const reset = async () => {
-    if (!confirm("Go back to the video as it was made? Your edits will be lost.")) return;
+    if (!confirm(`Go back to the video as it was made? Your edits will be lost.${price.cost > 0 ? ` This counts as an edit and uses ${price.cost} credits.` : ""}`)) return;
     setBusy(true);
-    await resetVideoEdit(projectId);
+    const r = await resetVideoEdit(projectId);
     setBusy(false);
+    if (!r.ok) return setNote({ ok: false, text: r.error });
     setNote({ ok: true, text: "Back to the video as it was made." });
     router.refresh();
   };
@@ -302,6 +352,7 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
         </button>
         <div className="ml-auto flex items-center gap-3">
           <span className="hidden text-xs text-white/45 sm:inline">{busy ? "Saving…" : dirty ? "● Unsaved changes" : edited ? "Edited · saved" : "As made"}</span>
+          {costLine(price) && <span className={`hidden text-xs md:inline ${price.cost > 0 && price.balance !== null && price.balance < price.cost ? "text-amber-300" : "text-white/45"}`}>{costLine(price)}</span>}
           {edited && !dirty && (
             <button type="button" disabled={busy} onClick={reset} className="text-xs text-white/55 hover:text-white">
               Restore original
@@ -349,23 +400,46 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
           <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
             {tab === "scene" ? (
               <>
-                <Section id="layout" lit={lit("layout")} title="Layout" hint={at === last ? "The last scene is always your brand and the ask" : `${ways.length} that fit this scene`}>
-                  <div className="grid grid-cols-2 gap-2">
-                    {ways.map((w) => {
-                      const on = scene.template === w.t && scene.variant === w.v;
-                      const n = ways.filter((x) => x.t === w.t).length;
+                <Section id="layout" lit={lit("layout")} title="Layout" hint={at === last ? "The last scene is always your brand and the ask" : `${kinds.length} kinds that fit this scene`}>
+                  <div className="grid grid-cols-3 gap-2">
+                    {kinds.map((w) => {
+                      const on = scene.template === w.t;
+                      const many = variantsOf(w.t) > 1;
                       return (
-                        <button key={`${w.t}${w.v}`} type="button" onClick={() => !on && changeScene({ template: w.t, variant: w.v, show: w.show, key: w.key, screen: w.t === "screen" ? (scene.screen ?? 0) : null })} className={`${option(on)} overflow-hidden`}>
+                        <button
+                          key={w.t}
+                          type="button"
+                          onClick={() => {
+                            setOpened({ at, t: w.t });
+                            if (!on) changeScene({ template: w.t, variant: w.v, show: w.show, key: w.key, screen: w.t === "screen" ? (scene.screen ?? 0) : null });
+                          }}
+                          className={`${option(on || openT === w.t)} overflow-hidden`}
+                        >
                           <Still plan={w.plan} frame={frameOf(w.plan.scenes[at])} />
                           <span className="block truncate px-2 py-1.5 text-[11px] text-white/70">
                             {TEMPLATE_NAME[w.t]}
-                            {n > 1 ? ` ${ways.filter((x) => x.t === w.t).findIndex((x) => x.v === w.v) + 1}` : ""}
+                            {many ? <span className="text-white/35"> · {variantsOf(w.t)}</span> : null}
                           </span>
                         </button>
                       );
                     })}
                   </div>
                 </Section>
+                {designs.length > 1 && (
+                  <Section title={`Designs · ${TEMPLATE_NAME[openT]}`} hint={`${designs.length} that fit this scene`}>
+                    <div className="grid grid-cols-2 gap-2">
+                      {designs.map((w) => {
+                        const on = scene.template === w.t && scene.variant === w.v;
+                        return (
+                          <button key={`${w.t}${w.v}`} type="button" onClick={() => !on && changeScene({ template: w.t, variant: w.v, show: w.show, key: w.key, screen: w.t === "screen" ? (scene.screen ?? 0) : null })} className={`${option(on)} overflow-hidden`}>
+                            <Still plan={w.plan} frame={frameOf(w.plan.scenes[at])} />
+                            <span className="block truncate px-2 py-1.5 text-[11px] text-white/70">{designName(w.t, w.v)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Section>
+                )}
 
                 {s.said?.length && scene.show ? (
                   <Section id="text" lit={lit("text")} title="Text" hint={`${scene.show[1] - scene.show[0] + 1} of up to ${mostWords(scene.template, scene.variant)} words`}>
@@ -378,6 +452,7 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
                   </Section>
                 )}
 
+                <More title="More for this scene" hint="Items, icon, picture, background" open={moreScene} onToggle={setMoreScene}>
                 {SHOWS_THINGS.includes(scene.template) && (
                   <Section id="items" lit={lit("items")} title="Items" hint="Up to 3 · each 1–3 words">
                     <div className="flex flex-col gap-2">
@@ -426,9 +501,30 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
                     ))}
                   </div>
                 </Section>
+                </More>
               </>
             ) : (
               <>
+                <Section title="Look" hint="Cards, icons and the background's pattern">
+                  <div className="grid grid-cols-3 gap-2">
+                    {looks.styles.map(({ st, g, plan: p }) => (
+                      <button key={st} type="button" disabled={!p} onClick={() => (edit.theme.style ?? "soft") !== st && changeLook({ style: st, ground: g })} className={`${option((edit.theme.style ?? "soft") === st, !p)} overflow-hidden`}>
+                        {p && <Still plan={p} frame={frameOf(p.scenes[at])} />}
+                        <span className="block truncate px-2 py-1.5 text-[11px] text-white/70">{STYLE_NAME[st]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+                <Section title="Transition" hint="Between scenes">
+                  <div className="flex flex-wrap gap-1.5">
+                    {WAYS.map((w) => (
+                      <button key={w} type="button" onClick={() => changeLook({ way: w })} className={pill(edit.theme.way === w)}>
+                        {WAY_NAME[w]}
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+                <More title="More style" hint="Background, lettering, movement" open={moreStyle} onToggle={setMoreStyle}>
                 <Section title="Background" hint={(() => {
                   const mine = shown.scenes.map((x, i) => (x.ground && x.ground !== shown.theme.ground ? i + 1 : 0)).filter(Boolean);
                   return mine.length ? `Scene ${mine.join(" and ")} ${mine.length > 1 ? "have" : "has"} its own` : "For the whole video";
@@ -452,15 +548,6 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
                     ))}
                   </div>
                 </Section>
-                <Section title="Transition" hint="Between scenes">
-                  <div className="flex flex-wrap gap-1.5">
-                    {WAYS.map((w) => (
-                      <button key={w} type="button" onClick={() => changeLook({ way: w })} className={pill(edit.theme.way === w)}>
-                        {WAY_NAME[w]}
-                      </button>
-                    ))}
-                  </div>
-                </Section>
                 <Section title="Movement">
                   <div className="flex flex-wrap gap-1.5">
                     {PACES.map((p) => (
@@ -470,6 +557,7 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
                     ))}
                   </div>
                 </Section>
+                </More>
               </>
             )}
           </div>
@@ -485,6 +573,21 @@ export function Editor({ projectId, plan, audioUrl, edited, onClose }: { project
 }
 
 // a section of the panel
+// What most edits never need, folded away under one line (opened when something in it is clicked in the video)
+function More({ title, hint, open, onToggle, children }: { title: string; hint: string; open: boolean; onToggle: (open: boolean) => void; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <button type="button" onClick={() => onToggle(!open)} className="flex items-center justify-between rounded-lg bg-white/[0.04] px-3 py-2.5 text-left text-xs text-white/70 hover:bg-white/[0.08]">
+        <span>
+          <span className="font-medium text-white/85">{title}</span> <span className="text-white/40">· {hint}</span>
+        </span>
+        <span className={`text-white/40 transition ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+      {open && children}
+    </div>
+  );
+}
+
 function Section({ id, lit = false, title, hint, children }: { id?: string; lit?: boolean; title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section data-sec={id} className={`-m-2 flex flex-col gap-2.5 rounded-lg p-2 transition-colors duration-500 ${lit ? "bg-[#3b8cff]/[0.12] ring-1 ring-[#3b8cff]/60" : "ring-1 ring-transparent"}`}>

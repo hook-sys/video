@@ -1,6 +1,6 @@
-# MotionBrief style reference
+# MotionDots style reference
 
-What the owner wants MotionBrief videos to look like, taken from 15 reference
+What the owner wants MotionDots videos to look like, taken from 15 reference
 promos (uploaded 29 Sep 2026; frames sampled every 3 s, motion measured at 5 fps).
 This is the brief for the Director prompt, the negative list and the engine
 backlog. Nothing here is wired into the pipeline yet.

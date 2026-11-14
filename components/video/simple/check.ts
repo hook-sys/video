@@ -7,9 +7,10 @@ import { type C, ICON_SLOT, type Play, keyIconOf } from "./kit";
 import { TEMPLATE, clickOf } from "./more";
 import { norm, thingAt, tileAt } from "./scenes";
 import { rowAt } from "./panel";
-import { choices, grey, planOf, printOf, variantOk, wordsAlone } from "./select";
+import { dealAt } from "./deck";
+import { choices, grey, planOf, printOf, showsIcon, variantOk, wordsAlone } from "./select";
 import { contrast, lookOf, themeOf } from "./theme";
-import { ideaNeedsThings, GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, VARIANTS } from "./types";
+import { ideaNeedsThings, GROUNDS, type Ground, type Reading, type Scene, type SimplePlan, type TemplateId, variantsOf } from "./types";
 
 // The plan checked before it is played, by code (no AI, no browser): every
 // scene laid out once at its last frame, and what would go wrong found —
@@ -29,6 +30,7 @@ export function meaningOf(s: Scene): string | null {
   if (s.template === "concept" && !s.concept) return "an idea with no idea to show";
   if (s.template === "point" && !s.point) return "a point's opening with no point";
   if (s.template === "panel" && !(s.tiles?.length)) return "a panel with no rows";
+  if (s.template === "deck" && !(s.tiles?.length)) return "cards with nothing on them";
   if (s.concept === "agenda" && s.template === "concept" && !(s.agenda?.length)) return "an agenda with no points";
   if (s.template === "concept" && ideaNeedsThings(s.concept, s.items.length)) return `an idea (${s.concept}) without its two things`;
   if (s.template === "kinetic" && s.variant === 1 && !/\?["'”’)]*$/.test(s.words.at(-1)?.t ?? "")) return "words typed as a prompt that ask nothing";
@@ -63,6 +65,7 @@ export function settledAt(s: Scene): number {
     : t === "concept" ? conceptSettled(s)
     : t === "point" ? s.from + 30
     : t === "panel" ? rowAt(s, Math.min(5, s.tiles?.length ?? 1) - 1) + 24
+    : t === "deck" ? dealAt(s, Math.min(4, s.tiles?.length ?? 1) - 1) + 30
     : t === "statement" && v === 1 && s.tiles?.length ? tileAt(s, Math.min(4, s.tiles.length) - 1) + 20
     : s.from;
   return Math.max(lastWord, n ? lastThing + 18 : s.from, own);
@@ -168,10 +171,12 @@ function fewerWords(s: Scene, most: number): Scene {
   const k = Math.max(0, s.words.findIndex((w) => w.key));
   const from = Math.max(0, Math.min(k - Math.floor((most - 1) / 2), s.words.length - most));
   const words = s.words.slice(from, from + most);
-  return { ...s, words: words.map((w, j) => ({ ...w, t: j === 0 ? w.t.charAt(0).toUpperCase() + w.t.slice(1) : w.t })) };
+  // (the first of them never later than 4 frames into the scene — as the selector brings them in)
+  const late = Math.max(0, (words[0]?.at ?? s.from) - (s.from + (s.from ? 4 : 0)));
+  return { ...s, words: words.map((w, j) => ({ ...w, at: w.at - late, t: j === 0 ? w.t.charAt(0).toUpperCase() + w.t.slice(1) : w.t })) };
 }
-// icons the library has (a thing without one shows the scene's)
-const knownIcons = (s: Scene): Scene => ({ ...s, icon: resolveIcon(s.icon) ? s.icon : "sparkles", items: s.items.map((it) => (it.icon && !resolveIcon(it.icon) ? { ...it, icon: null } : it)) });
+// icons the library has (an unknown one is none: never a stand-in for what is said)
+const knownIcons = (s: Scene): Scene => ({ ...s, icon: resolveIcon(s.icon) ? s.icon : "", items: s.items.map((it) => (it.icon && !resolveIcon(it.icon) ? { ...it, icon: null } : it)) });
 const unique = (s: Scene): Scene => {
   const said = norm(s.words.map((w) => w.t).join(" "));
   return { ...s, items: s.items.filter((it, k) => norm(it.text) !== said && s.items.findIndex((x) => norm(x.text) === norm(it.text)) === k) };
@@ -185,8 +190,9 @@ function candidates(plan: SimplePlan, i: number, kinds: Set<Problem["kind"]>, re
   const base = [kinds.has("icon") ? knownIcons : null, kinds.has("twice") ? unique : null].reduce((x, f) => (f ? f(x) : x), s);
   const mended: Scene[] = [base];
   if (kinds.has("cut")) mended.push(shortItems(base, 2), shortItems(base, 2, 2));
-  if (kinds.has("words")) mended.push(fewerWords(base, 4), fewerWords(base, 3));
-  const variants = (x: Scene, t: TemplateId) => Array.from({ length: VARIANTS }, (_, v) => v).filter((v) => variantOk(t, v, x.items.length)).map((v) => ({ ...x, template: t, variant: v }));
+  // (too many words, or the last one said too near the cut to be read: fewer of them, around the lit one)
+  if (kinds.has("words") || kinds.has("rushed")) mended.push(fewerWords(base, 4), fewerWords(base, 3));
+  const variants = (x: Scene, t: TemplateId) => Array.from({ length: variantsOf(t) }, (_, v) => v).filter((v) => variantOk(t, v, x.items.length)).map((v) => ({ ...x, template: t, variant: v }));
   const out = mended.flatMap((x) => [x, ...variants(x, s.template).filter((y) => y.variant !== x.variant)]);
   if (!last && reading) {
     // (never the template of the scene before or after it)
@@ -196,7 +202,8 @@ function candidates(plan: SimplePlan, i: number, kinds: Set<Problem["kind"]>, re
     // (the last resort: the words beside its icon, then the words alone)
     if (!near.has("statement")) out.push({ ...fewerWords(base, 4), template: "statement", variant: 1, items: [] }, { ...fewerWords(base, 4), template: "statement", variant: 0, items: [] });
   }
-  return out;
+  // (a scene with no word whose picture is said is never one whose hero is its icon)
+  return out.filter((x) => x.icon || (x.tiles?.length ?? 0) >= 2 || !showsIcon(x.template, x.variant, x.concept));
 }
 
 // The lit word's icon kept only where it fits: a scene whose words fit

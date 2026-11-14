@@ -4,7 +4,7 @@ import { hasDigit } from "./bangla";
 import { emWidth, familyOf } from "./faces";
 import { fitWords, measured } from "./fit";
 import { type Box, HERO_W, TYPE, WEIGHT, bandOf, sideOf, splitOf, stackOf, wordsFit } from "./geo";
-import { type C, Cursor, blend, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
+import { type C, rad, Cursor, blend, type Effect, Glyph, Mark, One, Words, clamp01, countUp, ease, keyStyle, panel, pop, rise, springAt, stagger, tint } from "./kit";
 import { closeAt, phraseMode, phrasesOf } from "./rhythm";
 import { Living, livingOf } from "./living";
 import type { Scene } from "./types";
@@ -107,16 +107,19 @@ function Statement({ c }: { c: C }) {
   if (c.s.variant === 0) return <WordsIn c={c} box={{ left: pad, top: 0, width: W - 2 * pad, height: H }} place="center" />;
   if (c.s.variant === 1 && (c.s.tiles?.length ?? 0) >= 2) return <Tiles c={c} />;
   if (c.s.variant === 1) {
-    const k = springAt(c, c.s.from + 4, 1.4);
+    // (the icon comes in just before its word is said — the voice and the picture together)
+    const inAt = Math.max(c.s.from + 4, (c.s.iconAt ?? 0) - 6);
+    const k = springAt(c, inAt, 1.4);
     const float = Math.sin((c.f - c.s.from) / 22) * 10;
     return (
       <Side c={c} dw={560} dh={560} hw={760}>
         <div style={{ ...center({ inset: 0 }), opacity: clamp01(k * 1.8), transform: `scale(${(0.6 + 0.4 * k).toFixed(4)}) translateY(${float.toFixed(1)}px) rotate(${((1 - k) * -14).toFixed(2)}deg)` }}>
-          {livingOf(c.s.icon) ? <div data-part="icon"><Living name={livingOf(c.s.icon)!} size={440} at={c.s.from + 4} /></div> : <Glyph c={c} part="icon" name={c.s.icon} size={440} solid />}
+          {livingOf(c.s.icon) ? <div data-part="icon"><Living name={livingOf(c.s.icon)!} size={440} at={inAt} /></div> : <Glyph c={c} part="icon" name={c.s.icon} size={440} solid at={inAt} />}
         </div>
       </Side>
     );
   }
+  if (c.s.variant >= 3) return <StatementMore c={c} />;
   // the lines come in from alternate sides, the key word in the accent
   const fit = fitWords(c.s.words.map((w) => w.t), c.look.display, { width: W - 2 * pad, lines: c.g.shape === "wide" ? 3 : 4, max: Math.round(TYPE.HERO * c.g.u), min: 70 });
   return (
@@ -132,6 +135,80 @@ function Statement({ c }: { c: C }) {
       })}
     </div>
   );
+}
+
+// The words alone, other ways (3…10): each a layout and a way of coming in (kit.tsx Moving)
+function StatementMore({ c }: { c: C }) {
+  const { W, H, pad, u, shape } = c.g;
+  const { look, s, f } = c;
+  const v = s.variant;
+  const full = { left: pad, top: 0, width: W - 2 * pad, height: H };
+  const key = s.words.find((w) => w.key) ?? s.words[0];
+  const k0 = springAt(c, s.from + 2);
+  // 3 · a quote set left, a bar of the accent beside it, rising from behind each line
+  if (v === 3) {
+    const bw = W - 2 * pad - 60;
+    return (
+      <div style={abs({ left: pad, top: 0, width: W - 2 * pad, height: H, display: "flex", alignItems: "center" })}>
+        <div style={{ width: Math.max(8, 12 * u), alignSelf: "center", height: `${(clamp01(k0 * 1.4) * 52).toFixed(1)}%`, borderRadius: 99, background: look.accentFill, marginRight: 48, flexShrink: 0 }} />
+        <Words c={c} width={bw} lines={shape === "wide" ? 3 : 5} max={Math.round(TYPE.HERO * u)} min={64} align="left" effect="mask" />
+      </div>
+    );
+  }
+  // 5 · on a card, as a quote
+  if (v === 5) {
+    const cw = W - 2 * pad, inner = cw - 140 * u;
+    const onCard = { ...c, look: { ...look, ink: look.panelInk, accent: look.panelAccent, plate: false, keyFill: undefined, keyGlow: undefined } };
+    return (
+      <div style={center({ ...full })}>
+        <div style={{ ...panel(c, 48), padding: `${Math.round(80 * u)}px ${Math.round(70 * u)}px`, position: "relative", ...rise(k0, 60) }}>
+          <div style={{ position: "absolute", left: 36 * u, top: -10 * u, fontFamily: familyOf(look.display), fontSize: 220 * u, lineHeight: 1, color: tint(look.panelAccent, 0.25) }}>“</div>
+          <Words c={onCard} width={inner} lines={shape === "wide" ? 3 : 4} max={Math.round(TYPE.HERO * u * 0.85)} min={56} effect="mask" />
+        </div>
+      </div>
+    );
+  }
+  // 6 · the lit word huge and faint behind, an outline; the words drop in over it
+  if (v === 6) {
+    const big = fitWords([key.t], look.display, { width: W * 1.1, lines: 1, max: Math.round(H * 0.45), min: 120 }).size;
+    const kb = springAt(c, key.at - 6, 1.6);
+    return (
+      <>
+        <div style={center({ inset: 0, opacity: 0.16 * clamp01(kb * 1.5), transform: `scale(${(1.15 - 0.15 * kb).toFixed(4)})` })}>
+          <div style={{ fontFamily: familyOf(look.display), fontWeight: 800, fontSize: big, color: "transparent", WebkitTextStroke: `${Math.max(2, big * 0.012).toFixed(1)}px ${look.accent}`, whiteSpace: "nowrap" }}>{key.t}</div>
+        </div>
+        <WordsIn c={c} box={full} place="center" effect="drop" />
+      </>
+    );
+  }
+  // 7 · inside a frame of corners drawn in, the lit word underlined
+  if (v === 7) {
+    const fw = W - 2 * pad * 0.6, fh = H * (shape === "wide" ? 0.62 : 0.42), arm = 70 * u, t = ease(clamp01((f - s.from - 2) / 16));
+    const corner = (st: CSSProperties) => <div style={abs({ width: arm * t, height: arm * t, borderColor: look.accent, borderStyle: "solid", borderWidth: 0, ...st })} />;
+    return (
+      <>
+        <div style={abs({ left: (W - fw) / 2, top: (H - fh) / 2, width: fw, height: fh })}>
+          {corner({ left: 0, top: 0, borderTopWidth: 5, borderLeftWidth: 5 })}
+          {corner({ right: 0, top: 0, borderTopWidth: 5, borderRightWidth: 5 })}
+          {corner({ left: 0, bottom: 0, borderBottomWidth: 5, borderLeftWidth: 5 })}
+          {corner({ right: 0, bottom: 0, borderBottomWidth: 5, borderRightWidth: 5 })}
+        </div>
+        <WordsIn c={c} box={{ left: (W - fw) / 2 + 40, top: (H - fh) / 2, width: fw - 80, height: fh }} place="center" effect="underline" />
+      </>
+    );
+  }
+  // 9 · in from a large blur, a soft light of the accent behind
+  if (v === 9) {
+    return (
+      <>
+        <div style={abs({ inset: 0, background: `radial-gradient(40% 32% at 50% 50%, ${tint(look.accent, look.dark ? 0.3 : 0.18)}, transparent 70%)`, opacity: clamp01(k0 * 1.4) })} />
+        <WordsIn c={c} box={full} place="center" effect="focus" />
+      </>
+    );
+  }
+  // 4 · a marker swept behind the lit word · 8 · the halves meeting · 10 · a box drawn round the lit word
+  const effect: Effect = v === 4 ? "sweep" : v === 8 ? "split" : "box";
+  return <WordsIn c={c} box={full} place="center" effect={effect} />;
 }
 
 // ── the words beside their pictures: a card for each thing they name ──────
@@ -209,7 +286,7 @@ function Trouble({ c }: { c: C }) {
           return (
             <div key={i} style={abs({ left: 20, top: 40 + i * 190, width: 820, height: 180, opacity: clamp01(k * 1.6), transform: `translateY(${((1 - k) * -420).toFixed(1)}px) rotate(${(turn[i] * (0.4 + 0.6 * k)).toFixed(2)}deg)` })}>
               <div style={{ ...panel(c, 26), height: "100%", display: "flex", alignItems: "center", gap: 28, padding: "0 34px" }}>
-                <div style={{ width: 100, height: 100, borderRadius: 26, background: tint(c.look.bad, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: 100, height: 100, borderRadius: rad(c, 26), background: tint(c.look.bad, 0.14), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <Icon name={it.icon ?? "triangle-alert"} size={54} color={c.look.bad} strokeWidth={2.2} />
                 </div>
                 <One part="item" style={{ fontSize: TYPE.ITEM, fontWeight: WEIGHT.item, flex: 1 }} fit={560} face={c.look.text}>{it.text}</One>
@@ -373,14 +450,14 @@ function Feature({ c }: { c: C }) {
     return (
       <Side c={c} dw={pw} dh={ph}>
         <div style={abs({ left: 0, top: 0, width: pw, height: ph, ...rise(k, 120) })}>
-          <div style={{ width: "100%", height: "100%", borderRadius: 64, background: c.look.dark ? "#0b0c10" : "#15171c", padding: 14, boxSizing: "border-box", boxShadow: `0 50px 120px ${c.look.shadow}` }}>
-            <div style={{ width: "100%", height: "100%", borderRadius: 52, background: c.look.dark ? "#16181f" : "#f2f3f6", position: "relative", overflow: "hidden", fontFamily: familyOf(c.look.text) }}>
+          <div style={{ width: "100%", height: "100%", borderRadius: rad(c, 64), background: c.look.dark ? "#0b0c10" : "#15171c", padding: 14, boxSizing: "border-box", boxShadow: `0 50px 120px ${c.look.shadow}` }}>
+            <div style={{ width: "100%", height: "100%", borderRadius: rad(c, 52), background: c.look.dark ? "#16181f" : "#f2f3f6", position: "relative", overflow: "hidden", fontFamily: familyOf(c.look.text) }}>
               <div style={abs({ left: pw / 2 - 70 - 14, top: 16, width: 140, height: 36, borderRadius: 99, background: "#000" })} />
               <div style={center({ left: 0, right: 0, top: 120, height: 90, fontSize: 76, fontWeight: 600, letterSpacing: "-0.03em", color: c.look.dark ? "#fff" : "#111" })}>9:41</div>
               {items.map((it, i) => {
                 const kr = springAt(c, itemAt(c, i, n));
                 return (
-                  <div key={i} style={abs({ left: 18, right: 18, top: 300 + i * 148, height: 132, borderRadius: 30, background: c.look.dark ? "rgba(255,255,255,0.1)" : "#ffffff", boxShadow: "0 10px 30px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 18, padding: "0 20px", color: c.look.dark ? "#fff" : "#111", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * -80).toFixed(1)}px) scale(${(0.92 + 0.08 * kr).toFixed(3)})` })}>
+                  <div key={i} style={abs({ left: 18, right: 18, top: 300 + i * 148, height: 132, borderRadius: rad(c, 30), background: c.look.dark ? "rgba(255,255,255,0.1)" : "#ffffff", boxShadow: "0 10px 30px rgba(0,0,0,0.12)", display: "flex", alignItems: "center", gap: 18, padding: "0 20px", color: c.look.dark ? "#fff" : "#111", opacity: clamp01(kr * 1.6), transform: `translateY(${((1 - kr) * -80).toFixed(1)}px) scale(${(0.92 + 0.08 * kr).toFixed(3)})` })}>
                     <Glyph c={c} part="item-icon" at={thingAt(c.s, i, c.s.items.length)} name={it.icon ?? c.s.icon} size={72} solid />
                     <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                       <One part="item" style={{ fontSize: 36, fontWeight: 700 }} fit={270} face={c.look.text}>{it.text}</One>
@@ -506,7 +583,7 @@ function Steps({ c }: { c: C }) {
         {items.slice(0, -1).map((_, i) => {
           const d = ease(clamp01((c.f - itemAt(c, i, n) - 8) / 14));
           const a = at(i), b = at(i + 1);
-          return <div key={`l${i}`} style={abs(row ? { left: a.x + 100, top: a.y - 3, width: (b.x - a.x - 200) * d, height: 6, borderRadius: 9, background: c.look.accent } : { left: a.x - 3, top: a.y + 100, width: 6, height: (b.y - a.y - 200) * d, borderRadius: 9, background: c.look.accent })} />;
+          return <div key={`l${i}`} style={abs(row ? { left: a.x + 100, top: a.y - 3, width: (b.x - a.x - 200) * d, height: 6, borderRadius: rad(c, 9), background: c.look.accent } : { left: a.x - 3, top: a.y + 100, width: 6, height: (b.y - a.y - 200) * d, borderRadius: rad(c, 9), background: c.look.accent })} />;
         })}
         {items.map((it, i) => {
           const k = springAt(c, itemAt(c, i, n));
