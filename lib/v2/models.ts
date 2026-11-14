@@ -58,7 +58,8 @@ export async function v2Speak(input: { script: string; language: string; style: 
   const name = v2VoiceName(voice, input.gender, input.voice);
   const fill = (t: string) => t.replace(/\{\{text\}\}/g, text).replace(/\{\{style\}\}/g, input.style).replace(/\{\{language\}\}/g, input.language).replace(/\{\{gender\}\}/g, input.gender).replace(/\{\{voice\}\}/g, name);
   if (voice.provider === "google") {
-    // (the template is Gemini's whole instruction, the script in it — "Say it warmly and fast: {{text}}"; none: the script alone)
+    // (the template is Gemini's whole instruction, the script in it — "Say it warmly and fast: {{text}}"; none: the
+    // script alone, the safe way: Gemini can read an instruction aloud before the script, as part of the voice)
     const prompt = voice.template.includes("{{text}}") ? fill(voice.template) : text;
     const spoken = await geminiSpeak(voice.model, prompt, name);
     return { model: voice.model, requestId: null, audio: spoken, units: spoken.units };
